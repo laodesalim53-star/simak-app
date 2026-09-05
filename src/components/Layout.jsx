@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { Bell, MessageSquare, X, Menu, Store } from 'lucide-react'
+import { Bell, MessageSquare, X, Menu, Store, Receipt } from 'lucide-react'
 import Sidebar from './Sidebar'
 import { useAuth } from '../lib/AuthContext'
 import { usePresenceTracker } from '../hooks/usePresenceTracker'
@@ -228,6 +228,17 @@ export default function Layout({ children, title, subtitle, actions }) {
             >
               <Store size={18} strokeWidth={2} />
               <span className="hidden sm:inline">Toko</span>
+            </Link>
+
+            {/* Tombol Riwayat Pesanan — akses cepat ke daftar transaksi pembeli,
+                ditaruh di sebelah tombol Toko supaya gampang ditemukan. */}
+            <Link
+              to="/riwayat-pesanan"
+              title="Riwayat Pesanan"
+              className="flex items-center gap-2 px-3 h-10 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+            >
+              <Receipt size={18} strokeWidth={2} />
+              <span className="hidden sm:inline">Riwayat Pesanan</span>
             </Link>
 
             <NotificationBell />
