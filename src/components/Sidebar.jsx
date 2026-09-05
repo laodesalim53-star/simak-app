@@ -71,6 +71,7 @@ function getGroupsAdmin(isAdminUtama, isSuperAdmin, jumlahMenunggu = 0, jumlahPe
         // guru tidak pernah melihat menu ini karena guru pakai getLinksGuru().
         { to: '/pesan-pusat', label: 'Admin Pusat', icon: Building2, badge: jumlahPesanPusatBelumDibaca },
         { to: '/toko', label: 'Toko', icon: Store },
+        { to: '/riwayat-pesanan', label: 'Riwayat Pesanan', icon: Receipt },
         { to: '/rapat', label: 'Rapat Video', icon: Video },
         { to: '/galeri', label: 'Galeri Kegiatan', icon: Images },
         { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
@@ -155,6 +156,7 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
   { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
   { to: '/toko', label: 'Toko', icon: Store },
+  { to: '/riwayat-pesanan', label: 'Riwayat Pesanan', icon: Receipt },
   { to: '/rapat', label: 'Rapat Video', icon: Video },
   { to: '/galeri', label: 'Galeri Kegiatan', icon: Images },
   { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
@@ -294,6 +296,7 @@ function getLinksOrangTua(jumlahPesanBelumDibaca = 0, sekolahId = null) {
     { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
     { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
     { to: '/toko', label: 'Toko', icon: Store },
+    { to: '/riwayat-pesanan', label: 'Riwayat Pesanan', icon: Receipt },
     { to: '/rapat', label: 'Rapat Video', icon: Video },
     { to: '/rapor-anak', label: 'Rapor Anak', icon: FileBadge },
     { to: '/presensi-anak', label: 'Presensi Anak', icon: ClipboardCheck },
