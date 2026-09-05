@@ -8,6 +8,7 @@ import {
   CreditCard,
   StickyNote,
   User,
+  Trash2,
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
@@ -70,6 +71,7 @@ export default function PesananMasuk() {
   const [filterStatus, setFilterStatus] = useState("semua");
   const [expandedId, setExpandedId] = useState(null);
   const [savingId, setSavingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   const fetchPesananMasuk = useCallback(async () => {
     if (!session?.user) return;
@@ -148,6 +150,21 @@ export default function PesananMasuk() {
       );
     }
     setSavingId(null);
+  };
+
+  const handleHapus = async (id) => {
+    if (!confirm("Yakin ingin menghapus pesanan ini? Tindakan ini tidak bisa dibatalkan.")) return;
+
+    setDeletingId(id);
+    const { error } = await supabase.from("pesanan").delete().eq("id", id);
+
+    if (error) {
+      alert("Gagal menghapus pesanan: " + error.message);
+    } else {
+      setPesananList((prev) => prev.filter((p) => p.id !== id));
+      if (expandedId === id) setExpandedId(null);
+    }
+    setDeletingId(null);
   };
 
   const daftarTampil =
@@ -322,21 +339,33 @@ export default function PesananMasuk() {
                         tidak ada tombol/dropdown di sini (juga dikunci lewat
                         RLS "Superadmin ubah status pesanan" di database). */}
                     {isSuperAdmin && (
-                      <div className="mt-3 pt-3 border-t border-slate-200">
-                        <label className="block mb-1.5 text-xs font-medium text-slate-500">
-                          Ubah status pesanan
-                        </label>
-                        <select
-                          value={p.status}
-                          disabled={savingId === p.id}
-                          onChange={(e) => handleUbahStatus(p.id, e.target.value)}
-                          className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white disabled:opacity-50"
+                      <div className="mt-3 pt-3 border-t border-slate-200 flex items-end justify-between gap-3">
+                        <div>
+                          <label className="block mb-1.5 text-xs font-medium text-slate-500">
+                            Ubah status pesanan
+                          </label>
+                          <select
+                            value={p.status}
+                            disabled={savingId === p.id || deletingId === p.id}
+                            onChange={(e) => handleUbahStatus(p.id, e.target.value)}
+                            className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white disabled:opacity-50"
+                          >
+                            <option value="baru">Baru</option>
+                            <option value="diproses">Diproses</option>
+                            <option value="selesai">Selesai</option>
+                            <option value="dibatalkan">Dibatalkan</option>
+                          </select>
+                        </div>
+
+                        <button
+                          onClick={() => handleHapus(p.id)}
+                          disabled={deletingId === p.id}
+                          title="Hapus pesanan"
+                          className="flex items-center gap-1.5 px-3 h-9 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50 shrink-0"
                         >
-                          <option value="baru">Baru</option>
-                          <option value="diproses">Diproses</option>
-                          <option value="selesai">Selesai</option>
-                          <option value="dibatalkan">Dibatalkan</option>
-                        </select>
+                          <Trash2 size={14} />
+                          {deletingId === p.id ? "Menghapus..." : "Hapus"}
+                        </button>
                       </div>
                     )}
                   </div>
