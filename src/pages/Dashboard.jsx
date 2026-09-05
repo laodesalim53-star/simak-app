@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import Layout from '../components/Layout'
+import StoryBar from '../components/StoryBar'
+import StoryUploader from '../components/StoryUploader'
 import { Users, GraduationCap, DoorOpen, Megaphone, LayoutDashboard, ClipboardCheck, FileClock } from 'lucide-react'
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
@@ -23,8 +25,6 @@ const KATEGORI_STYLE = {
   Akademik: 'bg-sage-500/15 text-sage-500',
 }
 
-// Palet kartu ringkasan — gaya solid gradient warna-warni (terinspirasi referensi SIMAJU):
-// kartu berwarna penuh, ikon dalam lingkaran putih transparan, angka besar putih.
 const CARD_THEME = {
   blue: { gradient: 'from-blue-500 to-blue-600' },
   green: { gradient: 'from-emerald-500 to-emerald-600' },
@@ -34,9 +34,6 @@ const CARD_THEME = {
   rose: { gradient: 'from-rose-500 to-rose-600' },
 }
 
-// Motif batik (kawung + parang) yang dipakai konsisten di seluruh tema —
-// motif sama persis dengan kartu identitas di halaman Profil Saya, hanya
-// warna garis yang menyesuaikan latar (emas di atas navy, putih di atas kartu warna-warni).
 function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 72 }) {
   return (
     <svg
@@ -54,7 +51,6 @@ function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 
           patternUnits="userSpaceOnUse"
           patternTransform="rotate(8)"
         >
-          {/* motif kawung: empat lengkung elips mengelilingi titik pusat */}
           <g fill="none" stroke={strokeColor} strokeWidth="1.1" opacity={opacity}>
             <ellipse cx={size / 2} cy={size * 0.333} rx={size * 0.125} ry={size * 0.194} opacity="0.55" />
             <ellipse cx={size / 2} cy={size * 0.667} rx={size * 0.125} ry={size * 0.194} opacity="0.55" />
@@ -62,7 +58,6 @@ function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 
             <ellipse cx={size * 0.667} cy={size / 2} rx={size * 0.194} ry={size * 0.125} opacity="0.55" />
             <circle cx={size / 2} cy={size / 2} r={size * 0.042} opacity="0.7" />
           </g>
-          {/* garis parang halus di sela-sela motif kawung */}
           <path
             d={`M0 ${size} L${size * 0.25} ${size * 0.75} L${size * 0.5} ${size} L${size * 0.75} ${size * 0.75} L${size} ${size}`}
             fill="none"
@@ -135,6 +130,7 @@ export default function Dashboard() {
   const [presensiHariIni, setPresensiHariIni] = useState({ terisi: 0, hadir: 0, izin: 0, alpa: 0 })
   const [pengajuanMenunggu, setPengajuanMenunggu] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [storyRefreshKey, setStoryRefreshKey] = useState(0)
 
   useEffect(() => {
     async function load() {
@@ -161,8 +157,6 @@ export default function Dashboard() {
         supabase.from('rpp').select('*', { count: 'exact', head: true }).eq('status', 'disetujui'),
         supabase.from('rpp').select('*', { count: 'exact', head: true }).eq('status', 'ditolak'),
         supabase.from('presensi_siswa').select('status').eq('tanggal', todayStr),
-        // Asumsi nilai status 'diajukan' dipakai untuk pengajuan izin yang menunggu persetujuan
-        // kepala sekolah. Kalau nilai sebenarnya beda (misal 'menunggu'/'pending'), ganti string ini.
         supabase.from('pengajuan_izin').select('*', { count: 'exact', head: true }).eq('status', 'diajukan'),
       ])
 
@@ -220,7 +214,6 @@ export default function Dashboard() {
 
   return (
     <Layout title="Dasbor" subtitle="Ringkasan data sekolah Anda hari ini">
-      {/* Keyframe animasi muncul bertahap, senada dengan halaman Login */}
       <style>{`
         @keyframes dashFadeInUp {
           from { opacity: 0; transform: translateY(10px); }
@@ -232,7 +225,6 @@ export default function Dashboard() {
       `}</style>
 
       <div className="relative">
-        {/* Banner navy — corak batik emas yang sama persis dengan kartu identitas di Profil Saya */}
         <div className="dash-fade-in opacity-0 relative overflow-hidden rounded-xl p-6 mb-6 flex items-center gap-4 bg-gradient-to-br from-blue-900 to-blue-950">
           <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/5 pointer-events-none" />
           <div className="absolute -bottom-14 -left-6 w-32 h-32 rounded-full bg-white/5 pointer-events-none" />
@@ -246,6 +238,10 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* --- Fitur Story/Status --- */}
+        <StoryBar key={storyRefreshKey} />
+        <StoryUploader onPosted={() => setStoryRefreshKey((k) => k + 1)} />
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
           {cards.map(({ label, value, icon: Icon, theme, sublabel }, i) => {
             const t = CARD_THEME[theme]
@@ -255,7 +251,6 @@ export default function Dashboard() {
                 className={`dash-fade-in opacity-0 relative overflow-hidden rounded-2xl p-5 text-white shadow-md bg-gradient-to-br ${t.gradient} transition-transform duration-300 ease-out hover:-translate-y-1`}
                 style={{ animationDelay: `${i * 90}ms` }}
               >
-                {/* Motif batik yang sama, versi putih tipis supaya tetap kontras di atas warna solid */}
                 <BatikOverlay patternId={`batikCard-${theme}-${i}`} strokeColor="#ffffff" opacity={0.5} size={56} />
                 <div className="relative flex items-start justify-between mb-4">
                   <p className="text-sm font-medium text-white/90">{label}</p>
