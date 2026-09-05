@@ -54,3 +54,35 @@ export async function getStories() {
   if (error) throw error
   return data
 }
+
+export async function getLikesForStory(storyId, userId) {
+  const { data, error } = await supabase
+    .from('story_likes')
+    .select('user_id')
+    .eq('story_id', storyId)
+
+  if (error) throw error
+
+  return {
+    count: data.length,
+    likedByMe: data.some((l) => l.user_id === userId),
+  }
+}
+
+export async function toggleLike(storyId, userId, currentlyLiked) {
+  if (currentlyLiked) {
+    const { error } = await supabase
+      .from('story_likes')
+      .delete()
+      .eq('story_id', storyId)
+      .eq('user_id', userId)
+
+    if (error) throw error
+  } else {
+    const { error } = await supabase
+      .from('story_likes')
+      .insert({ story_id: storyId, user_id: userId })
+
+    if (error) throw error
+  }
+}
