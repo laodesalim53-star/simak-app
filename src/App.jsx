@@ -71,6 +71,7 @@ import Keranjang from './pages/Keranjang'
 import Checkout from './pages/Checkout'
 import PesananSukses from './pages/PesananSukses'
 import RiwayatPesanan from './pages/RiwayatPesanan'
+import PesananMasuk from './pages/PesananMasuk'
 import { CartProvider } from './lib/CartContext'
 
 function ProtectedRoute({ children, adminOnly, adminUtamaOnly, superAdminOnly }) {
@@ -264,6 +265,11 @@ export default function App() {
             lintas toko (bukan per toko_id seperti keranjang/checkout), jadi
             butuh login — dibungkus ProtectedRoute seperti Checkout. */}
         <Route path="/riwayat-pesanan" element={<ProtectedRoute><RiwayatPesanan /></ProtectedRoute>} />
+        {/* Pesanan Masuk: sisi penjual — pemilik toko lihat pesanan ke
+            tokonya sendiri (view-only), superadmin lihat semua toko dan
+            satu-satunya yang boleh mengubah status (dikunci lewat RLS
+            "Superadmin ubah status pesanan" di Supabase). */}
+        <Route path="/pesanan-masuk" element={<ProtectedRoute><PesananMasuk /></ProtectedRoute>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
