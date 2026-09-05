@@ -70,6 +70,7 @@ import Toko from './pages/Toko'
 import Keranjang from './pages/Keranjang'
 import Checkout from './pages/Checkout'
 import PesananSukses from './pages/PesananSukses'
+import RiwayatPesanan from './pages/RiwayatPesanan'
 import { CartProvider } from './lib/CartContext'
 
 function ProtectedRoute({ children, adminOnly, adminUtamaOnly, superAdminOnly }) {
@@ -259,6 +260,10 @@ export default function App() {
         <Route path="/toko/:id/keranjang" element={<Keranjang />} />
         <Route path="/toko/:id/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
         <Route path="/toko/:id/pesanan-sukses" element={<ProtectedRoute><PesananSukses /></ProtectedRoute>} />
+        {/* Riwayat Pesanan: rekap semua transaksi milik pembeli yang login,
+            lintas toko (bukan per toko_id seperti keranjang/checkout), jadi
+            butuh login — dibungkus ProtectedRoute seperti Checkout. */}
+        <Route path="/riwayat-pesanan" element={<ProtectedRoute><RiwayatPesanan /></ProtectedRoute>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
