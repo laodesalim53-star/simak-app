@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Heart } from 'lucide-react'
+import { Heart, Volume2, VolumeX } from 'lucide-react'
 import { getLikesForStory, toggleLike } from '../lib/storyApi'
 import { useAuth } from '../lib/AuthContext'
 
@@ -10,10 +10,13 @@ export default function StoryViewer({ stories, initialIndex, onClose }) {
   const [likeCount, setLikeCount] = useState(0)
   const [likedByMe, setLikedByMe] = useState(false)
   const [likeLoading, setLikeLoading] = useState(false)
+  const [muted, setMuted] = useState(true)
   const timerRef = useRef(null)
+  const videoRef = useRef(null)
 
   const story = stories[index]
-  const DURATION = 5000
+  const isVideo = story?.media_type === 'video'
+  const IMAGE_DURATION = 5000 // gambar/teks tetap tampil 5 detik
   const userId = session?.user?.id
 
   const goNext = useCallback(() => {
@@ -28,14 +31,16 @@ export default function StoryViewer({ stories, initialIndex, onClose }) {
     if (index > 0) setIndex(index - 1)
   }
 
-  // Progress bar otomatis jalan ke story berikutnya
+  // Progress untuk story NON-video (gambar/teks) — pakai timer tetap
   useEffect(() => {
+    if (isVideo) return
+
     setProgress(0)
     const startTime = Date.now()
 
     timerRef.current = setInterval(() => {
       const elapsed = Date.now() - startTime
-      const pct = Math.min((elapsed / DURATION) * 100, 100)
+      const pct = Math.min((elapsed / IMAGE_DURATION) * 100, 100)
       setProgress(pct)
 
       if (pct >= 100) {
@@ -45,7 +50,33 @@ export default function StoryViewer({ stories, initialIndex, onClose }) {
     }, 50)
 
     return () => clearInterval(timerRef.current)
-  }, [index, goNext])
+  }, [index, isVideo, goNext])
+
+  // Progress untuk story VIDEO — sinkron dengan durasi video asli
+  useEffect(() => {
+    if (!isVideo) return
+    setProgress(0)
+
+    const videoEl = videoRef.current
+    if (!videoEl) return
+
+    function handleTimeUpdate() {
+      if (!videoEl.duration) return
+      setProgress((videoEl.currentTime / videoEl.duration) * 100)
+    }
+
+    function handleEnded() {
+      goNext()
+    }
+
+    videoEl.addEventListener('timeupdate', handleTimeUpdate)
+    videoEl.addEventListener('ended', handleEnded)
+
+    return () => {
+      videoEl.removeEventListener('timeupdate', handleTimeUpdate)
+      videoEl.removeEventListener('ended', handleEnded)
+    }
+  }, [index, isVideo, goNext])
 
   // Ambil status like setiap kali pindah story
   useEffect(() => {
@@ -69,7 +100,6 @@ export default function StoryViewer({ stories, initialIndex, onClose }) {
     if (!userId || likeLoading) return
     setLikeLoading(true)
 
-    // Update optimis di UI dulu supaya terasa responsif
     const nextLiked = !likedByMe
     setLikedByMe(nextLiked)
     setLikeCount((c) => (nextLiked ? c + 1 : Math.max(0, c - 1)))
@@ -77,7 +107,6 @@ export default function StoryViewer({ stories, initialIndex, onClose }) {
     try {
       await toggleLike(story.id, userId, likedByMe)
     } catch (err) {
-      // Kalau gagal, kembalikan seperti semula
       setLikedByMe(likedByMe)
       setLikeCount((c) => (nextLiked ? Math.max(0, c - 1) : c + 1))
       console.error('Gagal mengubah like:', err)
@@ -114,10 +143,28 @@ export default function StoryViewer({ stories, initialIndex, onClose }) {
         </p>
       </div>
 
+      {/* Tombol mute/unmute, hanya untuk video */}
+      {isVideo && (
+        <button
+          onClick={() => setMuted((m) => !m)}
+          className="absolute top-6 right-16 text-white z-10 bg-black/40 rounded-full p-2"
+        >
+          {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+        </button>
+      )}
+
       <div className="w-full h-full max-w-md flex items-center justify-center">
         {story.media_url ? (
-          story.media_type === 'video' ? (
-            <video src={story.media_url} autoPlay className="max-h-full max-w-full" />
+          isVideo ? (
+            <video
+              key={story.id}
+              ref={videoRef}
+              src={story.media_url}
+              autoPlay
+              muted={muted}
+              playsInline
+              className="max-h-full max-w-full"
+            />
           ) : (
             <img src={story.media_url} alt="" className="max-h-full max-w-full object-contain" />
           )
@@ -132,7 +179,6 @@ export default function StoryViewer({ stories, initialIndex, onClose }) {
         </div>
       )}
 
-      {/* Tombol Like */}
       <div className="absolute bottom-6 left-0 right-0 flex items-center justify-center gap-2 z-10">
         <button
           onClick={handleToggleLike}
