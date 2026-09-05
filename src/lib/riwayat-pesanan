@@ -1,0 +1,212 @@
+import { useEffect, useState } from "react";
+import { supabase } from "../lib/supabaseClient"; // sesuaikan path import supabase client di project Anda
+
+// Label & warna untuk status pesanan (kolom `status` di tabel pesanan)
+const STATUS_PESANAN = {
+  baru: { label: "Baru", className: "bg-blue-100 text-blue-700" },
+  diproses: { label: "Diproses", className: "bg-amber-100 text-amber-700" },
+  selesai: { label: "Selesai", className: "bg-green-100 text-green-700" },
+  dibatalkan: { label: "Dibatalkan", className: "bg-red-100 text-red-700" },
+};
+
+// Label & warna untuk status pembayaran (kolom `status_bayar`)
+const STATUS_BAYAR = {
+  menunggu: { label: "Menunggu pembayaran", className: "bg-amber-100 text-amber-700" },
+  dibayar: { label: "Sudah dibayar", className: "bg-green-100 text-green-700" },
+  gagal: { label: "Gagal", className: "bg-red-100 text-red-700" },
+  kadaluarsa: { label: "Kadaluarsa", className: "bg-gray-100 text-gray-600" },
+};
+
+function formatRupiah(angka) {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    minimumFractionDigits: 0,
+  }).format(angka || 0);
+}
+
+function formatTanggal(iso) {
+  return new Date(iso).toLocaleString("id-ID", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+export default function RiwayatPesanan() {
+  const [pesanan, setPesanan] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [filterStatus, setFilterStatus] = useState("semua");
+  const [terbuka, setTerbuka] = useState(null); // id pesanan yang sedang di-expand
+
+  useEffect(() => {
+    muatRiwayat();
+  }, []);
+
+  async function muatRiwayat() {
+    setLoading(true);
+    setError(null);
+
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData?.user?.id;
+
+    if (!userId) {
+      setError("Anda harus login untuk melihat riwayat pesanan.");
+      setLoading(false);
+      return;
+    }
+
+    // RLS "Pembeli lihat pesanan sendiri" & "Pembeli lihat item pesanan sendiri"
+    // sudah mengizinkan query ini tanpa perlu perubahan policy tambahan.
+    const { data, error: queryError } = await supabase
+      .from("pesanan")
+      .select(
+        `
+        id,
+        total,
+        status,
+        status_bayar,
+        metode_bayar,
+        created_at,
+        dibayar_pada,
+        catatan,
+        toko:toko_id ( nama_toko ),
+        pesanan_item ( id, nama_barang, harga_satuan, qty, subtotal )
+        `
+      )
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+
+    if (queryError) {
+      setError("Gagal memuat riwayat pesanan: " + queryError.message);
+      setLoading(false);
+      return;
+    }
+
+    setPesanan(data || []);
+    setLoading(false);
+  }
+
+  const daftarTampil =
+    filterStatus === "semua"
+      ? pesanan
+      : pesanan.filter((p) => p.status === filterStatus);
+
+  return (
+    <div className="max-w-3xl mx-auto px-4 py-6">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl font-semibold text-gray-900">Riwayat Pesanan</h1>
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white"
+        >
+          <option value="semua">Semua status</option>
+          <option value="baru">Baru</option>
+          <option value="diproses">Diproses</option>
+          <option value="selesai">Selesai</option>
+          <option value="dibatalkan">Dibatalkan</option>
+        </select>
+      </div>
+
+      {loading && (
+        <p className="text-sm text-gray-500">Memuat riwayat pesanan...</p>
+      )}
+
+      {error && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          {error}
+        </p>
+      )}
+
+      {!loading && !error && daftarTampil.length === 0 && (
+        <p className="text-sm text-gray-500">Belum ada pesanan.</p>
+      )}
+
+      <div className="space-y-3">
+        {daftarTampil.map((p) => {
+          const statusInfo = STATUS_PESANAN[p.status] || {
+            label: p.status,
+            className: "bg-gray-100 text-gray-600",
+          };
+          const bayarInfo = STATUS_BAYAR[p.status_bayar] || {
+            label: p.status_bayar,
+            className: "bg-gray-100 text-gray-600",
+          };
+          const isTerbuka = terbuka === p.id;
+
+          return (
+            <div
+              key={p.id}
+              className="border border-gray-200 rounded-xl overflow-hidden bg-white"
+            >
+              <button
+                onClick={() => setTerbuka(isTerbuka ? null : p.id)}
+                className="w-full flex items-center justify-between px-4 py-3 text-left"
+              >
+                <div>
+                  <p className="text-sm font-medium text-gray-900">
+                    {p.toko?.nama_toko || "Toko"}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {formatTanggal(p.created_at)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-semibold text-gray-900">
+                    {formatRupiah(p.total)}
+                  </p>
+                  <div className="flex gap-1 justify-end mt-1">
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full ${statusInfo.className}`}
+                    >
+                      {statusInfo.label}
+                    </span>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full ${bayarInfo.className}`}
+                    >
+                      {bayarInfo.label}
+                    </span>
+                  </div>
+                </div>
+              </button>
+
+              {isTerbuka && (
+                <div className="border-t border-gray-100 px-4 py-3 bg-gray-50">
+                  <ul className="divide-y divide-gray-200">
+                    {p.pesanan_item?.map((item) => (
+                      <li
+                        key={item.id}
+                        className="py-2 flex items-center justify-between text-sm"
+                      >
+                        <div>
+                          <p className="text-gray-800">{item.nama_barang}</p>
+                          <p className="text-xs text-gray-500">
+                            {item.qty} x {formatRupiah(item.harga_satuan)}
+                          </p>
+                        </div>
+                        <p className="text-gray-900 font-medium">
+                          {formatRupiah(item.subtotal)}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                  {p.catatan && (
+                    <p className="text-xs text-gray-500 mt-2">
+                      Catatan: {p.catatan}
+                    </p>
+                  )}
+                  {p.metode_bayar && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Metode bayar: {p.metode_bayar}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
