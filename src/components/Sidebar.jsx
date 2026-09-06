@@ -242,7 +242,7 @@ function NavItem({ to, label, icon: Icon, end, badge, onNavigate, external }) {
   // dasbor tetap terbuka.
   if (external) {
     return (
-      
+      <a
         href={to}
         target="_blank"
         rel="noopener noreferrer"
