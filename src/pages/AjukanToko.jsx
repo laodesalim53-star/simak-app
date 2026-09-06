@@ -9,6 +9,10 @@ import {
   XCircle,
   Loader2,
   ExternalLink,
+  ShieldCheck,
+  Wallet,
+  PackageCheck,
+  Banknote,
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
@@ -28,9 +32,20 @@ import Layout from "../components/Layout";
 // - Kalau ditolak, admin sekolah boleh mengajukan ulang lewat function
 //   `fn_ajukan_ulang_toko`, yang mengunci syarat: harus pemilik
 //   pengajuan & status sebelumnya memang "ditolak".
+//
+// PERBAIKAN (aturan pembayaran/escrow): ditambahkan kartu penjelasan
+// alur pembayaran (dana pembeli ditahan admin dulu -> toko kirim
+// barang -> pembeli konfirmasi terima -> admin cairkan dana ke toko
+// dikurangi komisi platform) SEBELUM calon pemilik toko mengajukan.
+// Ditambahkan juga checkbox wajib "menyetujui aturan pembayaran" agar
+// ada jejak persetujuan sebelum pengajuan bisa dikirim/diajukan ulang.
+// Ganti KOMISI_PERSEN di bawah sesuai kebijakan platform yang berlaku.
 // =========================================================
 
 const BUCKET_SK = "sk-toko";
+
+// TODO: sesuaikan dengan persentase komisi platform yang sebenarnya berlaku.
+const KOMISI_PERSEN = 5;
 
 function formatTanggal(iso) {
   if (!iso) return "-";
@@ -62,6 +77,81 @@ const STATUS_INFO = {
   },
 };
 
+// Kartu penjelasan alur pembayaran (escrow) — ditampilkan pada halaman
+// pengajuan toko supaya calon pemilik toko paham SEBELUM mendaftar bahwa
+// pembayaran pembeli tidak langsung masuk ke rekening toko, melainkan
+// ditahan admin dulu sampai pembeli mengonfirmasi barang diterima.
+function AturanPembayaranInfo() {
+  const langkah = [
+    {
+      icon: Wallet,
+      judul: "1. Pembeli membayar ke platform",
+      teks:
+        "Saat pembeli checkout, uang pembayaran masuk ke rekening admin/platform terlebih dahulu — bukan langsung ke rekening toko Anda.",
+    },
+    {
+      icon: Store,
+      judul: "2. Toko memproses & mengirim pesanan",
+      teks:
+        "Setelah pesanan masuk, toko menyiapkan dan mengirim barang seperti biasa melalui menu \u201cPesanan Masuk\u201d.",
+    },
+    {
+      icon: PackageCheck,
+      judul: "3. Pembeli konfirmasi barang diterima",
+      teks:
+        "Dana pembeli tetap ditahan admin selama barang dalam perjalanan, sampai pembeli menandai pesanan sebagai \u201cditerima\u201d.",
+    },
+    {
+      icon: Banknote,
+      judul: "4. Admin mencairkan dana ke toko",
+      teks: `Setelah admin memverifikasi pesanan selesai, dana langsung dicairkan ke toko dengan potongan komisi platform sebesar ${KOMISI_PERSEN}% dari nilai barang.`,
+    },
+  ];
+
+  return (
+    <div className="mb-5 border border-blue-100 rounded-xl bg-blue-50/60 p-4">
+      <div className="flex items-start gap-2.5 mb-3.5">
+        <div className="w-8 h-8 shrink-0 rounded-lg bg-blue-600 text-white flex items-center justify-center">
+          <ShieldCheck size={16} />
+        </div>
+        <div>
+          <p className="font-display font-semibold text-slate-900 text-sm">
+            Aturan Pembayaran: Dana Ditahan Dulu oleh Admin
+          </p>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Mohon dibaca sebelum mengajukan toko — ini berlaku untuk semua
+            transaksi di toko Anda.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        {langkah.map(({ icon: Icon, judul, teks }) => (
+          <div
+            key={judul}
+            className="flex items-start gap-2.5 p-3 bg-white rounded-lg border border-blue-100"
+          >
+            <Icon size={15} className="mt-0.5 shrink-0 text-blue-600" />
+            <div>
+              <p className="text-xs font-semibold text-slate-800">{judul}</p>
+              <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                {teks}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <p className="text-[11px] text-slate-500 mt-3">
+        Dengan kata lain: uang hasil penjualan tidak langsung masuk ke toko
+        saat pembeli membayar. Toko akan menerima dana{" "}
+        <b>setelah pembeli mengonfirmasi barang sudah diterima</b> dan admin
+        selesai memverifikasi pesanan tersebut.
+      </p>
+    </div>
+  );
+}
+
 export default function AjukanToko() {
   const { session } = useAuth();
   const userId = session?.user?.id;
@@ -77,6 +167,7 @@ export default function AjukanToko() {
   const [noTelp, setNoTelp] = useState("");
   const [deskripsi, setDeskripsi] = useState("");
   const [file, setFile] = useState(null);
+  const [setujuAturanPembayaran, setSetujuAturanPembayaran] = useState(false);
 
   const fetchPengajuan = useCallback(async () => {
     if (!userId) return;
@@ -128,6 +219,12 @@ export default function AjukanToko() {
       alert("File SK pembentukan toko online wajib dilampirkan.");
       return;
     }
+    if (!setujuAturanPembayaran) {
+      alert(
+        "Silakan centang persetujuan aturan pembayaran terlebih dahulu sebelum mengirim pengajuan."
+      );
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -157,6 +254,12 @@ export default function AjukanToko() {
     e.preventDefault();
     if (!namaToko.trim()) {
       alert("Nama toko wajib diisi.");
+      return;
+    }
+    if (!setujuAturanPembayaran) {
+      alert(
+        "Silakan centang persetujuan aturan pembayaran terlebih dahulu sebelum mengajukan ulang."
+      );
       return;
     }
 
@@ -217,10 +320,16 @@ export default function AjukanToko() {
   const status = pengajuan?.status;
   const statusInfo = status ? STATUS_INFO[status] : null;
   const StatusIcon = statusInfo?.icon;
+  const tampilkanForm = !pengajuan || status === "ditolak";
 
   return (
     <Layout title="Ajukan Toko" subtitle="Buka toko online untuk sekolah Anda">
       {errorMsg && <div className="mb-4 text-sm text-red-600">{errorMsg}</div>}
+
+      {/* Penjelasan aturan pembayaran — selalu tampil selama form pengajuan
+          masih relevan (belum pernah mengajukan, atau sedang ajukan ulang),
+          supaya dibaca SEBELUM mengirim pengajuan. */}
+      {tampilkanForm && <AturanPembayaranInfo />}
 
       {/* Status pengajuan terakhir (kalau ada) */}
       {pengajuan && (
@@ -291,7 +400,7 @@ export default function AjukanToko() {
       {/* Form: tampil kalau belum pernah mengajukan, atau pengajuan
           terakhir ditolak (untuk ajukan ulang). Kalau masih "menunggu"
           atau sudah "disetujui", form disembunyikan. */}
-      {(!pengajuan || status === "ditolak") && (
+      {tampilkanForm && (
         <form
           onSubmit={status === "ditolak" ? handleAjukanUlang : handleAjukanBaru}
           className="border border-slate-200 rounded-xl bg-white p-4 space-y-4"
@@ -368,9 +477,29 @@ export default function AjukanToko() {
             </label>
           </div>
 
+          {/* Persetujuan aturan pembayaran — wajib dicentang sebelum kirim */}
+          <label className="flex items-start gap-2.5 p-3 bg-slate-50 border border-slate-200 rounded-lg cursor-pointer">
+            <input
+              type="checkbox"
+              checked={setujuAturanPembayaran}
+              onChange={(e) => setSetujuAturanPembayaran(e.target.checked)}
+              className="mt-0.5 w-4 h-4 accent-blue-600"
+            />
+            <span className="text-xs text-slate-600 leading-relaxed">
+              Saya memahami dan menyetujui bahwa{" "}
+              <b>
+                dana hasil penjualan akan ditahan sementara oleh admin dan
+                baru dicairkan ke toko setelah pembeli mengonfirmasi barang
+                diterima
+              </b>
+              , dengan potongan komisi platform sebesar {KOMISI_PERSEN}% dari
+              nilai transaksi, sebagaimana dijelaskan di atas.
+            </span>
+          </label>
+
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || !setujuAturanPembayaran}
             className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
           >
             {submitting && <Loader2 size={15} className="animate-spin" />}
