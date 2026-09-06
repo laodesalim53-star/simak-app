@@ -60,7 +60,14 @@ import { supabase } from '../lib/supabaseClient'
 // Menu ADMIN dikelompokkan per kategori supaya tidak jadi satu daftar panjang.
 // Dibuat sebagai fungsi karena "Persetujuan Akun" dan "Profil Sekolah" hanya
 // boleh tampil untuk admin utama / superadmin, bukan admin biasa.
-function getGroupsAdmin(isAdminUtama, isSuperAdmin, jumlahMenunggu = 0, jumlahPesanBelumDibaca = 0, jumlahPesanPusatBelumDibaca = 0) {
+function getGroupsAdmin(
+  isAdminUtama,
+  isSuperAdmin,
+  jumlahMenunggu = 0,
+  jumlahPesanBelumDibaca = 0,
+  jumlahPesanPusatBelumDibaca = 0,
+  jumlahPengajuanTokoMenunggu = 0
+) {
   return [
     {
       label: null, // tanpa judul grup — selalu di atas
@@ -74,6 +81,13 @@ function getGroupsAdmin(isAdminUtama, isSuperAdmin, jumlahMenunggu = 0, jumlahPe
         { to: '/toko', label: 'Toko', icon: Store },
         { to: '/riwayat-pesanan', label: 'Riwayat Pesanan', icon: Receipt },
         { to: '/pesanan-masuk', label: 'Pesanan Masuk (Toko)', icon: Inbox },
+        // "Ajukan Toko" hanya untuk admin sekolah (admin/admin_utama) — sesuai
+        // RLS insert pengajuan_toko yang membatasi ke kedua role itu.
+        // Superadmin tidak mengajukan toko, jadi menu ini disembunyikan
+        // untuknya (superadmin punya menu "Persetujuan Toko" sendiri).
+        ...(!isSuperAdmin
+          ? [{ to: '/ajukan-toko', label: 'Ajukan Toko', icon: Store }]
+          : []),
         { to: '/rapat', label: 'Rapat Video', icon: Video },
         { to: '/galeri', label: 'Galeri Kegiatan', icon: Images },
         { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
@@ -130,10 +144,16 @@ function getGroupsAdmin(isAdminUtama, isSuperAdmin, jumlahMenunggu = 0, jumlahPe
         { to: '/hari-libur', label: 'Hari Libur', icon: CalendarOff },
         { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
         { to: '/backup', label: 'Backup Data', icon: DatabaseBackup },
-        // Manajemen Sekolah hanya untuk superadmin.
+        // Manajemen Sekolah & Persetujuan Toko hanya untuk superadmin.
         ...(isSuperAdmin
           ? [
               { to: '/manajemen-sekolah', label: 'Manajemen Sekolah', icon: Building2 },
+              {
+                to: '/persetujuan-toko',
+                label: 'Persetujuan Toko',
+                icon: ShieldCheck,
+                badge: jumlahPengajuanTokoMenunggu,
+              },
             ]
           : []),
         // "Persetujuan Akun" dan "Profil Sekolah" hanya untuk admin utama / superadmin
@@ -222,7 +242,7 @@ function NavItem({ to, label, icon: Icon, end, badge, onNavigate, external }) {
   // dasbor tetap terbuka.
   if (external) {
     return (
-      <a
+      
         href={to}
         target="_blank"
         rel="noopener noreferrer"
@@ -380,6 +400,41 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
     }
   }, [isAdminUtama, isSuperAdmin, sekolahId])
 
+  // Notifikasi real-time: jumlah pengajuan toko yang masih menunggu persetujuan.
+  // Hanya relevan untuk superadmin (satu-satunya yang punya menu "Persetujuan Toko").
+  const [jumlahPengajuanTokoMenunggu, setJumlahPengajuanTokoMenunggu] = useState(0)
+
+  useEffect(() => {
+    if (!isSuperAdmin) {
+      setJumlahPengajuanTokoMenunggu(0)
+      return
+    }
+
+    let aktif = true
+
+    async function muatJumlahPengajuanToko() {
+      const { count } = await supabase
+        .from('pengajuan_toko')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'menunggu')
+      if (aktif) setJumlahPengajuanTokoMenunggu(count || 0)
+    }
+
+    muatJumlahPengajuanToko()
+
+    const channel = supabase
+      .channel('pengajuan-toko-notifikasi')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pengajuan_toko' }, () => {
+        muatJumlahPengajuanToko()
+      })
+      .subscribe()
+
+    return () => {
+      aktif = false
+      supabase.removeChannel(channel)
+    }
+  }, [isSuperAdmin])
+
   // Notifikasi real-time: jumlah pesan masuk yang belum dibaca (fitur Pesan).
   const [jumlahPesanBelumDibaca, setJumlahPesanBelumDibaca] = useState(0)
 
@@ -472,7 +527,14 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
     }
   }, [session?.user?.id, isAdmin, isSuperAdmin, sekolahId])
 
-  const groupsAdmin = getGroupsAdmin(isAdminUtama, isSuperAdmin, jumlahMenunggu, jumlahPesanBelumDibaca, jumlahPesanPusatBelumDibaca)
+  const groupsAdmin = getGroupsAdmin(
+    isAdminUtama,
+    isSuperAdmin,
+    jumlahMenunggu,
+    jumlahPesanBelumDibaca,
+    jumlahPesanPusatBelumDibaca,
+    jumlahPengajuanTokoMenunggu
+  )
   const linksGuru = getLinksGuru(jumlahPesanBelumDibaca, sekolahId)
   const linksOrangTua = getLinksOrangTua(jumlahPesanBelumDibaca, sekolahId)
 
