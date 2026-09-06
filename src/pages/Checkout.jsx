@@ -13,18 +13,23 @@ import Layout from "../components/Layout";
 // Alur (SETELAH integrasi Midtrans):
 // 1. Ambil isi keranjang untuk toko ini dari CartContext
 // 2. Panggil fungsi database "buat_pesanan" -> membuat baris di
-//    pesanan + pesanan_item dan mengurangi stok (seperti sebelumnya).
-// 3. BARU: panggil Edge Function "create-transaction" dengan
-//    pesanan_id yang baru dibuat -> dapat snap_token dari Midtrans.
-// 4. BARU: buka popup pembayaran Snap pakai snap_token itu.
+//    pesanan + pesanan_item, MENYIMPAN data penerima/alamat pengiriman
+//    (baru), dan mengurangi stok.
+// 3. Panggil Edge Function "create-transaction" dengan pesanan_id yang
+//    baru dibuat -> dapat snap_token dari Midtrans.
+// 4. Buka popup pembayaran Snap pakai snap_token itu.
 // 5. Keranjang baru dikosongkan & diarahkan ke halaman sukses SETELAH
 //    pembeli benar-benar menyelesaikan pembayaran (onSuccess/onPending),
 //    bukan langsung setelah pesanan dibuat seperti sebelumnya — karena
 //    sekarang pesanan bisa dibuat tapi belum tentu dibayar.
 //
-// PERBAIKAN (tampilan): halaman ini sebelumnya merender <div> polos tanpa
-// <Layout>, sehingga Sidebar & header aplikasi hilang total saat dibuka.
-// Sekarang dibungkus <Layout> seperti pola di halaman lain (mis. Toko.jsx).
+// BARU (alamat pengiriman): sebelumnya pesanan tidak menyimpan siapa
+// pemesan & alamatnya sama sekali, sehingga penjual di halaman Pesanan
+// Masuk tidak tahu harus mengirim ke mana. Sekarang wajib diisi di sini
+// dan disimpan PERSIS seperti saat pesanan dibuat (tidak berubah walau
+// pembeli nanti mengubah alamat di profilnya). Nilai awal diambil dari
+// data profil pembeli (nama & no HP) sebagai draf yang bisa diedit,
+// supaya pembeli tidak perlu ketik ulang dari nol tiap checkout.
 
 // Ganti ke Client Key PRODUCTION dan URL produksi Snap.js saat go-live:
 // https://app.midtrans.com/snap/snap.js
@@ -59,6 +64,10 @@ export default function Checkout() {
   const { getCartItems, clearCart } = useCart();
 
   const [catatan, setCatatan] = useState("");
+  const [namaPenerima, setNamaPenerima] = useState("");
+  const [noHpPenerima, setNoHpPenerima] = useState("");
+  const [alamatPengiriman, setAlamatPengiriman] = useState("");
+  const [prefillLoading, setPrefillLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [snapReady, setSnapReady] = useState(false);
@@ -71,6 +80,47 @@ export default function Checkout() {
     loadSnapScript()
       .then(() => setSnapReady(true))
       .catch(() => setErrorMsg("Gagal memuat layanan pembayaran. Coba muat ulang halaman."));
+  }, []);
+
+  // Isi draf awal nama/no HP/alamat dari data profil pembeli, supaya
+  // tidak perlu ketik ulang dari nol. Tetap bisa diedit sebelum submit.
+  useEffect(() => {
+    let mounted = true;
+
+    async function muatDrafProfil() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user || !mounted) {
+        setPrefillLoading(false);
+        return;
+      }
+
+      const { data: profilData } = await supabase
+        .from("profil")
+        .select("nama_lengkap_pendaftar, no_hp, alamat, guru_id, guru:guru_id ( nama_lengkap )")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (!mounted) return;
+
+      if (profilData) {
+        setNamaPenerima(
+          profilData.guru?.nama_lengkap || profilData.nama_lengkap_pendaftar || ""
+        );
+        setNoHpPenerima(profilData.no_hp || "");
+        setAlamatPengiriman(profilData.alamat || "");
+      }
+
+      setPrefillLoading(false);
+    }
+
+    muatDrafProfil();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const formatRupiah = (angka) => {
@@ -103,14 +153,30 @@ export default function Checkout() {
       setErrorMsg("Layanan pembayaran belum siap, tunggu sebentar lalu coba lagi.");
       return;
     }
+    if (!namaPenerima.trim()) {
+      setErrorMsg("Nama penerima wajib diisi.");
+      return;
+    }
+    if (!noHpPenerima.trim()) {
+      setErrorMsg("Nomor HP penerima wajib diisi.");
+      return;
+    }
+    if (!alamatPengiriman.trim()) {
+      setErrorMsg("Alamat pengiriman wajib diisi.");
+      return;
+    }
 
     setLoading(true);
 
-    // 1) Buat pesanan seperti sebelumnya (stok berkurang di sini)
+    // 1) Buat pesanan seperti sebelumnya (stok berkurang di sini), sekarang
+    // sekaligus menyimpan data penerima & alamat pengiriman.
     const { data: pesananId, error } = await supabase.rpc("buat_pesanan", {
       p_toko_id: tokoId,
       p_items: items.map((item) => ({ barang_id: item.id, qty: item.qty })),
       p_catatan: catatan || null,
+      p_nama_penerima: namaPenerima.trim(),
+      p_no_hp_penerima: noHpPenerima.trim(),
+      p_alamat_pengiriman: alamatPengiriman.trim(),
     });
 
     if (error) {
@@ -215,6 +281,51 @@ export default function Checkout() {
             <span>Total</span>
             <span>{formatRupiah(total)}</span>
           </div>
+        </div>
+
+        {/* Data penerima & alamat pengiriman — wajib diisi, tersimpan
+            persis seperti saat pesanan ini dibuat. */}
+        <div className="mb-4 p-3 border rounded bg-gray-50">
+          <p className="mb-3 text-sm font-semibold text-gray-700">
+            Alamat Pengiriman
+          </p>
+
+          <label className="block mb-1 text-xs text-gray-500">
+            Nama Penerima
+          </label>
+          <input
+            type="text"
+            value={namaPenerima}
+            onChange={(e) => setNamaPenerima(e.target.value)}
+            placeholder={prefillLoading ? "Memuat..." : "Nama lengkap penerima"}
+            className="w-full px-3 py-2 mb-3 border rounded"
+          />
+
+          <label className="block mb-1 text-xs text-gray-500">
+            Nomor HP Penerima
+          </label>
+          <input
+            type="tel"
+            value={noHpPenerima}
+            onChange={(e) => setNoHpPenerima(e.target.value)}
+            placeholder={prefillLoading ? "Memuat..." : "08xxxxxxxxxx"}
+            className="w-full px-3 py-2 mb-3 border rounded"
+          />
+
+          <label className="block mb-1 text-xs text-gray-500">
+            Alamat Lengkap
+          </label>
+          <textarea
+            value={alamatPengiriman}
+            onChange={(e) => setAlamatPengiriman(e.target.value)}
+            placeholder={
+              prefillLoading
+                ? "Memuat..."
+                : "Nama jalan, nomor rumah, RT/RW, kelurahan, kecamatan, kota, kode pos"
+            }
+            rows={3}
+            className="w-full px-3 py-2 border rounded"
+          />
         </div>
 
         <label className="block mb-1 text-xs text-gray-500">
