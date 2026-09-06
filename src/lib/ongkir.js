@@ -1,61 +1,72 @@
 // src/lib/ongkir.js
 //
-// Konfigurasi tarif ongkir per kurir & kategori barang.
 // ====================================================================
-// SEMUA ANGKA DI BAWAH INI CONTOH — WAJIB DIGANTI SESUAI TARIF TOKO ANDA.
+// VERSI KHUSUS WILAYAH TIMUR (tahap awal): Dobo (Kab. Kepulauan Aru) <-> Ambon
 // ====================================================================
+// PENTING — WAJIB DIKONFIRMASI SEBELUM GO-LIVE:
+// Angka di bawah adalah ESTIMASI berdasarkan referensi tarif publik yang
+// ditemukan untuk rute SEJENIS (Ambon<->Dobo untuk JNE, dan Jakarta->Ambon
+// untuk Pos Indonesia yang lalu diperkirakan turun karena rute Dobo-Ambon
+// jauh lebih dekat). BUKAN tarif resmi dari agen di Dobo. Sebelum toko
+// live, datangi/telepon kantor JNE dan Pos Indonesia Dobo, minta tarif
+// resmi Dobo -> Ambon (dan sebaliknya) per kg, lalu ganti angka di bawah.
+//
+// Kenapa modelnya per-KG (bukan flat per kategori seperti versi lama)?
+// Kurir ke wilayah kepulauan/timur menghitung ongkos berdasarkan berat
+// aktual (kadang dibandingkan juga dengan berat volumetrik), bukan jenis
+// barang. Jadi setiap barang di `barang` WAJIB punya kolom berat (kg) —
+// kalau belum ada, pakai fallback DEFAULT_BERAT_KG di bawah dulu.
+// ====================================================================
+
 export const DAFTAR_KURIR = [
   { kode: "jne", label: "JNE" },
-  { kode: "jnt", label: "J&T" },
-  { kode: "sicepat", label: "SiCepat" },
-  { kode: "anteraja", label: "Anteraja" },
-  { kode: "gosend", label: "GoSend (Instan)" },
+  { kode: "pos", label: "Pos Indonesia (Kilat Khusus)" },
   { kode: "cod", label: "COD (Bayar di Tempat)" },
-  // BARU: ambil sendiri di lokasi penjual — tanpa ongkir, tanpa biaya COD.
-  // Ditangani secara eksplisit (bukan lewat TARIF_FLAT) di hitungOngkir di bawah.
   { kode: "pickup", label: "Ambil Sendiri (Jemput di Tempat)" },
+  // SiCepat, Anteraja, GoSend SENGAJA dihapus dari sini — belum ada bukti
+  // ketiganya melayani Dobo/Kepulauan Aru. Tambahkan lagi kalau ternyata
+  // ada agen resmi di daerah Anda.
 ];
 
-// Kode kurir yang berarti "ambil sendiri" — selalu Rp0, tidak dihitung dari
-// TARIF_FLAT / TARIF_PER_KG_HASIL_LAUT (yang memang sengaja tidak diisi
-// untuk kode ini).
 const KODE_PICKUP = "pickup";
 
-// Tarif FLAT (Rp) untuk kategori "pakaian" & "barang".
-// Dikenakan SEKALI per kategori yang muncul di keranjang, bukan per item —
-// diasumsikan 1 kategori = 1 paket kemasan. Kalau keranjang berisi pakaian
-// DAN barang biasa, kedua tarif flat akan dijumlahkan (2 paket terpisah).
-// Catatan: "pickup" sengaja TIDAK didaftarkan di sini — ditangani lewat
-// pengecekan KODE_PICKUP di hitungOngkir supaya selalu Rp0 apa pun isi
-// keranjangnya, bukan mengandalkan fallback ?? 0.
-const TARIF_FLAT = {
-  jne: { pakaian: 12000, barang: 15000 },
-  jnt: { pakaian: 11000, barang: 14000 },
-  sicepat: { pakaian: 11000, barang: 14000 },
-  anteraja: { pakaian: 10000, barang: 13000 },
-  gosend: { pakaian: 15000, barang: 18000 },
-  cod: { pakaian: 13000, barang: 16000 },
+// Berat default (kg) kalau data barang belum punya kolom berat sendiri.
+// Baju/kaos ringan umumnya 0.2-0.3 kg, jaket/celana lebih berat.
+// SEBAIKNYA setiap barang di tabel `barang` diisi berat aslinya — ini
+// cuma jaring pengaman kalau kolomnya kosong.
+const DEFAULT_BERAT_KG = 0.3;
+
+// --- Tarif per kg, rute Dobo <-> Ambon --------------------------------
+// ESTIMASI, WAJIB DIKONFIRMASI KE AGEN LOKAL (lihat catatan di atas).
+const TARIF_PER_KG = {
+  jne: 40000, // referensi: JNE REG Ambon-Dobo 1kg ~Rp40.000 (arah sebaliknya)
+  pos: 35000, // referensi kasar, Pos Kilat Khusus Jakarta-Ambon ~79rb-90rb/kg,
+              // diperkirakan lebih murah untuk rute sesama Maluku (Dobo-Ambon)
+  cod: 42000, // JNE/Pos + sedikit tambahan biaya layanan COD-nya
 };
 
-// Tarif per KG untuk kategori "hasil_laut".
-// Ongkir = (berat per satuan x qty) x tarif per kg.
-// "pickup" sengaja tidak didaftarkan, sama seperti TARIF_FLAT di atas.
-const TARIF_PER_KG_HASIL_LAUT = {
-  jne: 8000,
-  jnt: 7500,
-  sicepat: 7500,
-  anteraja: 7000,
-  gosend: 10000,
-  cod: 8500,
-};
+// Berat minimum yang ditagih per pengiriman (kg), sesuai kebiasaan kurir:
+// JNE membulatkan ke atas ke kelipatan 1 kg (toleransi 0.3kg).
+// Pos Indonesia membulatkan ke kelipatan 0.25kg untuk <1kg, lalu per kg.
+function bulatkanBerat(kurirKode, totalKg) {
+  if (kurirKode === "pos") {
+    // bulatkan ke atas ke kelipatan 0.25
+    return Math.max(0.25, Math.ceil(totalKg / 0.25) * 0.25);
+  }
+  // jne & cod: minimum 1kg, toleransi 0.3kg lalu bulat ke atas per 1kg
+  if (totalKg <= 1) return 1;
+  const lebih = totalKg - 1;
+  return 1 + Math.ceil(Math.max(0, lebih - 0.3));
+}
 
-// Biaya tambahan khusus COD. Bisa persentase, nominal tetap, atau gabungan.
+// Biaya tambahan khusus COD (selain ongkos kirim itu sendiri).
+// Silakan sesuaikan kalau kebijakan tokonya beda.
 const BIAYA_COD_PERSEN = 2; // 2% dari (subtotal barang + ongkir)
-const BIAYA_COD_FLAT = 0; // atau nominal tetap, mis. 2500
+const BIAYA_COD_FLAT = 0;
 
 /**
  * Menghitung ongkir + biaya COD berdasarkan isi keranjang & kurir yang dipilih.
- * @param {Array} items - item keranjang, tiap item punya: harga, qty, kategori_ongkir, berat (opsional)
+ * @param {Array} items - item keranjang: { harga, qty, berat? (kg per satuan) }
  * @param {string} kurirKode - salah satu kode di DAFTAR_KURIR
  * @returns {{ ongkir: number, rincian: Array, biayaCod: number }}
  */
@@ -64,43 +75,26 @@ export function hitungOngkir(items, kurirKode) {
     return { ongkir: 0, rincian: [], biayaCod: 0 };
   }
 
-  // BARU: ambil sendiri di tempat — selalu gratis ongkir, tanpa biaya COD,
-  // dan tanpa rincian (tidak ada paket yang benar-benar dikirim).
   if (kurirKode === KODE_PICKUP) {
     return { ongkir: 0, rincian: [], biayaCod: 0 };
   }
 
-  const kategoriFlatSudahDihitung = new Set();
-  let ongkir = 0;
-  const rincian = [];
+  const totalBeratAktual = items.reduce((sum, item) => {
+    const beratSatuan = Number(item.berat) || DEFAULT_BERAT_KG;
+    return sum + beratSatuan * item.qty;
+  }, 0);
 
-  for (const item of items) {
-    // Fallback ke "barang" kalau data barang belum punya kategori_ongkir terisi.
-    const kategori = item.kategori_ongkir || "barang";
+  const beratDitagih = bulatkanBerat(kurirKode, totalBeratAktual);
+  const tarifKg = TARIF_PER_KG[kurirKode] || 0;
+  const ongkir = Math.round(beratDitagih * tarifKg);
 
-    if (kategori === "hasil_laut") {
-      const beratKg = Number(item.berat) || 0; // berat per satuan, dalam kg
-      const totalBerat = beratKg * item.qty;
-      const tarifKg = TARIF_PER_KG_HASIL_LAUT[kurirKode] || 0;
-      const biaya = Math.round(totalBerat * tarifKg);
-      ongkir += biaya;
-      rincian.push({
-        nama: item.nama_barang,
-        keterangan: `${totalBerat.toFixed(2)} kg x ${tarifKg.toLocaleString("id-ID")}`,
-        biaya,
-      });
-    } else if (!kategoriFlatSudahDihitung.has(kategori)) {
-      const tarifFlat =
-        TARIF_FLAT[kurirKode]?.[kategori] ?? TARIF_FLAT[kurirKode]?.barang ?? 0;
-      ongkir += tarifFlat;
-      kategoriFlatSudahDihitung.add(kategori);
-      rincian.push({
-        nama: `Kategori: ${kategori}`,
-        keterangan: "Tarif flat",
-        biaya: tarifFlat,
-      });
-    }
-  }
+  const rincian = [
+    {
+      nama: "Berat total",
+      keterangan: `${totalBeratAktual.toFixed(2)} kg (ditagih ${beratDitagih.toFixed(2)} kg) x Rp${tarifKg.toLocaleString("id-ID")}/kg`,
+      biaya: ongkir,
+    },
+  ];
 
   let biayaCod = 0;
   if (kurirKode === "cod") {
