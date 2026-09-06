@@ -8,6 +8,7 @@ import {
   Calendar,
   CreditCard,
   StickyNote,
+  Truck,
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
@@ -84,6 +85,10 @@ export default function RiwayatPesanan() {
         metode_bayar,
         created_at,
         catatan,
+        kurir,
+        ongkir,
+        biaya_cod,
+        grand_total,
         toko:toko_id ( nama_toko ),
         pesanan_item ( id, nama_barang, harga_satuan, qty, subtotal )
         `
@@ -211,7 +216,7 @@ export default function RiwayatPesanan() {
 
                   <div className="text-right shrink-0">
                     <p className="text-sm font-semibold text-slate-900">
-                      {formatRupiah(p.total)}
+                      {formatRupiah(p.grand_total || p.total)}
                     </p>
                     <div className="flex gap-1 justify-end mt-1.5">
                       <span
@@ -261,6 +266,56 @@ export default function RiwayatPesanan() {
                         </li>
                       ))}
                     </ul>
+
+                    {/* Rincian pengiriman & pembayaran — kurir, ongkir,
+                        biaya COD, dan grand total dari tabel pesanan.
+                        Selalu ditampilkan (bukan cuma saat ada kurir)
+                        supaya pembeli tetap lihat rincian subtotal ->
+                        grand total, meski kurir belum terisi. */}
+                    <div className="mt-3 pt-3 border-t border-slate-200">
+                      <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 mb-1.5">
+                        <Truck size={13} />
+                        Pengiriman & pembayaran
+                      </p>
+                      <div className="space-y-1 text-sm">
+                        {p.kurir && (
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">Kurir</span>
+                            <span className="font-medium text-slate-800">
+                              {p.kurir}
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Subtotal barang</span>
+                          <span className="text-slate-700">
+                            {formatRupiah(p.total)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Ongkos kirim</span>
+                          <span className="text-slate-700">
+                            {formatRupiah(p.ongkir)}
+                          </span>
+                        </div>
+                        {Number(p.biaya_cod) > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">Biaya COD</span>
+                            <span className="text-slate-700">
+                              {formatRupiah(p.biaya_cod)}
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex justify-between pt-1.5 mt-1.5 border-t border-slate-200">
+                          <span className="font-semibold text-slate-900">
+                            Total bayar
+                          </span>
+                          <span className="font-semibold text-slate-900">
+                            {formatRupiah(p.grand_total || p.total)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
 
                     {(p.metode_bayar || p.catatan) && (
                       <div className="mt-3 pt-3 border-t border-slate-200 space-y-1.5">
