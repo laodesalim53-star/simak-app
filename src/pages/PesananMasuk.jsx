@@ -13,6 +13,7 @@ import {
   Trash2,
   Search,
   Download,
+  MapPin,
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
@@ -100,6 +101,9 @@ function unduhCsv(daftarPesanan, namaPembeli) {
     "ID Pesanan",
     "Toko",
     "Pembeli",
+    "Nama Penerima",
+    "No HP Penerima",
+    "Alamat Pengiriman",
     "Tanggal",
     "Total",
     "Status",
@@ -112,6 +116,9 @@ function unduhCsv(daftarPesanan, namaPembeli) {
     p.id,
     p.toko?.nama_toko || "",
     namaPembeli[p.user_id] || "",
+    p.nama_penerima || "",
+    p.no_hp_penerima || "",
+    p.alamat_pengiriman || "",
     formatTanggal(p.created_at),
     p.total,
     STATUS_PESANAN[p.status]?.label || p.status,
@@ -170,6 +177,9 @@ export default function PesananMasuk() {
         metode_bayar,
         created_at,
         catatan,
+        nama_penerima,
+        no_hp_penerima,
+        alamat_pengiriman,
         toko:toko_id!inner ( nama_toko, created_by ),
         pesanan_item ( id, nama_barang, harga_satuan, qty, subtotal )
         `
@@ -283,6 +293,8 @@ export default function PesananMasuk() {
       const namaToko = p.toko?.nama_toko?.toLowerCase() || "";
       const pembeli = (namaPembeli[p.user_id] || "").toLowerCase();
       const catatan = (p.catatan || "").toLowerCase();
+      const namaPenerima = (p.nama_penerima || "").toLowerCase();
+      const alamat = (p.alamat_pengiriman || "").toLowerCase();
       const namaBarang = (p.pesanan_item || [])
         .map((item) => item.nama_barang?.toLowerCase() || "")
         .join(" ");
@@ -292,6 +304,8 @@ export default function PesananMasuk() {
         namaToko.includes(q) ||
         pembeli.includes(q) ||
         catatan.includes(q) ||
+        namaPenerima.includes(q) ||
+        alamat.includes(q) ||
         namaBarang.includes(q) ||
         idPesanan.includes(q)
       );
@@ -419,7 +433,7 @@ export default function PesananMasuk() {
                       </p>
                       <p className="flex items-center gap-1 text-xs text-slate-400 mt-0.5">
                         <User size={12} />
-                        {namaPembeli[p.user_id] || "Pembeli"}
+                        {p.nama_penerima || namaPembeli[p.user_id] || "Pembeli"}
                         <span className="mx-1">•</span>
                         <Calendar size={12} />
                         {formatTanggal(p.created_at)}
@@ -447,6 +461,38 @@ export default function PesananMasuk() {
 
                   {isExpanded && (
                     <div className="border-t border-slate-100 px-4 py-3.5 bg-slate-50">
+                      {/* Data penerima & alamat pengiriman — ini yang
+                          sebelumnya tidak ada sama sekali di halaman ini.
+                          Ditaruh paling atas karena ini info yang paling
+                          dibutuhkan penjual untuk mengirim barang. */}
+                      <div className="mb-3 p-3 rounded-lg bg-white border border-slate-200">
+                        <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 mb-1.5">
+                          <MapPin size={13} />
+                          Dikirim ke
+                        </p>
+                        {p.nama_penerima || p.no_hp_penerima || p.alamat_pengiriman ? (
+                          <>
+                            <p className="text-sm font-medium text-slate-900">
+                              {p.nama_penerima || namaPembeli[p.user_id] || "Pembeli"}
+                              {p.no_hp_penerima && (
+                                <span className="font-normal text-slate-500">
+                                  {" "}
+                                  • {p.no_hp_penerima}
+                                </span>
+                              )}
+                            </p>
+                            <p className="text-sm text-slate-600 mt-0.5 whitespace-pre-line">
+                              {p.alamat_pengiriman || "Alamat belum diisi"}
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-sm text-slate-400 italic">
+                            Pesanan ini dibuat sebelum fitur alamat pengiriman
+                            aktif, data penerima tidak tersedia.
+                          </p>
+                        )}
+                      </div>
+
                       <ul className="divide-y divide-slate-200">
                         {p.pesanan_item?.map((item) => (
                           <li
