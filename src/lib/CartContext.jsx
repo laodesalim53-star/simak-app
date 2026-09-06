@@ -24,9 +24,14 @@ import { supabase } from "./supabaseClient"; // sesuaikan path kalau berbeda di 
 
 const CartContext = createContext(null);
 const GUEST_KEY = "simak_keranjang_tamu";
+const GUEST_KURIR_KEY = "simak_kurir_tamu";
 
 function getStorageKey(userId) {
   return userId ? `simak_keranjang_${userId}` : GUEST_KEY;
+}
+
+function getKurirStorageKey(userId) {
+  return userId ? `simak_kurir_${userId}` : GUEST_KURIR_KEY;
 }
 
 function loadCart(storageKey) {
@@ -58,11 +63,19 @@ function mergeCarts(guestCart, userCart) {
   return merged;
 }
 
+// Gabungkan kurir pilihan tamu ke milik user yang baru login. Kalau user
+// sudah punya pilihan kurir sendiri untuk toko tsb, punya user yang menang.
+function mergeKurir(guestKurir, userKurir) {
+  return { ...guestKurir, ...userKurir };
+}
+
 export function CartProvider({ children }) {
   const [userId, setUserId] = useState(null);
   const [ready, setReady] = useState(false);
   // Bentuk data: { [tokoId]: { [barangId]: { id, nama_barang, harga, satuan, stok, kategori_ongkir, berat, qty } } }
   const [cart, setCart] = useState({});
+  // Bentuk data: { [tokoId]: "kode_kurir" }
+  const [kurirPerToko, setKurirPerToko] = useState({});
 
   // Pantau status login & muat cart sesuai user yang aktif
   useEffect(() => {
@@ -73,6 +86,7 @@ export function CartProvider({ children }) {
       const uid = data?.user?.id ?? null;
       setUserId(uid);
       setCart(loadCart(getStorageKey(uid)));
+      setKurirPerToko(loadCart(getKurirStorageKey(uid)));
       setReady(true);
     });
 
@@ -81,19 +95,28 @@ export function CartProvider({ children }) {
         const uid = session?.user?.id ?? null;
 
         if (event === "SIGNED_IN") {
-          // Baru saja login: gabungkan keranjang tamu (kalau ada isinya) ke
-          // keranjang milik akun ini, lalu bersihkan slot tamu supaya tidak
-          // "bocor" ke tamu berikutnya yang memakai browser/device yang sama.
+          // Baru saja login: gabungkan keranjang & kurir tamu (kalau ada
+          // isinya) ke milik akun ini, lalu bersihkan slot tamu supaya
+          // tidak "bocor" ke tamu berikutnya yang memakai browser/device
+          // yang sama.
           const guestCart = loadCart(GUEST_KEY);
           const userCart = loadCart(getStorageKey(uid));
           const merged = mergeCarts(guestCart, userCart);
           setCart(merged);
           localStorage.setItem(getStorageKey(uid), JSON.stringify(merged));
           localStorage.removeItem(GUEST_KEY);
+
+          const guestKurir = loadCart(GUEST_KURIR_KEY);
+          const userKurir = loadCart(getKurirStorageKey(uid));
+          const mergedKurir = mergeKurir(guestKurir, userKurir);
+          setKurirPerToko(mergedKurir);
+          localStorage.setItem(getKurirStorageKey(uid), JSON.stringify(mergedKurir));
+          localStorage.removeItem(GUEST_KURIR_KEY);
         } else {
           // Restore sesi biasa (refresh halaman) atau logout — cukup muat
-          // ulang keranjang sesuai slot user/tamu yang sedang aktif.
+          // ulang cart & kurir sesuai slot user/tamu yang sedang aktif.
           setCart(loadCart(getStorageKey(uid)));
+          setKurirPerToko(loadCart(getKurirStorageKey(uid)));
         }
 
         setUserId(uid);
@@ -112,6 +135,12 @@ export function CartProvider({ children }) {
     if (!ready) return;
     localStorage.setItem(getStorageKey(userId), JSON.stringify(cart));
   }, [cart, userId, ready]);
+
+  // Simpan kurir pilihan ke localStorage tiap kali berubah.
+  useEffect(() => {
+    if (!ready) return;
+    localStorage.setItem(getKurirStorageKey(userId), JSON.stringify(kurirPerToko));
+  }, [kurirPerToko, userId, ready]);
 
   const addItem = useCallback((tokoId, barang, qty = 1) => {
     setCart((prev) => {
@@ -177,6 +206,15 @@ export function CartProvider({ children }) {
     [cart]
   );
 
+  const getKurir = useCallback(
+    (tokoId) => kurirPerToko[tokoId] || "",
+    [kurirPerToko]
+  );
+
+  const setKurirToko = useCallback((tokoId, kurirKode) => {
+    setKurirPerToko((prev) => ({ ...prev, [tokoId]: kurirKode }));
+  }, []);
+
   const value = {
     addItem,
     updateQty,
@@ -184,6 +222,8 @@ export function CartProvider({ children }) {
     clearCart,
     getCartItems,
     getCartCount,
+    getKurir,
+    setKurirToko,
   };
 
   return (
