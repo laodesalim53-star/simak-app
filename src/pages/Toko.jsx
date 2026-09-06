@@ -16,6 +16,7 @@ import {
   Trash2,
   Package,
   Upload,
+  Download,
   Settings2,
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
@@ -63,9 +64,27 @@ import Layout from "../components/Layout";
 // Ditambahkan `isPemilikTokoAktif` & `bisaKelolaBarang` supaya pemilik
 // toko yang sedang membuka tokonya sendiri juga mendapat akses kelola
 // barang, tanpa mengubah aturan CRUD untuk data toko itu sendiri.
+// BARU (unduh template CSV): tombol "Unduh Template" di sebelah "Import
+// CSV" (superadmin only), supaya admin tidak perlu mencari-cari sendiri
+// format kolom yang benar. Template dibuat langsung di browser (Blob),
+// TIDAK perlu file statis terpisah / endpoint server. Kolomnya sengaja
+// dibuat identik dengan yang dibaca handleImportCSV (nama_toko, alamat,
+// no_telp, deskripsi, status) supaya file yang diunduh selalu sinkron
+// kalau parser importnya nanti berubah.
+// CATATAN: handleImportCSV masih memakai parser CSV sederhana
+// (row.split(",")) yang TIDAK mendukung koma di dalam satu kolom, jadi
+// template & contoh baris di bawah sengaja menghindari tanda koma pada
+// isi alamat/deskripsi.
 // =========================================================
 
 const BARANG_PHOTO_BUCKET = "barang-photos";
+
+// Template CSV untuk import toko — kolomnya harus selalu sinkron dengan
+// header yang dibaca handleImportCSV di bawah.
+const TEMPLATE_CSV_TOKO = `nama_toko,alamat,no_telp,deskripsi,status
+Toko Koperasi Sekolah,Jl. Pendidikan No. 1 Manokwari,081234567890,Menjual alat tulis dan seragam sekolah,aktif
+Kantin Bu Siti,Jl. Merdeka No. 12 Manokwari,081298765432,Aneka jajanan dan makanan ringan,aktif
+`;
 
 // Palet warna kartu toko - berotasi sesuai urutan toko, meniru pola
 // warna kartu ringkasan di Dasbor.
@@ -401,6 +420,23 @@ export default function Toko() {
     fetchToko();
   };
 
+  // Unduh template CSV import toko — dibuat langsung di browser (Blob),
+  // supaya admin selalu dapat format kolom yang benar tanpa harus mencari
+  // file terpisah. Kolom di TEMPLATE_CSV_TOKO harus selalu sinkron dengan
+  // header yang dibaca handleImportCSV di atas.
+  const handleDownloadTemplateCSV = () => {
+    if (!isSuperadmin) return;
+    const blob = new Blob([TEMPLATE_CSV_TOKO], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "template_import_toko.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   // ---------------------------------------------------
   // Modal daftar barang - buka/tutup
   // ---------------------------------------------------
@@ -613,6 +649,13 @@ export default function Toko() {
 
   const headerActions = isSuperadmin && (
     <>
+      <button
+        onClick={handleDownloadTemplateCSV}
+        className="flex items-center gap-1.5 px-3 h-10 text-sm font-medium bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600"
+      >
+        <Download size={15} />
+        Unduh Template
+      </button>
       <label className="flex items-center gap-1.5 px-3 h-10 text-sm font-medium bg-white border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 text-slate-600">
         <Upload size={15} />
         Import CSV
