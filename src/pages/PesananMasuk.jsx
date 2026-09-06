@@ -15,6 +15,9 @@ import {
   Download,
   MapPin,
   Truck,
+  Sparkles,
+  ClipboardList,
+  Tag,
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
@@ -36,6 +39,14 @@ import Layout from "../components/Layout";
 // Tanpa ini, tombol Hapus yang disembunyikan di UI TIDAK cukup —
 // siapa pun yang login tetap bisa memanggil supabase.from("pesanan")
 // .delete() langsung lewat console browser.
+//
+// TEMA (mengikuti Toko.jsx): banner sambutan bergradasi + motif batik,
+// dan kartu pesanan kini pakai palet warna solid berotasi (biru/hijau/
+// ungu/oranye) yang sama seperti kartu toko di Dasbor & Toko, supaya
+// tampilan antar halaman konsisten. Bagian detail yang terbuka (alamat,
+// pengiriman, daftar barang) tetap memakai latar terang agar tetap mudah
+// dibaca — sama seperti modal barang di Toko yang tetap putih walau
+// kartu di luarnya berwarna.
 // =========================================================
 
 const FILTER_STATUS = [
@@ -60,7 +71,94 @@ const STATUS_BAYAR = {
   kadaluarsa: { label: "Kadaluarsa", className: "bg-slate-100 text-slate-500" },
 };
 
+// Badge versi "di atas warna solid" — dipakai di header kartu pesanan
+// yang kini berlatar warna, supaya kontrasnya tetap enak dibaca
+// (mengikuti pola badgeOn/badgeOff pada kartu toko).
+const STATUS_PESANAN_ON_COLOR = {
+  baru: "bg-white/25 text-white",
+  diproses: "bg-white/25 text-white",
+  selesai: "bg-white/25 text-white",
+  dibatalkan: "bg-white/25 text-white",
+};
+
 const PAGE_SIZE = 10;
+
+// Palet warna kartu — identik dengan CARD_COLORS di Toko.jsx & Dasbor,
+// dipakai berotasi sesuai urutan pesanan yang tampil di halaman ini.
+const CARD_COLORS = [
+  {
+    bg: "bg-blue-600",
+    icon: "bg-white/15 text-white",
+    sub: "text-blue-100",
+  },
+  {
+    bg: "bg-emerald-600",
+    icon: "bg-white/15 text-white",
+    sub: "text-emerald-100",
+  },
+  {
+    bg: "bg-purple-600",
+    icon: "bg-white/15 text-white",
+    sub: "text-purple-100",
+  },
+  {
+    bg: "bg-orange-500",
+    icon: "bg-white/15 text-white",
+    sub: "text-orange-100",
+  },
+];
+
+// Motif batik (kawung + parang) — disalin persis dari Toko.jsx/Dasbor.jsx
+// supaya motif dekoratifnya identik di seluruh halaman.
+function BatikOverlay({ patternId, strokeColor = "#d4af37", opacity = 1, size = 72 }) {
+  return (
+    <svg
+      className="absolute inset-0 w-full h-full pointer-events-none"
+      preserveAspectRatio="xMidYMid slice"
+      aria-hidden="true"
+    >
+      <defs>
+        <pattern
+          id={patternId}
+          x="0"
+          y="0"
+          width={size}
+          height={size}
+          patternUnits="userSpaceOnUse"
+          patternTransform="rotate(8)"
+        >
+          {/* motif kawung: empat lengkung elips mengelilingi titik pusat */}
+          <g fill="none" stroke={strokeColor} strokeWidth="1.1" opacity={opacity}>
+            <ellipse cx={size / 2} cy={size * 0.333} rx={size * 0.125} ry={size * 0.194} opacity="0.55" />
+            <ellipse cx={size / 2} cy={size * 0.667} rx={size * 0.125} ry={size * 0.194} opacity="0.55" />
+            <ellipse cx={size * 0.333} cy={size / 2} rx={size * 0.194} ry={size * 0.125} opacity="0.55" />
+            <ellipse cx={size * 0.667} cy={size / 2} rx={size * 0.194} ry={size * 0.125} opacity="0.55" />
+            <circle cx={size / 2} cy={size / 2} r={size * 0.042} opacity="0.7" />
+          </g>
+          {/* garis parang halus di sela-sela motif kawung */}
+          <path
+            d={`M0 ${size} L${size * 0.25} ${size * 0.75} L${size * 0.5} ${size} L${size * 0.75} ${size * 0.75} L${size} ${size}`}
+            fill="none"
+            stroke={strokeColor}
+            strokeWidth="0.8"
+            opacity={opacity * 0.35}
+          />
+          <path
+            d={`M0 0 L${size * 0.25} ${size * 0.25} L0 ${size * 0.5}`}
+            fill="none"
+            stroke={strokeColor}
+            strokeWidth="0.8"
+            opacity={opacity * 0.3}
+          />
+          <circle cx={size * 0.11} cy={size * 0.11} r="1.3" fill={strokeColor} opacity={opacity * 0.4} />
+          <circle cx={size * 0.89} cy={size * 0.22} r="1.3" fill={strokeColor} opacity={opacity * 0.4} />
+          <circle cx={size * 0.22} cy={size * 0.89} r="1.3" fill={strokeColor} opacity={opacity * 0.4} />
+        </pattern>
+      </defs>
+      <rect x="0" y="0" width="100%" height="100%" fill={`url(#${patternId})`} />
+    </svg>
+  );
+}
 
 function formatRupiah(nilai) {
   if (nilai === null || nilai === undefined || nilai === "") return "-";
@@ -77,7 +175,7 @@ function formatTanggal(iso) {
   });
 }
 
-// Badge kecil untuk status — dipakai ulang, mengurangi duplikasi
+// Badge kecil untuk status — dipakai di bagian detail (latar putih)
 function Badge({ info }) {
   return (
     <span
@@ -351,6 +449,47 @@ export default function PesananMasuk() {
           : "Pesanan yang masuk ke toko Anda"
       }
     >
+      {/* ================= Banner sambutan (tema sama dengan Toko) ================= */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-fuchsia-600 px-5 sm:px-6 py-5 sm:py-6 mb-6 shadow-sm">
+        <BatikOverlay
+          patternId="batikBannerPesanan"
+          strokeColor="#ffffff"
+          opacity={0.4}
+          size={64}
+        />
+        <Truck
+          size={110}
+          strokeWidth={1.2}
+          className="absolute -right-5 -bottom-8 text-white/10 rotate-[12deg] pointer-events-none"
+        />
+        <Package
+          size={64}
+          strokeWidth={1.2}
+          className="absolute right-20 -top-5 text-white/10 -rotate-12 pointer-events-none hidden sm:block"
+        />
+        <MapPin
+          size={52}
+          strokeWidth={1.2}
+          className="absolute right-44 bottom-3 text-white/10 rotate-6 pointer-events-none hidden md:block"
+        />
+
+        <div className="relative z-10 flex items-start sm:items-center gap-3">
+          <div className="w-11 h-11 shrink-0 rounded-xl bg-white/15 flex items-center justify-center text-white">
+            <Sparkles size={20} />
+          </div>
+          <div className="min-w-0">
+            <p className="font-display font-semibold text-white text-base sm:text-lg">
+              {isSuperAdmin ? "Pantau semua pesanan masuk" : "Pesanan masuk ke toko Anda"}
+            </p>
+            <p className="text-sm text-blue-100 mt-0.5">
+              {isSuperAdmin
+                ? "Lihat, cari, dan kelola status pesanan dari seluruh toko dalam satu tempat."
+                : "Cek detail penerima, pengiriman, dan barang untuk setiap pesanan yang masuk."}
+            </p>
+          </div>
+        </div>
+      </div>
+
       {errorMsg && (
         <div className="mb-4 text-sm text-red-600">{errorMsg}</div>
       )}
@@ -416,7 +555,8 @@ export default function PesananMasuk() {
       ) : (
         <>
           <div className="space-y-3">
-            {daftarTampil.map((p) => {
+            {daftarTampil.map((p, idx) => {
+              const c = CARD_COLORS[idx % CARD_COLORS.length];
               const statusInfo = STATUS_PESANAN[p.status] || {
                 label: p.status,
                 className: "bg-slate-100 text-slate-600",
@@ -425,45 +565,63 @@ export default function PesananMasuk() {
                 label: p.status_bayar,
                 className: "bg-slate-100 text-slate-600",
               };
+              const statusOnColor =
+                STATUS_PESANAN_ON_COLOR[p.status] || "bg-white/25 text-white";
               const isExpanded = expandedId === p.id;
 
               return (
                 <div
                   key={p.id}
-                  className="border border-slate-200 rounded-xl bg-white overflow-hidden hover:shadow-sm transition-shadow"
+                  className="rounded-2xl bg-white overflow-hidden shadow-sm hover:shadow-md transition-shadow"
                 >
+                  {/* Header kartu — latar warna solid berotasi + motif batik,
+                      mengikuti tema kartu toko */}
                   <button
                     onClick={() => setExpandedId(isExpanded ? null : p.id)}
-                    className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+                    className={`relative w-full flex items-center gap-3 px-4 py-3.5 text-left overflow-hidden ${c.bg}`}
                   >
-                    <div className="w-10 h-10 shrink-0 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+                    <BatikOverlay
+                      patternId={`batikPesanan-${p.id}`}
+                      strokeColor="#ffffff"
+                      opacity={0.5}
+                      size={56}
+                    />
+
+                    <div
+                      className={`relative z-10 w-10 h-10 shrink-0 rounded-xl ${c.icon} flex items-center justify-center`}
+                    >
                       <Inbox size={17} />
                     </div>
 
-                    <div className="min-w-0 flex-1">
-                      <p className="font-display font-semibold text-slate-900 truncate">
+                    <div className="relative z-10 min-w-0 flex-1">
+                      <p className="font-display font-semibold text-white truncate">
                         {p.toko?.nama_toko || "Toko"}
                       </p>
-                      <p className="flex items-center gap-1 text-xs text-slate-400 mt-0.5">
+                      <p className={`flex items-center gap-1 text-xs ${c.sub} mt-0.5`}>
                         <User size={12} />
-                        {p.nama_penerima || namaPembeli[p.user_id] || "Pembeli"}
+                        <span className="truncate">
+                          {p.nama_penerima || namaPembeli[p.user_id] || "Pembeli"}
+                        </span>
                         <span className="mx-1">•</span>
-                        <Calendar size={12} />
-                        {formatTanggal(p.created_at)}
+                        <Calendar size={12} className="shrink-0" />
+                        <span className="whitespace-nowrap">{formatTanggal(p.created_at)}</span>
                       </p>
                     </div>
 
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-semibold text-slate-900">
+                    <div className="relative z-10 text-right shrink-0">
+                      <p className="text-sm font-semibold text-white">
                         {formatRupiah(p.grand_total || p.total)}
                       </p>
                       <div className="flex gap-1 justify-end mt-1.5">
-                        <Badge info={statusInfo} />
-                        <Badge info={bayarInfo} />
+                        <span
+                          className={`px-2 py-0.5 text-[11px] font-medium rounded-full ${statusOnColor}`}
+                        >
+                          {statusInfo.label}
+                        </span>
                       </div>
                     </div>
 
-                    <div className="shrink-0 text-slate-400">
+                    <div className="relative z-10 shrink-0 text-white/80">
                       {isExpanded ? (
                         <ChevronUp size={16} />
                       ) : (
@@ -474,10 +632,13 @@ export default function PesananMasuk() {
 
                   {isExpanded && (
                     <div className="border-t border-slate-100 px-4 py-3.5 bg-slate-50">
-                      {/* Data penerima & alamat pengiriman — ini yang
-                          sebelumnya tidak ada sama sekali di halaman ini.
-                          Ditaruh paling atas karena ini info yang paling
-                          dibutuhkan penjual untuk mengirim barang. */}
+                      {/* Status bayar dipindah ke sini (dari header) supaya
+                          header tetap ringkas saat berwarna solid */}
+                      <div className="flex justify-end mb-3">
+                        <Badge info={bayarInfo} />
+                      </div>
+
+                      {/* Data penerima & alamat pengiriman */}
                       <div className="mb-3 p-3 rounded-lg bg-white border border-slate-200">
                         <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 mb-1.5">
                           <MapPin size={13} />
@@ -506,9 +667,7 @@ export default function PesananMasuk() {
                         )}
                       </div>
 
-                      {/* Kurir + ongkir + biaya COD + grand total — inilah
-                          yang penjual butuhkan untuk tahu harus kirim
-                          pakai kurir apa dan berapa ongkirnya. */}
+                      {/* Kurir + ongkir + biaya COD + grand total */}
                       <div className="mb-3 p-3 rounded-lg bg-white border border-slate-200">
                         <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 mb-1.5">
                           <Truck size={13} />
@@ -594,7 +753,7 @@ export default function PesananMasuk() {
                       )}
 
                       {/* Kontrol ubah status — HANYA untuk superadmin.
-                          Pemilik toko biasa cuma lihat badge status di atas,
+                          Pemilik toko biasa cuma lihat badge status di header,
                           tidak ada tombol/dropdown di sini (juga WAJIB
                           dikunci lewat RLS "Superadmin ubah status pesanan"
                           dan "Superadmin hapus pesanan" di database —
