@@ -12,6 +12,14 @@ import { supabase } from "./supabaseClient"; // sesuaikan path kalau berbeda di 
 //   tamu login, isi keranjangnya digabung ke keranjang akun yang
 //   baru login, lalu slot tamu dikosongkan.
 // - Bungkus <App /> dengan <CartProvider> di App.jsx.
+//
+// BARU (ongkir): item keranjang sekarang juga menyimpan
+// `kategori_ongkir` dan `berat` dari data barang, supaya halaman
+// Checkout bisa menghitung ongkir per kategori (lib/ongkir.js).
+// Pastikan query yang mengambil data barang (di halaman produk/
+// katalog) ikut men-select kedua kolom ini dari tabel `barang`,
+// karena addItem hanya meneruskan apa yang ada di objek `barang`
+// yang dikirim ke fungsi ini.
 // =========================================================
 
 const CartContext = createContext(null);
@@ -53,7 +61,7 @@ function mergeCarts(guestCart, userCart) {
 export function CartProvider({ children }) {
   const [userId, setUserId] = useState(null);
   const [ready, setReady] = useState(false);
-  // Bentuk data: { [tokoId]: { [barangId]: { id, nama_barang, harga, satuan, stok, qty } } }
+  // Bentuk data: { [tokoId]: { [barangId]: { id, nama_barang, harga, satuan, stok, kategori_ongkir, berat, qty } } }
   const [cart, setCart] = useState({});
 
   // Pantau status login & muat cart sesuai user yang aktif
@@ -118,6 +126,8 @@ export function CartProvider({ children }) {
         harga: barang.harga,
         satuan: barang.satuan,
         stok: barang.stok,
+        kategori_ongkir: barang.kategori_ongkir,
+        berat: barang.berat,
         qty: nextQty,
       };
       return { ...prev, [tokoId]: tokoCart };
