@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
-import { supabase } from "../supabaseClient"; // sesuaikan path kalau berbeda di project kamu
+import { supabase } from "../lib/supabaseClient";
 
 const LABEL_STATUS = {
   belum_memenuhi_syarat: { text: "Belum Memenuhi Syarat", color: "bg-gray-100 text-gray-600" },
