@@ -76,6 +76,8 @@ import PesananMasuk from './pages/PesananMasuk'
 // --- Fitur Toko: Pengajuan & Persetujuan Toko Baru ---
 import AjukanToko from './pages/AjukanToko'
 import PersetujuanToko from './pages/PersetujuanToko'
+// --- Fitur Toko: Pencairan Dana ke penjual (superadmin only) ---
+import PencairanDana from './pages/PencairanDana'
 import { CartProvider } from './lib/CartContext'
 
 function ProtectedRoute({ children, adminOnly, adminUtamaOnly, superAdminOnly }) {
@@ -286,6 +288,12 @@ export default function App() {
             fn_tolak_pengajuan_toko yang mengunci syarat superadmin di server. */}
         <Route path="/ajukan-toko" element={<ProtectedRoute adminOnly><AjukanToko /></ProtectedRoute>} />
         <Route path="/persetujuan-toko" element={<ProtectedRoute superAdminOnly><PersetujuanToko /></ProtectedRoute>} />
+
+        {/* --- Fitur Toko: Pencairan Dana ---
+            Khusus superadmin — satu-satunya role yang boleh menandai dana
+            sudah ditransfer manual ke penjual, lewat RPC security definer
+            fn_cairkan_pesanan / fn_tahan_pencairan (lihat PencairanDana.jsx). */}
+        <Route path="/pencairan-dana" element={<ProtectedRoute superAdminOnly><PencairanDana /></ProtectedRoute>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
