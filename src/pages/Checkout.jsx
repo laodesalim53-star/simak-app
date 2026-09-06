@@ -40,11 +40,34 @@ import { DAFTAR_KURIR, hitungOngkir } from "../lib/ongkir";
 // Sekarang pembeli wajib memilih kurir, ongkir dihitung otomatis dari
 // kategori & berat barang di keranjang (lib/ongkir.js), dan grand total
 // yang dibayar/ditagih ke pembeli sudah termasuk ongkir + biaya COD.
+//
+// BARU (ambil sendiri / pickup): opsi kurir "pickup" — pembeli ambil
+// barang sendiri di lokasi penjual. Ongkir & biaya COD = 0, alamat
+// pengiriman TIDAK wajib diisi (diganti info ambil sendiri), tapi nama
+// & no HP tetap wajib untuk konfirmasi siapa yang datang mengambil.
+// Pembayaran tetap lewat Snap (online), BUKAN bayar tunai di tempat —
+// kalau ternyata maksudnya "bayar saat ambil", cabang ini tinggal
+// disamakan dengan pola isCod di bawah.
+// >> PENTING: kode kurir "pickup" ini juga perlu ditambahkan sebagai
+// opsi yang bisa dipilih pembeli di halaman /toko/:id/pengiriman, dan
+// idealnya juga didaftarkan di DAFTAR_KURIR / hitungOngkir (lib/ongkir.js)
+// supaya label & rincian tampil konsisten di semua tempat. Di file ini
+// ongkir/biaya COD untuk "pickup" sudah di-override manual jadi tetap
+// aman meski lib/ongkir.js belum diperbarui.
+//
+// FIX: sebelumnya tombol "Bayar Sekarang" bisa diklik lagi SEBELUM popup
+// Snap selesai (loading di-set false terlalu awal), berisiko membuat
+// pesanan & mengurangi stok dua kali kalau pembeli klik ganda. Sekarang
+// loading baru dimatikan di masing-masing callback Snap.
 
 // Ganti ke Client Key PRODUCTION dan URL produksi Snap.js saat go-live:
 // https://app.midtrans.com/snap/snap.js
 const SNAP_JS_URL = "https://app.sandbox.midtrans.com/snap/snap.js";
 const MIDTRANS_CLIENT_KEY = import.meta.env.VITE_MIDTRANS_CLIENT_KEY;
+
+// Kode kurir khusus untuk "ambil sendiri di tempat"
+const KODE_PICKUP = "pickup";
+const LABEL_PICKUP_FALLBACK = "Ambil Sendiri (Jemput di Tempat)";
 
 // Muat script Snap.js sekali saja (kalau sudah ada di halaman, tidak diulang)
 function loadSnapScript() {
@@ -84,6 +107,9 @@ export default function Checkout() {
 
   const items = getCartItems(tokoId);
   const kurir = getKurir(tokoId);
+
+  const isCod = kurir === "cod";
+  const isPickup = kurir === KODE_PICKUP;
 
   // Kurir wajib sudah dipilih di halaman /toko/:id/pengiriman sebelum
   // masuk ke sini. Kalau belum ada (mis. pembeli langsung buka URL
@@ -155,9 +181,27 @@ export default function Checkout() {
   const total = items.reduce((sum, item) => sum + item.harga * item.qty, 0);
 
   // Ongkir & biaya COD dihitung ulang tiap kali kurir/isi keranjang berubah.
-  const { ongkir, rincian, biayaCod } = hitungOngkir(items, kurir);
+  // FIX: hitungOngkir tidak dipanggil kalau kurir masih null/kosong (mis.
+  // sesaat sebelum useEffect di atas sempat redirect ke /pengiriman), supaya
+  // tidak berisiko error kalau lib/ongkir.js mengasumsikan kurir selalu ada.
+  // Untuk "pickup", ongkir & biaya COD di-override 0 di sini secara eksplisit
+  // supaya tetap benar walau lib/ongkir.js belum didaftarkan kode "pickup".
+  let ongkir = 0;
+  let rincian = [];
+  let biayaCod = 0;
+
+  if (kurir && !isPickup) {
+    const hasil = hitungOngkir(items, kurir);
+    ongkir = hasil.ongkir;
+    rincian = hasil.rincian;
+    biayaCod = hasil.biayaCod;
+  }
+
   const grandTotal = total + ongkir + biayaCod;
-  const isCod = kurir === "cod";
+
+  const labelKurir = isPickup
+    ? (DAFTAR_KURIR.find((k) => k.kode === kurir)?.label || LABEL_PICKUP_FALLBACK)
+    : (DAFTAR_KURIR.find((k) => k.kode === kurir)?.label || kurir);
 
   const handleCheckout = async () => {
     setErrorMsg("");
@@ -175,18 +219,20 @@ export default function Checkout() {
       return;
     }
     if (!namaPenerima.trim()) {
-      setErrorMsg("Nama penerima wajib diisi.");
+      setErrorMsg(isPickup ? "Nama yang akan mengambil barang wajib diisi." : "Nama penerima wajib diisi.");
       return;
     }
     if (!noHpPenerima.trim()) {
-      setErrorMsg("Nomor HP penerima wajib diisi.");
+      setErrorMsg("Nomor HP wajib diisi.");
       return;
     }
-    if (!alamatPengiriman.trim()) {
+    // Alamat pengiriman hanya wajib kalau BUKAN ambil sendiri di tempat.
+    if (!isPickup && !alamatPengiriman.trim()) {
       setErrorMsg("Alamat pengiriman wajib diisi.");
       return;
     }
-    // Snap hanya dibutuhkan untuk metode pembayaran non-COD.
+    // Snap hanya dibutuhkan untuk metode pembayaran non-COD (termasuk pickup,
+    // karena pickup tetap bayar online lewat Snap).
     if (!isCod && !snapReady) {
       setErrorMsg("Layanan pembayaran belum siap, tunggu sebentar lalu coba lagi.");
       return;
@@ -196,14 +242,16 @@ export default function Checkout() {
 
     // 1) Buat pesanan seperti sebelumnya (stok berkurang di sini), sekarang
     // sekaligus menyimpan data penerima, alamat pengiriman, kurir, ongkir,
-    // biaya COD, dan grand total.
+    // biaya COD, dan grand total. Untuk pickup, alamat dikirim string
+    // penanda karena kolomnya tetap NOT NULL di database — sesuaikan kalau
+    // skema pesanan sudah membolehkan alamat kosong untuk pickup.
     const { data: pesananId, error } = await supabase.rpc("buat_pesanan", {
       p_toko_id: tokoId,
       p_items: items.map((item) => ({ barang_id: item.id, qty: item.qty })),
       p_catatan: catatan || null,
       p_nama_penerima: namaPenerima.trim(),
       p_no_hp_penerima: noHpPenerima.trim(),
-      p_alamat_pengiriman: alamatPengiriman.trim(),
+      p_alamat_pengiriman: isPickup ? "Ambil sendiri di toko" : alamatPengiriman.trim(),
       p_kurir: kurir,
       p_ongkir: ongkir,
       p_biaya_cod: biayaCod,
@@ -226,9 +274,10 @@ export default function Checkout() {
       return;
     }
 
-    // 3) Non-COD: minta snap_token dari Edge Function create-transaction.
-    // supabase.functions.invoke otomatis menyertakan token login user yang
-    // sedang aktif, jadi create-transaction bisa memverifikasi pemiliknya.
+    // 3) Non-COD (termasuk pickup): minta snap_token dari Edge Function
+    // create-transaction. supabase.functions.invoke otomatis menyertakan
+    // token login user yang sedang aktif, jadi create-transaction bisa
+    // memverifikasi pemiliknya.
     // >> Pastikan create-transaction memakai grand_total (termasuk ongkir),
     // bukan cuma subtotal barang, saat membuat transaksi Midtrans.
     const { data: fnData, error: fnError } = await supabase.functions.invoke(
@@ -236,9 +285,8 @@ export default function Checkout() {
       { body: { pesanan_id: pesananId } },
     );
 
-    setLoading(false);
-
     if (fnError || !fnData?.snap_token) {
+      setLoading(false);
       setErrorMsg(
         "Pesanan sudah dibuat, tapi gagal memulai pembayaran: " +
           (fnError?.message || "Terjadi kesalahan. Cek menu Pesanan Anda dan coba bayar lagi nanti."),
@@ -246,9 +294,14 @@ export default function Checkout() {
       return;
     }
 
-    // 4) Buka popup pembayaran Snap
+    // 4) Buka popup pembayaran Snap.
+    // FIX: loading TIDAK dimatikan di sini — biarkan tombol tetap disabled
+    // selama popup terbuka, supaya pembeli tidak bisa klik ganda dan memicu
+    // buat_pesanan lagi (double order + stok berkurang dua kali). loading
+    // baru di-set false di masing-masing callback di bawah.
     window.snap.pay(fnData.snap_token, {
       onSuccess: () => {
+        setLoading(false);
         clearCart(tokoId);
         navigate(`/toko/${tokoId}/pesanan-sukses`, { state: { pesananId } });
       },
@@ -258,10 +311,12 @@ export default function Checkout() {
         // mengonfirmasi. Tetap arahkan ke halaman sukses supaya pembeli
         // lihat instruksi & status pesanannya, keranjang tetap dikosongkan
         // karena pesanan sudah tercatat di database.
+        setLoading(false);
         clearCart(tokoId);
         navigate(`/toko/${tokoId}/pesanan-sukses`, { state: { pesananId } });
       },
       onError: () => {
+        setLoading(false);
         setErrorMsg(
           "Pembayaran gagal. Pesanan Anda tetap tercatat sebagai 'menunggu' — coba bayar lagi dari menu Pesanan.",
         );
@@ -270,6 +325,7 @@ export default function Checkout() {
         // Popup ditutup tanpa menyelesaikan pembayaran — jangan kosongkan
         // keranjang, biarkan pembeli tahu pesanan sudah dibuat tapi belum
         // dibayar.
+        setLoading(false);
         setErrorMsg(
           "Pembayaran dibatalkan. Pesanan Anda tetap tersimpan dengan status menunggu bayar.",
         );
@@ -332,7 +388,7 @@ export default function Checkout() {
           <div className="mb-4 p-3 border rounded bg-gray-50">
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm font-semibold text-gray-700">
-                Jasa Pengiriman: {DAFTAR_KURIR.find((k) => k.kode === kurir)?.label || kurir}
+                Jasa Pengiriman: {labelKurir}
               </p>
               <button
                 onClick={() => navigate(`/toko/${tokoId}/pengiriman`)}
@@ -342,47 +398,53 @@ export default function Checkout() {
               </button>
             </div>
 
-            <div className="text-sm">
-              {rincian.map((r, idx) => (
-                <div key={idx} className="flex items-center justify-between py-0.5 text-gray-600">
-                  <span>{r.nama} ({r.keterangan})</span>
-                  <span>{formatRupiah(r.biaya)}</span>
+            {isPickup ? (
+              <p className="text-sm text-gray-600">
+                Tidak ada ongkos kirim — barang diambil langsung di lokasi penjual.
+              </p>
+            ) : (
+              <div className="text-sm">
+                {rincian.map((r, idx) => (
+                  <div key={idx} className="flex items-center justify-between py-0.5 text-gray-600">
+                    <span>{r.nama} ({r.keterangan})</span>
+                    <span>{formatRupiah(r.biaya)}</span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between py-0.5 font-medium">
+                  <span>Ongkos Kirim</span>
+                  <span>{formatRupiah(ongkir)}</span>
                 </div>
-              ))}
-              <div className="flex items-center justify-between py-0.5 font-medium">
-                <span>Ongkos Kirim</span>
-                <span>{formatRupiah(ongkir)}</span>
+                {isCod && (
+                  <div className="flex items-center justify-between py-0.5 text-gray-600">
+                    <span>Biaya COD</span>
+                    <span>{formatRupiah(biayaCod)}</span>
+                  </div>
+                )}
               </div>
-              {isCod && (
-                <div className="flex items-center justify-between py-0.5 text-gray-600">
-                  <span>Biaya COD</span>
-                  <span>{formatRupiah(biayaCod)}</span>
-                </div>
-              )}
-            </div>
+            )}
           </div>
         )}
 
-        {/* Data penerima & alamat pengiriman — wajib diisi, tersimpan
-            persis seperti saat pesanan ini dibuat. */}
+        {/* Data penerima & alamat pengiriman — tidak berlaku untuk pickup,
+            karena barang diambil sendiri (tidak perlu alamat). */}
         <div className="mb-4 p-3 border rounded bg-gray-50">
           <p className="mb-3 text-sm font-semibold text-gray-700">
-            Alamat Pengiriman
+            {isPickup ? "Data Pengambilan" : "Alamat Pengiriman"}
           </p>
 
           <label className="block mb-1 text-xs text-gray-500">
-            Nama Penerima
+            {isPickup ? "Nama yang Mengambil" : "Nama Penerima"}
           </label>
           <input
             type="text"
             value={namaPenerima}
             onChange={(e) => setNamaPenerima(e.target.value)}
-            placeholder={prefillLoading ? "Memuat..." : "Nama lengkap penerima"}
+            placeholder={prefillLoading ? "Memuat..." : "Nama lengkap"}
             className="w-full px-3 py-2 mb-3 border rounded"
           />
 
           <label className="block mb-1 text-xs text-gray-500">
-            Nomor HP Penerima
+            Nomor HP {isPickup ? "" : "Penerima"}
           </label>
           <input
             type="tel"
@@ -392,20 +454,30 @@ export default function Checkout() {
             className="w-full px-3 py-2 mb-3 border rounded"
           />
 
-          <label className="block mb-1 text-xs text-gray-500">
-            Alamat Lengkap
-          </label>
-          <textarea
-            value={alamatPengiriman}
-            onChange={(e) => setAlamatPengiriman(e.target.value)}
-            placeholder={
-              prefillLoading
-                ? "Memuat..."
-                : "Nama jalan, nomor rumah, RT/RW, kelurahan, kecamatan, kota, kode pos"
-            }
-            rows={3}
-            className="w-full px-3 py-2 border rounded"
-          />
+          {isPickup ? (
+            <p className="text-sm text-gray-600">
+              Barang tidak dikirim — silakan ambil langsung di lokasi penjual setelah pesanan
+              dikonfirmasi. Nomor HP di atas dipakai penjual untuk menghubungi Anda soal jadwal
+              pengambilan.
+            </p>
+          ) : (
+            <>
+              <label className="block mb-1 text-xs text-gray-500">
+                Alamat Lengkap
+              </label>
+              <textarea
+                value={alamatPengiriman}
+                onChange={(e) => setAlamatPengiriman(e.target.value)}
+                placeholder={
+                  prefillLoading
+                    ? "Memuat..."
+                    : "Nama jalan, nomor rumah, RT/RW, kelurahan, kecamatan, kota, kode pos"
+                }
+                rows={3}
+                className="w-full px-3 py-2 border rounded"
+              />
+            </>
+          )}
         </div>
 
         <label className="block mb-1 text-xs text-gray-500">
@@ -436,7 +508,9 @@ export default function Checkout() {
             ? "Memproses pesanan..."
             : isCod
               ? "Buat Pesanan (Bayar di Tempat)"
-              : "Bayar Sekarang"}
+              : isPickup
+                ? "Bayar Sekarang (Ambil di Toko)"
+                : "Bayar Sekarang"}
         </button>
       </div>
     </Layout>
