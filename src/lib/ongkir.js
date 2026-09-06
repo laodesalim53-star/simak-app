@@ -4,7 +4,6 @@
 // ====================================================================
 // SEMUA ANGKA DI BAWAH INI CONTOH — WAJIB DIGANTI SESUAI TARIF TOKO ANDA.
 // ====================================================================
-
 export const DAFTAR_KURIR = [
   { kode: "jne", label: "JNE" },
   { kode: "jnt", label: "J&T" },
@@ -12,12 +11,23 @@ export const DAFTAR_KURIR = [
   { kode: "anteraja", label: "Anteraja" },
   { kode: "gosend", label: "GoSend (Instan)" },
   { kode: "cod", label: "COD (Bayar di Tempat)" },
+  // BARU: ambil sendiri di lokasi penjual — tanpa ongkir, tanpa biaya COD.
+  // Ditangani secara eksplisit (bukan lewat TARIF_FLAT) di hitungOngkir di bawah.
+  { kode: "pickup", label: "Ambil Sendiri (Jemput di Tempat)" },
 ];
+
+// Kode kurir yang berarti "ambil sendiri" — selalu Rp0, tidak dihitung dari
+// TARIF_FLAT / TARIF_PER_KG_HASIL_LAUT (yang memang sengaja tidak diisi
+// untuk kode ini).
+const KODE_PICKUP = "pickup";
 
 // Tarif FLAT (Rp) untuk kategori "pakaian" & "barang".
 // Dikenakan SEKALI per kategori yang muncul di keranjang, bukan per item —
 // diasumsikan 1 kategori = 1 paket kemasan. Kalau keranjang berisi pakaian
 // DAN barang biasa, kedua tarif flat akan dijumlahkan (2 paket terpisah).
+// Catatan: "pickup" sengaja TIDAK didaftarkan di sini — ditangani lewat
+// pengecekan KODE_PICKUP di hitungOngkir supaya selalu Rp0 apa pun isi
+// keranjangnya, bukan mengandalkan fallback ?? 0.
 const TARIF_FLAT = {
   jne: { pakaian: 12000, barang: 15000 },
   jnt: { pakaian: 11000, barang: 14000 },
@@ -29,6 +39,7 @@ const TARIF_FLAT = {
 
 // Tarif per KG untuk kategori "hasil_laut".
 // Ongkir = (berat per satuan x qty) x tarif per kg.
+// "pickup" sengaja tidak didaftarkan, sama seperti TARIF_FLAT di atas.
 const TARIF_PER_KG_HASIL_LAUT = {
   jne: 8000,
   jnt: 7500,
@@ -50,6 +61,12 @@ const BIAYA_COD_FLAT = 0; // atau nominal tetap, mis. 2500
  */
 export function hitungOngkir(items, kurirKode) {
   if (!kurirKode || !items?.length) {
+    return { ongkir: 0, rincian: [], biayaCod: 0 };
+  }
+
+  // BARU: ambil sendiri di tempat — selalu gratis ongkir, tanpa biaya COD,
+  // dan tanpa rincian (tidak ada paket yang benar-benar dikirim).
+  if (kurirKode === KODE_PICKUP) {
     return { ongkir: 0, rincian: [], biayaCod: 0 };
   }
 
