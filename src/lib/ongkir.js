@@ -44,7 +44,7 @@ const BIAYA_COD_FLAT = 0; // atau nominal tetap, mis. 2500
 
 /**
  * Menghitung ongkir + biaya COD berdasarkan isi keranjang & kurir yang dipilih.
- * @param {Array} items - item keranjang, tiap item punya: harga, qty, kategori, berat (opsional)
+ * @param {Array} items - item keranjang, tiap item punya: harga, qty, kategori_ongkir, berat (opsional)
  * @param {string} kurirKode - salah satu kode di DAFTAR_KURIR
  * @returns {{ ongkir: number, rincian: Array, biayaCod: number }}
  */
@@ -58,8 +58,8 @@ export function hitungOngkir(items, kurirKode) {
   const rincian = [];
 
   for (const item of items) {
-    // Fallback ke "barang" kalau data barang belum punya kategori terisi.
-    const kategori = item.kategori || "barang";
+    // Fallback ke "barang" kalau data barang belum punya kategori_ongkir terisi.
+    const kategori = item.kategori_ongkir || "barang";
 
     if (kategori === "hasil_laut") {
       const beratKg = Number(item.berat) || 0; // berat per satuan, dalam kg
