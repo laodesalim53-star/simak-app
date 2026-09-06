@@ -73,6 +73,7 @@ import Checkout from './pages/Checkout'
 import PesananSukses from './pages/PesananSukses'
 import RiwayatPesanan from './pages/RiwayatPesanan'
 import PesananMasuk from './pages/PesananMasuk'
+import RiwayatPencairanSaya from './pages/RiwayatPencairanSaya'
 // --- Fitur Toko: Pengajuan & Persetujuan Toko Baru ---
 import AjukanToko from './pages/AjukanToko'
 import PersetujuanToko from './pages/PersetujuanToko'
@@ -278,6 +279,11 @@ export default function App() {
             satu-satunya yang boleh mengubah status (dikunci lewat RLS
             "Superadmin ubah status pesanan" di Supabase). */}
         <Route path="/pesanan-masuk" element={<ProtectedRoute><PesananMasuk /></ProtectedRoute>} />
+        {/* Riwayat Pencairan Saya: sisi penjual — pemilik toko pantau status
+            pencairan dana tokonya sendiri (view-only). Sengaja BUKAN
+            superAdminOnly/adminOnly, dibatasi lewat RLS "Pemilik toko lihat
+            pesanan tokonya" — akun tanpa toko otomatis melihat daftar kosong. */}
+        <Route path="/riwayat-pencairan-saya" element={<ProtectedRoute><RiwayatPencairanSaya /></ProtectedRoute>} />
 
         {/* --- Fitur Toko: Pengajuan & Persetujuan Toko Baru ---
             /ajukan-toko: admin sekolah (adminOnly — mencakup admin & admin_utama,
