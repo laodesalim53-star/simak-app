@@ -73,6 +73,9 @@ import Checkout from './pages/Checkout'
 import PesananSukses from './pages/PesananSukses'
 import RiwayatPesanan from './pages/RiwayatPesanan'
 import PesananMasuk from './pages/PesananMasuk'
+// --- Fitur Toko: Pengajuan & Persetujuan Toko Baru ---
+import AjukanToko from './pages/AjukanToko'
+import PersetujuanToko from './pages/PersetujuanToko'
 import { CartProvider } from './lib/CartContext'
 
 function ProtectedRoute({ children, adminOnly, adminUtamaOnly, superAdminOnly }) {
@@ -273,6 +276,16 @@ export default function App() {
             satu-satunya yang boleh mengubah status (dikunci lewat RLS
             "Superadmin ubah status pesanan" di Supabase). */}
         <Route path="/pesanan-masuk" element={<ProtectedRoute><PesananMasuk /></ProtectedRoute>} />
+
+        {/* --- Fitur Toko: Pengajuan & Persetujuan Toko Baru ---
+            /ajukan-toko: admin sekolah (adminOnly — mencakup admin & admin_utama,
+            RLS insert pengajuan_toko sudah membatasi lebih ketat lagi ke role
+            'admin'/'admin_utama' persis).
+            /persetujuan-toko: khusus superadmin, sesuai policy select "Superadmin
+            lihat semua pengajuan toko" dan function fn_setujui_pengajuan_toko /
+            fn_tolak_pengajuan_toko yang mengunci syarat superadmin di server. */}
+        <Route path="/ajukan-toko" element={<ProtectedRoute adminOnly><AjukanToko /></ProtectedRoute>} />
+        <Route path="/persetujuan-toko" element={<ProtectedRoute superAdminOnly><PersetujuanToko /></ProtectedRoute>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
