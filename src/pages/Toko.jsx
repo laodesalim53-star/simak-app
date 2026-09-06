@@ -5,6 +5,10 @@ import {
   MapPin,
   Phone,
   ShoppingCart,
+  ShoppingBag,
+  Gift,
+  Tag,
+  Sparkles,
   X,
   Plus,
   Minus,
@@ -42,6 +46,10 @@ import Layout from "../components/Layout";
 // PERBAIKAN (tampilan kartu toko): kartu toko sekarang berwarna solid
 // berotasi (biru/hijau/ungu/oranye) mengikuti pola kartu di Dasbor,
 // bukan lagi putih polos.
+// PERBAIKAN (banner sambutan + pratinjau barang): ditambahkan banner
+// sambutan bergaya toko di atas grid, serta pratinjau foto/ikon barang
+// tiap toko di bagian bawah kartunya supaya pengunjung langsung dapat
+// gambaran isi toko sebelum membuka modalnya.
 // =========================================================
 
 const BARANG_PHOTO_BUCKET = "barang-photos";
@@ -152,6 +160,10 @@ export default function Toko() {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
 
+  // Pratinjau barang tiap toko, untuk ditampilkan di kartu toko:
+  // { [toko_id]: [{ id, nama_barang, foto_url }, ...] }
+  const [barangPreview, setBarangPreview] = useState({});
+
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({
@@ -188,7 +200,7 @@ export default function Toko() {
   const isSuperadmin = isSuperAdmin;
 
   // ---------------------------------------------------
-  // Ambil daftar toko
+  // Ambil daftar toko + pratinjau barang tiap toko
   // ---------------------------------------------------
   const fetchToko = useCallback(async () => {
     setLoading(true);
@@ -199,10 +211,33 @@ export default function Toko() {
 
     if (error) {
       setErrorMsg(error.message);
-    } else {
-      setTokoList(data);
-      setErrorMsg("");
+      setLoading(false);
+      return;
     }
+
+    setTokoList(data);
+    setErrorMsg("");
+
+    // Ambil beberapa barang dari semua toko sekaligus (1 query) untuk
+    // dijadikan pratinjau kecil di tiap kartu toko.
+    const idToko = (data || []).map((t) => t.id);
+    if (idToko.length > 0) {
+      const { data: semuaBarang } = await supabase
+        .from("barang")
+        .select("id, toko_id, nama_barang, foto_url")
+        .in("toko_id", idToko)
+        .order("created_at", { ascending: false });
+
+      const peta = {};
+      (semuaBarang || []).forEach((b) => {
+        if (!peta[b.toko_id]) peta[b.toko_id] = [];
+        peta[b.toko_id].push(b);
+      });
+      setBarangPreview(peta);
+    } else {
+      setBarangPreview({});
+    }
+
     setLoading(false);
   }, []);
 
@@ -500,6 +535,8 @@ export default function Toko() {
 
     resetBarangForm();
     fetchBarang(activeToko.id);
+    // Sinkronkan pratinjau barang di kartu toko (foto/jumlah barang baru).
+    fetchToko();
   };
 
   const handleBarangDelete = async (id) => {
@@ -512,6 +549,8 @@ export default function Toko() {
       return;
     }
     fetchBarang(activeToko.id);
+    // Sinkronkan pratinjau barang di kartu toko.
+    fetchToko();
   };
 
   // ---------------------------------------------------
@@ -581,6 +620,47 @@ export default function Toko() {
       {errorMsg && (
         <div className="mb-4 text-sm text-red-600">{errorMsg}</div>
       )}
+
+      {/* ================= Banner sambutan ================= */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-fuchsia-600 px-5 sm:px-6 py-5 sm:py-6 mb-6 shadow-sm">
+        <BatikOverlay
+          patternId="batikBannerToko"
+          strokeColor="#ffffff"
+          opacity={0.4}
+          size={64}
+        />
+        {/* Ikon dekoratif bertema toko, melayang di latar */}
+        <ShoppingBag
+          size={110}
+          strokeWidth={1.2}
+          className="absolute -right-5 -bottom-8 text-white/10 rotate-[12deg] pointer-events-none"
+        />
+        <Gift
+          size={64}
+          strokeWidth={1.2}
+          className="absolute right-20 -top-5 text-white/10 -rotate-12 pointer-events-none hidden sm:block"
+        />
+        <Tag
+          size={52}
+          strokeWidth={1.2}
+          className="absolute right-44 bottom-3 text-white/10 rotate-6 pointer-events-none hidden md:block"
+        />
+
+        <div className="relative z-10 flex items-start sm:items-center gap-3">
+          <div className="w-11 h-11 shrink-0 rounded-xl bg-white/15 flex items-center justify-center text-white">
+            <Sparkles size={20} />
+          </div>
+          <div className="min-w-0">
+            <p className="font-display font-semibold text-white text-base sm:text-lg">
+              Selamat datang di Toko Sekolah!
+            </p>
+            <p className="text-sm text-blue-100 mt-0.5">
+              Silakan pilih salah satu toko di bawah ini untuk melihat barang
+              yang tersedia dan mulai berbelanja dengan mudah dan nyaman.
+            </p>
+          </div>
+        </div>
+      </div>
 
       {!session ? (
         <p className="mb-5 text-sm text-slate-500">
@@ -673,6 +753,10 @@ export default function Toko() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {tokoList.map((item, idx) => {
             const c = CARD_COLORS[idx % CARD_COLORS.length];
+            const preview = barangPreview[item.id] || [];
+            const tampil = preview.slice(0, 4);
+            const sisa = preview.length - tampil.length;
+
             return (
               <div
                 key={item.id}
@@ -738,6 +822,43 @@ export default function Toko() {
                       <Phone size={13} className="shrink-0" />
                       {item.no_telp}
                     </p>
+                  )}
+                </div>
+
+                {/* Pratinjau barang - foto/ikon barang toko ini + jumlah total */}
+                <div className="relative z-10 flex items-center gap-2 mb-3 pb-3 border-b border-white/15">
+                  {tampil.length > 0 ? (
+                    <>
+                      <div className="flex -space-x-2 shrink-0">
+                        {tampil.map((b) =>
+                          b.foto_url ? (
+                            <img
+                              key={b.id}
+                              src={b.foto_url}
+                              alt={b.nama_barang}
+                              title={b.nama_barang}
+                              className="w-7 h-7 rounded-full object-cover border-2 border-white/50"
+                            />
+                          ) : (
+                            <div
+                              key={b.id}
+                              title={b.nama_barang}
+                              className="w-7 h-7 rounded-full bg-white/20 border-2 border-white/50 flex items-center justify-center"
+                            >
+                              <Package size={12} className="text-white" />
+                            </div>
+                          )
+                        )}
+                      </div>
+                      <span className={`text-[11px] font-medium ${c.sub} truncate`}>
+                        {preview.length} barang{sisa > 0 ? ` · +${sisa} lainnya` : ""}
+                      </span>
+                    </>
+                  ) : (
+                    <span className={`flex items-center gap-1.5 text-[11px] ${c.sub}`}>
+                      <Package size={13} />
+                      Belum ada barang
+                    </span>
                   )}
                 </div>
 
