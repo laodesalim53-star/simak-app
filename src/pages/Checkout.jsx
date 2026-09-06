@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { useCart } from "../lib/CartContext";
 import Layout from "../components/Layout";
+import { DAFTAR_KURIR, hitungOngkir } from "../lib/ongkir";
 
 // URL yang disarankan: /toko/:id/checkout
 // Rute ini DIBUNGKUS ProtectedRoute di App.jsx, jadi user pasti sudah
@@ -10,26 +11,29 @@ import Layout from "../components/Layout";
 // handleCheckout tetap dipertahankan sebagai lapisan pengaman tambahan
 // (mis. kalau sesi kedaluwarsa persis saat tombol diklik).
 //
-// Alur (SETELAH integrasi Midtrans):
+// Alur (SETELAH integrasi Midtrans + kurir/ongkir):
 // 1. Ambil isi keranjang untuk toko ini dari CartContext
-// 2. Panggil fungsi database "buat_pesanan" -> membuat baris di
-//    pesanan + pesanan_item, MENYIMPAN data penerima/alamat pengiriman
-//    (baru), dan mengurangi stok.
-// 3. Panggil Edge Function "create-transaction" dengan pesanan_id yang
-//    baru dibuat -> dapat snap_token dari Midtrans.
-// 4. Buka popup pembayaran Snap pakai snap_token itu.
-// 5. Keranjang baru dikosongkan & diarahkan ke halaman sukses SETELAH
-//    pembeli benar-benar menyelesaikan pembayaran (onSuccess/onPending),
-//    bukan langsung setelah pesanan dibuat seperti sebelumnya — karena
-//    sekarang pesanan bisa dibuat tapi belum tentu dibayar.
+// 2. Hitung ongkir & biaya COD (lib/ongkir.js) berdasarkan kategori/berat
+//    tiap barang dan kurir yang dipilih pembeli.
+// 3. Panggil fungsi database "buat_pesanan" -> membuat baris di
+//    pesanan + pesanan_item, MENYIMPAN data penerima/alamat pengiriman,
+//    kurir, ongkir, biaya COD, dan grand total, lalu mengurangi stok.
+//    >> PENTING: fungsi buat_pesanan di database perlu diperbarui agar
+//    menerima parameter baru: p_kurir, p_ongkir, p_biaya_cod, p_grand_total.
+//    Kirim definisi SQL fungsi ini kalau perlu bantuan menyesuaikannya.
+// 4. Panggil Edge Function "create-transaction" dengan pesanan_id yang
+//    baru dibuat -> dapat snap_token dari Midtrans (grand total, bukan
+//    cuma subtotal barang, yang dikirim ke Midtrans).
+//    >> Kalau kurir = COD, biasanya pembayaran TIDAK lewat Midtrans sama
+//    sekali (bayar tunai saat barang sampai). Bagian ini diberi cabang
+//    khusus di bawah: kalau COD, pesanan langsung dianggap tercatat dan
+//    diarahkan ke halaman sukses tanpa membuka popup Snap.
+// 5. Buka popup pembayaran Snap pakai snap_token itu (khusus non-COD).
 //
-// BARU (alamat pengiriman): sebelumnya pesanan tidak menyimpan siapa
-// pemesan & alamatnya sama sekali, sehingga penjual di halaman Pesanan
-// Masuk tidak tahu harus mengirim ke mana. Sekarang wajib diisi di sini
-// dan disimpan PERSIS seperti saat pesanan dibuat (tidak berubah walau
-// pembeli nanti mengubah alamat di profilnya). Nilai awal diambil dari
-// data profil pembeli (nama & no HP) sebagai draf yang bisa diedit,
-// supaya pembeli tidak perlu ketik ulang dari nol tiap checkout.
+// BARU (kurir & ongkir): sebelumnya ongkir sama sekali belum dihitung.
+// Sekarang pembeli wajib memilih kurir, ongkir dihitung otomatis dari
+// kategori & berat barang di keranjang (lib/ongkir.js), dan grand total
+// yang dibayar/ditagih ke pembeli sudah termasuk ongkir + biaya COD.
 
 // Ganti ke Client Key PRODUCTION dan URL produksi Snap.js saat go-live:
 // https://app.midtrans.com/snap/snap.js
@@ -67,6 +71,7 @@ export default function Checkout() {
   const [namaPenerima, setNamaPenerima] = useState("");
   const [noHpPenerima, setNoHpPenerima] = useState("");
   const [alamatPengiriman, setAlamatPengiriman] = useState("");
+  const [kurir, setKurir] = useState("");
   const [prefillLoading, setPrefillLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -134,6 +139,11 @@ export default function Checkout() {
 
   const total = items.reduce((sum, item) => sum + item.harga * item.qty, 0);
 
+  // Ongkir & biaya COD dihitung ulang tiap kali kurir/isi keranjang berubah.
+  const { ongkir, rincian, biayaCod } = hitungOngkir(items, kurir);
+  const grandTotal = total + ongkir + biayaCod;
+  const isCod = kurir === "cod";
+
   const handleCheckout = async () => {
     setErrorMsg("");
 
@@ -149,10 +159,6 @@ export default function Checkout() {
       setErrorMsg("Keranjang masih kosong.");
       return;
     }
-    if (!snapReady) {
-      setErrorMsg("Layanan pembayaran belum siap, tunggu sebentar lalu coba lagi.");
-      return;
-    }
     if (!namaPenerima.trim()) {
       setErrorMsg("Nama penerima wajib diisi.");
       return;
@@ -165,11 +171,21 @@ export default function Checkout() {
       setErrorMsg("Alamat pengiriman wajib diisi.");
       return;
     }
+    if (!kurir) {
+      setErrorMsg("Jasa pengiriman wajib dipilih.");
+      return;
+    }
+    // Snap hanya dibutuhkan untuk metode pembayaran non-COD.
+    if (!isCod && !snapReady) {
+      setErrorMsg("Layanan pembayaran belum siap, tunggu sebentar lalu coba lagi.");
+      return;
+    }
 
     setLoading(true);
 
     // 1) Buat pesanan seperti sebelumnya (stok berkurang di sini), sekarang
-    // sekaligus menyimpan data penerima & alamat pengiriman.
+    // sekaligus menyimpan data penerima, alamat pengiriman, kurir, ongkir,
+    // biaya COD, dan grand total.
     const { data: pesananId, error } = await supabase.rpc("buat_pesanan", {
       p_toko_id: tokoId,
       p_items: items.map((item) => ({ barang_id: item.id, qty: item.qty })),
@@ -177,6 +193,10 @@ export default function Checkout() {
       p_nama_penerima: namaPenerima.trim(),
       p_no_hp_penerima: noHpPenerima.trim(),
       p_alamat_pengiriman: alamatPengiriman.trim(),
+      p_kurir: kurir,
+      p_ongkir: ongkir,
+      p_biaya_cod: biayaCod,
+      p_grand_total: grandTotal,
     });
 
     if (error) {
@@ -185,9 +205,21 @@ export default function Checkout() {
       return;
     }
 
-    // 2) Minta snap_token dari Edge Function create-transaction.
+    // 2) Kalau COD: tidak ada pembayaran online sama sekali, langsung
+    // anggap pesanan tercatat dan arahkan ke halaman sukses (bayar tunai
+    // saat barang sampai).
+    if (isCod) {
+      setLoading(false);
+      clearCart(tokoId);
+      navigate(`/toko/${tokoId}/pesanan-sukses`, { state: { pesananId } });
+      return;
+    }
+
+    // 3) Non-COD: minta snap_token dari Edge Function create-transaction.
     // supabase.functions.invoke otomatis menyertakan token login user yang
     // sedang aktif, jadi create-transaction bisa memverifikasi pemiliknya.
+    // >> Pastikan create-transaction memakai grand_total (termasuk ongkir),
+    // bukan cuma subtotal barang, saat membuat transaksi Midtrans.
     const { data: fnData, error: fnError } = await supabase.functions.invoke(
       "create-transaction",
       { body: { pesanan_id: pesananId } },
@@ -203,7 +235,7 @@ export default function Checkout() {
       return;
     }
 
-    // 3) Buka popup pembayaran Snap
+    // 4) Buka popup pembayaran Snap
     window.snap.pay(fnData.snap_token, {
       onSuccess: () => {
         clearCart(tokoId);
@@ -278,9 +310,53 @@ export default function Checkout() {
             </div>
           ))}
           <div className="flex items-center justify-between px-3 py-2 font-semibold bg-gray-50">
-            <span>Total</span>
+            <span>Subtotal Barang</span>
             <span>{formatRupiah(total)}</span>
           </div>
+        </div>
+
+        {/* Jasa pengiriman & ongkir */}
+        <div className="mb-4 p-3 border rounded bg-gray-50">
+          <p className="mb-3 text-sm font-semibold text-gray-700">
+            Jasa Pengiriman
+          </p>
+
+          <label className="block mb-1 text-xs text-gray-500">
+            Pilih Kurir
+          </label>
+          <select
+            value={kurir}
+            onChange={(e) => setKurir(e.target.value)}
+            className="w-full px-3 py-2 mb-3 border rounded bg-white"
+          >
+            <option value="">-- Pilih jasa pengiriman --</option>
+            {DAFTAR_KURIR.map((k) => (
+              <option key={k.kode} value={k.kode}>
+                {k.label}
+              </option>
+            ))}
+          </select>
+
+          {kurir && (
+            <div className="text-sm">
+              {rincian.map((r, idx) => (
+                <div key={idx} className="flex items-center justify-between py-0.5 text-gray-600">
+                  <span>{r.nama} ({r.keterangan})</span>
+                  <span>{formatRupiah(r.biaya)}</span>
+                </div>
+              ))}
+              <div className="flex items-center justify-between py-0.5 font-medium">
+                <span>Ongkos Kirim</span>
+                <span>{formatRupiah(ongkir)}</span>
+              </div>
+              {isCod && (
+                <div className="flex items-center justify-between py-0.5 text-gray-600">
+                  <span>Biaya COD</span>
+                  <span>{formatRupiah(biayaCod)}</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Data penerima & alamat pengiriman — wajib diisi, tersimpan
@@ -338,6 +414,11 @@ export default function Checkout() {
           className="w-full px-3 py-2 mb-4 border rounded"
         />
 
+        <div className="flex items-center justify-between px-3 py-2 mb-4 font-semibold border rounded bg-gray-50">
+          <span>Total Bayar</span>
+          <span>{formatRupiah(grandTotal)}</span>
+        </div>
+
         {errorMsg && (
           <div className="mb-4 text-sm text-red-600">{errorMsg}</div>
         )}
@@ -347,7 +428,11 @@ export default function Checkout() {
           disabled={loading}
           className="w-full px-4 py-2 text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50"
         >
-          {loading ? "Memproses pesanan..." : "Bayar Sekarang"}
+          {loading
+            ? "Memproses pesanan..."
+            : isCod
+              ? "Buat Pesanan (Bayar di Tempat)"
+              : "Bayar Sekarang"}
         </button>
       </div>
     </Layout>
