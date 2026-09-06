@@ -10,6 +10,7 @@ import {
   XCircle,
   Loader2,
   Store,
+  Trash2,
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import Layout from "../components/Layout";
@@ -25,6 +26,9 @@ import Layout from "../components/Layout";
 //   di UI — lihat migration tambah_pengajuan_toko_dan_approval.
 //   Tabel pengajuan_toko sengaja TIDAK punya policy UPDATE untuk
 //   siapa pun, jadi halaman ini tidak pernah bisa .update() langsung.
+// - Hapus -> .delete() langsung ke tabel pengajuan_toko. Pastikan ada
+//   RLS policy DELETE khusus superadmin di tabel ini; kalau belum ada,
+//   Supabase akan menolak (silent/no-op atau error), bukan menghapus.
 // =========================================================
 
 const BUCKET_SK = "sk-toko";
@@ -155,6 +159,19 @@ export default function PersetujuanToko() {
     setProsesId(null);
   }
 
+  async function handleHapus(id) {
+    if (!confirm("Hapus pengajuan ini secara permanen? Tindakan ini tidak dapat dibatalkan.")) return;
+    setProsesId(id);
+    const { error } = await supabase.from("pengajuan_toko").delete().eq("id", id);
+    if (error) {
+      alert("Gagal menghapus: " + error.message);
+    } else {
+      setDaftar((prev) => prev.filter((p) => p.id !== id));
+      if (tolakId === id) setTolakId(null);
+    }
+    setProsesId(null);
+  }
+
   const daftarTampil =
     filterStatus === "semua" ? daftar : daftar.filter((p) => p.status === filterStatus);
 
@@ -215,12 +232,27 @@ export default function PersetujuanToko() {
                       </p>
                     </div>
                   </div>
-                  <span
-                    className={`flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full shrink-0 ${statusInfo.className}`}
-                  >
-                    <StatusIcon size={13} />
-                    {statusInfo.label}
-                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span
+                      className={`flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full ${statusInfo.className}`}
+                    >
+                      <StatusIcon size={13} />
+                      {statusInfo.label}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleHapus(p.id)}
+                      disabled={prosesId === p.id}
+                      title="Hapus pengajuan"
+                      className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-50"
+                    >
+                      {prosesId === p.id ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Trash2 size={14} />
+                      )}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="text-sm text-slate-600 space-y-0.5 mb-2">
