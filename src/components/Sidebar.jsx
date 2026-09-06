@@ -20,6 +20,7 @@ import {
   FileText,
   FileSignature,
   Wallet,
+  Banknote,
   DatabaseBackup,
   UserPlus,
   Landmark,
@@ -66,7 +67,8 @@ function getGroupsAdmin(
   jumlahMenunggu = 0,
   jumlahPesanBelumDibaca = 0,
   jumlahPesanPusatBelumDibaca = 0,
-  jumlahPengajuanTokoMenunggu = 0
+  jumlahPengajuanTokoMenunggu = 0,
+  jumlahSiapDicairkan = 0
 ) {
   return [
     {
@@ -128,6 +130,19 @@ function getGroupsAdmin(
         { to: '/nota', label: 'Nota Belanja', icon: ShoppingCart },
         { to: '/perpustakaan', label: 'Perpustakaan', icon: Library },
         { to: '/inventaris', label: 'Inventaris', icon: Boxes },
+        // Pencairan Dana hanya untuk superadmin — satu-satunya yang boleh
+        // menandai dana sudah ditransfer ke penjual (lewat RPC
+        // fn_cairkan_pesanan / fn_tahan_pencairan, lihat PencairanDana.jsx).
+        ...(isSuperAdmin
+          ? [
+              {
+                to: '/pencairan-dana',
+                label: 'Pencairan Dana',
+                icon: Banknote,
+                badge: jumlahSiapDicairkan,
+              },
+            ]
+          : []),
       ],
     },
     {
@@ -435,6 +450,43 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
     }
   }, [isSuperAdmin])
 
+  // Notifikasi real-time: jumlah pesanan yang sudah siap dicairkan tapi
+  // belum ditransfer ke penjual. Hanya relevan untuk superadmin (satu-
+  // satunya yang punya menu "Pencairan Dana" dan boleh memanggil RPC
+  // fn_cairkan_pesanan / fn_tahan_pencairan).
+  const [jumlahSiapDicairkan, setJumlahSiapDicairkan] = useState(0)
+
+  useEffect(() => {
+    if (!isSuperAdmin) {
+      setJumlahSiapDicairkan(0)
+      return
+    }
+
+    let aktif = true
+
+    async function muatJumlahSiapDicairkan() {
+      const { count } = await supabase
+        .from('pesanan')
+        .select('id', { count: 'exact', head: true })
+        .eq('status_pencairan', 'siap_dicairkan')
+      if (aktif) setJumlahSiapDicairkan(count || 0)
+    }
+
+    muatJumlahSiapDicairkan()
+
+    const channel = supabase
+      .channel('pencairan-dana-notifikasi')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pesanan' }, () => {
+        muatJumlahSiapDicairkan()
+      })
+      .subscribe()
+
+    return () => {
+      aktif = false
+      supabase.removeChannel(channel)
+    }
+  }, [isSuperAdmin])
+
   // Notifikasi real-time: jumlah pesan masuk yang belum dibaca (fitur Pesan).
   const [jumlahPesanBelumDibaca, setJumlahPesanBelumDibaca] = useState(0)
 
@@ -533,7 +585,8 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
     jumlahMenunggu,
     jumlahPesanBelumDibaca,
     jumlahPesanPusatBelumDibaca,
-    jumlahPengajuanTokoMenunggu
+    jumlahPengajuanTokoMenunggu,
+    jumlahSiapDicairkan
   )
   const linksGuru = getLinksGuru(jumlahPesanBelumDibaca, sekolahId)
   const linksOrangTua = getLinksOrangTua(jumlahPesanBelumDibaca, sekolahId)
