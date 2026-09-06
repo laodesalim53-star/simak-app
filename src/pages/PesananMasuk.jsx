@@ -14,6 +14,7 @@ import {
   Search,
   Download,
   MapPin,
+  Truck,
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
@@ -104,8 +105,12 @@ function unduhCsv(daftarPesanan, namaPembeli) {
     "Nama Penerima",
     "No HP Penerima",
     "Alamat Pengiriman",
+    "Kurir",
+    "Ongkir",
+    "Biaya COD",
+    "Subtotal Barang",
+    "Grand Total",
     "Tanggal",
-    "Total",
     "Status",
     "Status Bayar",
     "Metode Bayar",
@@ -119,8 +124,12 @@ function unduhCsv(daftarPesanan, namaPembeli) {
     p.nama_penerima || "",
     p.no_hp_penerima || "",
     p.alamat_pengiriman || "",
-    formatTanggal(p.created_at),
+    p.kurir || "",
+    p.ongkir ?? 0,
+    p.biaya_cod ?? 0,
     p.total,
+    p.grand_total || p.total,
+    formatTanggal(p.created_at),
     STATUS_PESANAN[p.status]?.label || p.status,
     STATUS_BAYAR[p.status_bayar]?.label || p.status_bayar,
     p.metode_bayar || "",
@@ -180,6 +189,10 @@ export default function PesananMasuk() {
         nama_penerima,
         no_hp_penerima,
         alamat_pengiriman,
+        kurir,
+        ongkir,
+        biaya_cod,
+        grand_total,
         toko:toko_id!inner ( nama_toko, created_by ),
         pesanan_item ( id, nama_barang, harga_satuan, qty, subtotal )
         `
@@ -442,7 +455,7 @@ export default function PesananMasuk() {
 
                     <div className="text-right shrink-0">
                       <p className="text-sm font-semibold text-slate-900">
-                        {formatRupiah(p.total)}
+                        {formatRupiah(p.grand_total || p.total)}
                       </p>
                       <div className="flex gap-1 justify-end mt-1.5">
                         <Badge info={statusInfo} />
@@ -489,6 +502,52 @@ export default function PesananMasuk() {
                           <p className="text-sm text-slate-400 italic">
                             Pesanan ini dibuat sebelum fitur alamat pengiriman
                             aktif, data penerima tidak tersedia.
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Kurir + ongkir + biaya COD + grand total — inilah
+                          yang penjual butuhkan untuk tahu harus kirim
+                          pakai kurir apa dan berapa ongkirnya. */}
+                      <div className="mb-3 p-3 rounded-lg bg-white border border-slate-200">
+                        <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 mb-1.5">
+                          <Truck size={13} />
+                          Pengiriman
+                        </p>
+                        {p.kurir ? (
+                          <div className="space-y-1 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-slate-500">Kurir</span>
+                              <span className="font-semibold text-slate-900">
+                                {p.kurir}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-500">Ongkos kirim</span>
+                              <span className="font-medium text-slate-800">
+                                {formatRupiah(p.ongkir)}
+                              </span>
+                            </div>
+                            {Number(p.biaya_cod) > 0 && (
+                              <div className="flex justify-between">
+                                <span className="text-slate-500">Biaya COD</span>
+                                <span className="font-medium text-slate-800">
+                                  {formatRupiah(p.biaya_cod)}
+                                </span>
+                              </div>
+                            )}
+                            <div className="flex justify-between pt-1.5 mt-1.5 border-t border-slate-200">
+                              <span className="font-semibold text-slate-900">
+                                Grand total
+                              </span>
+                              <span className="font-semibold text-slate-900">
+                                {formatRupiah(p.grand_total || p.total)}
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-slate-400 italic">
+                            Data kurir & ongkir belum tersedia untuk pesanan ini.
                           </p>
                         )}
                       </div>
