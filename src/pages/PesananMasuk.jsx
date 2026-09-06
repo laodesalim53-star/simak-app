@@ -1,14 +1,18 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import {
   Inbox,
   Package,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   Calendar,
   CreditCard,
   StickyNote,
   User,
   Trash2,
+  Search,
+  Download,
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
@@ -22,6 +26,14 @@ import Layout from "../components/Layout";
 //   peran yang boleh mengubah status pesanan (baru/diproses/selesai/
 //   dibatalkan) — dibatasi lewat RLS policy "Superadmin ubah status
 //   pesanan" di Supabase, bukan cuma disembunyikan di UI.
+//
+// PENTING (keamanan): pastikan juga ADA policy RLS terpisah untuk
+// operasi DELETE yang membatasi ke superadmin saja, mis.:
+//   create policy "Superadmin hapus pesanan" on pesanan for delete
+//   using ( (select is_superadmin from profiles where id = auth.uid()) );
+// Tanpa ini, tombol Hapus yang disembunyikan di UI TIDAK cukup —
+// siapa pun yang login tetap bisa memanggil supabase.from("pesanan")
+// .delete() langsung lewat console browser.
 // =========================================================
 
 const FILTER_STATUS = [
@@ -46,6 +58,8 @@ const STATUS_BAYAR = {
   kadaluarsa: { label: "Kadaluarsa", className: "bg-slate-100 text-slate-500" },
 };
 
+const PAGE_SIZE = 10;
+
 function formatRupiah(nilai) {
   if (nilai === null || nilai === undefined || nilai === "") return "-";
   const angka = Number(nilai);
@@ -61,20 +75,86 @@ function formatTanggal(iso) {
   });
 }
 
+// Badge kecil untuk status — dipakai ulang, mengurangi duplikasi
+function Badge({ info }) {
+  return (
+    <span
+      className={`px-2 py-0.5 text-[11px] font-medium rounded-full ${info.className}`}
+    >
+      {info.label}
+    </span>
+  );
+}
+
+// Escape sederhana untuk field CSV (bungkus dengan kutip jika perlu)
+function escapeCsvField(value) {
+  const str = String(value ?? "");
+  if (/[",\n]/.test(str)) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+function unduhCsv(daftarPesanan, namaPembeli) {
+  const header = [
+    "ID Pesanan",
+    "Toko",
+    "Pembeli",
+    "Tanggal",
+    "Total",
+    "Status",
+    "Status Bayar",
+    "Metode Bayar",
+    "Catatan",
+  ];
+
+  const baris = daftarPesanan.map((p) => [
+    p.id,
+    p.toko?.nama_toko || "",
+    namaPembeli[p.user_id] || "",
+    formatTanggal(p.created_at),
+    p.total,
+    STATUS_PESANAN[p.status]?.label || p.status,
+    STATUS_BAYAR[p.status_bayar]?.label || p.status_bayar,
+    p.metode_bayar || "",
+    p.catatan || "",
+  ]);
+
+  const csvContent = [header, ...baris]
+    .map((row) => row.map(escapeCsvField).join(","))
+    .join("\n");
+
+  // Tambahkan BOM supaya karakter non-ASCII tampil benar di Excel
+  const blob = new Blob(["\uFEFF" + csvContent], {
+    type: "text/csv;charset=utf-8;",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `pesanan-masuk-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 export default function PesananMasuk() {
   const { session, isSuperAdmin, loading: authLoading } = useAuth();
+  const userId = session?.user?.id;
 
   const [pesananList, setPesananList] = useState([]);
   const [namaPembeli, setNamaPembeli] = useState({}); // { [user_id]: nama_lengkap }
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
   const [filterStatus, setFilterStatus] = useState("semua");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const [expandedId, setExpandedId] = useState(null);
   const [savingId, setSavingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
   const fetchPesananMasuk = useCallback(async () => {
-    if (!session?.user) return;
+    if (!userId) return;
 
     setLoading(true);
 
@@ -98,9 +178,10 @@ export default function PesananMasuk() {
 
     // Pemilik toko (bukan superadmin) hanya boleh lihat pesanan ke tokonya
     // sendiri. Superadmin tidak difilter — RLS "Superadmin lihat semua
-    // pesanan" yang mengizinkan lihat semua toko.
+    // pesanan" yang mengizinkan lihat semua toko. Filter ini HANYA untuk
+    // UX; RLS di database tetap wajib membatasi akses sebenarnya.
     if (!isSuperAdmin) {
-      query = query.eq("toko.created_by", session.user.id);
+      query = query.eq("toko.created_by", userId);
     }
 
     const { data, error } = await query;
@@ -117,23 +198,37 @@ export default function PesananMasuk() {
     // Ambil nama pembeli lewat tabel profiles (id = auth.users.id)
     const idUnik = [...new Set((data || []).map((p) => p.user_id))].filter(Boolean);
     if (idUnik.length > 0) {
-      const { data: profilData } = await supabase
+      const { data: profilData, error: profilError } = await supabase
         .from("profiles")
         .select("id, nama_lengkap")
         .in("id", idUnik);
-      const peta = {};
-      (profilData || []).forEach((p) => {
-        peta[p.id] = p.nama_lengkap;
-      });
-      setNamaPembeli(peta);
+
+      if (profilError) {
+        // Jangan diamkan error di sini — nama pembeli penting untuk
+        // proses verifikasi pesanan, jadi tunjukkan ke pengguna.
+        setErrorMsg((prev) =>
+          prev || "Sebagian nama pembeli gagal dimuat: " + profilError.message
+        );
+      } else {
+        const peta = {};
+        (profilData || []).forEach((p) => {
+          peta[p.id] = p.nama_lengkap;
+        });
+        setNamaPembeli(peta);
+      }
     }
 
     setLoading(false);
-  }, [session, isSuperAdmin]);
+  }, [userId, isSuperAdmin]);
 
   useEffect(() => {
     fetchPesananMasuk();
   }, [fetchPesananMasuk]);
+
+  // Reset ke halaman 1 setiap kali filter/pencarian berubah
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterStatus, searchQuery]);
 
   const handleUbahStatus = async (id, statusBaru) => {
     setSavingId(id);
@@ -167,10 +262,41 @@ export default function PesananMasuk() {
     setDeletingId(null);
   };
 
-  const daftarTampil =
-    filterStatus === "semua"
-      ? pesananList
-      : pesananList.filter((p) => p.status === filterStatus);
+  // Filter status -> lalu filter pencarian teks bebas
+  const daftarTerfilter = useMemo(() => {
+    const byStatus =
+      filterStatus === "semua"
+        ? pesananList
+        : pesananList.filter((p) => p.status === filterStatus);
+
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return byStatus;
+
+    return byStatus.filter((p) => {
+      const namaToko = p.toko?.nama_toko?.toLowerCase() || "";
+      const pembeli = (namaPembeli[p.user_id] || "").toLowerCase();
+      const catatan = (p.catatan || "").toLowerCase();
+      const namaBarang = (p.pesanan_item || [])
+        .map((item) => item.nama_barang?.toLowerCase() || "")
+        .join(" ");
+      const idPesanan = String(p.id).toLowerCase();
+
+      return (
+        namaToko.includes(q) ||
+        pembeli.includes(q) ||
+        catatan.includes(q) ||
+        namaBarang.includes(q) ||
+        idPesanan.includes(q)
+      );
+    });
+  }, [pesananList, filterStatus, searchQuery, namaPembeli]);
+
+  const totalHalaman = Math.max(1, Math.ceil(daftarTerfilter.length / PAGE_SIZE));
+  const halamanAman = Math.min(currentPage, totalHalaman);
+  const daftarTampil = daftarTerfilter.slice(
+    (halamanAman - 1) * PAGE_SIZE,
+    halamanAman * PAGE_SIZE
+  );
 
   if (authLoading) {
     return (
@@ -195,6 +321,32 @@ export default function PesananMasuk() {
         <div className="mb-4 text-sm text-red-600">{errorMsg}</div>
       )}
 
+      {/* Baris kontrol: pencarian + ekspor */}
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+        <div className="relative flex-1">
+          <Search
+            size={15}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+          />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Cari toko, pembeli, barang, atau catatan..."
+            className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+          />
+        </div>
+
+        <button
+          onClick={() => unduhCsv(daftarTerfilter, namaPembeli)}
+          disabled={daftarTerfilter.length === 0}
+          className="flex items-center justify-center gap-1.5 px-3.5 py-2 text-sm font-medium text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+        >
+          <Download size={14} />
+          Ekspor CSV
+        </button>
+      </div>
+
       {/* Filter status */}
       <div className="flex flex-wrap gap-2 mb-5">
         {FILTER_STATUS.map((f) => (
@@ -216,164 +368,196 @@ export default function PesananMasuk() {
         <div className="py-16 text-center text-sm text-slate-400">
           Memuat pesanan masuk...
         </div>
-      ) : daftarTampil.length === 0 ? (
+      ) : daftarTerfilter.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-slate-200 rounded-xl">
           <Inbox size={28} className="text-slate-300 mb-2" />
           <p className="text-sm text-slate-400">
-            {isSuperAdmin
+            {searchQuery
+              ? "Tidak ada pesanan yang cocok dengan pencarian."
+              : isSuperAdmin
               ? "Belum ada pesanan masuk."
               : "Belum ada pesanan masuk ke toko Anda."}
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {daftarTampil.map((p) => {
-            const statusInfo = STATUS_PESANAN[p.status] || {
-              label: p.status,
-              className: "bg-slate-100 text-slate-600",
-            };
-            const bayarInfo = STATUS_BAYAR[p.status_bayar] || {
-              label: p.status_bayar,
-              className: "bg-slate-100 text-slate-600",
-            };
-            const isExpanded = expandedId === p.id;
+        <>
+          <div className="space-y-3">
+            {daftarTampil.map((p) => {
+              const statusInfo = STATUS_PESANAN[p.status] || {
+                label: p.status,
+                className: "bg-slate-100 text-slate-600",
+              };
+              const bayarInfo = STATUS_BAYAR[p.status_bayar] || {
+                label: p.status_bayar,
+                className: "bg-slate-100 text-slate-600",
+              };
+              const isExpanded = expandedId === p.id;
 
-            return (
-              <div
-                key={p.id}
-                className="border border-slate-200 rounded-xl bg-white overflow-hidden hover:shadow-sm transition-shadow"
-              >
-                <button
-                  onClick={() => setExpandedId(isExpanded ? null : p.id)}
-                  className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+              return (
+                <div
+                  key={p.id}
+                  className="border border-slate-200 rounded-xl bg-white overflow-hidden hover:shadow-sm transition-shadow"
                 >
-                  <div className="w-10 h-10 shrink-0 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
-                    <Inbox size={17} />
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <p className="font-display font-semibold text-slate-900 truncate">
-                      {p.toko?.nama_toko || "Toko"}
-                    </p>
-                    <p className="flex items-center gap-1 text-xs text-slate-400 mt-0.5">
-                      <User size={12} />
-                      {namaPembeli[p.user_id] || "Pembeli"}
-                      <span className="mx-1">•</span>
-                      <Calendar size={12} />
-                      {formatTanggal(p.created_at)}
-                    </p>
-                  </div>
-
-                  <div className="text-right shrink-0">
-                    <p className="text-sm font-semibold text-slate-900">
-                      {formatRupiah(p.total)}
-                    </p>
-                    <div className="flex gap-1 justify-end mt-1.5">
-                      <span
-                        className={`px-2 py-0.5 text-[11px] font-medium rounded-full ${statusInfo.className}`}
-                      >
-                        {statusInfo.label}
-                      </span>
-                      <span
-                        className={`px-2 py-0.5 text-[11px] font-medium rounded-full ${bayarInfo.className}`}
-                      >
-                        {bayarInfo.label}
-                      </span>
+                  <button
+                    onClick={() => setExpandedId(isExpanded ? null : p.id)}
+                    className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+                  >
+                    <div className="w-10 h-10 shrink-0 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+                      <Inbox size={17} />
                     </div>
-                  </div>
 
-                  <div className="shrink-0 text-slate-400">
-                    {isExpanded ? (
-                      <ChevronUp size={16} />
-                    ) : (
-                      <ChevronDown size={16} />
-                    )}
-                  </div>
-                </button>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-display font-semibold text-slate-900 truncate">
+                        {p.toko?.nama_toko || "Toko"}
+                      </p>
+                      <p className="flex items-center gap-1 text-xs text-slate-400 mt-0.5">
+                        <User size={12} />
+                        {namaPembeli[p.user_id] || "Pembeli"}
+                        <span className="mx-1">•</span>
+                        <Calendar size={12} />
+                        {formatTanggal(p.created_at)}
+                      </p>
+                    </div>
 
-                {isExpanded && (
-                  <div className="border-t border-slate-100 px-4 py-3.5 bg-slate-50">
-                    <ul className="divide-y divide-slate-200">
-                      {p.pesanan_item?.map((item) => (
-                        <li
-                          key={item.id}
-                          className="py-2 flex items-center gap-3"
-                        >
-                          <div className="w-8 h-8 shrink-0 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-400">
-                            <Package size={14} />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm text-slate-800 truncate">
-                              {item.nama_barang}
-                            </p>
-                            <p className="text-xs text-slate-400">
-                              {item.qty} x {formatRupiah(item.harga_satuan)}
-                            </p>
-                          </div>
-                          <p className="text-sm font-medium text-slate-900 shrink-0">
-                            {formatRupiah(item.subtotal)}
-                          </p>
-                        </li>
-                      ))}
-                    </ul>
-
-                    {(p.metode_bayar || p.catatan) && (
-                      <div className="mt-3 pt-3 border-t border-slate-200 space-y-1.5">
-                        {p.metode_bayar && (
-                          <p className="flex items-center gap-1.5 text-xs text-slate-500">
-                            <CreditCard size={12} />
-                            Metode bayar: {p.metode_bayar}
-                          </p>
-                        )}
-                        {p.catatan && (
-                          <p className="flex items-center gap-1.5 text-xs text-slate-500">
-                            <StickyNote size={12} />
-                            Catatan: {p.catatan}
-                          </p>
-                        )}
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-semibold text-slate-900">
+                        {formatRupiah(p.total)}
+                      </p>
+                      <div className="flex gap-1 justify-end mt-1.5">
+                        <Badge info={statusInfo} />
+                        <Badge info={bayarInfo} />
                       </div>
-                    )}
+                    </div>
 
-                    {/* Kontrol ubah status — HANYA untuk superadmin.
-                        Pemilik toko biasa cuma lihat badge status di atas,
-                        tidak ada tombol/dropdown di sini (juga dikunci lewat
-                        RLS "Superadmin ubah status pesanan" di database). */}
-                    {isSuperAdmin && (
-                      <div className="mt-3 pt-3 border-t border-slate-200 flex items-end justify-between gap-3">
-                        <div>
-                          <label className="block mb-1.5 text-xs font-medium text-slate-500">
-                            Ubah status pesanan
-                          </label>
-                          <select
-                            value={p.status}
-                            disabled={savingId === p.id || deletingId === p.id}
-                            onChange={(e) => handleUbahStatus(p.id, e.target.value)}
-                            className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white disabled:opacity-50"
+                    <div className="shrink-0 text-slate-400">
+                      {isExpanded ? (
+                        <ChevronUp size={16} />
+                      ) : (
+                        <ChevronDown size={16} />
+                      )}
+                    </div>
+                  </button>
+
+                  {isExpanded && (
+                    <div className="border-t border-slate-100 px-4 py-3.5 bg-slate-50">
+                      <ul className="divide-y divide-slate-200">
+                        {p.pesanan_item?.map((item) => (
+                          <li
+                            key={item.id}
+                            className="py-2 flex items-center gap-3"
                           >
-                            <option value="baru">Baru</option>
-                            <option value="diproses">Diproses</option>
-                            <option value="selesai">Selesai</option>
-                            <option value="dibatalkan">Dibatalkan</option>
-                          </select>
-                        </div>
+                            <div className="w-8 h-8 shrink-0 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-400">
+                              <Package size={14} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm text-slate-800 truncate">
+                                {item.nama_barang}
+                              </p>
+                              <p className="text-xs text-slate-400">
+                                {item.qty} x {formatRupiah(item.harga_satuan)}
+                              </p>
+                            </div>
+                            <p className="text-sm font-medium text-slate-900 shrink-0">
+                              {formatRupiah(item.subtotal)}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
 
-                        <button
-                          onClick={() => handleHapus(p.id)}
-                          disabled={deletingId === p.id}
-                          title="Hapus pesanan"
-                          className="flex items-center gap-1.5 px-3 h-9 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50 shrink-0"
-                        >
-                          <Trash2 size={14} />
-                          {deletingId === p.id ? "Menghapus..." : "Hapus"}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
+                      {(p.metode_bayar || p.catatan) && (
+                        <div className="mt-3 pt-3 border-t border-slate-200 space-y-1.5">
+                          {p.metode_bayar && (
+                            <p className="flex items-center gap-1.5 text-xs text-slate-500">
+                              <CreditCard size={12} />
+                              Metode bayar: {p.metode_bayar}
+                            </p>
+                          )}
+                          {p.catatan && (
+                            <p className="flex items-center gap-1.5 text-xs text-slate-500">
+                              <StickyNote size={12} />
+                              Catatan: {p.catatan}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Kontrol ubah status — HANYA untuk superadmin.
+                          Pemilik toko biasa cuma lihat badge status di atas,
+                          tidak ada tombol/dropdown di sini (juga WAJIB
+                          dikunci lewat RLS "Superadmin ubah status pesanan"
+                          dan "Superadmin hapus pesanan" di database —
+                          lihat catatan keamanan di bagian atas file ini). */}
+                      {isSuperAdmin && (
+                        <div className="mt-3 pt-3 border-t border-slate-200 flex items-end justify-between gap-3">
+                          <div>
+                            <label className="block mb-1.5 text-xs font-medium text-slate-500">
+                              Ubah status pesanan
+                            </label>
+                            <select
+                              value={p.status}
+                              disabled={savingId === p.id || deletingId === p.id}
+                              onChange={(e) => handleUbahStatus(p.id, e.target.value)}
+                              className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white disabled:opacity-50"
+                            >
+                              <option value="baru">Baru</option>
+                              <option value="diproses">Diproses</option>
+                              <option value="selesai">Selesai</option>
+                              <option value="dibatalkan">Dibatalkan</option>
+                            </select>
+                          </div>
+
+                          <button
+                            onClick={() => handleHapus(p.id)}
+                            disabled={deletingId === p.id}
+                            title="Hapus pesanan"
+                            className="flex items-center gap-1.5 px-3 h-9 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50 shrink-0"
+                          >
+                            <Trash2 size={14} />
+                            {deletingId === p.id ? "Menghapus..." : "Hapus"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Pagination */}
+          {totalHalaman > 1 && (
+            <div className="flex items-center justify-between mt-5">
+              <p className="text-xs text-slate-400">
+                Menampilkan {(halamanAman - 1) * PAGE_SIZE + 1}–
+                {Math.min(halamanAman * PAGE_SIZE, daftarTerfilter.length)} dari{" "}
+                {daftarTerfilter.length} pesanan
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={halamanAman === 1}
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50"
+                >
+                  <ChevronLeft size={14} />
+                  Sebelumnya
+                </button>
+                <span className="text-xs text-slate-500">
+                  Hal {halamanAman} / {totalHalaman}
+                </span>
+                <button
+                  onClick={() =>
+                    setCurrentPage((p) => Math.min(totalHalaman, p + 1))
+                  }
+                  disabled={halamanAman === totalHalaman}
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50"
+                >
+                  Berikutnya
+                  <ChevronRight size={14} />
+                </button>
               </div>
-            );
-          })}
-        </div>
+            </div>
+          )}
+        </>
       )}
     </Layout>
   );
