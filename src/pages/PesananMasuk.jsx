@@ -195,12 +195,16 @@ export default function PesananMasuk() {
     setPesananList(data || []);
     setErrorMsg("");
 
-    // Ambil nama pembeli lewat tabel profiles (id = auth.users.id)
+    // Ambil nama pembeli lewat tabel profil (id = auth.users.id).
+    // CATATAN: sebelumnya query ini memakai tabel "profiles" (dengan "s"),
+    // tapi tabel itu adalah sisa skema lama berisi 1 baris dan sudah
+    // dihapus. Sumber kebenaran yang dipakai seluruh aplikasi (termasuk
+    // AuthContext) adalah tabel "profil".
     const idUnik = [...new Set((data || []).map((p) => p.user_id))].filter(Boolean);
     if (idUnik.length > 0) {
       const { data: profilData, error: profilError } = await supabase
-        .from("profiles")
-        .select("id, nama_lengkap")
+        .from("profil")
+        .select("id, guru_id, nama_lengkap_pendaftar, guru:guru_id ( nama_lengkap )")
         .in("id", idUnik);
 
       if (profilError) {
@@ -212,7 +216,10 @@ export default function PesananMasuk() {
       } else {
         const peta = {};
         (profilData || []).forEach((p) => {
-          peta[p.id] = p.nama_lengkap;
+          // Prioritas nama sama seperti di AuthContext: kalau pembeli
+          // punya guru_id, pakai nama dari tabel guru; kalau tidak,
+          // pakai nama yang diisi saat pendaftaran.
+          peta[p.id] = p.guru?.nama_lengkap || p.nama_lengkap_pendaftar;
         });
         setNamaPembeli(peta);
       }
