@@ -12,6 +12,7 @@ import {
   Store,
   Trash2,
   Sparkles,
+  Info,
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import Layout from "../components/Layout";
@@ -43,6 +44,15 @@ import Layout from "../components/Layout";
 //   supaya penghapusan yang diam-diam gagal karena RLS tidak dikira
 //   berhasil oleh UI (ini penyebab "sudah dihapus tapi muncul lagi
 //   setelah refresh").
+//
+// ATURAN PEMBAYARAN (ditampilkan sebagai catatan di halaman ini, BUKAN
+// logika otomatis): begitu toko disetujui, seluruh pembayaran pembeli
+// masuk dulu ke rekening/akun superadmin. Penjual (admin sekolah) baru
+// menerima uang hasil penjualannya setelah barang benar-benar diambil
+// atau diserahkan ke pembeli. Ini murni kebijakan operasional yang perlu
+// dijalankan manual oleh superadmin di luar sistem (belum ada alur
+// escrow/pencairan otomatis di database) — catatan ini hanya pengingat
+// supaya kebijakannya konsisten dipahami setiap kali menyetujui toko.
 //
 // TEMA (mengikuti Toko.jsx): banner sambutan bergradasi + motif batik,
 // dan kartu pengajuan pakai aksen warna solid berotasi (biru/hijau/
@@ -226,7 +236,15 @@ export default function PersetujuanToko() {
   }
 
   async function handleSetujui(id) {
-    if (!confirm("Setujui pengajuan toko ini? Toko akan langsung aktif.")) return;
+    if (
+      !confirm(
+        "Setujui pengajuan toko ini? Toko akan langsung aktif.\n\n" +
+          "Ingat: setelah disetujui, seluruh pembayaran pembeli masuk ke " +
+          "superadmin terlebih dahulu. Penjual baru menerima uang hasil " +
+          "penjualan setelah barang diambil/diserahkan ke pembeli."
+      )
+    )
+      return;
     setProsesId(id);
     const { error } = await supabase.rpc("fn_setujui_pengajuan_toko", {
       p_pengajuan_id: id,
@@ -345,6 +363,20 @@ export default function PersetujuanToko() {
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Catatan aturan pembayaran — pengingat kebijakan, bukan logika
+          otomatis. Ditampilkan di atas daftar supaya selalu terlihat
+          setiap kali superadmin meninjau pengajuan. */}
+      <div className="flex items-start gap-2.5 mb-5 p-3.5 rounded-xl bg-blue-50 border border-blue-100">
+        <Info size={16} className="text-blue-600 mt-0.5 shrink-0" />
+        <p className="text-xs sm:text-sm text-blue-800 leading-relaxed">
+          <span className="font-semibold">Aturan pembayaran:</span> setelah
+          toko disetujui, seluruh pembayaran dari pembeli masuk terlebih
+          dahulu ke superadmin. Penjual (admin sekolah) baru menerima uang
+          hasil penjualannya setelah barang diambil atau diserahkan kepada
+          pembeli.
+        </p>
       </div>
 
       {errorMsg && <div className="mb-4 text-sm text-red-600">{errorMsg}</div>}
