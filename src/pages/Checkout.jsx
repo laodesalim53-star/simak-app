@@ -11,10 +11,16 @@ import { DAFTAR_KURIR, hitungOngkir } from "../lib/ongkir";
 // handleCheckout tetap dipertahankan sebagai lapisan pengaman tambahan
 // (mis. kalau sesi kedaluwarsa persis saat tombol diklik).
 //
-// Alur (SETELAH integrasi Midtrans + kurir/ongkir):
-// 1. Ambil isi keranjang untuk toko ini dari CartContext
-// 2. Hitung ongkir & biaya COD (lib/ongkir.js) berdasarkan kategori/berat
-//    tiap barang dan kurir yang dipilih pembeli.
+// Alur (SETELAH integrasi Midtrans + halaman pilih pengiriman):
+//   Keranjang -> /toko/:id/pengiriman (pilih kurir, lihat ongkir)
+//             -> /toko/:id/checkout (halaman ini: alamat + bayar)
+//
+// 1. Ambil isi keranjang untuk toko ini dari CartContext, dan kurir yang
+//    sudah dipilih pembeli di halaman /pengiriman (getKurir). Kalau
+//    kurir belum ada, pembeli dilempar balik ke halaman itu (lihat
+//    useEffect di bawah).
+// 2. Ongkir & biaya COD dihitung ulang di sini (lib/ongkir.js) dari data
+//    yang sama, cukup untuk ditampilkan sebagai ringkasan.
 // 3. Panggil fungsi database "buat_pesanan" -> membuat baris di
 //    pesanan + pesanan_item, MENYIMPAN data penerima/alamat pengiriman,
 //    kurir, ongkir, biaya COD, dan grand total, lalu mengurangi stok.
@@ -65,19 +71,28 @@ function loadSnapScript() {
 export default function Checkout() {
   const { id: tokoId } = useParams();
   const navigate = useNavigate();
-  const { getCartItems, clearCart } = useCart();
+  const { getCartItems, clearCart, getKurir } = useCart();
 
   const [catatan, setCatatan] = useState("");
   const [namaPenerima, setNamaPenerima] = useState("");
   const [noHpPenerima, setNoHpPenerima] = useState("");
   const [alamatPengiriman, setAlamatPengiriman] = useState("");
-  const [kurir, setKurir] = useState("");
   const [prefillLoading, setPrefillLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [snapReady, setSnapReady] = useState(false);
 
   const items = getCartItems(tokoId);
+  const kurir = getKurir(tokoId);
+
+  // Kurir wajib sudah dipilih di halaman /toko/:id/pengiriman sebelum
+  // masuk ke sini. Kalau belum ada (mis. pembeli langsung buka URL
+  // checkout), lempar balik ke halaman pilih pengiriman.
+  useEffect(() => {
+    if (items.length > 0 && !kurir) {
+      navigate(`/toko/${tokoId}/pengiriman`, { replace: true });
+    }
+  }, [items.length, kurir, tokoId, navigate]);
 
   // Muat Snap.js begitu halaman Checkout dibuka, supaya saat tombol
   // "Buat Pesanan" diklik popup sudah siap tampil tanpa jeda.
@@ -169,10 +184,6 @@ export default function Checkout() {
     }
     if (!alamatPengiriman.trim()) {
       setErrorMsg("Alamat pengiriman wajib diisi.");
-      return;
-    }
-    if (!kurir) {
-      setErrorMsg("Jasa pengiriman wajib dipilih.");
       return;
     }
     // Snap hanya dibutuhkan untuk metode pembayaran non-COD.
@@ -315,29 +326,22 @@ export default function Checkout() {
           </div>
         </div>
 
-        {/* Jasa pengiriman & ongkir */}
-        <div className="mb-4 p-3 border rounded bg-gray-50">
-          <p className="mb-3 text-sm font-semibold text-gray-700">
-            Jasa Pengiriman
-          </p>
+        {/* Jasa pengiriman & ongkir — sudah dipilih di halaman sebelumnya
+            (/toko/:id/pengiriman), di sini hanya ditampilkan ringkasannya. */}
+        {kurir && (
+          <div className="mb-4 p-3 border rounded bg-gray-50">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-semibold text-gray-700">
+                Jasa Pengiriman: {DAFTAR_KURIR.find((k) => k.kode === kurir)?.label || kurir}
+              </p>
+              <button
+                onClick={() => navigate(`/toko/${tokoId}/pengiriman`)}
+                className="text-xs text-blue-600 hover:underline"
+              >
+                Ganti
+              </button>
+            </div>
 
-          <label className="block mb-1 text-xs text-gray-500">
-            Pilih Kurir
-          </label>
-          <select
-            value={kurir}
-            onChange={(e) => setKurir(e.target.value)}
-            className="w-full px-3 py-2 mb-3 border rounded bg-white"
-          >
-            <option value="">-- Pilih jasa pengiriman --</option>
-            {DAFTAR_KURIR.map((k) => (
-              <option key={k.kode} value={k.kode}>
-                {k.label}
-              </option>
-            ))}
-          </select>
-
-          {kurir && (
             <div className="text-sm">
               {rincian.map((r, idx) => (
                 <div key={idx} className="flex items-center justify-between py-0.5 text-gray-600">
@@ -356,8 +360,8 @@ export default function Checkout() {
                 </div>
               )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Data penerima & alamat pengiriman — wajib diisi, tersimpan
             persis seperti saat pesanan ini dibuat. */}
