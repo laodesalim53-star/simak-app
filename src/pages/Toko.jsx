@@ -33,6 +33,10 @@ import Layout from "../components/Layout";
 // - Superadmin: bisa Tambah, Edit, Hapus, dan Import CSV toko, dan
 //   tambah/edit/hapus barang lewat panel "Kelola Barang" yang bisa
 //   ditampilkan/disembunyikan di dalam modal barang.
+// - Pemilik toko (created_by toko === user login): bisa tambah/edit/hapus
+//   BARANG di tokonya sendiri lewat panel "Kelola Barang" yang sama,
+//   tapi TIDAK bisa mengelola toko lain, dan TIDAK bisa edit/hapus/import
+//   data toko itu sendiri (itu tetap superadmin-only).
 //
 // PERBAIKAN (role): role diambil dari AuthContext.
 // PERBAIKAN (RLS tabel toko): insert & import CSV menyertakan created_by.
@@ -50,6 +54,15 @@ import Layout from "../components/Layout";
 // sambutan bergaya toko di atas grid, serta pratinjau foto/ikon barang
 // tiap toko di bagian bawah kartunya supaya pengunjung langsung dapat
 // gambaran isi toko sebelum membuka modalnya.
+// PERBAIKAN (akses kelola barang untuk pemilik toko): sebelumnya semua
+// kontrol "Kelola Barang" (tombol, panel form, edit/hapus per barang)
+// dan handler-nya (handleBarangEdit/Submit/Delete) hanya dicek
+// isSuperadmin, sehingga pemilik toko biasa tidak pernah melihat/bisa
+// memakai kontrol tsb sama sekali — walau RLS Supabase untuk tabel
+// barang sudah mengizinkan pemilik toko (created_by toko = auth.uid()).
+// Ditambahkan `isPemilikTokoAktif` & `bisaKelolaBarang` supaya pemilik
+// toko yang sedang membuka tokonya sendiri juga mendapat akses kelola
+// barang, tanpa mengubah aturan CRUD untuk data toko itu sendiri.
 // =========================================================
 
 const BARANG_PHOTO_BUCKET = "barang-photos";
@@ -180,7 +193,7 @@ export default function Toko() {
   const [barangList, setBarangList] = useState([]);
   const [barangLoading, setBarangLoading] = useState(false);
   const [barangError, setBarangError] = useState("");
-  const [showBarangForm, setShowBarangForm] = useState(false); // panel kelola (superadmin)
+  const [showBarangForm, setShowBarangForm] = useState(false); // panel kelola (superadmin / pemilik toko)
   const [editingBarangId, setEditingBarangId] = useState(null);
   const [barangForm, setBarangForm] = useState({
     nama_barang: "",
@@ -198,6 +211,18 @@ export default function Toko() {
   const [qtyInput, setQtyInput] = useState({});
 
   const isSuperadmin = isSuperAdmin;
+
+  // Pemilik toko yang sedang dibuka (activeToko) boleh kelola BARANG di
+  // tokonya sendiri, selain superadmin. Ini sengaja dicek terhadap
+  // activeToko (bukan seluruh tokoList) karena kontrol ini hanya relevan
+  // saat modal barang sedang terbuka. CRUD untuk data TOKO itu sendiri
+  // (handleEdit/handleSubmit/handleDelete toko, import CSV) tetap
+  // superadmin-only dan tidak dipengaruhi oleh flag ini.
+  const isPemilikTokoAktif =
+    !!session?.user?.id &&
+    !!activeToko &&
+    activeToko.created_by === session.user.id;
+  const bisaKelolaBarang = isSuperadmin || isPemilikTokoAktif;
 
   // ---------------------------------------------------
   // Ambil daftar toko + pratinjau barang tiap toko
@@ -435,7 +460,7 @@ export default function Toko() {
   };
 
   const handleBarangEdit = (item) => {
-    if (!isSuperadmin) return;
+    if (!bisaKelolaBarang) return;
     setBarangForm({
       nama_barang: item.nama_barang || "",
       kategori: item.kategori || "",
@@ -488,7 +513,7 @@ export default function Toko() {
 
   const handleBarangSubmit = async (e) => {
     e.preventDefault();
-    if (!isSuperadmin) return;
+    if (!bisaKelolaBarang) return;
     if (!activeToko) return;
 
     if (!barangForm.nama_barang.trim()) {
@@ -540,7 +565,7 @@ export default function Toko() {
   };
 
   const handleBarangDelete = async (id) => {
-    if (!isSuperadmin) return;
+    if (!bisaKelolaBarang) return;
     if (!confirm("Yakin ingin menghapus barang ini?")) return;
 
     const { error } = await supabase.from("barang").delete().eq("id", id);
@@ -896,7 +921,7 @@ export default function Toko() {
                 </h2>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                {isSuperadmin && (
+                {bisaKelolaBarang && (
                   <button
                     onClick={() => setShowBarangForm((v) => !v)}
                     className={`flex items-center gap-1.5 px-3 h-9 text-sm font-medium rounded-lg border transition-colors ${
@@ -935,8 +960,8 @@ export default function Toko() {
                 <div className="mb-3 text-sm text-red-600">{barangError}</div>
               )}
 
-              {/* Panel kelola barang - superadmin, bisa disembunyikan */}
-              {isSuperadmin && showBarangForm && (
+              {/* Panel kelola barang - superadmin ATAU pemilik toko aktif, bisa disembunyikan */}
+              {bisaKelolaBarang && showBarangForm && (
                 <form
                   onSubmit={handleBarangSubmit}
                   className="p-4 mb-5 space-y-2.5 border border-slate-200 rounded-xl bg-slate-50"
@@ -1056,7 +1081,7 @@ export default function Toko() {
                         key={b.id}
                         className="group relative border border-slate-200 rounded-xl overflow-hidden bg-white hover:shadow-sm transition-shadow"
                       >
-                        {isSuperadmin && (
+                        {bisaKelolaBarang && (
                           <div className="absolute top-2 right-2 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
                               onClick={() => handleBarangEdit(b)}
