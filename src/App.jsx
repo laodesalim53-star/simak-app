@@ -68,6 +68,7 @@ import Loader from './components/Loader'
 // --- Fitur Toko: Keranjang & Checkout ---
 import Toko from './pages/Toko'
 import Keranjang from './pages/Keranjang'
+import PilihPengiriman from './pages/PilihPengiriman'
 import Checkout from './pages/Checkout'
 import PesananSukses from './pages/PesananSukses'
 import RiwayatPesanan from './pages/RiwayatPesanan'
@@ -253,12 +254,14 @@ export default function App() {
         <Route path="/rapat/:roomId" element={<RapatVideo />} />
 
         {/* --- Fitur Toko: Keranjang & Checkout ---
-            /toko dan /toko/:id/keranjang sengaja TIDAK dibungkus ProtectedRoute —
-            pengunjung boleh lihat-lihat & isi keranjang tanpa akun. Login baru
-            diwajibkan saat checkout, dan otomatis kembali ke halaman checkout
-            setelah berhasil login (lihat state `from` di ProtectedRoute & Login.jsx). */}
+            /toko, /toko/:id/keranjang, dan /toko/:id/pengiriman sengaja TIDAK
+            dibungkus ProtectedRoute — pengunjung boleh lihat-lihat, isi
+            keranjang, dan pilih kurir tanpa akun. Login baru diwajibkan saat
+            checkout, dan otomatis kembali ke halaman checkout setelah berhasil
+            login (lihat state `from` di ProtectedRoute & Login.jsx). */}
         <Route path="/toko" element={<Toko />} />
         <Route path="/toko/:id/keranjang" element={<Keranjang />} />
+        <Route path="/toko/:id/pengiriman" element={<PilihPengiriman />} />
         <Route path="/toko/:id/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
         <Route path="/toko/:id/pesanan-sukses" element={<ProtectedRoute><PesananSukses /></ProtectedRoute>} />
         {/* Riwayat Pesanan: rekap semua transaksi milik pembeli yang login,
