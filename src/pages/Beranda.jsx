@@ -1,8 +1,57 @@
 import { Link } from 'react-router-dom'
+import { ArrowRight, LogIn, GraduationCap } from 'lucide-react'
 
 // Halaman utama publik (landing page) — ditampilkan di "/" untuk pengunjung
 // yang belum login. Tombol "Daftar" & "Masuk" mengarah ke rute React Router
 // internal (/register, /login), BUKAN link keluar ke domain lain.
+//
+// Tema visual disamakan dengan Dashboard: gradasi navy–indigo, motif batik
+// emas tipis sebagai overlay, dan kartu-kartu gradien warna-warni.
+
+function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 72 }) {
+  return (
+    <svg className="batik-overlay" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <defs>
+        <pattern
+          id={patternId}
+          x="0"
+          y="0"
+          width={size}
+          height={size}
+          patternUnits="userSpaceOnUse"
+          patternTransform="rotate(8)"
+        >
+          <g fill="none" stroke={strokeColor} strokeWidth="1.1" opacity={opacity}>
+            <ellipse cx={size / 2} cy={size * 0.333} rx={size * 0.125} ry={size * 0.194} opacity="0.55" />
+            <ellipse cx={size / 2} cy={size * 0.667} rx={size * 0.125} ry={size * 0.194} opacity="0.55" />
+            <ellipse cx={size * 0.333} cy={size / 2} rx={size * 0.194} ry={size * 0.125} opacity="0.55" />
+            <ellipse cx={size * 0.667} cy={size / 2} rx={size * 0.194} ry={size * 0.125} opacity="0.55" />
+            <circle cx={size / 2} cy={size / 2} r={size * 0.042} opacity="0.7" />
+          </g>
+          <path
+            d={`M0 ${size} L${size * 0.25} ${size * 0.75} L${size * 0.5} ${size} L${size * 0.75} ${size * 0.75} L${size} ${size}`}
+            fill="none"
+            stroke={strokeColor}
+            strokeWidth="0.8"
+            opacity={opacity * 0.35}
+          />
+          <path
+            d={`M0 0 L${size * 0.25} ${size * 0.25} L0 ${size * 0.5}`}
+            fill="none"
+            stroke={strokeColor}
+            strokeWidth="0.8"
+            opacity={opacity * 0.3}
+          />
+          <circle cx={size * 0.11} cy={size * 0.11} r="1.3" fill={strokeColor} opacity={opacity * 0.4} />
+          <circle cx={size * 0.89} cy={size * 0.22} r="1.3" fill={strokeColor} opacity={opacity * 0.4} />
+          <circle cx={size * 0.22} cy={size * 0.89} r="1.3" fill={strokeColor} opacity={opacity * 0.4} />
+        </pattern>
+      </defs>
+      <rect x="0" y="0" width="100%" height="100%" fill={`url(#${patternId})`} />
+    </svg>
+  )
+}
+
 export default function Beranda() {
   return (
     <div className="beranda-canvas">
@@ -21,7 +70,11 @@ export default function Beranda() {
         <div className="beranda-main">
 
           <div className="beranda-header">
-            <div>
+            <BatikOverlay patternId="batikHero" strokeColor="#d4af37" opacity={0.9} />
+            <div className="header-glow header-glow-a"></div>
+            <div className="header-glow header-glow-b"></div>
+
+            <div className="header-content">
               <span className="header-eyebrow">Sistem informasi sekolah terpadu</span>
               <h1 className="beranda-title">Satu aplikasi, seluruh sekolah</h1>
               <p className="beranda-sub">
@@ -29,44 +82,58 @@ export default function Beranda() {
                 keuangan, komunikasi, hingga toko sekolah, dalam satu sistem yang sama.
               </p>
               <div className="header-actions">
-                <Link to="/register" className="promo-pill">Daftar sekarang</Link>
-                <Link to="/login" className="login-link">Sudah punya akun? Masuk</Link>
+                <Link to="/register" className="promo-pill">
+                  Daftar sekarang
+                  <ArrowRight size={16} strokeWidth={2.5} />
+                </Link>
+                <Link to="/login" className="login-link">
+                  <LogIn size={15} strokeWidth={2.5} />
+                  Sudah punya akun? Masuk
+                </Link>
               </div>
             </div>
           </div>
 
+          <div className="aru-banner">
+            <div className="aru-icon"><GraduationCap size={18} /></div>
+            <p className="aru-text">
+              Salam hangat untuk Bapak/Ibu Guru di Kabupaten Kepulauan Aru — SIMAK dibuat
+              untuk membantu sekolah Anda mengelola data lebih ringan, dari kelas hingga kantor.
+            </p>
+          </div>
+
           <div className="tile-strip">
-            <div className="tile" style={{ background: 'linear-gradient(135deg,#4F8EF7,#2F6FE0)' }}>
+            <div className="tile" style={{ background: 'linear-gradient(135deg,#3B82F6,#2563EB)' }}>
               <div className="tile-icon"></div>
               <p className="tile-label">Area 1</p>
               <p className="tile-name">Akademik &amp; Ujian</p>
             </div>
-            <div className="tile" style={{ background: 'linear-gradient(135deg,#16C79A,#0EA57B)' }}>
+            <div className="tile" style={{ background: 'linear-gradient(135deg,#10B981,#059669)' }}>
               <div className="tile-icon"></div>
               <p className="tile-label">Area 2</p>
               <p className="tile-name">Administrasi Siswa</p>
             </div>
-            <div className="tile" style={{ background: 'linear-gradient(135deg,#FF9A52,#F2762B)' }}>
+            <div className="tile" style={{ background: 'linear-gradient(135deg,#F97316,#EA580C)' }}>
               <div className="tile-icon"></div>
               <p className="tile-label">Area 3</p>
               <p className="tile-name">Keuangan Sekolah</p>
             </div>
-            <div className="tile" style={{ background: 'linear-gradient(135deg,#9B6BF2,#7C4FE0)' }}>
+            <div className="tile" style={{ background: 'linear-gradient(135deg,#A855F7,#9333EA)' }}>
               <div className="tile-icon"></div>
               <p className="tile-label">Area 4</p>
               <p className="tile-name">Komunikasi</p>
             </div>
-            <div className="tile" style={{ background: 'linear-gradient(135deg,#6C7CF0,#4E5FE0)' }}>
+            <div className="tile" style={{ background: 'linear-gradient(135deg,#14B8A6,#0D9488)' }}>
               <div className="tile-icon"></div>
               <p className="tile-label">Area 5</p>
               <p className="tile-name">Manajemen Sekolah</p>
             </div>
-            <div className="tile" style={{ background: 'linear-gradient(135deg,#FB7C99,#E85277)' }}>
+            <div className="tile" style={{ background: 'linear-gradient(135deg,#F43F5E,#E11D48)' }}>
               <div className="tile-icon"></div>
               <p className="tile-label">Area 6</p>
               <p className="tile-name">Portal Orang Tua</p>
             </div>
-            <div className="tile" style={{ background: 'linear-gradient(135deg,#35C2E8,#159EC9)' }}>
+            <div className="tile" style={{ background: 'linear-gradient(135deg,#0EA5E9,#0284C7)' }}>
               <div className="tile-icon"></div>
               <p className="tile-label">Area 7</p>
               <p className="tile-name">Toko Sekolah</p>
@@ -76,9 +143,9 @@ export default function Beranda() {
           <div className="cat-section">
 
             <div className="cat-card">
-              <span className="cat-tag" style={{ background: '#2F6FE0' }}>Area 1</span>
-              <h2 className="cat-title" style={{ '--accent': '#2F6FE0' }}>Akademik &amp; ujian</h2>
-              <ul className="cat-list" style={{ '--accent': '#2F6FE0' }}>
+              <span className="cat-tag" style={{ background: '#2563EB' }}>Area 1</span>
+              <h2 className="cat-title">Akademik &amp; ujian</h2>
+              <ul className="cat-list" style={{ '--accent': '#2563EB' }}>
                 <li>Ujian online &amp; bank soal</li>
                 <li>Kuis seru untuk kelas rendah</li>
                 <li>Nilai, rapor &amp; nilai asesmen</li>
@@ -89,9 +156,9 @@ export default function Beranda() {
             </div>
 
             <div className="cat-card">
-              <span className="cat-tag" style={{ background: '#0EA57B' }}>Area 2</span>
+              <span className="cat-tag" style={{ background: '#059669' }}>Area 2</span>
               <h2 className="cat-title">Administrasi siswa</h2>
-              <ul className="cat-list" style={{ '--accent': '#0EA57B' }}>
+              <ul className="cat-list" style={{ '--accent': '#059669' }}>
                 <li>Data siswa, kelas &amp; jadwal</li>
                 <li>Presensi harian</li>
                 <li>Kartu siswa, ijazah &amp; SKL</li>
@@ -101,9 +168,9 @@ export default function Beranda() {
             </div>
 
             <div className="cat-card">
-              <span className="cat-tag" style={{ background: '#F2762B' }}>Area 3</span>
+              <span className="cat-tag" style={{ background: '#EA580C' }}>Area 3</span>
               <h2 className="cat-title">Keuangan sekolah</h2>
-              <ul className="cat-list" style={{ '--accent': '#F2762B' }}>
+              <ul className="cat-list" style={{ '--accent': '#EA580C' }}>
                 <li>Keuangan sekolah &amp; kas kelas</li>
                 <li>Kuitansi &amp; nota otomatis</li>
                 <li>Laporan bulanan</li>
@@ -112,9 +179,9 @@ export default function Beranda() {
             </div>
 
             <div className="cat-card">
-              <span className="cat-tag" style={{ background: '#7C4FE0' }}>Area 4</span>
+              <span className="cat-tag" style={{ background: '#9333EA' }}>Area 4</span>
               <h2 className="cat-title">Komunikasi &amp; publikasi</h2>
-              <ul className="cat-list" style={{ '--accent': '#7C4FE0' }}>
+              <ul className="cat-list" style={{ '--accent': '#9333EA' }}>
                 <li>Pengumuman &amp; agenda sekolah</li>
                 <li>Pesan langsung antar warga sekolah</li>
                 <li>Rapat online lewat video</li>
@@ -125,9 +192,9 @@ export default function Beranda() {
             </div>
 
             <div className="cat-card">
-              <span className="cat-tag" style={{ background: '#4E5FE0' }}>Area 5</span>
+              <span className="cat-tag" style={{ background: '#0D9488' }}>Area 5</span>
               <h2 className="cat-title">Manajemen sekolah</h2>
-              <ul className="cat-list" style={{ '--accent': '#4E5FE0' }}>
+              <ul className="cat-list" style={{ '--accent': '#0D9488' }}>
                 <li>Data guru &amp; inventaris</li>
                 <li>Profil &amp; identitas sekolah</li>
                 <li>Kalender pendidikan &amp; hari libur</li>
@@ -136,9 +203,9 @@ export default function Beranda() {
             </div>
 
             <div className="cat-card">
-              <span className="cat-tag" style={{ background: '#E85277' }}>Area 6</span>
+              <span className="cat-tag" style={{ background: '#E11D48' }}>Area 6</span>
               <h2 className="cat-title">Portal orang tua</h2>
-              <ul className="cat-list" style={{ '--accent': '#E85277' }}>
+              <ul className="cat-list" style={{ '--accent': '#E11D48' }}>
                 <li>Pantau rapor &amp; nilai anak</li>
                 <li>Presensi &amp; portofolio anak</li>
                 <li>Galeri foto khusus orang tua</li>
@@ -146,9 +213,9 @@ export default function Beranda() {
             </div>
 
             <div className="cat-card wide">
-              <span className="cat-tag" style={{ background: '#159EC9' }}>Area 7 — fitur unggulan</span>
+              <span className="cat-tag" style={{ background: '#0284C7' }}>Area 7 — fitur unggulan</span>
               <h2 className="cat-title">Toko sekolah</h2>
-              <ul className="cat-list" style={{ '--accent': '#159EC9' }}>
+              <ul className="cat-list" style={{ '--accent': '#0284C7' }}>
                 <li>Belanja kebutuhan sekolah secara online</li>
                 <li>Keranjang, checkout &amp; riwayat pesanan</li>
                 <li>Kelola pesanan masuk &amp; pencairan dana untuk penjual</li>
@@ -158,11 +225,17 @@ export default function Beranda() {
           </div>
 
           <div className="beranda-footer">
-            <div>
-              <p className="beranda-footer-title">Tertarik menerapkannya di sekolah Anda?</p>
-              <p className="beranda-footer-sub">Gratis selama masa promo berlaku. Daftar akun untuk sekolah Anda sekarang.</p>
+            <BatikOverlay patternId="batikFooter" strokeColor="#d4af37" opacity={0.7} size={56} />
+            <div className="footer-content">
+              <div>
+                <p className="beranda-footer-title">Tertarik menerapkannya di sekolah Anda?</p>
+                <p className="beranda-footer-sub">Gratis selama masa promo berlaku. Daftar akun untuk sekolah Anda sekarang.</p>
+              </div>
+              <Link to="/register" className="beranda-cta">
+                Daftar sekarang
+                <ArrowRight size={16} strokeWidth={2.5} />
+              </Link>
             </div>
-            <Link to="/register" className="beranda-cta">Daftar sekarang</Link>
           </div>
 
         </div>
@@ -224,56 +297,109 @@ export default function Beranda() {
           min-width: 0;
         }
 
-        .beranda-header {
-          background: #fff;
-          padding: 26px 36px 20px;
-          border-bottom: 1px solid #E9EBF4;
+        .batik-overlay {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          pointer-events: none;
         }
+
+        .beranda-header {
+          position: relative;
+          overflow: hidden;
+          background: linear-gradient(120deg, #14162C 0%, #2D3072 100%);
+          padding: 34px 36px 30px;
+        }
+        .header-glow {
+          position: absolute;
+          border-radius: 50%;
+          background: rgba(255,255,255,0.06);
+          pointer-events: none;
+        }
+        .header-glow-a { width: 220px; height: 220px; top: -80px; right: -60px; }
+        .header-glow-b { width: 160px; height: 160px; bottom: -90px; left: -30px; }
+        .header-content { position: relative; }
         .header-eyebrow {
           display: inline-block;
           font-size: 12px;
           font-weight: 600;
-          color: #5B6172;
-          background: #F1F3FA;
+          color: #D8DBF5;
+          background: rgba(255,255,255,0.1);
           padding: 5px 12px;
           border-radius: 999px;
-          margin-bottom: 10px;
+          margin-bottom: 12px;
         }
         .beranda-title {
-          font-size: 30px;
+          font-size: 32px;
           font-weight: 800;
-          color: #171A2E;
-          margin: 0 0 6px;
+          color: #fff;
+          margin: 0 0 8px;
           line-height: 1.15;
         }
         .beranda-sub {
           font-size: 14px;
-          color: #7A8094;
-          margin: 0 0 16px;
+          color: #B7BAD6;
+          margin: 0 0 22px;
           max-width: 52ch;
         }
         .header-actions {
           display: flex;
           align-items: center;
-          gap: 16px;
+          gap: 18px;
           flex-wrap: wrap;
         }
         .promo-pill {
-          display: inline-block;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
           background: linear-gradient(135deg, #FF9A52, #F2762B);
           color: #fff;
           font-weight: 700;
-          font-size: 13px;
-          padding: 10px 18px;
+          font-size: 14px;
+          padding: 13px 22px;
           border-radius: 999px;
           white-space: nowrap;
           text-decoration: none;
+          box-shadow: 0 10px 24px rgba(242, 118, 43, 0.35);
         }
         .login-link {
-          font-size: 13px;
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          font-size: 13.5px;
           font-weight: 600;
-          color: #3E82F1;
-          text-decoration: underline;
+          color: #fff;
+          background: rgba(255,255,255,0.1);
+          padding: 12px 18px;
+          border-radius: 999px;
+          text-decoration: none;
+          border: 1px solid rgba(255,255,255,0.18);
+        }
+
+        .aru-banner {
+          margin: 18px 36px 0;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          background: #FDF6E7;
+          border: 1px solid #F0DFAE;
+          border-radius: 14px;
+          padding: 12px 16px;
+        }
+        .aru-icon {
+          width: 34px; height: 34px;
+          border-radius: 10px;
+          background: #D9A441;
+          color: #fff;
+          display: flex; align-items: center; justify-content: center;
+          flex-shrink: 0;
+        }
+        .aru-text {
+          font-size: 12.5px;
+          line-height: 1.55;
+          color: #7A6620;
+          margin: 0;
         }
 
         .tile-strip {
@@ -335,10 +461,15 @@ export default function Beranda() {
         }
 
         .beranda-footer {
+          position: relative;
+          overflow: hidden;
           margin-top: auto;
           background: linear-gradient(90deg, #14162C 0%, #2D3072 100%);
           color: #fff;
-          padding: 22px 36px;
+          padding: 24px 36px;
+        }
+        .footer-content {
+          position: relative;
           display: flex;
           justify-content: space-between;
           align-items: center;
@@ -348,14 +479,18 @@ export default function Beranda() {
         .beranda-footer-title { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
         .beranda-footer-sub { font-size: 12.5px; color: #B7BAD6; margin: 0; }
         .beranda-cta {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
           background: #3E82F1;
           color: #fff;
           font-weight: 700;
-          font-size: 13px;
-          padding: 11px 20px;
+          font-size: 14px;
+          padding: 13px 22px;
           border-radius: 999px;
           text-decoration: none;
           white-space: nowrap;
+          box-shadow: 0 10px 24px rgba(62, 130, 241, 0.35);
         }
 
         @media (max-width: 900px) {
@@ -363,10 +498,13 @@ export default function Beranda() {
           .beranda-side { width: 100%; flex-direction: row; justify-content: center; padding: 12px; }
           .cat-section { grid-template-columns: repeat(2, 1fr); }
           .cat-card.wide { grid-column: span 2; }
+          .aru-banner { margin: 16px 20px 0; }
         }
         @media (max-width: 560px) {
           .cat-section { grid-template-columns: 1fr; }
           .cat-card.wide { grid-column: span 1; }
+          .header-actions { flex-direction: column; align-items: stretch; }
+          .promo-pill, .login-link { justify-content: center; }
         }
       `}</style>
     </div>
