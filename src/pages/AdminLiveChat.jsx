@@ -1,15 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Send, Headset, Search, MessageSquare, ArrowLeft } from 'lucide-react'
+import Layout from '../components/Layout'
 // PENTING: sesuaikan path import ini dengan lokasi client Supabase Anda,
 // sama seperti yang dipakai di Beranda.jsx.
 import { supabase } from '../lib/supabaseClient'
 
 // Halaman dashboard admin untuk membalas pesan live chat dari pengunjung
-// website. Menampilkan daftar percakapan (dikelompokkan per sesi_id) di
-// sisi kiri, dan jendela percakapan yang sedang dibuka di sisi kanan.
-// Balasan admin disimpan ke tabel yang sama (live_chat_pesan) dengan
-// pengirim: 'admin', sehingga langsung muncul realtime di panel chat
-// pengunjung di halaman Beranda.
+// website. Dibungkus dengan <Layout> yang sama dipakai Dashboard.jsx, dsb —
+// jadi otomatis dapat sidebar navigasi + header (notifikasi, tombol toko,
+// dll) yang sama, bukan halaman berdiri sendiri lagi.
+// Menampilkan daftar percakapan (dikelompokkan per sesi_id) di sisi kiri,
+// dan jendela percakapan yang sedang dibuka di sisi kanan. Balasan admin
+// disimpan ke tabel yang sama (live_chat_pesan) dengan pengirim: 'admin',
+// sehingga langsung muncul realtime di panel chat pengunjung di Beranda.
 
 function formatWaktu(iso) {
   if (!iso) return ''
@@ -143,8 +146,8 @@ export default function AdminLiveChat() {
   const sesiTerpilih = daftarSesi.find((s) => s.sesi_id === sesiAktif)
 
   return (
-    <div className="admchat-canvas">
-      <div className={`admchat-wrap ${sesiAktif ? 'admchat-tampilkan-panel' : ''}`}>
+    <Layout title="Live Chat" subtitle="Percakapan real-time dengan pengunjung website">
+      <div className={`admchat-card ${sesiAktif ? 'admchat-tampilkan-panel' : ''}`}>
 
         <aside className="admchat-list">
           <div className="admchat-list-header">
@@ -251,29 +254,20 @@ export default function AdminLiveChat() {
       </div>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-
-        .admchat-canvas * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        .admchat-canvas {
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          background: #E7E9F5;
-          padding: 22px;
-          min-height: 100vh;
-        }
-        .admchat-wrap {
-          max-width: 1200px;
-          margin: 0 auto;
-          height: calc(100vh - 44px);
-          min-height: 560px;
+        .admchat-card * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        .admchat-card {
           display: flex;
-          border-radius: 26px;
+          height: calc(100vh - 230px);
+          min-height: 520px;
+          border-radius: 16px;
           overflow: hidden;
-          box-shadow: 0 24px 50px rgba(21, 23, 55, 0.18);
+          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.06);
+          border: 1px solid #E2E8F0;
           background: #fff;
         }
 
         .admchat-list {
-          width: 320px;
+          width: 300px;
           flex-shrink: 0;
           border-right: 1px solid #EEF0F7;
           display: flex;
@@ -281,8 +275,8 @@ export default function AdminLiveChat() {
           background: #F7F8FC;
         }
         .admchat-list-header {
-          padding: 20px 18px 14px;
-          background: linear-gradient(120deg, #14162C 0%, #2D3072 100%);
+          padding: 18px 16px 14px;
+          background: linear-gradient(120deg, #172554 0%, #312e81 100%);
           color: #fff;
           flex-shrink: 0;
         }
@@ -290,19 +284,19 @@ export default function AdminLiveChat() {
           display: flex;
           align-items: center;
           gap: 8px;
-          font-size: 16px;
-          font-weight: 800;
+          font-size: 15px;
+          font-weight: 700;
           margin-bottom: 3px;
         }
-        .admchat-list-sub { font-size: 11.5px; color: #B7BAD6; margin: 0 0 14px; }
+        .admchat-list-sub { font-size: 11.5px; color: #B7BAD6; margin: 0 0 12px; }
         .admchat-search {
           display: flex;
           align-items: center;
           gap: 8px;
           background: rgba(255,255,255,0.1);
           border: 1px solid rgba(255,255,255,0.18);
-          border-radius: 11px;
-          padding: 9px 12px;
+          border-radius: 10px;
+          padding: 8px 11px;
           color: #D8DBF5;
         }
         .admchat-search input {
@@ -341,7 +335,7 @@ export default function AdminLiveChat() {
           text-align: left;
           background: none;
           border: none;
-          border-radius: 13px;
+          border-radius: 12px;
           padding: 10px 10px;
           cursor: pointer;
           font-family: inherit;
@@ -350,11 +344,11 @@ export default function AdminLiveChat() {
         .admchat-item:hover { background: #EEF0FA; }
         .admchat-item-aktif { background: #fff; box-shadow: 0 4px 14px rgba(23, 26, 46, 0.08); }
         .admchat-avatar {
-          width: 36px; height: 36px;
+          width: 34px; height: 34px;
           border-radius: 999px;
-          background: linear-gradient(135deg, #4E5FE0, #2F6FE0);
+          background: linear-gradient(135deg, #3b82f6, #4f46e5);
           color: #fff;
-          font-size: 14px;
+          font-size: 13px;
           font-weight: 700;
           display: flex; align-items: center; justify-content: center;
           flex-shrink: 0;
@@ -373,8 +367,8 @@ export default function AdminLiveChat() {
         }
         .admchat-badge {
           flex-shrink: 0;
-          min-width: 19px;
-          height: 19px;
+          min-width: 18px;
+          height: 18px;
           border-radius: 999px;
           background: #E11D48;
           color: #fff;
@@ -403,20 +397,20 @@ export default function AdminLiveChat() {
           padding: 20px;
         }
         .admchat-empty-icon {
-          width: 56px; height: 56px;
+          width: 52px; height: 52px;
           border-radius: 999px;
           background: #EEF0FA;
-          color: #4E5FE0;
+          color: #4338ca;
           display: flex; align-items: center; justify-content: center;
         }
-        .admchat-empty-title { font-size: 15px; font-weight: 700; color: #171A2E; margin: 0; }
+        .admchat-empty-title { font-size: 14.5px; font-weight: 700; color: #171A2E; margin: 0; }
         .admchat-empty-sub { font-size: 12.5px; color: #9AA0B4; margin: 0; max-width: 30ch; }
 
         .admchat-panel-header {
           display: flex;
           align-items: center;
           gap: 12px;
-          padding: 16px 20px;
+          padding: 14px 18px;
           border-bottom: 1px solid #EEF0F7;
           flex-shrink: 0;
         }
@@ -432,14 +426,14 @@ export default function AdminLiveChat() {
           cursor: pointer;
           flex-shrink: 0;
         }
-        .admchat-avatar-header { width: 40px; height: 40px; font-size: 15px; }
-        .admchat-panel-nama { font-size: 14.5px; font-weight: 700; color: #171A2E; margin: 0; }
+        .admchat-avatar-header { width: 38px; height: 38px; font-size: 14px; }
+        .admchat-panel-nama { font-size: 14px; font-weight: 700; color: #171A2E; margin: 0; }
         .admchat-panel-status { font-size: 11.5px; color: #9AA0B4; margin: 1px 0 0; }
 
         .admchat-panel-body {
           flex: 1;
           overflow-y: auto;
-          padding: 18px 20px;
+          padding: 16px 18px;
           display: flex;
           flex-direction: column;
           gap: 10px;
@@ -461,7 +455,7 @@ export default function AdminLiveChat() {
         }
         .admchat-bubble-admin {
           align-self: flex-end;
-          background: linear-gradient(135deg, #4E5FE0, #2F6FE0);
+          background: linear-gradient(135deg, #3b82f6, #4f46e5);
           color: #fff;
           border-bottom-right-radius: 4px;
         }
@@ -476,7 +470,7 @@ export default function AdminLiveChat() {
           display: flex;
           align-items: center;
           gap: 10px;
-          padding: 14px 20px;
+          padding: 12px 18px;
           border-top: 1px solid #EEF0F7;
           flex-shrink: 0;
         }
@@ -484,24 +478,24 @@ export default function AdminLiveChat() {
           flex: 1;
           min-width: 0;
           font-size: 14px;
-          padding: 12px 16px;
+          padding: 11px 15px;
           border-radius: 999px;
           border: 1px solid #E2E5F0;
           background: #F7F8FC;
           color: #171A2E;
           font-family: inherit;
         }
-        .admchat-input:focus { outline: none; border-color: #4E5FE0; background: #fff; }
+        .admchat-input:focus { outline: none; border-color: #4f46e5; background: #fff; }
         .admchat-send-btn {
           flex-shrink: 0;
-          width: 42px; height: 42px;
+          width: 40px; height: 40px;
           border-radius: 999px;
-          background: linear-gradient(135deg, #4E5FE0, #2F6FE0);
+          background: linear-gradient(135deg, #3b82f6, #4f46e5);
           color: #fff;
           border: none;
           display: flex; align-items: center; justify-content: center;
           cursor: pointer;
-          box-shadow: 0 8px 18px rgba(47, 111, 224, 0.35);
+          box-shadow: 0 8px 18px rgba(79, 70, 229, 0.3);
         }
         .admchat-send-btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
 
@@ -509,14 +503,13 @@ export default function AdminLiveChat() {
            bergantian (seperti aplikasi chat pada umumnya), dengan tombol
            kembali untuk balik ke daftar. */
         @media (max-width: 780px) {
-          .admchat-canvas { padding: 0; }
-          .admchat-wrap { border-radius: 0; height: 100vh; }
+          .admchat-card { height: calc(100vh - 190px); border-radius: 12px; }
           .admchat-list { width: 100%; }
           .admchat-back-btn { display: flex; }
-          .admchat-wrap.admchat-tampilkan-panel .admchat-list { display: none; }
-          .admchat-wrap:not(.admchat-tampilkan-panel) .admchat-panel { display: none; }
+          .admchat-card.admchat-tampilkan-panel .admchat-list { display: none; }
+          .admchat-card:not(.admchat-tampilkan-panel) .admchat-panel { display: none; }
         }
       `}</style>
-    </div>
+    </Layout>
   )
 }
