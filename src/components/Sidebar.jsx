@@ -54,6 +54,7 @@ import {
   MessageCircle,
   Building2,
   Inbox,
+  Sparkles,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
@@ -76,6 +77,9 @@ function getGroupsAdmin(
       links: [
         { to: '/', label: 'Dasbor', icon: LayoutDashboard, end: true },
         { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
+        // Upgrade Fitur: status paket (free/premium) melekat ke akun masing-
+        // masing, jadi menu ini tampil untuk semua role, bukan cuma admin.
+        { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
         { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
         // Chat dua arah dengan Superadmin ("Admin Pusat") — khusus admin-tier,
         // guru tidak pernah melihat menu ini karena guru pakai getLinksGuru().
@@ -191,6 +195,7 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   return [
   { to: '/', label: 'Dasbor', icon: LayoutDashboard, end: true },
   { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
+  { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
   { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
   { to: '/toko', label: 'Toko', icon: Store },
   { to: '/riwayat-pesanan', label: 'Riwayat Pesanan', icon: Receipt },
@@ -332,6 +337,7 @@ function getLinksOrangTua(jumlahPesanBelumDibaca = 0, sekolahId = null) {
   return [
     { to: '/', label: 'Dasbor', icon: LayoutDashboard, end: true },
     { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
+    { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
     { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
     { to: '/toko', label: 'Toko', icon: Store },
     { to: '/riwayat-pesanan', label: 'Riwayat Pesanan', icon: Receipt },
