@@ -66,7 +66,9 @@ export default function Register() {
     }
   }, [isOrangTua, form.sekolahId])
 
-  if (session) return <Navigate to="/" replace />
+  // Sudah login → tidak perlu mendaftar lagi, langsung ke dashboard
+  // (bukan "/" lagi, karena "/" sekarang halaman Beranda publik).
+  if (session) return <Navigate to="/dashboard" replace />
 
   // Background dipakai di kedua state (sukses maupun form)
   const Background = () => (
