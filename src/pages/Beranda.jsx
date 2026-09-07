@@ -1,6 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, LogIn, GraduationCap, Video, Download, Monitor, Apple, Share, SquarePlus, X, BookOpen, IdCard, Wallet, MessageCircle, Settings, Users, ShoppingBag } from 'lucide-react'
+import { ArrowRight, LogIn, GraduationCap, Video, Download, Monitor, Apple, Share, SquarePlus, X, BookOpen, IdCard, Wallet, MessageCircle, Settings, Users, ShoppingBag, Phone, Send, Headset } from 'lucide-react'
+// PENTING: sesuaikan path import ini dengan lokasi client Supabase Anda
+// yang sudah ada di project (biasanya di src/lib/ atau src/services/).
+import { supabase } from '../lib/supabaseClient'
 
 // Halaman utama publik (landing page) — ditampilkan di "/" untuk pengunjung
 // yang belum login. Tombol "Daftar" & "Masuk" mengarah ke rute React Router
@@ -63,6 +66,104 @@ export default function Beranda() {
   // seperti APK/MSIX, jadi guru pengguna iOS dituntun lewat panduan manual
   // (Safari > Share > Tambah ke Layar Utama) alih-alih tombol download.
   const [showIosGuide, setShowIosGuide] = useState(false)
+
+  // BARU: menu pilihan kontak (WhatsApp / Live Chat) dari tombol mengambang.
+  const [showFabMenu, setShowFabMenu] = useState(false)
+  const [showLiveChat, setShowLiveChat] = useState(false)
+
+  // BARU: live chat — pesan pengunjung disimpan ke tabel Supabase
+  // "live_chat_pesan" supaya langsung muncul di aplikasi/dashboard admin.
+  // Setiap pengunjung punya sesi_id unik (disimpan di localStorage) agar
+  // balasan admin bisa diarahkan ke percakapan yang tepat.
+  const [namaPengunjung, setNamaPengunjung] = useState(
+    () => localStorage.getItem('simak_nama_pengunjung') || ''
+  )
+  const [inputNama, setInputNama] = useState('')
+  const [sesiId] = useState(() => {
+    let id = localStorage.getItem('simak_sesi_chat')
+    if (!id) {
+      id = crypto.randomUUID()
+      localStorage.setItem('simak_sesi_chat', id)
+    }
+    return id
+  })
+  const [pesanList, setPesanList] = useState([])
+  const [pesanBaru, setPesanBaru] = useState('')
+  const [mengirim, setMengirim] = useState(false)
+  const chatBodyRef = useRef(null)
+
+  // Ambil riwayat chat + dengarkan pesan baru (balasan admin) secara realtime
+  // begitu panel live chat dibuka dan pengunjung sudah mengisi nama.
+  useEffect(() => {
+    if (!showLiveChat || !namaPengunjung) return
+
+    let aktif = true
+
+    async function muatRiwayat() {
+      const { data, error } = await supabase
+        .from('live_chat_pesan')
+        .select('*')
+        .eq('sesi_id', sesiId)
+        .order('dibuat_pada', { ascending: true })
+      if (!error && aktif && data) setPesanList(data)
+    }
+    muatRiwayat()
+
+    const channel = supabase
+      .channel(`live-chat-${sesiId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'live_chat_pesan',
+          filter: `sesi_id=eq.${sesiId}`,
+        },
+        (payload) => {
+          setPesanList((prev) => [...prev, payload.new])
+        }
+      )
+      .subscribe()
+
+    return () => {
+      aktif = false
+      supabase.removeChannel(channel)
+    }
+  }, [showLiveChat, namaPengunjung, sesiId])
+
+  // Auto-scroll ke pesan terbaru
+  useEffect(() => {
+    if (chatBodyRef.current) {
+      chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight
+    }
+  }, [pesanList, showLiveChat])
+
+  function mulaiLiveChat(e) {
+    e.preventDefault()
+    const nama = inputNama.trim()
+    if (!nama) return
+    localStorage.setItem('simak_nama_pengunjung', nama)
+    setNamaPengunjung(nama)
+  }
+
+  async function kirimPesanLiveChat(e) {
+    e.preventDefault()
+    const isi = pesanBaru.trim()
+    if (!isi || mengirim) return
+    setMengirim(true)
+    setPesanBaru('')
+    const { error } = await supabase.from('live_chat_pesan').insert({
+      sesi_id: sesiId,
+      nama_pengirim: namaPengunjung,
+      pengirim: 'pengunjung',
+      pesan: isi,
+    })
+    if (error) {
+      // Kembalikan teks ke input kalau gagal terkirim, supaya tidak hilang
+      setPesanBaru(isi)
+    }
+    setMengirim(false)
+  }
 
   function gabungRapat(e) {
     e.preventDefault()
@@ -364,6 +465,117 @@ export default function Beranda() {
         </div>
       )}
 
+      {/* BARU: tombol kontak mengambang — tap untuk memilih WhatsApp atau
+          Live Chat. GANTI nomor WA di href di bawah dengan nomor sekolah
+          Anda (format: kode negara tanpa "+"/"0" di depan, mis. 62 untuk
+          Indonesia lalu nomor HP-nya). */}
+      <div className="contact-fab-wrap">
+        {showFabMenu && (
+          <div className="fab-menu">
+            <a
+              href="https://wa.me/6281234567890?text=Halo%20SIMAK%2C%20saya%20ingin%20bertanya"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="fab-menu-item"
+              onClick={() => setShowFabMenu(false)}
+            >
+              <span className="fab-menu-icon fab-menu-icon-wa"><Phone size={17} strokeWidth={2.4} fill="currentColor" /></span>
+              WhatsApp
+            </a>
+            <button
+              type="button"
+              className="fab-menu-item"
+              onClick={() => {
+                setShowFabMenu(false)
+                setShowLiveChat(true)
+              }}
+            >
+              <span className="fab-menu-icon fab-menu-icon-chat"><Headset size={17} strokeWidth={2.4} /></span>
+              Live Chat
+            </button>
+          </div>
+        )}
+
+        <button
+          type="button"
+          className="wa-fab"
+          aria-label="Hubungi kami"
+          onClick={() => setShowFabMenu((v) => !v)}
+        >
+          {showFabMenu ? <X size={24} strokeWidth={2.4} /> : <MessageCircle size={26} strokeWidth={2.3} />}
+          {!showFabMenu && <span className="wa-fab-ring"></span>}
+        </button>
+      </div>
+
+      {/* BARU: panel live chat. Pesan pengunjung tersimpan ke tabel
+          Supabase "live_chat_pesan" (lihat catatan setup di bawah kode
+          ini) sehingga langsung masuk ke aplikasi/dashboard admin. */}
+      {showLiveChat && (
+        <div className="chat-panel">
+          <div className="chat-panel-header">
+            <div className="chat-panel-title">
+              <Headset size={17} strokeWidth={2.4} />
+              Live Chat SIMAK
+            </div>
+            <button
+              type="button"
+              className="chat-panel-close"
+              onClick={() => setShowLiveChat(false)}
+              aria-label="Tutup live chat"
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          {!namaPengunjung ? (
+            <form className="chat-nama-form" onSubmit={mulaiLiveChat}>
+              <p className="chat-nama-label">Masukkan nama Anda untuk memulai percakapan:</p>
+              <input
+                type="text"
+                value={inputNama}
+                onChange={(e) => setInputNama(e.target.value)}
+                placeholder="Nama Anda"
+                className="chat-nama-input"
+                autoFocus
+              />
+              <button type="submit" className="chat-nama-btn" disabled={!inputNama.trim()}>
+                Mulai Chat
+              </button>
+            </form>
+          ) : (
+            <>
+              <div className="chat-panel-body" ref={chatBodyRef}>
+                {pesanList.length === 0 && (
+                  <p className="chat-empty">
+                    Halo {namaPengunjung}, silakan tulis pertanyaan Anda. Tim kami akan segera membalas.
+                  </p>
+                )}
+                {pesanList.map((p) => (
+                  <div
+                    key={p.id}
+                    className={`chat-bubble ${p.pengirim === 'admin' ? 'chat-bubble-admin' : 'chat-bubble-user'}`}
+                  >
+                    {p.pesan}
+                  </div>
+                ))}
+              </div>
+              <form className="chat-input-row" onSubmit={kirimPesanLiveChat}>
+                <input
+                  type="text"
+                  value={pesanBaru}
+                  onChange={(e) => setPesanBaru(e.target.value)}
+                  placeholder="Tulis pesan..."
+                  className="chat-input"
+                />
+                <button type="submit" className="chat-send-btn" disabled={!pesanBaru.trim() || mengirim}>
+                  <Send size={16} strokeWidth={2.4} />
+                </button>
+              </form>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Style khusus halaman Beranda — pola sama dengan Login.jsx (style
           ditulis inline lewat <style> di dalam komponen). */}
       <style>{`
@@ -569,6 +781,226 @@ export default function Beranda() {
           background: linear-gradient(135deg, #3A3D45, #1C1D22);
           box-shadow: 0 10px 24px rgba(28, 29, 34, 0.35);
           font-family: inherit;
+        }
+
+        .contact-fab-wrap {
+          position: fixed;
+          right: 24px;
+          bottom: 24px;
+          z-index: 1100;
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          gap: 12px;
+        }
+        .fab-menu {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          background: #fff;
+          border-radius: 16px;
+          padding: 8px;
+          box-shadow: 0 16px 34px rgba(21, 23, 55, 0.22);
+          animation: fabMenuMasuk 0.18s ease-out;
+        }
+        @keyframes fabMenuMasuk {
+          from { opacity: 0; transform: translateY(6px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .fab-menu-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-family: inherit;
+          font-size: 13.5px;
+          font-weight: 700;
+          color: #171A2E;
+          background: none;
+          border: none;
+          padding: 9px 14px 9px 9px;
+          border-radius: 11px;
+          cursor: pointer;
+          text-decoration: none;
+          white-space: nowrap;
+        }
+        .fab-menu-item:hover { background: #F1F3FA; }
+        .fab-menu-icon {
+          width: 30px; height: 30px;
+          border-radius: 999px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #fff;
+          flex-shrink: 0;
+        }
+        .fab-menu-icon-wa { background: #25D366; }
+        .fab-menu-icon-chat { background: #4E5FE0; }
+        .wa-fab {
+          width: 58px;
+          height: 58px;
+          border-radius: 50%;
+          background: #25D366;
+          color: #fff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 10px 26px rgba(37, 211, 102, 0.5);
+          border: none;
+          cursor: pointer;
+          position: relative;
+        }
+        .wa-fab-ring {
+          position: absolute;
+          inset: 0;
+          border-radius: 50%;
+          border: 2px solid rgba(37, 211, 102, 0.6);
+          animation: waPulse 2.2s ease-out infinite;
+          pointer-events: none;
+        }
+        @keyframes waPulse {
+          0% { transform: scale(1); opacity: 0.7; }
+          100% { transform: scale(1.6); opacity: 0; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .wa-fab-ring { animation: none; }
+        }
+        @media (max-width: 560px) {
+          .contact-fab-wrap { right: 16px; bottom: 16px; }
+          .wa-fab { width: 52px; height: 52px; }
+        }
+
+        .chat-panel {
+          position: fixed;
+          right: 24px;
+          bottom: 96px;
+          width: 320px;
+          max-height: 460px;
+          background: #fff;
+          border-radius: 18px;
+          box-shadow: 0 20px 44px rgba(21, 23, 55, 0.26);
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          z-index: 1100;
+          animation: fabMenuMasuk 0.18s ease-out;
+        }
+        .chat-panel-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          background: linear-gradient(120deg, #14162C 0%, #2D3072 100%);
+          color: #fff;
+          padding: 14px 16px;
+          flex-shrink: 0;
+        }
+        .chat-panel-title {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 14px;
+          font-weight: 700;
+        }
+        .chat-panel-close {
+          width: 28px; height: 28px;
+          border-radius: 999px;
+          background: rgba(255,255,255,0.12);
+          border: none;
+          color: #fff;
+          display: flex; align-items: center; justify-content: center;
+          cursor: pointer;
+          flex-shrink: 0;
+        }
+        .chat-nama-form {
+          padding: 20px 18px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .chat-nama-label { font-size: 12.5px; color: #5B6172; margin: 0; line-height: 1.5; }
+        .chat-nama-input {
+          font-size: 14px;
+          padding: 11px 14px;
+          border-radius: 11px;
+          border: 1px solid #E2E5F0;
+          background: #F7F8FC;
+          color: #171A2E;
+        }
+        .chat-nama-input:focus { outline: none; border-color: #4E5FE0; background: #fff; }
+        .chat-nama-btn {
+          font-size: 13.5px;
+          font-weight: 700;
+          color: #fff;
+          background: linear-gradient(135deg, #4E5FE0, #2F6FE0);
+          padding: 11px;
+          border-radius: 11px;
+          border: none;
+          cursor: pointer;
+        }
+        .chat-nama-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .chat-panel-body {
+          flex: 1;
+          overflow-y: auto;
+          padding: 14px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          background: #F7F8FC;
+          min-height: 200px;
+        }
+        .chat-empty { font-size: 12.5px; color: #7A8094; line-height: 1.6; margin: 0; }
+        .chat-bubble {
+          max-width: 78%;
+          font-size: 13px;
+          line-height: 1.45;
+          padding: 9px 12px;
+          border-radius: 14px;
+          word-break: break-word;
+        }
+        .chat-bubble-user {
+          align-self: flex-end;
+          background: linear-gradient(135deg, #4E5FE0, #2F6FE0);
+          color: #fff;
+          border-bottom-right-radius: 4px;
+        }
+        .chat-bubble-admin {
+          align-self: flex-start;
+          background: #fff;
+          color: #171A2E;
+          border: 1px solid #E2E5F0;
+          border-bottom-left-radius: 4px;
+        }
+        .chat-input-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 12px;
+          border-top: 1px solid #EEF0F7;
+          flex-shrink: 0;
+        }
+        .chat-input {
+          flex: 1;
+          min-width: 0;
+          font-size: 14px;
+          padding: 10px 14px;
+          border-radius: 999px;
+          border: 1px solid #E2E5F0;
+          background: #F7F8FC;
+          color: #171A2E;
+        }
+        .chat-input:focus { outline: none; border-color: #4E5FE0; background: #fff; }
+        .chat-send-btn {
+          flex-shrink: 0;
+          width: 38px; height: 38px;
+          border-radius: 999px;
+          background: linear-gradient(135deg, #4E5FE0, #2F6FE0);
+          color: #fff;
+          border: none;
+          display: flex; align-items: center; justify-content: center;
+          cursor: pointer;
+        }
+        .chat-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        @media (max-width: 560px) {
+          .chat-panel { right: 12px; left: 12px; width: auto; bottom: 84px; max-height: 66vh; }
         }
 
         .ios-overlay {
