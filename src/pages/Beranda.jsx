@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, LogIn, GraduationCap, Video, Download, Monitor, Apple, Share, SquarePlus, X } from 'lucide-react'
+import { ArrowRight, LogIn, GraduationCap, Video, Download, Monitor, Apple, Share, SquarePlus, X, BookOpen, IdCard, Wallet, MessageCircle, Settings, Users, ShoppingBag } from 'lucide-react'
 
 // Halaman utama publik (landing page) — ditampilkan di "/" untuk pengunjung
 // yang belum login. Tombol "Daftar" & "Masuk" mengarah ke rute React Router
@@ -91,17 +91,6 @@ export default function Beranda() {
 
           <div className="beranda-header">
             <BatikOverlay patternId="batikHero" strokeColor="#d4af37" opacity={0.9} />
-            {/* BARU: ilustrasi kelas ditampilkan samar-samar di belakang teks
-                header, dengan animasi opacity + gerak naik-turun pelan
-                ("timbul tenggelam") supaya terasa hidup tanpa mengganggu
-                keterbacaan judul. Letakkan file kelas-ilustrasi.png di
-                folder public proyek Anda (atau sesuaikan path src di bawah). */}
-            <img
-              src="/kelas-ilustrasi.png"
-              alt=""
-              aria-hidden="true"
-              className="header-bg-image"
-            />
             <div className="header-glow header-glow-a"></div>
             <div className="header-glow header-glow-b"></div>
 
@@ -184,49 +173,62 @@ export default function Beranda() {
             </form>
           </div>
 
-          <div className="tile-strip">
+          <div className="area-showcase">
+            {/* Ilustrasi kelas dipindah ke area putih di bawah (bukan di
+                header gelap), ditampilkan sangat samar sebagai latar
+                dekoratif dengan animasi naik-turun pelan ("timbul
+                tenggelam"). Letakkan file kelas-ilustrasi.png di folder
+                public proyek Anda. */}
+            <img
+              src="/kelas-ilustrasi.png"
+              alt=""
+              aria-hidden="true"
+              className="area-bg-image"
+            />
+
+            <div className="tile-strip">
             <div className="tile" style={{ background: 'linear-gradient(135deg,#3B82F6,#2563EB)' }}>
-              <div className="tile-icon"></div>
+              <div className="tile-icon"><BookOpen size={15} strokeWidth={2.4} /></div>
               <p className="tile-label">Area 1</p>
               <p className="tile-name">Akademik &amp; Ujian</p>
             </div>
             <div className="tile" style={{ background: 'linear-gradient(135deg,#10B981,#059669)' }}>
-              <div className="tile-icon"></div>
+              <div className="tile-icon"><IdCard size={15} strokeWidth={2.4} /></div>
               <p className="tile-label">Area 2</p>
               <p className="tile-name">Administrasi Siswa</p>
             </div>
             <div className="tile" style={{ background: 'linear-gradient(135deg,#F97316,#EA580C)' }}>
-              <div className="tile-icon"></div>
+              <div className="tile-icon"><Wallet size={15} strokeWidth={2.4} /></div>
               <p className="tile-label">Area 3</p>
               <p className="tile-name">Keuangan Sekolah</p>
             </div>
             <div className="tile" style={{ background: 'linear-gradient(135deg,#A855F7,#9333EA)' }}>
-              <div className="tile-icon"></div>
+              <div className="tile-icon"><MessageCircle size={15} strokeWidth={2.4} /></div>
               <p className="tile-label">Area 4</p>
               <p className="tile-name">Komunikasi</p>
             </div>
             <div className="tile" style={{ background: 'linear-gradient(135deg,#14B8A6,#0D9488)' }}>
-              <div className="tile-icon"></div>
+              <div className="tile-icon"><Settings size={15} strokeWidth={2.4} /></div>
               <p className="tile-label">Area 5</p>
               <p className="tile-name">Manajemen Sekolah</p>
             </div>
             <div className="tile" style={{ background: 'linear-gradient(135deg,#F43F5E,#E11D48)' }}>
-              <div className="tile-icon"></div>
+              <div className="tile-icon"><Users size={15} strokeWidth={2.4} /></div>
               <p className="tile-label">Area 6</p>
               <p className="tile-name">Portal Orang Tua</p>
             </div>
             <div className="tile" style={{ background: 'linear-gradient(135deg,#0EA5E9,#0284C7)' }}>
-              <div className="tile-icon"></div>
+              <div className="tile-icon"><ShoppingBag size={15} strokeWidth={2.4} /></div>
               <p className="tile-label">Area 7</p>
               <p className="tile-name">Toko Sekolah</p>
             </div>
-          </div>
+            </div>
 
-          <div className="cat-section">
+            <div className="cat-section">
 
             <div className="cat-card">
               <span className="cat-tag" style={{ background: '#2563EB' }}>Area 1</span>
-              <h2 className="cat-title">Akademik &amp; ujian</h2>
+              <h2 className="cat-title"><BookOpen size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#2563EB' }} />Akademik &amp; ujian</h2>
               <ul className="cat-list" style={{ '--accent': '#2563EB' }}>
                 <li>Ujian online &amp; bank soal</li>
                 <li>Kuis seru untuk kelas rendah</li>
@@ -239,7 +241,7 @@ export default function Beranda() {
 
             <div className="cat-card">
               <span className="cat-tag" style={{ background: '#059669' }}>Area 2</span>
-              <h2 className="cat-title">Administrasi siswa</h2>
+              <h2 className="cat-title"><IdCard size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#059669' }} />Administrasi siswa</h2>
               <ul className="cat-list" style={{ '--accent': '#059669' }}>
                 <li>Data siswa, kelas &amp; jadwal</li>
                 <li>Presensi harian</li>
@@ -251,7 +253,7 @@ export default function Beranda() {
 
             <div className="cat-card">
               <span className="cat-tag" style={{ background: '#EA580C' }}>Area 3</span>
-              <h2 className="cat-title">Keuangan sekolah</h2>
+              <h2 className="cat-title"><Wallet size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#EA580C' }} />Keuangan sekolah</h2>
               <ul className="cat-list" style={{ '--accent': '#EA580C' }}>
                 <li>Keuangan sekolah &amp; kas kelas</li>
                 <li>Kuitansi &amp; nota otomatis</li>
@@ -262,7 +264,7 @@ export default function Beranda() {
 
             <div className="cat-card">
               <span className="cat-tag" style={{ background: '#9333EA' }}>Area 4</span>
-              <h2 className="cat-title">Komunikasi &amp; publikasi</h2>
+              <h2 className="cat-title"><MessageCircle size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#9333EA' }} />Komunikasi &amp; publikasi</h2>
               <ul className="cat-list" style={{ '--accent': '#9333EA' }}>
                 <li>Pengumuman &amp; agenda sekolah</li>
                 <li>Pesan langsung antar warga sekolah</li>
@@ -275,7 +277,7 @@ export default function Beranda() {
 
             <div className="cat-card">
               <span className="cat-tag" style={{ background: '#0D9488' }}>Area 5</span>
-              <h2 className="cat-title">Manajemen sekolah</h2>
+              <h2 className="cat-title"><Settings size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#0D9488' }} />Manajemen sekolah</h2>
               <ul className="cat-list" style={{ '--accent': '#0D9488' }}>
                 <li>Data guru &amp; inventaris</li>
                 <li>Profil &amp; identitas sekolah</li>
@@ -286,7 +288,7 @@ export default function Beranda() {
 
             <div className="cat-card">
               <span className="cat-tag" style={{ background: '#E11D48' }}>Area 6</span>
-              <h2 className="cat-title">Portal orang tua</h2>
+              <h2 className="cat-title"><Users size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#E11D48' }} />Portal orang tua</h2>
               <ul className="cat-list" style={{ '--accent': '#E11D48' }}>
                 <li>Pantau rapor &amp; nilai anak</li>
                 <li>Presensi &amp; portofolio anak</li>
@@ -296,7 +298,7 @@ export default function Beranda() {
 
             <div className="cat-card wide">
               <span className="cat-tag" style={{ background: '#0284C7' }}>Area 7 — fitur unggulan</span>
-              <h2 className="cat-title">Toko sekolah</h2>
+              <h2 className="cat-title"><ShoppingBag size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#0284C7' }} />Toko sekolah</h2>
               <ul className="cat-list" style={{ '--accent': '#0284C7' }}>
                 <li>Belanja kebutuhan sekolah secara online</li>
                 <li>Keranjang, checkout &amp; riwayat pesanan</li>
@@ -304,6 +306,7 @@ export default function Beranda() {
               </ul>
             </div>
 
+            </div>
           </div>
 
           <div className="beranda-footer">
@@ -441,28 +444,6 @@ export default function Beranda() {
         }
         .header-glow-a { width: 220px; height: 220px; top: -80px; right: -60px; }
         .header-glow-b { width: 160px; height: 160px; bottom: -90px; left: -30px; }
-        .header-bg-image {
-          position: absolute;
-          right: -20px;
-          bottom: -10px;
-          width: 46%;
-          max-width: 420px;
-          object-fit: contain;
-          opacity: 0.16;
-          filter: grayscale(15%);
-          pointer-events: none;
-          animation: timbulTenggelam 7s ease-in-out infinite;
-        }
-        @keyframes timbulTenggelam {
-          0%, 100% { opacity: 0.1; transform: translateY(10px) scale(1); }
-          50% { opacity: 0.24; transform: translateY(-10px) scale(1.03); }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .header-bg-image { animation: none; opacity: 0.14; }
-        }
-        @media (max-width: 560px) {
-          .header-bg-image { width: 62%; opacity: 0.12; }
-        }
         .header-content { position: relative; }
         .brand-logo {
           display: flex;
@@ -781,7 +762,36 @@ export default function Beranda() {
         }
         .meet-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+        .area-showcase {
+          position: relative;
+        }
+        .area-bg-image {
+          position: absolute;
+          right: -10px;
+          bottom: -30px;
+          width: 34%;
+          max-width: 360px;
+          object-fit: contain;
+          opacity: 0.09;
+          filter: grayscale(35%);
+          pointer-events: none;
+          z-index: 0;
+          animation: timbulTenggelam 7s ease-in-out infinite;
+        }
+        @keyframes timbulTenggelam {
+          0%, 100% { opacity: 0.06; transform: translateY(10px) scale(1); }
+          50% { opacity: 0.14; transform: translateY(-10px) scale(1.03); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .area-bg-image { animation: none; opacity: 0.08; }
+        }
+        @media (max-width: 560px) {
+          .area-bg-image { width: 55%; opacity: 0.07; }
+        }
+
         .tile-strip {
+          position: relative;
+          z-index: 1;
           padding: 20px 36px 6px;
           display: flex;
           gap: 12px;
@@ -800,12 +810,17 @@ export default function Beranda() {
           width: 28px; height: 28px;
           border-radius: 9px;
           background: rgba(255,255,255,0.28);
+          display: flex;
+          align-items: center;
+          justify-content: center;
           float: right;
         }
         .tile-label { font-size: 11.5px; opacity: 0.9; margin: 0 0 20px; }
         .tile-name { font-size: 15px; font-weight: 700; line-height: 1.25; margin: 0; }
 
         .cat-section {
+          position: relative;
+          z-index: 1;
           padding: 18px 36px 30px;
           display: grid;
           grid-template-columns: repeat(4, 1fr);
@@ -827,7 +842,16 @@ export default function Beranda() {
           border-radius: 999px;
           margin-bottom: 10px;
         }
-        .cat-title { font-size: 15.5px; font-weight: 700; color: #171A2E; margin: 0 0 10px; }
+        .cat-title {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          font-size: 15.5px;
+          font-weight: 700;
+          color: #171A2E;
+          margin: 0 0 10px;
+        }
+        .cat-icon { flex-shrink: 0; }
         .cat-list { list-style: none; margin: 0; padding: 0; font-size: 12.5px; line-height: 1.75; color: #5B6172; }
         .cat-list li { padding-left: 14px; position: relative; }
         .cat-list li::before {
