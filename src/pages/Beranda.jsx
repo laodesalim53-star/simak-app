@@ -341,12 +341,13 @@ export default function Beranda() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
-        .beranda-canvas * { box-sizing: border-box; }
+        .beranda-canvas * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         .beranda-canvas {
           font-family: 'Plus Jakarta Sans', sans-serif;
           background: #E7E9F5;
           padding: 22px;
           min-height: 100vh;
+          touch-action: manipulation;
         }
         .beranda-wrap {
           max-width: 1360px;
@@ -447,12 +448,14 @@ export default function Beranda() {
         .promo-pill {
           display: inline-flex;
           align-items: center;
+          justify-content: center;
           gap: 8px;
           background: linear-gradient(135deg, #FF9A52, #F2762B);
           color: #fff;
           font-weight: 700;
           font-size: 14px;
           padding: 13px 22px;
+          min-height: 44px;
           border-radius: 999px;
           white-space: nowrap;
           text-decoration: none;
@@ -461,12 +464,14 @@ export default function Beranda() {
         .login-link {
           display: inline-flex;
           align-items: center;
+          justify-content: center;
           gap: 7px;
           font-size: 13.5px;
           font-weight: 600;
           color: #fff;
           background: rgba(255,255,255,0.1);
           padding: 12px 18px;
+          min-height: 44px;
           border-radius: 999px;
           text-decoration: none;
           border: 1px solid rgba(255,255,255,0.18);
@@ -474,12 +479,14 @@ export default function Beranda() {
         .install-pill {
           display: inline-flex;
           align-items: center;
+          justify-content: center;
           gap: 8px;
           background: linear-gradient(135deg, #16C79A, #0EA57B);
           color: #fff;
           font-weight: 700;
           font-size: 14px;
           padding: 13px 22px;
+          min-height: 44px;
           border-radius: 999px;
           border: none;
           cursor: pointer;
@@ -512,6 +519,9 @@ export default function Beranda() {
           padding: 24px;
           width: 100%;
           max-width: 380px;
+          max-height: 88vh;
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
           box-shadow: 0 30px 60px rgba(21, 23, 55, 0.3);
         }
         .ios-modal-header {
@@ -525,7 +535,7 @@ export default function Beranda() {
           background: #F1F3FA;
           border: none;
           border-radius: 999px;
-          width: 30px; height: 30px;
+          width: 40px; height: 40px;
           display: flex; align-items: center; justify-content: center;
           color: #5B6172;
           cursor: pointer;
@@ -657,8 +667,9 @@ export default function Beranda() {
         .meet-input {
           flex: 1;
           min-width: 0;
-          font-size: 13px;
+          font-size: 16px;
           padding: 10px 14px;
+          min-height: 44px;
           border-radius: 999px;
           border: 1px solid #E2E5F0;
           background: #F7F8FC;
@@ -676,6 +687,7 @@ export default function Beranda() {
           color: #fff;
           background: linear-gradient(135deg, #4E5FE0, #2F6FE0);
           padding: 10px 20px;
+          min-height: 44px;
           border-radius: 999px;
           border: none;
           cursor: pointer;
@@ -761,32 +773,63 @@ export default function Beranda() {
         .beranda-cta {
           display: inline-flex;
           align-items: center;
+          justify-content: center;
           gap: 8px;
           background: #3E82F1;
           color: #fff;
           font-weight: 700;
           font-size: 14px;
           padding: 13px 22px;
+          min-height: 44px;
           border-radius: 999px;
           text-decoration: none;
           white-space: nowrap;
           box-shadow: 0 10px 24px rgba(62, 130, 241, 0.35);
         }
 
+        /* Tablet / layar sedang (mis. Android tablet, iPad mini) */
         @media (max-width: 900px) {
-          .beranda-wrap { flex-direction: column; }
-          .beranda-side { width: 100%; flex-direction: row; justify-content: center; padding: 12px; }
-          .cat-section { grid-template-columns: repeat(2, 1fr); }
+          .beranda-canvas { padding: 0; }
+          .beranda-wrap { flex-direction: column; border-radius: 0; min-height: 100vh; }
+          .beranda-side { width: 100%; flex-direction: row; justify-content: center; padding: 12px; gap: 10px; }
+          .side-dot { width: 26px; height: 26px; }
+          .beranda-header { padding: 26px 20px 24px; }
+          .beranda-title { font-size: 26px; }
+          .cat-section { grid-template-columns: repeat(2, 1fr); padding: 16px 20px 24px; }
           .cat-card.wide { grid-column: span 2; }
-          .aru-banner { margin: 16px 20px 0; }
-          .meet-join { margin: 14px 20px 0; }
+          .aru-banner { margin: 16px 20px 0; padding: 12px 14px; }
+          .meet-join { margin: 14px 20px 0; padding: 12px 14px; }
+          .tile-strip { padding: 16px 20px 4px; }
+          .beranda-footer { padding: 20px; }
         }
+
+        /* Ponsel Android umum (360–412px) dan ponsel kecil lainnya */
         @media (max-width: 560px) {
-          .cat-section { grid-template-columns: 1fr; }
+          .beranda-header { padding: 22px 16px 20px; }
+          .header-eyebrow { font-size: 11px; }
+          .beranda-title { font-size: 22px; }
+          .beranda-sub { font-size: 13px; margin-bottom: 18px; }
+          .cat-section { grid-template-columns: 1fr; padding: 14px 16px 24px; gap: 12px; }
           .cat-card.wide { grid-column: span 1; }
-          .header-actions { flex-direction: column; align-items: stretch; }
-          .promo-pill, .login-link, .install-pill { justify-content: center; }
-          .meet-form { flex-direction: column; align-items: stretch; width: 100%; }
+          .header-actions { flex-direction: column; align-items: stretch; gap: 10px; }
+          .promo-pill, .login-link, .install-pill { justify-content: center; width: 100%; }
+          .aru-banner { margin: 14px 16px 0; }
+          .aru-text { font-size: 14px; }
+          .meet-join { margin: 12px 16px 0; padding: 12px; flex-direction: column; align-items: stretch; }
+          .meet-icon { display: none; }
+          .meet-form { flex-direction: column; align-items: stretch; width: 100%; min-width: 0; }
+          .meet-btn { width: 100%; }
+          .tile-strip { padding: 14px 16px 4px; gap: 10px; }
+          .tile { min-width: 130px; padding: 12px 14px; }
+          .footer-content { flex-direction: column; align-items: stretch; text-align: center; }
+          .beranda-cta { width: 100%; }
+          .ios-modal { padding: 20px; border-radius: 16px; }
+        }
+
+        /* Ponsel Android sempit (mis. Galaxy S, layar <380px) */
+        @media (max-width: 380px) {
+          .beranda-title { font-size: 20px; }
+          .tile { min-width: 100%; }
         }
       `}</style>
     </div>
