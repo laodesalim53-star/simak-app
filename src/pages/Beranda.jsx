@@ -1,5 +1,6 @@
-import { Link } from 'react-router-dom'
-import { ArrowRight, LogIn, GraduationCap } from 'lucide-react'
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { ArrowRight, LogIn, GraduationCap, Video } from 'lucide-react'
 
 // Halaman utama publik (landing page) — ditampilkan di "/" untuk pengunjung
 // yang belum login. Tombol "Daftar" & "Masuk" mengarah ke rute React Router
@@ -53,6 +54,21 @@ function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 
 }
 
 export default function Beranda() {
+  const navigate = useNavigate()
+  // BARU: gabung rapat langsung dari beranda lewat link/kode yang dibagikan
+  // host (misal lewat WhatsApp). Menerima link penuh (.../rapat/xxxx) atau
+  // kode ruangan saja.
+  const [kodeRapat, setKodeRapat] = useState('')
+
+  function gabungRapat(e) {
+    e.preventDefault()
+    const nilai = kodeRapat.trim()
+    if (!nilai) return
+    const cocokRute = nilai.match(/\/rapat\/([^/?#]+)/)
+    const roomId = cocokRute ? cocokRute[1] : nilai
+    navigate(`/rapat/${roomId}`)
+  }
+
   return (
     <div className="beranda-canvas">
       <div className="beranda-wrap">
@@ -100,6 +116,26 @@ export default function Beranda() {
               Salam hangat untuk Bapak/Ibu Guru di Kabupaten Kepulauan Aru — SIMAK dibuat
               untuk membantu sekolah Anda mengelola data lebih ringan, dari kelas hingga kantor.
             </p>
+          </div>
+
+          <div className="meet-join">
+            <div className="meet-icon"><Video size={18} /></div>
+            <div className="meet-text">
+              <p className="meet-title">Sudah punya link rapat/miting?</p>
+              <p className="meet-sub">Tempel link atau kode ruangan yang dibagikan oleh host untuk langsung bergabung.</p>
+            </div>
+            <form className="meet-form" onSubmit={gabungRapat}>
+              <input
+                type="text"
+                value={kodeRapat}
+                onChange={(e) => setKodeRapat(e.target.value)}
+                placeholder="Tempel link atau kode ruangan"
+                className="meet-input"
+              />
+              <button type="submit" className="meet-btn" disabled={!kodeRapat.trim()}>
+                Gabung
+              </button>
+            </form>
           </div>
 
           <div className="tile-strip">
@@ -402,6 +438,63 @@ export default function Beranda() {
           margin: 0;
         }
 
+        .meet-join {
+          margin: 14px 36px 0;
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          background: #fff;
+          border-radius: 14px;
+          padding: 14px 16px;
+          box-shadow: 0 6px 18px rgba(23, 26, 46, 0.06);
+          flex-wrap: wrap;
+        }
+        .meet-icon {
+          width: 34px; height: 34px;
+          border-radius: 10px;
+          background: linear-gradient(135deg, #4E5FE0, #2F6FE0);
+          color: #fff;
+          display: flex; align-items: center; justify-content: center;
+          flex-shrink: 0;
+        }
+        .meet-text { flex: 1; min-width: 180px; }
+        .meet-title { font-size: 13px; font-weight: 700; color: #171A2E; margin: 0 0 2px; }
+        .meet-sub { font-size: 11.5px; color: #7A8094; margin: 0; }
+        .meet-form {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex: 1;
+          min-width: 240px;
+        }
+        .meet-input {
+          flex: 1;
+          min-width: 0;
+          font-size: 13px;
+          padding: 10px 14px;
+          border-radius: 999px;
+          border: 1px solid #E2E5F0;
+          background: #F7F8FC;
+          color: #171A2E;
+        }
+        .meet-input:focus {
+          outline: none;
+          border-color: #4E5FE0;
+          background: #fff;
+        }
+        .meet-btn {
+          flex-shrink: 0;
+          font-size: 13px;
+          font-weight: 700;
+          color: #fff;
+          background: linear-gradient(135deg, #4E5FE0, #2F6FE0);
+          padding: 10px 20px;
+          border-radius: 999px;
+          border: none;
+          cursor: pointer;
+        }
+        .meet-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
         .tile-strip {
           padding: 20px 36px 6px;
           display: flex;
@@ -499,12 +592,14 @@ export default function Beranda() {
           .cat-section { grid-template-columns: repeat(2, 1fr); }
           .cat-card.wide { grid-column: span 2; }
           .aru-banner { margin: 16px 20px 0; }
+          .meet-join { margin: 14px 20px 0; }
         }
         @media (max-width: 560px) {
           .cat-section { grid-template-columns: 1fr; }
           .cat-card.wide { grid-column: span 1; }
           .header-actions { flex-direction: column; align-items: stretch; }
           .promo-pill, .login-link { justify-content: center; }
+          .meet-form { flex-direction: column; align-items: stretch; width: 100%; }
         }
       `}</style>
     </div>
