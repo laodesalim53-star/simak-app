@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, LogIn, GraduationCap, Video } from 'lucide-react'
-import InstallButton from '../components/InstallButton'
+import { ArrowRight, LogIn, GraduationCap, Video, Download } from 'lucide-react'
 
 // Halaman utama publik (landing page) — ditampilkan di "/" untuk pengunjung
 // yang belum login. Tombol "Daftar" & "Masuk" mengarah ke rute React Router
@@ -107,7 +106,10 @@ export default function Beranda() {
                   <LogIn size={15} strokeWidth={2.5} />
                   Sudah punya akun? Masuk
                 </Link>
-                <InstallButton className="install-pill" label="Instal Aplikasi" />
+                <a href="/simak-app.apk" download className="install-pill">
+                  <Download size={16} strokeWidth={2.5} />
+                  Instal Aplikasi
+                </a>
               </div>
             </div>
           </div>
