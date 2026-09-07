@@ -95,8 +95,22 @@ export default function Beranda() {
             <div className="header-glow header-glow-b"></div>
 
             <div className="header-content">
+              <div className="brand-logo">
+                <div className="brand-logo-icon"><GraduationCap size={22} strokeWidth={2.5} /></div>
+                <span className="brand-logo-text">SIMAK</span>
+              </div>
               <span className="header-eyebrow">Sistem informasi sekolah terpadu</span>
-              <h1 className="beranda-title">Satu aplikasi, seluruh sekolah</h1>
+              <h1 className="beranda-title">
+                {'Satu aplikasi, seluruh sekolah'.split('').map((huruf, i) => (
+                  <span
+                    key={i}
+                    className="title-letter"
+                    style={{ animationDelay: `${i * 0.06}s` }}
+                  >
+                    {huruf === ' ' ? '\u00A0' : huruf}
+                  </span>
+                ))}
+              </h1>
               <p className="beranda-sub">
                 Tujuh area utama dengan puluhan modul siap pakai — akademik, administrasi,
                 keuangan, komunikasi, hingga toko sekolah, dalam satu sistem yang sama.
@@ -416,6 +430,27 @@ export default function Beranda() {
         .header-glow-a { width: 220px; height: 220px; top: -80px; right: -60px; }
         .header-glow-b { width: 160px; height: 160px; bottom: -90px; left: -30px; }
         .header-content { position: relative; }
+        .brand-logo {
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          margin-bottom: 14px;
+        }
+        .brand-logo-icon {
+          width: 36px; height: 36px;
+          border-radius: 10px;
+          background: linear-gradient(135deg, #FF9A52, #F2762B);
+          color: #fff;
+          display: flex; align-items: center; justify-content: center;
+          box-shadow: 0 6px 14px rgba(242, 118, 43, 0.4);
+          flex-shrink: 0;
+        }
+        .brand-logo-text {
+          font-size: 18px;
+          font-weight: 800;
+          color: #fff;
+          letter-spacing: 1px;
+        }
         .header-eyebrow {
           display: inline-block;
           font-size: 12px;
@@ -430,8 +465,26 @@ export default function Beranda() {
           font-size: 32px;
           font-weight: 800;
           color: #fff;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
           margin: 0 0 8px;
           line-height: 1.15;
+          perspective: 700px;
+        }
+        .title-letter {
+          display: inline-block;
+          transform-style: preserve-3d;
+          text-shadow:
+            2px 3px 0 rgba(20, 22, 44, 0.4),
+            4px 7px 12px rgba(20, 22, 44, 0.3);
+          animation: putarHuruf 2.6s linear infinite;
+        }
+        @keyframes putarHuruf {
+          0% { transform: rotateY(0deg); }
+          100% { transform: rotateY(360deg); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .title-letter { animation: none; }
         }
         .beranda-sub {
           font-size: 14px;
