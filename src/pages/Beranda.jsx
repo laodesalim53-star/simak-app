@@ -756,6 +756,7 @@ export default function Beranda() {
           white-space: nowrap;
           text-decoration: none;
           box-shadow: 0 10px 24px rgba(242, 118, 43, 0.35);
+          animation: kedipTeks 1.6s ease-in-out infinite;
         }
         .login-link {
           display: inline-flex;
@@ -771,6 +772,7 @@ export default function Beranda() {
           border-radius: 999px;
           text-decoration: none;
           border: 1px solid rgba(255,255,255,0.18);
+          animation: kedipTeks 1.6s ease-in-out infinite;
         }
         .install-pill {
           display: inline-flex;
@@ -788,6 +790,7 @@ export default function Beranda() {
           cursor: pointer;
           white-space: nowrap;
           box-shadow: 0 10px 24px rgba(14, 165, 123, 0.35);
+          animation: kedipTeks 1.6s ease-in-out infinite;
         }
         .install-pill-windows {
           background: linear-gradient(135deg, #4E5FE0, #2F6FE0);
@@ -797,6 +800,15 @@ export default function Beranda() {
           background: linear-gradient(135deg, #3A3D45, #1C1D22);
           box-shadow: 0 10px 24px rgba(28, 29, 34, 0.35);
           font-family: inherit;
+          animation: none; /* tombol iOS tidak ikut berkedip */
+        }
+        /* BARU: efek berkedip-kedip untuk 4 tombol utama di header */
+        @keyframes kedipTeks {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.45; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .promo-pill, .login-link, .install-pill { animation: none; }
         }
 
         .contact-fab-wrap {
