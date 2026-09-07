@@ -75,7 +75,9 @@ function getGroupsAdmin(
     {
       label: null, // tanpa judul grup — selalu di atas
       links: [
-        { to: '/', label: 'Dasbor', icon: LayoutDashboard, end: true },
+        // PERBAIKAN: "/" sekarang halaman Beranda publik (poster promosi),
+        // Dashboard aplikasi dipindah ke "/dashboard" — menu ini harus ikut.
+        { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
         { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
         // Upgrade Fitur: status paket (free/premium) melekat ke akun masing-
         // masing, jadi menu ini tampil untuk semua role, bukan cuma admin.
@@ -193,7 +195,8 @@ function getGroupsAdmin(
 // fitur ini admin-only (lihat RLS policy nota_hanya_admin di Supabase).
 function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   return [
-  { to: '/', label: 'Dasbor', icon: LayoutDashboard, end: true },
+  // PERBAIKAN: "/" sekarang halaman Beranda publik, Dashboard di "/dashboard".
+  { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
   { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
   { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
   { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
@@ -335,7 +338,8 @@ function getLabelPeran(profil, isSuperAdmin, isAdminUtama, isAdmin, isOrangTua, 
 // diedit untuk SEMUA siswa di kelas).
 function getLinksOrangTua(jumlahPesanBelumDibaca = 0, sekolahId = null) {
   return [
-    { to: '/', label: 'Dasbor', icon: LayoutDashboard, end: true },
+    // PERBAIKAN: "/" sekarang halaman Beranda publik, Dashboard di "/dashboard".
+    { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
     { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
     { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
     { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
