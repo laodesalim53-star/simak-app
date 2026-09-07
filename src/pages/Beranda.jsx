@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, LogIn, GraduationCap, Video, Download } from 'lucide-react'
+import { ArrowRight, LogIn, GraduationCap, Video, Download, Monitor } from 'lucide-react'
 
 // Halaman utama publik (landing page) — ditampilkan di "/" untuk pengunjung
 // yang belum login. Tombol "Daftar" & "Masuk" mengarah ke rute React Router
@@ -109,6 +109,10 @@ export default function Beranda() {
                 <a href="/simak-app.apk" download className="install-pill">
                   <Download size={16} strokeWidth={2.5} />
                   Instal untuk Android
+                </a>
+                <a href="/simak-app-windows.msix" download className="install-pill install-pill-windows">
+                  <Monitor size={16} strokeWidth={2.5} />
+                  Instal untuk Windows
                 </a>
               </div>
             </div>
@@ -430,6 +434,10 @@ export default function Beranda() {
           cursor: pointer;
           white-space: nowrap;
           box-shadow: 0 10px 24px rgba(14, 165, 123, 0.35);
+        }
+        .install-pill-windows {
+          background: linear-gradient(135deg, #4E5FE0, #2F6FE0);
+          box-shadow: 0 10px 24px rgba(47, 111, 224, 0.35);
         }
 
         .aru-banner {
