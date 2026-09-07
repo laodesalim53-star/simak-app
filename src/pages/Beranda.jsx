@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, LogIn, GraduationCap, Video } from 'lucide-react'
+import InstallButton from '../components/InstallButton'
 
 // Halaman utama publik (landing page) — ditampilkan di "/" untuk pengunjung
 // yang belum login. Tombol "Daftar" & "Masuk" mengarah ke rute React Router
@@ -106,6 +107,7 @@ export default function Beranda() {
                   <LogIn size={15} strokeWidth={2.5} />
                   Sudah punya akun? Masuk
                 </Link>
+                <InstallButton className="install-pill" label="Instal Aplikasi" />
               </div>
             </div>
           </div>
@@ -412,6 +414,21 @@ export default function Beranda() {
           text-decoration: none;
           border: 1px solid rgba(255,255,255,0.18);
         }
+        .install-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          background: linear-gradient(135deg, #16C79A, #0EA57B);
+          color: #fff;
+          font-weight: 700;
+          font-size: 14px;
+          padding: 13px 22px;
+          border-radius: 999px;
+          border: none;
+          cursor: pointer;
+          white-space: nowrap;
+          box-shadow: 0 10px 24px rgba(14, 165, 123, 0.35);
+        }
 
         .aru-banner {
           margin: 18px 36px 0;
@@ -598,7 +615,7 @@ export default function Beranda() {
           .cat-section { grid-template-columns: 1fr; }
           .cat-card.wide { grid-column: span 1; }
           .header-actions { flex-direction: column; align-items: stretch; }
-          .promo-pill, .login-link { justify-content: center; }
+          .promo-pill, .login-link, .install-pill { justify-content: center; }
           .meet-form { flex-direction: column; align-items: stretch; width: 100%; }
         }
       `}</style>
