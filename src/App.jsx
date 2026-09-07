@@ -79,6 +79,8 @@ import AjukanToko from './pages/AjukanToko'
 import PersetujuanToko from './pages/PersetujuanToko'
 // --- Fitur Toko: Pencairan Dana ke penjual (superadmin only) ---
 import PencairanDana from './pages/PencairanDana'
+// --- Fitur Upgrade Paket/Langganan (Free vs Premium, per user) ---
+import UpgradeFitur from './pages/UpgradeFitur'
 import { CartProvider } from './lib/CartContext'
 
 function ProtectedRoute({ children, adminOnly, adminUtamaOnly, superAdminOnly }) {
@@ -296,10 +298,16 @@ export default function App() {
         <Route path="/persetujuan-toko" element={<ProtectedRoute superAdminOnly><PersetujuanToko /></ProtectedRoute>} />
 
         {/* --- Fitur Toko: Pencairan Dana ---
-            Khusus superadmin — satu-satunya role yang boleh menandai dana
+            Khusus superadmin — satu-satunya yang boleh menandai dana
             sudah ditransfer manual ke penjual, lewat RPC security definer
             fn_cairkan_pesanan / fn_tahan_pencairan (lihat PencairanDana.jsx). */}
         <Route path="/pencairan-dana" element={<ProtectedRoute superAdminOnly><PencairanDana /></ProtectedRoute>} />
+
+        {/* --- Upgrade Paket/Langganan ---
+            Halaman terbuka untuk SEMUA role yang sudah login (admin, guru,
+            orang tua) — status paket (free/premium) melekat ke masing-masing
+            akun individu, bukan ke sekolah. */}
+        <Route path="/upgrade-fitur" element={<ProtectedRoute><UpgradeFitur /></ProtectedRoute>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
