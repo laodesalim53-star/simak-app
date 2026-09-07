@@ -140,6 +140,7 @@ function PreviewKartuModal({ jenis, siswaList, fotoUrl, profilSekolah, generatin
                     <div className="w-6 h-[2px] rounded-full mt-0.5 mb-1" style={{ background: tema.aksen }} />
                     <div className="grid grid-cols-[28px_4px_1fr] gap-y-0.5 text-ink-700/70">
                       <span>NIS</span><span>:</span><span className="truncate">{s.nis || '-'}</span>
+                      <span>NISN</span><span>:</span><span className="truncate">{s.nisn || '-'}</span>
                       <span>TTL</span><span>:</span><span className="truncate">{formatTTL(s)}</span>
                       <span>Alamat</span><span>:</span><span className="line-clamp-2">{s.alamat || '-'}</span>
                     </div>
@@ -191,6 +192,7 @@ export default function KartuSiswa() {
   const [siswaList, setSiswaList] = useState([])
   const [selected, setSelected] = useState({})
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState('')
   const [uploadingId, setUploadingId] = useState(null)
   const [generating, setGenerating] = useState(false)
   const [previewJenis, setPreviewJenis] = useState(null) // 'pelajar' | 'perpustakaan' | null
@@ -233,13 +235,24 @@ export default function KartuSiswa() {
 
   async function loadSiswa() {
     setLoading(true)
-    // ⚠️ SESUAIKAN: pastikan kolom tempat_lahir, tanggal_lahir, alamat memang ada di tabel siswa
-    const { data } = await supabase
+    setLoadError('')
+    // ⚠️ SESUAIKAN: pastikan kolom nisn, tempat_lahir, tanggal_lahir, alamat memang ada di tabel siswa
+    const { data, error } = await supabase
       .from('siswa')
-      .select('id, nama_lengkap, nis, foto_path, tempat_lahir, tanggal_lahir, alamat, kelas(nama_kelas)')
+      .select('id, nama_lengkap, nis, nisn, foto_path, tempat_lahir, tanggal_lahir, alamat, kelas(nama_kelas)')
       .eq('kelas_id', kelasId)
       .eq('status', 'aktif')
       .order('nama_lengkap')
+
+    if (error) {
+      console.error('Gagal memuat siswa:', error)
+      // Kemungkinan besar ada kolom yang belum ada di tabel `siswa`
+      // (nisn / tempat_lahir / tanggal_lahir / alamat). Cek pesan error ini.
+      setLoadError(`Gagal memuat data siswa: ${error.message}`)
+      setLoading(false)
+      return // jangan timpa siswaList yang lama dengan array kosong
+    }
+
     setSiswaList(data || [])
     setSelected({})
     setLoading(false)
@@ -260,8 +273,14 @@ export default function KartuSiswa() {
       setUploadingId(null)
       return
     }
-    await supabase.from('siswa').update({ foto_path: path }).eq('id', siswaId)
-    await loadSiswa()
+    const { error: updateError } = await supabase.from('siswa').update({ foto_path: path }).eq('id', siswaId)
+    if (updateError) {
+      alert('Foto terupload tapi gagal menyimpan ke data siswa: ' + updateError.message)
+      setUploadingId(null)
+      return
+    }
+    // Update langsung di state, tidak perlu reload seluruh daftar
+    setSiswaList((prev) => prev.map((s) => (s.id === siswaId ? { ...s, foto_path: path } : s)))
     setUploadingId(null)
   }
 
@@ -400,7 +419,7 @@ export default function KartuSiswa() {
             console.error('Gagal generate QR:', err)
           }
 
-          // Data siswa: Nama / NIS / TTL / Alamat
+          // Data siswa: Nama / NIS / NISN / TTL / Alamat
           const textX = fotoX + fotoW + 14
           const labelColX = textX + 34
           let textY = y + CARD_H - headerH - 12
@@ -423,6 +442,7 @@ export default function KartuSiswa() {
           }
 
           drawBaris('NIS', siswa.nis)
+          drawBaris('NISN', siswa.nisn)
           drawBaris('TTL', formatTTL(siswa))
           drawBaris('Alamat', siswa.alamat)
 
@@ -507,6 +527,10 @@ export default function KartuSiswa() {
           </div>
         </div>
       </div>
+
+      {loadError && (
+        <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 mb-4">{loadError}</p>
+      )}
 
       <div className="card overflow-hidden">
         {loading ? (
