@@ -4,6 +4,10 @@ import { ArrowRight, LogIn, GraduationCap, Video, Download, Monitor, Apple, Shar
 // PENTING: sesuaikan path import ini dengan lokasi client Supabase Anda
 // yang sudah ada di project (biasanya di src/lib/ atau src/services/).
 import { supabase } from '../lib/supabaseClient'
+// BARU: widget "Tanya AI" — ditempatkan di pojok KIRI bawah supaya tidak
+// bertabrakan dengan tombol WhatsApp/Live Chat yang sudah ada di kanan bawah.
+// Sesuaikan path import ini dengan lokasi file TanyaAI.jsx di project Anda.
+import TanyaAI from '../components/TanyaAI'
 
 // Halaman utama publik (landing page) — ditampilkan di "/" untuk pengunjung
 // yang belum login. Tombol "Daftar" & "Masuk" mengarah ke rute React Router
@@ -591,6 +595,12 @@ export default function Beranda() {
           )}
         </div>
       )}
+
+      {/* BARU: widget Tanya AI — ditempatkan terpisah di pojok KIRI bawah
+          agar tidak bertumpuk dengan tombol WhatsApp/Live Chat di kanan
+          bawah. Komponen ini sudah mengatur floating button + panel
+          chat-nya sendiri (lihat TanyaAI.jsx). */}
+      <TanyaAI />
 
       {/* Style khusus halaman Beranda — pola sama dengan Login.jsx (style
           ditulis inline lewat <style> di dalam komponen). */}
