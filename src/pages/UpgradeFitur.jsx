@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Check, Sparkles } from "lucide-react";
 import { useAuth } from "../lib/AuthContext"; // sesuaikan path jika beda
+import Layout from "../components/Layout"; // dibungkus Layout, sama seperti ProfilSaya.jsx
 
 const FITUR_FREE = [
   "Data Siswa & Data Guru",
@@ -51,18 +52,11 @@ export default function UpgradeFitur() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-10">
-      <div className="mb-8 text-center">
-        <h1 className="text-2xl font-semibold text-slate-900">
-          Paket & Fitur
-        </h1>
-        <p className="mt-2 text-slate-500">
-          Fitur dasar sekolah tetap gratis. Upgrade ke Premium untuk membuka
-          otomasi surat, AI RPP, dan fitur lainnya.
-        </p>
-      </div>
-
-      <div className="grid gap-6 sm:grid-cols-2">
+    <Layout
+      title="Paket & Fitur"
+      subtitle="Fitur dasar sekolah tetap gratis. Upgrade ke Premium untuk membuka otomasi surat, AI RPP, dan fitur lainnya."
+    >
+      <div className="grid gap-6 sm:grid-cols-2 max-w-4xl">
         {/* Paket Free */}
         <div className="rounded-xl border border-slate-200 p-6">
           <h2 className="text-lg font-medium text-slate-900">Free</h2>
@@ -126,6 +120,6 @@ export default function UpgradeFitur() {
           )}
         </div>
       </div>
-    </div>
+    </Layout>
   );
 }
