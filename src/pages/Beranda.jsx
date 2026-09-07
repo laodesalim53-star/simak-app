@@ -119,11 +119,12 @@ export default function Beranda() {
           </div>
 
           <div className="aru-banner">
-            <div className="aru-icon"><GraduationCap size={18} /></div>
-            <p className="aru-text">
-              Salam hangat untuk Bapak/Ibu Guru di Kabupaten Kepulauan Aru — SIMAK dibuat
-              untuk membantu sekolah Anda mengelola data lebih ringan, dari kelas hingga kantor.
-            </p>
+            <div className="aru-icon"><GraduationCap size={20} /></div>
+            <div className="aru-marquee">
+              <p className="aru-text">
+                ✨ Salam hangat untuk Bapak/Ibu Guru di Kabupaten Kepulauan Aru — SIMAK dibuat untuk membantu sekolah Anda mengelola data lebih ringan, dari kelas hingga kantor. ✨
+              </p>
+            </div>
           </div>
 
           <div className="meet-join">
@@ -444,25 +445,48 @@ export default function Beranda() {
           margin: 18px 36px 0;
           display: flex;
           align-items: center;
-          gap: 12px;
-          background: #FDF6E7;
+          gap: 14px;
+          background: linear-gradient(90deg, #FDF6E7 0%, #FBEBC4 100%);
           border: 1px solid #F0DFAE;
           border-radius: 14px;
-          padding: 12px 16px;
+          padding: 14px 18px;
+          overflow: hidden;
         }
         .aru-icon {
-          width: 34px; height: 34px;
-          border-radius: 10px;
-          background: #D9A441;
+          width: 40px; height: 40px;
+          border-radius: 12px;
+          background: linear-gradient(135deg, #E8B84B, #D9A441);
           color: #fff;
           display: flex; align-items: center; justify-content: center;
           flex-shrink: 0;
+          box-shadow: 0 6px 14px rgba(217, 164, 65, 0.35);
+        }
+        .aru-marquee {
+          flex: 1;
+          min-width: 0;
+          overflow: hidden;
         }
         .aru-text {
-          font-size: 12.5px;
-          line-height: 1.55;
-          color: #7A6620;
+          display: inline-block;
+          white-space: nowrap;
+          font-size: 16px;
+          font-weight: 700;
+          line-height: 1.4;
+          color: #8A6620;
           margin: 0;
+          padding-left: 100%;
+          animation: aruMarquee 18s linear infinite;
+        }
+        @keyframes aruMarquee {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-100%); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .aru-text {
+            animation: none;
+            padding-left: 0;
+            white-space: normal;
+          }
         }
 
         .meet-join {
