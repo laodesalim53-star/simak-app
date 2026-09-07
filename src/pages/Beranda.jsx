@@ -1288,19 +1288,20 @@ export default function Beranda() {
           position: relative;
           overflow: hidden;
           transform-style: preserve-3d;
-          animation: tilePutarPelan 9s linear infinite;
+          animation: tileGoyangPelan 3.6s ease-in-out infinite;
         }
-        /* Jeda berbeda tiap kartu supaya tidak berputar bersamaan */
+        /* Jeda berbeda tiap kartu supaya tidak bergoyang bersamaan */
         .tile:nth-child(1) { animation-delay: 0s; }
-        .tile:nth-child(2) { animation-delay: 0.6s; }
-        .tile:nth-child(3) { animation-delay: 1.2s; }
-        .tile:nth-child(4) { animation-delay: 1.8s; }
-        .tile:nth-child(5) { animation-delay: 2.4s; }
-        .tile:nth-child(6) { animation-delay: 3s; }
-        .tile:nth-child(7) { animation-delay: 3.6s; }
-        @keyframes tilePutarPelan {
-          0%   { transform: rotateY(0deg); }
-          100% { transform: rotateY(360deg); }
+        .tile:nth-child(2) { animation-delay: 0.3s; }
+        .tile:nth-child(3) { animation-delay: 0.6s; }
+        .tile:nth-child(4) { animation-delay: 0.9s; }
+        .tile:nth-child(5) { animation-delay: 1.2s; }
+        .tile:nth-child(6) { animation-delay: 1.5s; }
+        .tile:nth-child(7) { animation-delay: 1.8s; }
+        /* BARU: goyang pelan (bukan putar penuh) agar teks tetap mudah dibaca */
+        @keyframes tileGoyangPelan {
+          0%, 100% { transform: rotate(0deg); }
+          50%      { transform: rotate(2.5deg); }
         }
         @media (prefers-reduced-motion: reduce) {
           .tile { animation: none; }
