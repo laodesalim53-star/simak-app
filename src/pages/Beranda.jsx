@@ -91,6 +91,17 @@ export default function Beranda() {
 
           <div className="beranda-header">
             <BatikOverlay patternId="batikHero" strokeColor="#d4af37" opacity={0.9} />
+            {/* BARU: ilustrasi kelas ditampilkan samar-samar di belakang teks
+                header, dengan animasi opacity + gerak naik-turun pelan
+                ("timbul tenggelam") supaya terasa hidup tanpa mengganggu
+                keterbacaan judul. Letakkan file kelas-ilustrasi.png di
+                folder public proyek Anda (atau sesuaikan path src di bawah). */}
+            <img
+              src="/kelas-ilustrasi.png"
+              alt=""
+              aria-hidden="true"
+              className="header-bg-image"
+            />
             <div className="header-glow header-glow-a"></div>
             <div className="header-glow header-glow-b"></div>
 
@@ -105,7 +116,7 @@ export default function Beranda() {
                   <span
                     key={i}
                     className="title-letter"
-                    style={{ animationDelay: `${i * 0.06}s` }}
+                    style={{ animationDelay: `${i * 0.12}s` }}
                   >
                     {huruf === ' ' ? '\u00A0' : huruf}
                   </span>
@@ -418,6 +429,7 @@ export default function Beranda() {
         .beranda-header {
           position: relative;
           overflow: hidden;
+          isolation: isolate;
           background: linear-gradient(120deg, #14162C 0%, #2D3072 100%);
           padding: 34px 36px 30px;
         }
@@ -429,6 +441,28 @@ export default function Beranda() {
         }
         .header-glow-a { width: 220px; height: 220px; top: -80px; right: -60px; }
         .header-glow-b { width: 160px; height: 160px; bottom: -90px; left: -30px; }
+        .header-bg-image {
+          position: absolute;
+          right: -20px;
+          bottom: -10px;
+          width: 46%;
+          max-width: 420px;
+          object-fit: contain;
+          opacity: 0.16;
+          filter: grayscale(15%);
+          pointer-events: none;
+          animation: timbulTenggelam 7s ease-in-out infinite;
+        }
+        @keyframes timbulTenggelam {
+          0%, 100% { opacity: 0.1; transform: translateY(10px) scale(1); }
+          50% { opacity: 0.24; transform: translateY(-10px) scale(1.03); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .header-bg-image { animation: none; opacity: 0.14; }
+        }
+        @media (max-width: 560px) {
+          .header-bg-image { width: 62%; opacity: 0.12; }
+        }
         .header-content { position: relative; }
         .brand-logo {
           display: flex;
@@ -477,7 +511,7 @@ export default function Beranda() {
           text-shadow:
             2px 3px 0 rgba(20, 22, 44, 0.4),
             4px 7px 12px rgba(20, 22, 44, 0.3);
-          animation: putarHuruf 2.6s linear infinite;
+          animation: putarHuruf 5.5s linear infinite;
         }
         @keyframes putarHuruf {
           0% { transform: rotateY(0deg); }
