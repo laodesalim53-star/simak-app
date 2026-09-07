@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { LiveKitRoom, VideoConference } from '@livekit/components-react'
 import '@livekit/components-styles'
-import { Radio, Square } from 'lucide-react'
+import { Radio, Square, Link2, Check, HelpCircle, X } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 
 export default function RapatVideo() {
@@ -30,6 +30,11 @@ export default function RapatVideo() {
   const [egressId, setEgressId] = useState(null)
   const [streamError, setStreamError] = useState(null)
   const [streamLoading, setStreamLoading] = useState(false)
+
+  // BARU: link undangan + panduan singkat. linkTersalin dipakai untuk kasih
+  // feedback sesaat ("Tersalin!") setelah tombol salin link diklik.
+  const [linkTersalin, setLinkTersalin] = useState(false)
+  const [showPanduan, setShowPanduan] = useState(false)
 
   // Nama peserta: kalau sudah login pakai nama/email akunnya (otomatis),
   // kalau tamu pakai nama yang mereka isi lewat form di bawah.
@@ -72,6 +77,18 @@ export default function RapatVideo() {
     e.preventDefault()
     if (!namaTamu.trim()) return
     setNamaTamuTerkirim(namaTamu.trim())
+  }
+
+  // BARU: salin link undangan rapat ini ke clipboard supaya gampang dibagikan
+  // ke peserta lain (WhatsApp, email, dll).
+  async function salinLinkUndangan() {
+    try {
+      await navigator.clipboard.writeText(window.location.href)
+      setLinkTersalin(true)
+      setTimeout(() => setLinkTersalin(false), 2000)
+    } catch (err) {
+      console.error('Gagal menyalin link:', err)
+    }
   }
 
   async function mulaiStreaming(e) {
@@ -191,6 +208,13 @@ export default function RapatVideo() {
           >
             Gabung Sekarang
           </button>
+          {/* BARU: petunjuk singkat untuk peserta tamu yang baru pertama kali
+              buka link rapat, supaya mereka tahu apa yang akan terjadi setelah
+              menekan tombol di atas. */}
+          <p className="text-xs text-gray-400 text-center leading-relaxed">
+            Setelah mengisi nama, Anda akan langsung masuk ke ruang video.
+            Pastikan browser mengizinkan akses kamera &amp; mikrofon saat diminta.
+          </p>
         </form>
       </div>
     )
@@ -206,6 +230,48 @@ export default function RapatVideo() {
 
   return (
     <div style={{ position: 'relative', height: '100vh' }}>
+      {/* BARU: panel bagikan link + panduan singkat, mengambang di kiri atas */}
+      <div className="absolute top-3 left-3 z-50 flex flex-col items-start gap-2">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={salinLinkUndangan}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white text-gray-800 text-sm font-medium hover:bg-gray-100 shadow-lg"
+          >
+            {linkTersalin ? (
+              <>
+                <Check className="w-4 h-4 text-green-600" />
+                Tersalin!
+              </>
+            ) : (
+              <>
+                <Link2 className="w-4 h-4 text-blue-600" />
+                Salin Link Undangan
+              </>
+            )}
+          </button>
+          <button
+            onClick={() => setShowPanduan((v) => !v)}
+            className="flex items-center justify-center w-9 h-9 rounded-lg bg-white text-gray-800 hover:bg-gray-100 shadow-lg"
+            title="Cara menggunakan"
+          >
+            {showPanduan ? <X className="w-4 h-4" /> : <HelpCircle className="w-4 h-4" />}
+          </button>
+        </div>
+
+        {showPanduan && (
+          <div className="bg-white rounded-lg shadow-xl p-4 w-72 text-sm text-gray-700">
+            <p className="font-semibold mb-2">Cara menggunakan rapat ini</p>
+            <ul className="list-disc list-inside space-y-1.5 text-gray-600">
+              <li>Nyala/matikan kamera &amp; mikrofon lewat ikon di bagian bawah layar.</li>
+              <li>Klik <strong>Salin Link Undangan</strong> lalu kirim ke peserta lain (WhatsApp/email) agar mereka bisa gabung.</li>
+              <li>Peserta yang belum login cukup buka link, isi nama, langsung masuk.</li>
+              <li>Klik <strong>Live Streaming</strong> di kanan atas untuk menyiarkan rapat ke YouTube/Facebook lewat RTMP.</li>
+              <li>Klik ikon "keluar" di kontrol bawah untuk meninggalkan rapat.</li>
+            </ul>
+          </div>
+        )}
+      </div>
+
       {/* Panel kontrol live streaming, mengambang di atas video */}
       <div className="absolute top-3 right-3 z-50 flex flex-col items-end gap-2">
         {streaming ? (
