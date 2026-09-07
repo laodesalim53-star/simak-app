@@ -6,6 +6,7 @@ import GaleriOrangTua from './pages/GaleriOrangTua'
 import Dokumen from './pages/Dokumen'
 import Pesan from './pages/Pesan'
 import PesanPusat from './pages/PesanPusat'
+import AdminLiveChat from './pages/AdminLiveChat'
 import ScanDokumen from './pages/ScanDokumen'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './lib/AuthContext'
@@ -257,6 +258,9 @@ export default function App() {
         <Route path="/dokumen" element={<ProtectedRoute><Dokumen /></ProtectedRoute>} />
         <Route path="/pesan" element={<ProtectedRoute><Pesan /></ProtectedRoute>} />
         <Route path="/pesan-pusat" element={<ProtectedRoute adminOnly><PesanPusat /></ProtectedRoute>} />
+        {/* Live Chat: percakapan real-time dengan pengunjung publik di Beranda,
+            dikelola admin sekolah — sama pola dengan /pesan-pusat. */}
+        <Route path="/live-chat" element={<ProtectedRoute adminOnly><AdminLiveChat /></ProtectedRoute>} />
         {/* Scan Dokumen: OCR upload/foto dokumen jadi teks yang bisa diunduh sebagai
             Word/txt. Sengaja BUKAN adminOnly — guru juga butuh fitur ini. */}
         <Route path="/scan-dokumen" element={<ProtectedRoute><ScanDokumen /></ProtectedRoute>} />
