@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, LogIn, GraduationCap, Video, Download, Monitor } from 'lucide-react'
+import { ArrowRight, LogIn, GraduationCap, Video, Download, Monitor, Apple, Share, SquarePlus, X } from 'lucide-react'
 
 // Halaman utama publik (landing page) — ditampilkan di "/" untuk pengunjung
 // yang belum login. Tombol "Daftar" & "Masuk" mengarah ke rute React Router
@@ -59,6 +59,10 @@ export default function Beranda() {
   // host (misal lewat WhatsApp). Menerima link penuh (.../rapat/xxxx) atau
   // kode ruangan saja.
   const [kodeRapat, setKodeRapat] = useState('')
+  // BARU: panduan instal untuk iPhone/iPad — Apple tidak punya file installer
+  // seperti APK/MSIX, jadi guru pengguna iOS dituntun lewat panduan manual
+  // (Safari > Share > Tambah ke Layar Utama) alih-alih tombol download.
+  const [showIosGuide, setShowIosGuide] = useState(false)
 
   function gabungRapat(e) {
     e.preventDefault()
@@ -114,6 +118,14 @@ export default function Beranda() {
                   <Monitor size={16} strokeWidth={2.5} />
                   Instal untuk Windows
                 </a>
+                <button
+                  type="button"
+                  onClick={() => setShowIosGuide(true)}
+                  className="install-pill install-pill-ios"
+                >
+                  <Apple size={16} strokeWidth={2.5} />
+                  Instal untuk iPhone/iPad
+                </button>
               </div>
             </div>
           </div>
@@ -286,6 +298,44 @@ export default function Beranda() {
         </div>
       </div>
 
+      {/* BARU: modal panduan instal untuk iPhone/iPad, muncul saat tombol
+          "Instal untuk iPhone/iPad" diklik. */}
+      {showIosGuide && (
+        <div className="ios-overlay" onClick={() => setShowIosGuide(false)}>
+          <div className="ios-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="ios-modal-header">
+              <h3 className="ios-modal-title">Cara instal di iPhone/iPad</h3>
+              <button
+                type="button"
+                onClick={() => setShowIosGuide(false)}
+                className="ios-modal-close"
+                aria-label="Tutup"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <p className="ios-modal-sub">
+              Apple belum mengizinkan instal 1 klik seperti Android/Windows, jadi ikuti 3 langkah singkat ini lewat Safari.
+            </p>
+            <ol className="ios-steps">
+              <li>
+                <span className="ios-step-num">1</span>
+                <span>Buka <strong>www.simaksdnwaria.site</strong> lewat browser <strong>Safari</strong> (bukan Chrome).</span>
+              </li>
+              <li>
+                <span className="ios-step-num">2</span>
+                <span>Tap ikon <strong>Share</strong> <Share size={14} className="ios-inline-icon" /> di bagian bawah layar.</span>
+              </li>
+              <li>
+                <span className="ios-step-num">3</span>
+                <span>Scroll lalu pilih <strong>Tambah ke Layar Utama</strong> <SquarePlus size={14} className="ios-inline-icon" />, lalu tap <strong>Tambah</strong>.</span>
+              </li>
+            </ol>
+            <p className="ios-modal-note">Setelah itu, ikon SIMAK akan muncul di layar utama seperti aplikasi biasa.</p>
+          </div>
+        </div>
+      )}
+
       {/* Style khusus halaman Beranda — pola sama dengan Login.jsx (style
           ditulis inline lewat <style> di dalam komponen). */}
       <style>{`
@@ -439,6 +489,92 @@ export default function Beranda() {
         .install-pill-windows {
           background: linear-gradient(135deg, #4E5FE0, #2F6FE0);
           box-shadow: 0 10px 24px rgba(47, 111, 224, 0.35);
+        }
+        .install-pill-ios {
+          background: linear-gradient(135deg, #3A3D45, #1C1D22);
+          box-shadow: 0 10px 24px rgba(28, 29, 34, 0.35);
+          font-family: inherit;
+        }
+
+        .ios-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(20, 22, 44, 0.55);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 20px;
+          z-index: 1000;
+        }
+        .ios-modal {
+          background: #fff;
+          border-radius: 20px;
+          padding: 24px;
+          width: 100%;
+          max-width: 380px;
+          box-shadow: 0 30px 60px rgba(21, 23, 55, 0.3);
+        }
+        .ios-modal-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 6px;
+        }
+        .ios-modal-title { font-size: 17px; font-weight: 800; color: #171A2E; margin: 0; }
+        .ios-modal-close {
+          background: #F1F3FA;
+          border: none;
+          border-radius: 999px;
+          width: 30px; height: 30px;
+          display: flex; align-items: center; justify-content: center;
+          color: #5B6172;
+          cursor: pointer;
+          flex-shrink: 0;
+        }
+        .ios-modal-sub {
+          font-size: 12.5px;
+          color: #7A8094;
+          margin: 0 0 18px;
+          line-height: 1.5;
+        }
+        .ios-steps {
+          list-style: none;
+          margin: 0 0 14px;
+          padding: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+        }
+        .ios-steps li {
+          display: flex;
+          align-items: flex-start;
+          gap: 12px;
+          font-size: 13.5px;
+          color: #3A3D4B;
+          line-height: 1.5;
+        }
+        .ios-step-num {
+          flex-shrink: 0;
+          width: 24px; height: 24px;
+          border-radius: 999px;
+          background: #1C1D22;
+          color: #fff;
+          font-size: 12px;
+          font-weight: 700;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .ios-inline-icon {
+          display: inline-block;
+          vertical-align: -2px;
+          margin: 0 2px;
+          color: #3E82F1;
+        }
+        .ios-modal-note {
+          font-size: 12px;
+          color: #9AA0B4;
+          margin: 0;
+          padding-top: 12px;
+          border-top: 1px solid #EEF0F7;
         }
 
         .aru-banner {
