@@ -112,13 +112,14 @@ export default function Login() {
 
   // Halaman yang tadinya mau diakses sebelum dialihkan ke sini (dikirim lewat
   // state `from` oleh ProtectedRoute di App.jsx). Kalau tidak ada — mis. user
-  // buka /login langsung dari menu — fallback ke Dashboard seperti sebelumnya.
+  // buka /login langsung dari menu atau dari halaman Beranda — fallback ke
+  // /dashboard (bukan "/" lagi, karena "/" sekarang halaman Beranda publik).
   // `location.state.from` adalah objek Location internal react-router yang
   // hanya bisa diisi lewat <Navigate state={...}> di dalam app sendiri,
   // jadi aman dari open-redirect lewat query string/URL luar.
   const from = location.state?.from
     ? location.state.from.pathname + (location.state.from.search || '')
-    : '/'
+    : '/dashboard'
 
   if (session) return <Navigate to={from} replace />
 
