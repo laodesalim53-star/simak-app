@@ -12,6 +12,18 @@ import { supabase } from '../lib/supabaseClient'
 // Tema visual disamakan dengan Dashboard: gradasi navy–indigo, motif batik
 // emas tipis sebagai overlay, dan kartu-kartu gradien warna-warni.
 
+// BARU: nomor WhatsApp sekolah — dipakai di tombol WhatsApp pada menu
+// kontak mengambang. Format wa.me: kode negara (62) TANPA angka 0 di
+// depan, langsung disambung nomornya.
+const NOMOR_WA_SEKOLAH = '6282197574897'
+
+// BARU: foto/ilustrasi "Ibu Guru" yang dipakai sebagai logo tombol kontak
+// mengambang & header panel Live Chat, menggantikan ikon generik. Taruh
+// file gambarnya di folder public proyek Anda dengan nama persis di bawah
+// ini (sama seperti pola /kelas-ilustrasi.png yang sudah ada) — ganti nama
+// filenya di sini kalau nama file Anda berbeda.
+const FOTO_ADMIN_CHAT = '/ibu-guru-chat.jpg'
+
 function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 72 }) {
   return (
     <svg className="batik-overlay" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
@@ -466,14 +478,12 @@ export default function Beranda() {
       )}
 
       {/* BARU: tombol kontak mengambang — tap untuk memilih WhatsApp atau
-          Live Chat. GANTI nomor WA di href di bawah dengan nomor sekolah
-          Anda (format: kode negara tanpa "+"/"0" di depan, mis. 62 untuk
-          Indonesia lalu nomor HP-nya). */}
+          Live Chat. Nomor WA memakai konstanta NOMOR_WA_SEKOLAH di atas. */}
       <div className="contact-fab-wrap">
         {showFabMenu && (
           <div className="fab-menu">
             <a
-              href="https://wa.me/6281234567890?text=Halo%20SIMAK%2C%20saya%20ingin%20bertanya"
+              href={`https://wa.me/${NOMOR_WA_SEKOLAH}?text=Halo%20SIMAK%2C%20saya%20ingin%20bertanya`}
               target="_blank"
               rel="noopener noreferrer"
               className="fab-menu-item"
@@ -490,7 +500,9 @@ export default function Beranda() {
                 setShowLiveChat(true)
               }}
             >
-              <span className="fab-menu-icon fab-menu-icon-chat"><Headset size={17} strokeWidth={2.4} /></span>
+              <span className="fab-menu-icon fab-menu-icon-chat">
+                <img src={FOTO_ADMIN_CHAT} alt="" className="fab-menu-icon-img" />
+              </span>
               Live Chat
             </button>
           </div>
@@ -502,7 +514,11 @@ export default function Beranda() {
           aria-label="Hubungi kami"
           onClick={() => setShowFabMenu((v) => !v)}
         >
-          {showFabMenu ? <X size={24} strokeWidth={2.4} /> : <MessageCircle size={26} strokeWidth={2.3} />}
+          {showFabMenu ? (
+            <X size={24} strokeWidth={2.4} />
+          ) : (
+            <img src={FOTO_ADMIN_CHAT} alt="Hubungi kami" className="wa-fab-avatar" />
+          )}
           {!showFabMenu && <span className="wa-fab-ring"></span>}
         </button>
       </div>
@@ -514,7 +530,7 @@ export default function Beranda() {
         <div className="chat-panel">
           <div className="chat-panel-header">
             <div className="chat-panel-title">
-              <Headset size={17} strokeWidth={2.4} />
+              <img src={FOTO_ADMIN_CHAT} alt="" className="chat-panel-avatar" />
               Live Chat SIMAK
             </div>
             <button
@@ -832,28 +848,42 @@ export default function Beranda() {
           justify-content: center;
           color: #fff;
           flex-shrink: 0;
+          overflow: hidden;
         }
         .fab-menu-icon-wa { background: #25D366; }
         .fab-menu-icon-chat { background: #4E5FE0; }
+        .fab-menu-icon-img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
         .wa-fab {
           width: 58px;
           height: 58px;
           border-radius: 50%;
-          background: #25D366;
+          background: #4E5FE0;
           color: #fff;
           display: flex;
           align-items: center;
           justify-content: center;
-          box-shadow: 0 10px 26px rgba(37, 211, 102, 0.5);
+          box-shadow: 0 10px 26px rgba(78, 95, 224, 0.5);
           border: none;
           cursor: pointer;
           position: relative;
+          overflow: hidden;
+          padding: 0;
+        }
+        .wa-fab-avatar {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          border-radius: 50%;
         }
         .wa-fab-ring {
           position: absolute;
           inset: 0;
           border-radius: 50%;
-          border: 2px solid rgba(37, 211, 102, 0.6);
+          border: 2px solid rgba(78, 95, 224, 0.6);
           animation: waPulse 2.2s ease-out infinite;
           pointer-events: none;
         }
@@ -899,6 +929,13 @@ export default function Beranda() {
           gap: 8px;
           font-size: 14px;
           font-weight: 700;
+        }
+        .chat-panel-avatar {
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          object-fit: cover;
+          flex-shrink: 0;
         }
         .chat-panel-close {
           width: 28px; height: 28px;
