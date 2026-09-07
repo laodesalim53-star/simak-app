@@ -39,7 +39,9 @@ export function AuthProvider({ children }) {
         no_hp,
         tanggal_lahir,
         pendidikan_terakhir,
-        alamat
+        alamat,
+        paket,
+        paket_berlaku_sampai
       `)
       .eq('id', userId)
       .maybeSingle()
@@ -513,6 +515,19 @@ export function AuthProvider({ children }) {
 
         pesanAdmin:
           profil?.catatan_admin ?? null,
+
+        // Status paket fitur (free/premium) — dipakai untuk mengunci fitur
+        // premium lewat komponen FiturPremium / hook usePaketPremium.
+        // Default 'free' kalau kolomnya null (mis. sebelum migration
+        // dijalankan, atau profil lama yang belum ter-set).
+        paket:
+          profil?.paket ?? 'free',
+
+        isPremium:
+          (profil?.paket ?? 'free') === 'premium',
+
+        paketBerlakuSampai:
+          profil?.paket_berlaku_sampai ?? null,
 
         tandaiPesanDibaca,
       }}
