@@ -52,6 +52,7 @@ import {
   CalendarRange,
   ShieldCheck,
   MessageCircle,
+  MessagesSquare,
   Building2,
   Inbox,
   Sparkles,
@@ -69,7 +70,8 @@ function getGroupsAdmin(
   jumlahPesanBelumDibaca = 0,
   jumlahPesanPusatBelumDibaca = 0,
   jumlahPengajuanTokoMenunggu = 0,
-  jumlahSiapDicairkan = 0
+  jumlahSiapDicairkan = 0,
+  jumlahLiveChatBelumDibaca = 0
 ) {
   return [
     {
@@ -86,6 +88,8 @@ function getGroupsAdmin(
         // Chat dua arah dengan Superadmin ("Admin Pusat") — khusus admin-tier,
         // guru tidak pernah melihat menu ini karena guru pakai getLinksGuru().
         { to: '/pesan-pusat', label: 'Admin Pusat', icon: Building2, badge: jumlahPesanPusatBelumDibaca },
+        // Live Chat: percakapan real-time dengan pengunjung publik di Beranda.
+        { to: '/live-chat', label: 'Live Chat', icon: MessagesSquare, badge: jumlahLiveChatBelumDibaca },
         { to: '/toko', label: 'Toko', icon: Store },
         { to: '/riwayat-pesanan', label: 'Riwayat Pesanan', icon: Receipt },
         { to: '/pesanan-masuk', label: 'Pesanan Masuk (Toko)', icon: Inbox },
@@ -589,6 +593,44 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
     }
   }, [session?.user?.id, isAdmin, isSuperAdmin, sekolahId])
 
+  // Notifikasi real-time: jumlah pesan Live Chat dari pengunjung publik yang
+  // belum dibaca admin. Asumsi: kolom `pengirim` pada live_chat_pesan berisi
+  // 'pengunjung' untuk pesan dari pengunjung dan 'admin' untuk balasan admin
+  // — sesuaikan nilai string ini kalau berbeda di AdminLiveChat.jsx Anda.
+  const [jumlahLiveChatBelumDibaca, setJumlahLiveChatBelumDibaca] = useState(0)
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setJumlahLiveChatBelumDibaca(0)
+      return
+    }
+
+    let aktif = true
+
+    async function muatJumlahLiveChat() {
+      const { count } = await supabase
+        .from('live_chat_pesan')
+        .select('id', { count: 'exact', head: true })
+        .eq('dibaca', false)
+        .eq('pengirim', 'pengunjung')
+      if (aktif) setJumlahLiveChatBelumDibaca(count || 0)
+    }
+
+    muatJumlahLiveChat()
+
+    const channel = supabase
+      .channel('live-chat-notifikasi')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'live_chat_pesan' }, () => {
+        muatJumlahLiveChat()
+      })
+      .subscribe()
+
+    return () => {
+      aktif = false
+      supabase.removeChannel(channel)
+    }
+  }, [isAdmin])
+
   const groupsAdmin = getGroupsAdmin(
     isAdminUtama,
     isSuperAdmin,
@@ -596,7 +638,8 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
     jumlahPesanBelumDibaca,
     jumlahPesanPusatBelumDibaca,
     jumlahPengajuanTokoMenunggu,
-    jumlahSiapDicairkan
+    jumlahSiapDicairkan,
+    jumlahLiveChatBelumDibaca
   )
   const linksGuru = getLinksGuru(jumlahPesanBelumDibaca, sekolahId)
   const linksOrangTua = getLinksOrangTua(jumlahPesanBelumDibaca, sekolahId)
