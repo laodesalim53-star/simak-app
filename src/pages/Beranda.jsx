@@ -1265,6 +1265,7 @@ export default function Beranda() {
           display: flex;
           gap: 12px;
           flex-wrap: wrap;
+          perspective: 900px;
         }
         .tile {
           flex: 1;
@@ -1274,6 +1275,23 @@ export default function Beranda() {
           color: #fff;
           position: relative;
           overflow: hidden;
+          transform-style: preserve-3d;
+          animation: tilePutarPelan 9s linear infinite;
+        }
+        /* Jeda berbeda tiap kartu supaya tidak berputar bersamaan */
+        .tile:nth-child(1) { animation-delay: 0s; }
+        .tile:nth-child(2) { animation-delay: 0.6s; }
+        .tile:nth-child(3) { animation-delay: 1.2s; }
+        .tile:nth-child(4) { animation-delay: 1.8s; }
+        .tile:nth-child(5) { animation-delay: 2.4s; }
+        .tile:nth-child(6) { animation-delay: 3s; }
+        .tile:nth-child(7) { animation-delay: 3.6s; }
+        @keyframes tilePutarPelan {
+          0%   { transform: rotateY(0deg); }
+          100% { transform: rotateY(360deg); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .tile { animation: none; }
         }
         .tile-icon {
           width: 28px; height: 28px;
