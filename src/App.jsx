@@ -10,6 +10,7 @@ import ScanDokumen from './pages/ScanDokumen'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './lib/AuthContext'
 import { supabase } from './lib/supabaseClient'
+import Beranda from './pages/Beranda'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import MenungguPersetujuan from './pages/MenungguPersetujuan'
@@ -83,6 +84,11 @@ import PencairanDana from './pages/PencairanDana'
 import UpgradeFitur from './pages/UpgradeFitur'
 import { CartProvider } from './lib/CartContext'
 
+// Halaman "dashboard" (setelah login) — semua redirect kegagalan akses
+// (adminOnly/adminUtamaOnly/superAdminOnly) mengarah ke sini, BUKAN ke "/"
+// lagi, karena "/" sekarang adalah halaman Beranda publik (poster promosi).
+const HALAMAN_SETELAH_LOGIN = '/dashboard'
+
 function ProtectedRoute({ children, adminOnly, adminUtamaOnly, superAdminOnly }) {
   const { session, loading, isAdmin, isAdminUtama, isSuperAdmin, statusAkun } = useAuth()
   const [minTimeElapsed, setMinTimeElapsed] = useState(false)
@@ -110,9 +116,9 @@ function ProtectedRoute({ children, adminOnly, adminUtamaOnly, superAdminOnly })
     return <Navigate to="/menunggu-persetujuan" replace />
   }
 
-  if (adminOnly && !isAdmin) return <Navigate to="/" replace />
-  if (adminUtamaOnly && !isAdminUtama) return <Navigate to="/" replace />
-  if (superAdminOnly && !isSuperAdmin) return <Navigate to="/" replace />
+  if (adminOnly && !isAdmin) return <Navigate to={HALAMAN_SETELAH_LOGIN} replace />
+  if (adminUtamaOnly && !isAdminUtama) return <Navigate to={HALAMAN_SETELAH_LOGIN} replace />
+  if (superAdminOnly && !isSuperAdmin) return <Navigate to={HALAMAN_SETELAH_LOGIN} replace />
   return children
 }
 
@@ -135,7 +141,7 @@ function RouteMenunggu({ children }) {
     )
   }
   if (!session) return <Navigate to="/login" replace />
-  if (statusAkun !== 'menunggu' && statusAkun !== 'ditolak') return <Navigate to="/" replace />
+  if (statusAkun !== 'menunggu' && statusAkun !== 'ditolak') return <Navigate to={HALAMAN_SETELAH_LOGIN} replace />
   return children
 }
 
@@ -173,7 +179,15 @@ export default function App() {
   return (
     <CartProvider>
       <Routes>
-        {/* Halaman publik — TIDAK perlu login, dibagikan ke orang tua calon siswa.
+        {/* Halaman utama publik — poster/promosi SIMAK, TIDAK perlu login.
+            Pengunjung yang sudah login pun tetap bisa membuka "/" (tidak
+            dipaksa redirect), supaya link "/" yang dibagikan tetap konsisten
+            menampilkan halaman promosi. Untuk masuk ke aplikasi, mereka
+            memakai tombol "Masuk"/"Daftar" di halaman ini menuju /login
+            atau /register. */}
+        <Route path="/" element={<Beranda />} />
+
+        {/* Halaman publik lain — TIDAK perlu login, dibagikan ke orang tua calon siswa.
             /ppdb/:sekolahId adalah link resmi (tiap sekolah punya link sendiri,
             lihat tombol "Salin Link Pendaftaran" di halaman PPDB Admin).
             /ppdb tanpa ID dipertahankan supaya link lama yang mungkin sudah
@@ -189,7 +203,12 @@ export default function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/menunggu-persetujuan" element={<RouteMenunggu><MenungguPersetujuan /></RouteMenunggu>} />
         <Route path="/persetujuan-akun" element={<ProtectedRoute adminUtamaOnly><PersetujuanAkun /></ProtectedRoute>} />
-        <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+
+        {/* Dashboard aplikasi — sebelumnya di "/", sekarang dipindah ke
+            "/dashboard" karena "/" dipakai untuk halaman Beranda publik.
+            Ini tujuan redirect utama setelah login berhasil. */}
+        <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+
         <Route path="/siswa" element={<ProtectedRoute><Siswa /></ProtectedRoute>} />
         <Route path="/hasil-ujian" element={<ProtectedRoute><HasilUjian /></ProtectedRoute>} />
         <Route path="/guru" element={<ProtectedRoute adminOnly><Guru /></ProtectedRoute>} />
