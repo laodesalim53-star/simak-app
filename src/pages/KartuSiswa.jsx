@@ -15,6 +15,24 @@ const ROWS = 4
 // Ganti dengan domain Vercel Anda yang sebenarnya
 const BASE_URL = 'https://domain-anda.vercel.app'
 
+const BULAN_ID = [
+  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+]
+
+function formatTanggalIndo(dateLike) {
+  if (!dateLike) return '-'
+  const d = new Date(dateLike)
+  if (isNaN(d.getTime())) return '-'
+  return `${String(d.getDate()).padStart(2, '0')} ${BULAN_ID[d.getMonth()]} ${d.getFullYear()}`
+}
+
+function formatTTL(siswa) {
+  const tempat = siswa.tempat_lahir || '-'
+  const tanggal = siswa.tanggal_lahir ? formatTanggalIndo(siswa.tanggal_lahir) : '-'
+  return `${tempat}, ${tanggal}`
+}
+
 // Warna & label per jenis kartu — dipakai bersama oleh PDF generator dan modal pratinjau,
 // supaya kartu yang tampil di layar sama persis dengan yang dicetak.
 const TEMA_KARTU = {
@@ -33,9 +51,10 @@ const TEMA_KARTU = {
 // Modal pratinjau — menampilkan desain kartu modern untuk siswa yang dipilih,
 // sebelum benar-benar di-generate jadi PDF. QR code dibuat langsung di sini
 // (bukan lewat pdf-lib) supaya tampilannya ringan dan instan di browser.
-function PreviewKartuModal({ jenis, siswaList, fotoUrl, generating, onClose, onDownload }) {
+function PreviewKartuModal({ jenis, siswaList, fotoUrl, profilSekolah, generating, onClose, onDownload }) {
   const [qrMap, setQrMap] = useState({})
   const tema = TEMA_KARTU[jenis]
+  const tanggalTerbit = formatTanggalIndo(new Date())
 
   useEffect(() => {
     let aktif = true
@@ -75,53 +94,71 @@ function PreviewKartuModal({ jenis, siswaList, fotoUrl, generating, onClose, onD
             {siswaList.map((s) => (
               <div
                 key={s.id}
-                className="relative rounded-xl overflow-hidden shadow-md ring-1 ring-black/5"
+                className="relative rounded-xl overflow-hidden shadow-md ring-1 ring-black/5 flex flex-col"
                 style={{ aspectRatio: '242 / 153' }}
               >
                 {/* Header + aksen emas tipis, warna sesuai jenis kartu */}
-                <div className="px-3 pt-2 pb-2.5 relative" style={{ background: tema.warna }}>
-                  <p className="text-[10px] font-semibold text-white tracking-wide">SD NEGERI WARIA</p>
-                  <p className="text-[9px] text-white/70 mt-0.5">{tema.label}</p>
-                  {/* Lencana bulat inisial sekolah, aksen dekoratif kanan atas */}
-                  <div className="absolute top-1.5 right-2 w-6 h-6 rounded-full bg-white/15 flex items-center justify-center">
-                    <span className="text-[8px] font-semibold text-white">SD</span>
-                  </div>
+                <div className="px-3 pt-2 pb-2 relative shrink-0" style={{ background: `linear-gradient(135deg, ${tema.warna}, ${tema.warna}dd)` }}>
+                  <p className="text-[11px] font-bold text-white tracking-wide leading-tight">
+                    {profilSekolah?.nama_sekolah || 'SD NEGERI WARIA'}
+                  </p>
+                  <p className="text-[9px] text-white/85 font-semibold mt-0.5">{tema.label}</p>
+                  {profilSekolah?.alamat && (
+                    <p className="text-[6.5px] text-white/60 mt-0.5 truncate">{profilSekolah.alamat}</p>
+                  )}
                   <div className="absolute bottom-0 left-0 w-full h-[3px]" style={{ background: tema.aksen }} />
                 </div>
 
-                <div className="flex gap-2.5 p-3 bg-white">
-                  {/* Foto dengan bingkai aksen emas */}
-                  <div
-                    className="w-14 h-14 rounded-lg overflow-hidden shrink-0 bg-ink-900/[0.06] flex items-center justify-center"
-                    style={{ boxShadow: `0 0 0 1.5px ${tema.aksen}` }}
-                  >
-                    {fotoUrl(s.foto_path) ? (
-                      <img src={fotoUrl(s.foto_path)} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-sm font-semibold text-ink-700/40">{s.nama_lengkap?.[0]}</span>
-                    )}
+                {/* Badan kartu: foto + identitas */}
+                <div className="flex-1 flex gap-2 p-2.5 bg-white min-h-0">
+                  <div className="flex flex-col items-center gap-1 shrink-0">
+                    <div
+                      className="w-12 h-14 rounded-md overflow-hidden bg-ink-900/[0.06] flex items-center justify-center"
+                      style={{ boxShadow: `0 0 0 1.5px ${tema.aksen}` }}
+                    >
+                      {fotoUrl(s.foto_path) ? (
+                        <img src={fotoUrl(s.foto_path)} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-xs font-semibold text-ink-700/40">{s.nama_lengkap?.[0]}</span>
+                      )}
+                    </div>
+                    {/* QR code kecil di bawah foto */}
+                    <div
+                      className="w-7 h-7 rounded bg-white flex items-center justify-center shrink-0"
+                      style={{ boxShadow: `0 0 0 1px ${tema.aksen}` }}
+                    >
+                      {qrMap[s.id] ? (
+                        <img src={qrMap[s.id]} alt="QR verifikasi" className="w-6 h-6" />
+                      ) : (
+                        <Loader2 size={10} className="animate-spin text-ink-700/30" />
+                      )}
+                    </div>
                   </div>
 
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-ink-950 truncate">{s.nama_lengkap}</p>
-                    <div className="w-6 h-[2px] rounded-full mt-1" style={{ background: tema.aksen }} />
-                    <p className="text-[10px] text-ink-700/60 mt-1">NIS: {s.nis || '-'}</p>
-                    <p className="text-[10px] text-ink-700/60">Kelas: {s.kelas?.nama_kelas || '-'}</p>
-                    <span className="inline-block mt-1 text-[9px] px-1.5 py-0.5 rounded bg-ink-900/[0.05] text-ink-700/60">
-                      TP {new Date().getFullYear()}/{new Date().getFullYear() + 1}
-                    </span>
+                  <div className="min-w-0 flex-1 text-[9px] leading-snug">
+                    <p className="text-[11px] font-bold text-ink-950 truncate">{s.nama_lengkap}</p>
+                    <div className="w-6 h-[2px] rounded-full mt-0.5 mb-1" style={{ background: tema.aksen }} />
+                    <div className="grid grid-cols-[28px_4px_1fr] gap-y-0.5 text-ink-700/70">
+                      <span>NIS</span><span>:</span><span className="truncate">{s.nis || '-'}</span>
+                      <span>TTL</span><span>:</span><span className="truncate">{formatTTL(s)}</span>
+                      <span>Alamat</span><span>:</span><span className="line-clamp-2">{s.alamat || '-'}</span>
+                    </div>
                   </div>
+                </div>
 
-                  {/* QR code dengan kotak putih + bingkai aksen */}
-                  <div
-                    className="w-9 h-9 rounded-md bg-white flex items-center justify-center shrink-0 self-end"
-                    style={{ boxShadow: `0 0 0 1px ${tema.aksen}` }}
-                  >
-                    {qrMap[s.id] ? (
-                      <img src={qrMap[s.id]} alt="QR verifikasi" className="w-7 h-7" />
-                    ) : (
-                      <Loader2 size={12} className="animate-spin text-ink-700/30" />
-                    )}
+                {/* Footer: tanda tangan kepala sekolah, diambil dari profil sekolah */}
+                <div className="shrink-0 px-2.5 py-1.5 flex items-end justify-end bg-white border-t border-ink-900/[0.06]">
+                  <div className="text-right text-[7px] text-ink-700/60 leading-tight">
+                    <p>{tanggalTerbit}</p>
+                    <p>Kepala Sekolah</p>
+                    <div className="h-6 flex items-end justify-end">
+                      {profilSekolah?.ttd_url ? (
+                        <img src={profilSekolah.ttd_url} alt="Tanda tangan" className="h-6 object-contain" />
+                      ) : null}
+                    </div>
+                    <p className="font-semibold text-ink-900 underline underline-offset-2">
+                      {profilSekolah?.nama_kepala_sekolah || '-'}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -157,12 +194,15 @@ export default function KartuSiswa() {
   const [uploadingId, setUploadingId] = useState(null)
   const [generating, setGenerating] = useState(false)
   const [previewJenis, setPreviewJenis] = useState(null) // 'pelajar' | 'perpustakaan' | null
+  const [previewSiswaTunggal, setPreviewSiswaTunggal] = useState(null) // siswa untuk tombol "Lihat" per-baris
+  const [profilSekolah, setProfilSekolah] = useState(null)
 
   useEffect(() => {
     supabase.from('kelas').select('id, nama_kelas').order('nama_kelas').then(({ data }) => {
       setKelasList(data || [])
       if (data?.length) setKelasId(data[0].id)
     })
+    loadProfilSekolah()
   }, [])
 
   useEffect(() => {
@@ -170,11 +210,33 @@ export default function KartuSiswa() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kelasId])
 
+  // ⚠️ SESUAIKAN: nama tabel/kolom profil sekolah & bucket tanda tangan
+  // sesuai skema Supabase Anda yang sebenarnya.
+  async function loadProfilSekolah() {
+    const { data, error } = await supabase
+      .from('profil_sekolah')
+      .select('nama_sekolah, alamat, nama_kepala_sekolah, ttd_path')
+      .single()
+
+    if (error || !data) {
+      console.warn('Profil sekolah belum tersedia:', error?.message)
+      setProfilSekolah(null)
+      return
+    }
+
+    let ttd_url = null
+    if (data.ttd_path) {
+      ttd_url = supabase.storage.from('tanda-tangan').getPublicUrl(data.ttd_path).data.publicUrl
+    }
+    setProfilSekolah({ ...data, ttd_url })
+  }
+
   async function loadSiswa() {
     setLoading(true)
+    // ⚠️ SESUAIKAN: pastikan kolom tempat_lahir, tanggal_lahir, alamat memang ada di tabel siswa
     const { data } = await supabase
       .from('siswa')
-      .select('id, nama_lengkap, nis, foto_path, kelas(nama_kelas)')
+      .select('id, nama_lengkap, nis, foto_path, tempat_lahir, tanggal_lahir, alamat, kelas(nama_kelas)')
       .eq('kelas_id', kelasId)
       .eq('status', 'aktif')
       .order('nama_lengkap')
@@ -227,7 +289,7 @@ export default function KartuSiswa() {
     return new Uint8Array(await res.arrayBuffer())
   }
 
-  // Ubah QR data-URL (base64) menjadi bytes agar bisa di-embed pdf-lib
+  // Ubah QR / gambar data-URL (base64) menjadi bytes agar bisa di-embed pdf-lib
   function dataUrlToBytes(dataUrl) {
     const base64 = dataUrl.split(',')[1]
     const binary = atob(base64)
@@ -254,9 +316,25 @@ export default function KartuSiswa() {
       const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
       const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
 
+      // Tanda tangan kepala sekolah di-embed sekali saja (dipakai ulang di semua kartu)
+      let ttdImg = null
+      if (profilSekolah?.ttd_url) {
+        try {
+          const ttdBytes = await fetchImageBytes(profilSekolah.ttd_url)
+          const isPng = profilSekolah.ttd_url.toLowerCase().includes('.png')
+          ttdImg = isPng ? await pdfDoc.embedPng(ttdBytes) : await pdfDoc.embedJpg(ttdBytes)
+        } catch (err) {
+          console.error('Gagal embed tanda tangan:', err)
+        }
+      }
+
       const perPage = COLS * ROWS
       const tema = TEMA_KARTU[jenis]
       const judulKartu = tema.label
+      const namaSekolah = profilSekolah?.nama_sekolah || 'SD NEGERI WARIA'
+      const alamatSekolah = profilSekolah?.alamat || ''
+      const namaKepsek = profilSekolah?.nama_kepala_sekolah || '-'
+      const tanggalTerbit = formatTanggalIndo(new Date())
       const warna = jenis === 'pelajar' ? rgb(0.11, 0.19, 0.36) : rgb(0.31, 0.09, 0.09)
       const aksen = rgb(0.83, 0.69, 0.22) // emas — sama seperti garis aksen di pratinjau
 
@@ -270,7 +348,7 @@ export default function KartuSiswa() {
           const row = Math.floor(i / COLS)
           const x = MARGIN + col * (CARD_W + GAP)
           const y = 842 - MARGIN - CARD_H - row * (CARD_H + GAP)
-          const headerH = 30
+          const headerH = alamatSekolah ? 38 : 32
 
           // Latar kartu
           page.drawRectangle({ x, y, width: CARD_W, height: CARD_H, color: rgb(1, 1, 1), borderColor: warna, borderWidth: 1.5 })
@@ -278,22 +356,19 @@ export default function KartuSiswa() {
           // Header berwarna + garis aksen emas tipis di bawahnya
           page.drawRectangle({ x, y: y + CARD_H - headerH, width: CARD_W, height: headerH, color: warna })
           page.drawRectangle({ x, y: y + CARD_H - headerH - 2.5, width: CARD_W, height: 2.5, color: aksen })
-          page.drawText('SD NEGERI WARIA', { x: x + 10, y: y + CARD_H - 13, size: 8, font: fontBold, color: rgb(1, 1, 1) })
-          page.drawText(judulKartu, { x: x + 10, y: y + CARD_H - 23, size: 6.5, font, color: rgb(0.85, 0.85, 0.92) })
-
-          // Lencana bulat inisial sekolah — pojok kanan atas header, aksen dekoratif
-          page.drawEllipse({
-            x: x + CARD_W - 20, y: y + CARD_H - headerH / 2, xScale: 9, yScale: 9,
-            color: rgb(1, 1, 1), opacity: 0.15,
-          })
-          page.drawText('SD', { x: x + CARD_W - 27, y: y + CARD_H - headerH / 2 - 3, size: 6.5, font: fontBold, color: rgb(1, 1, 1) })
+          page.drawText(namaSekolah, { x: x + 10, y: y + CARD_H - 13, size: 8.5, font: fontBold, color: rgb(1, 1, 1) })
+          page.drawText(judulKartu, { x: x + 10, y: y + CARD_H - 23, size: 6.5, font, color: rgb(0.9, 0.9, 0.95) })
+          if (alamatSekolah) {
+            page.drawText(alamatSekolah, { x: x + 10, y: y + CARD_H - 31, size: 5, font, color: rgb(0.75, 0.75, 0.85) })
+          }
 
           // Foto dengan bingkai aksen emas
-          const fotoX = x + 12
-          const fotoY = y + 16
-          const fotoSize = 56
+          const fotoX = x + 10
+          const fotoY = y + CARD_H - headerH - 60
+          const fotoW = 46
+          const fotoH = 56
           page.drawRectangle({
-            x: fotoX - 2, y: fotoY - 2, width: fotoSize + 4, height: fotoSize + 4,
+            x: fotoX - 2, y: fotoY - 2, width: fotoW + 4, height: fotoH + 4,
             color: rgb(1, 1, 1), borderColor: aksen, borderWidth: 1.2,
           })
           if (siswa.foto_path) {
@@ -301,46 +376,67 @@ export default function KartuSiswa() {
               const bytes = await fetchImageBytes(fotoUrl(siswa.foto_path))
               const isPng = siswa.foto_path.toLowerCase().endsWith('.png')
               const img = isPng ? await pdfDoc.embedPng(bytes) : await pdfDoc.embedJpg(bytes)
-              page.drawImage(img, { x: fotoX, y: fotoY, width: fotoSize, height: fotoSize })
+              page.drawImage(img, { x: fotoX, y: fotoY, width: fotoW, height: fotoH })
             } catch {
-              page.drawRectangle({ x: fotoX, y: fotoY, width: fotoSize, height: fotoSize, color: rgb(0.9, 0.9, 0.9) })
+              page.drawRectangle({ x: fotoX, y: fotoY, width: fotoW, height: fotoH, color: rgb(0.9, 0.9, 0.9) })
             }
           } else {
-            page.drawRectangle({ x: fotoX, y: fotoY, width: fotoSize, height: fotoSize, color: rgb(0.9, 0.9, 0.9) })
+            page.drawRectangle({ x: fotoX, y: fotoY, width: fotoW, height: fotoH, color: rgb(0.9, 0.9, 0.9) })
           }
 
-          // Data siswa
-          const textX = fotoX + fotoSize + 14
-          let textY = y + CARD_H - headerH - 12
-          page.drawText(siswa.nama_lengkap, { x: textX, y: textY, size: 9.5, font: fontBold, color: rgb(0.1, 0.1, 0.1) })
-          // Garis aksen pendek di bawah nama
-          textY -= 6
-          page.drawRectangle({ x: textX, y: textY, width: 18, height: 1.4, color: aksen })
-          textY -= 10
-          page.drawText(`NIS: ${siswa.nis || '-'}`, { x: textX, y: textY, size: 7.5, font, color: rgb(0.35, 0.35, 0.35) })
-          textY -= 11
-          page.drawText(`Kelas: ${siswa.kelas?.nama_kelas || '-'}`, { x: textX, y: textY, size: 7.5, font, color: rgb(0.35, 0.35, 0.35) })
-          textY -= 13
-          // Pil "TP" — kotak abu muda di belakang teks tahun ajaran
-          const tpText = `TP ${new Date().getFullYear()}/${new Date().getFullYear() + 1}`
-          page.drawRectangle({ x: textX, y: textY - 2, width: font.widthOfTextAtSize(tpText, 6.5) + 8, height: 10, color: rgb(0.94, 0.94, 0.94) })
-          page.drawText(tpText, { x: textX + 4, y: textY, size: 6.5, font, color: rgb(0.45, 0.45, 0.45) })
-
-          // QR Code dengan kotak putih + bingkai aksen (pojok kanan bawah kartu)
+          // QR code kecil di bawah foto
           try {
             const qrBytes = await generateQRBytes(siswa.id)
             const qrImg = await pdfDoc.embedPng(qrBytes)
-            const qrSize = 28
-            const qrX = x + CARD_W - qrSize - 12
-            const qrY = y + 9
+            const qrSize = 22
+            const qrX = fotoX + (fotoW - qrSize) / 2
+            const qrY = fotoY - qrSize - 6
             page.drawRectangle({
-              x: qrX - 3, y: qrY - 3, width: qrSize + 6, height: qrSize + 6,
-              color: rgb(1, 1, 1), borderColor: aksen, borderWidth: 1,
+              x: qrX - 2, y: qrY - 2, width: qrSize + 4, height: qrSize + 4,
+              color: rgb(1, 1, 1), borderColor: aksen, borderWidth: 0.8,
             })
             page.drawImage(qrImg, { x: qrX, y: qrY, width: qrSize, height: qrSize })
           } catch (err) {
             console.error('Gagal generate QR:', err)
           }
+
+          // Data siswa: Nama / NIS / TTL / Alamat
+          const textX = fotoX + fotoW + 14
+          const labelColX = textX + 34
+          let textY = y + CARD_H - headerH - 12
+          page.drawText(siswa.nama_lengkap, { x: textX, y: textY, size: 9, font: fontBold, color: rgb(0.1, 0.1, 0.1) })
+          textY -= 6
+          page.drawRectangle({ x: textX, y: textY, width: 18, height: 1.4, color: aksen })
+          textY -= 11
+
+          function drawBaris(label, isi) {
+            page.drawText(label, { x: textX, y: textY, size: 6.8, font, color: rgb(0.4, 0.4, 0.4) })
+            page.drawText(':', { x: labelColX, y: textY, size: 6.8, font, color: rgb(0.4, 0.4, 0.4) })
+            const maxWidth = CARD_W - (labelColX + 6 - x)
+            let isiText = isi || '-'
+            // Potong teks alamat panjang agar tidak keluar kartu
+            while (font.widthOfTextAtSize(isiText, 6.8) > maxWidth && isiText.length > 3) {
+              isiText = isiText.slice(0, -4) + '…'
+            }
+            page.drawText(isiText, { x: labelColX + 6, y: textY, size: 6.8, font, color: rgb(0.25, 0.25, 0.25) })
+            textY -= 10
+          }
+
+          drawBaris('NIS', siswa.nis)
+          drawBaris('TTL', formatTTL(siswa))
+          drawBaris('Alamat', siswa.alamat)
+
+          // Tanda tangan kepala sekolah, pojok kanan bawah
+          const ttdBoxW = 78
+          const ttdX = x + CARD_W - ttdBoxW - 8
+          let ttdY = y + 8
+          page.drawText(tanggalTerbit, { x: ttdX, y: ttdY + 32, size: 5, font, color: rgb(0.45, 0.45, 0.45) })
+          page.drawText('Kepala Sekolah', { x: ttdX, y: ttdY + 25, size: 5, font, color: rgb(0.45, 0.45, 0.45) })
+          if (ttdImg) {
+            page.drawImage(ttdImg, { x: ttdX, y: ttdY + 8, width: 50, height: 16 })
+          }
+          page.drawRectangle({ x: ttdX, y: ttdY + 6, width: ttdBoxW, height: 0.6, color: rgb(0.7, 0.7, 0.7) })
+          page.drawText(namaKepsek, { x: ttdX, y: ttdY - 1, size: 5.8, font: fontBold, color: rgb(0.1, 0.1, 0.1) })
         }
       }
 
@@ -433,6 +529,14 @@ export default function KartuSiswa() {
                   <p className="text-sm font-medium text-ink-950">{s.nama_lengkap}</p>
                   <p className="text-xs text-ink-700/50">NIS: {s.nis || '-'}</p>
                 </div>
+                {/* Tombol Lihat per-siswa — pratinjau kartu untuk satu siswa ini saja */}
+                <button
+                  type="button"
+                  onClick={() => setPreviewSiswaTunggal(s)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-ink-700 hover:bg-ink-900/[0.05] shrink-0"
+                >
+                  <Eye size={14} /> Lihat
+                </button>
                 <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-ink-700 hover:bg-ink-900/[0.05] cursor-pointer shrink-0">
                   {uploadingId === s.id ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
                   {s.foto_path ? 'Ganti Foto' : 'Upload Foto'}
@@ -451,7 +555,7 @@ export default function KartuSiswa() {
       </div>
 
       <p className="text-xs text-ink-700/40 mt-4">
-        Siswa tanpa foto akan tetap tercetak dengan kotak foto kosong. QR code di pojok kanan bawah untuk verifikasi. Kartu dicetak 8 per halaman A4, tinggal potong sesuai garis.
+        Siswa tanpa foto akan tetap tercetak dengan kotak foto kosong. QR code untuk verifikasi. Kartu dicetak 8 per halaman A4, tinggal potong sesuai garis.
       </p>
 
       {previewJenis && (
@@ -459,11 +563,29 @@ export default function KartuSiswa() {
           jenis={previewJenis}
           siswaList={siswaList.filter((s) => selected[s.id])}
           fotoUrl={fotoUrl}
+          profilSekolah={profilSekolah}
           generating={generating}
           onClose={() => setPreviewJenis(null)}
           onDownload={async (jenis) => {
             await generateKartu(jenis)
             setPreviewJenis(null)
+          }}
+        />
+      )}
+
+      {/* Pratinjau untuk tombol "Lihat" per-baris siswa: default tampilkan Kartu Pelajar */}
+      {previewSiswaTunggal && (
+        <PreviewKartuModal
+          jenis="pelajar"
+          siswaList={[previewSiswaTunggal]}
+          fotoUrl={fotoUrl}
+          profilSekolah={profilSekolah}
+          generating={generating}
+          onClose={() => setPreviewSiswaTunggal(null)}
+          onDownload={async (jenis) => {
+            setSelected({ [previewSiswaTunggal.id]: true })
+            await generateKartu(jenis)
+            setPreviewSiswaTunggal(null)
           }}
         />
       )}
