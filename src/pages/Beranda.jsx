@@ -108,7 +108,7 @@ export default function Beranda() {
                 </Link>
                 <a href="/simak-app.apk" download className="install-pill">
                   <Download size={16} strokeWidth={2.5} />
-                  Instal Aplikasi
+                  Instal untuk Android
                 </a>
               </div>
             </div>
