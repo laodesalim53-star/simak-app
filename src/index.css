@@ -46,7 +46,10 @@ body {
 }
 /* Aturan cetak untuk Kuitansi/Nota — sembunyikan seluruh halaman kecuali
    elemen berkelas .print-only (dipakai oleh KuitansiPrintTemplate) saat
-   window.print() dipanggil dari Keuangan.jsx / KuitansiModal.jsx / Kuitansi.jsx */
+   window.print() dipanggil dari Keuangan.jsx / KuitansiModal.jsx / Kuitansi.jsx.
+   Sejak Cetak8355.jsx ikut memakai .print-only (3 lembar lampiran), file itu
+   menambahkan override khusus (position: static) untuk kasusnya sendiri —
+   lihat komentar di dalam Cetak8355.jsx. */
 @media print {
   @page {
     size: A4;
