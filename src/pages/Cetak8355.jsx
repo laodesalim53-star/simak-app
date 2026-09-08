@@ -252,8 +252,27 @@ export default function Cetak8355() {
           .no-print { display: none !important; }
           .lembar-cetak { box-shadow: none !important; margin: 0 !important; max-width: none !important; width: 100% !important; }
           body { background: white; }
-          @page { size: A4 landscape; margin: 8mm; }
+          @page { size: A4 landscape !important; margin: 8mm !important; }
           .lampiran-break { page-break-before: always; }
+
+          /* CSS global (index.css) punya aturan:
+               body * { visibility: hidden; }
+               .print-only, .print-only * { visibility: visible; }
+             yang tadinya dibuat khusus untuk Kuitansi/Nota (1 lembar).
+             Halaman ini pakai .print-only juga (lihat 3 div lampiran di
+             bawah) supaya isinya kasat mata saat print, TAPI di sini ada
+             3 lembar terpisah dengan page-break, jadi override posisi
+             "fixed" bawaan .print-only global menjadi "static" — supaya
+             page-break-before antar lampiran tetap jalan mengikuti alur
+             dokumen normal, bukan menumpuk di satu titik fixed. */
+          .lembar-cetak.print-only {
+            position: static !important;
+            top: auto !important;
+            left: auto !important;
+            right: auto !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
+          }
         }
         .tabel-8355 th, .tabel-8355 td {
           border: 1px solid #0B1220;
@@ -304,21 +323,26 @@ export default function Cetak8355() {
       </div>
 
       {/* ---------------- LAMPIRAN 1 ---------------- */}
-      <div className="lampiran lembar-cetak max-w-[1200px] mx-auto bg-white shadow-lg p-6 text-sm text-ink-950">
+      {/* Class "print-only" ditambahkan: CSS global menyembunyikan SEMUA
+          elemen (body *) saat print kecuali yang berkelas print-only.
+          Tanpa class ini, 3 lembar lampiran di bawah ikut tersembunyi
+          walau tinggi/jumlah halamannya tetap terhitung — itu sebabnya
+          hasil cetak sebelumnya "5 halaman" tapi kosong semua. */}
+      <div className="lampiran lembar-cetak print-only max-w-[1200px] mx-auto bg-white shadow-lg p-6 text-sm text-ink-950">
         <KopSurat />
         <Judul nomorLampiran={1} />
         <TabelLampiran kolom={LAMPIRAN_1_KOLOM} />
       </div>
 
       {/* ---------------- LAMPIRAN 2 ---------------- */}
-      <div className="lampiran lampiran-break lembar-cetak max-w-[1200px] mx-auto bg-white shadow-lg p-6 mt-8 print:mt-0 text-sm text-ink-950">
+      <div className="lampiran lampiran-break lembar-cetak print-only max-w-[1200px] mx-auto bg-white shadow-lg p-6 mt-8 print:mt-0 text-sm text-ink-950">
         <KopSurat />
         <Judul nomorLampiran={2} />
         <TabelLampiran kolom={LAMPIRAN_2_KOLOM} />
       </div>
 
       {/* ---------------- LAMPIRAN 3 ---------------- */}
-      <div className="lampiran lampiran-break lembar-cetak max-w-[1200px] mx-auto bg-white shadow-lg p-6 mt-8 print:mt-0 text-sm text-ink-950">
+      <div className="lampiran lampiran-break lembar-cetak print-only max-w-[1200px] mx-auto bg-white shadow-lg p-6 mt-8 print:mt-0 text-sm text-ink-950">
         <KopSurat />
         <Judul nomorLampiran={3} />
         <TabelLampiran kolom={LAMPIRAN_3_KOLOM} />
