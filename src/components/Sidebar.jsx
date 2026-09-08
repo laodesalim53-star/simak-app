@@ -189,6 +189,15 @@ function getGroupsAdmin(
         { to: '/hari-libur', label: 'Hari Libur', icon: CalendarOff },
         { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
         { to: '/backup', label: 'Backup Data', icon: DatabaseBackup },
+        // PERBAIKAN: Data Ujian 8355 & Cetak 8355 sebelumnya dikunci ke
+        // `isSuperAdmin || isKepalaSekolah` saja, jadi admin sekolah biasa
+        // (dan admin_utama yang bukan kepsek) tidak pernah melihat menu ini.
+        // Grup "Administrasi" ini sendiri hanya dirender saat isAdmin true
+        // (lihat cabang render di komponen Sidebar di bawah), jadi tidak
+        // perlu gate tambahan di sini — semua role admin-tier (admin,
+        // admin_utama, superadmin, kepala sekolah) sekarang dapat akses.
+        { to: '/data-ujian-8355', label: 'Data Ujian 8355', icon: Table2 },
+        { to: '/cetak-8355', label: 'Cetak 8355 (Kelas 6)', icon: Printer },
         // Manajemen Sekolah dan Persetujuan Toko hanya untuk superadmin.
         ...(isSuperAdmin
           ? [
@@ -199,13 +208,6 @@ function getGroupsAdmin(
                 icon: ShieldCheck,
                 badge: jumlahPengajuanTokoMenunggu,
               },
-            ]
-          : []),
-        // Data Ujian 8355 & Cetak 8355 dapat diakses superadmin dan kepala sekolah.
-        ...(isSuperAdmin || isKepalaSekolah
-          ? [
-              { to: '/data-ujian-8355', label: 'Data Ujian 8355', icon: Table2 },
-              { to: '/cetak-8355', label: 'Cetak 8355 (Kelas 6)', icon: Printer },
             ]
           : []),
         // "Persetujuan Akun" dan "Profil Sekolah" hanya untuk admin utama / superadmin
