@@ -107,7 +107,7 @@ const LAMPIRAN_3_KOLOM = [
 ]
 
 export default function Cetak8355() {
-  const { profil, isSuperAdmin } = useAuth()
+  const { profil, isAdmin } = useAuth()
   const sekolahId = profil?.sekolah_id
 
   const [loading, setLoading] = useState(true)
@@ -134,10 +134,10 @@ export default function Cetak8355() {
   const [kodeTersimpan, setKodeTersimpan] = useState(false)
 
   useEffect(() => {
-    if (isSuperAdmin) muatSemua()
+    if (isAdmin) muatSemua()
     else setLoading(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sekolahId, isSuperAdmin])
+  }, [sekolahId, isAdmin])
 
   async function muatSemua() {
     if (!sekolahId) {
@@ -225,8 +225,8 @@ export default function Cetak8355() {
     return v === null || v === undefined || v === '' ? '-' : v
   }
 
-  if (!isSuperAdmin) {
-    return <div className="p-10 text-center text-ink-700/60">Halaman ini khusus untuk Superadmin.</div>
+  if (!isAdmin) {
+    return <div className="p-10 text-center text-ink-700/60">Halaman ini khusus untuk Admin, Admin Utama, dan Superadmin.</div>
   }
 
   if (loading) {
