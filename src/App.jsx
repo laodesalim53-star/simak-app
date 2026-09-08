@@ -83,6 +83,9 @@ import PersetujuanToko from './pages/PersetujuanToko'
 import PencairanDana from './pages/PencairanDana'
 // --- Fitur Upgrade Paket/Langganan (Free vs Premium, per user) ---
 import UpgradeFitur from './pages/UpgradeFitur'
+// --- Fitur Data/Cetak Ujian 8355 (superadmin only) ---
+import DataUjian8355 from './pages/DataUjian8355'
+import Cetak8355 from './pages/Cetak8355'
 import { CartProvider } from './lib/CartContext'
 
 // Halaman "dashboard" (setelah login) — semua redirect kegagalan akses
@@ -339,6 +342,11 @@ export default function App() {
             orang tua) — status paket (free/premium) melekat ke masing-masing
             akun individu, bukan ke sekolah. */}
         <Route path="/upgrade-fitur" element={<ProtectedRoute><UpgradeFitur /></ProtectedRoute>} />
+
+        {/* --- Data/Cetak Ujian 8355 ---
+            Khusus superadmin. */}
+        <Route path="/data-ujian-8355" element={<ProtectedRoute superAdminOnly><DataUjian8355 /></ProtectedRoute>} />
+        <Route path="/cetak-8355" element={<ProtectedRoute superAdminOnly><Cetak8355 /></ProtectedRoute>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
