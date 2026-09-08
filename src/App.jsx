@@ -345,8 +345,8 @@ export default function App() {
 
         {/* --- Data/Cetak Ujian 8355 ---
             Khusus superadmin. */}
-        <Route path="/data-ujian-8355" element={<ProtectedRoute superAdminOnly><DataUjian8355 /></ProtectedRoute>} />
-        <Route path="/cetak-8355" element={<ProtectedRoute superAdminOnly><Cetak8355 /></ProtectedRoute>} />
+        <Route path="/data-ujian-8355" element={<ProtectedRoute adminOnly><DataUjian8355 /></ProtectedRoute>} />
+        <Route path="/cetak-8355" element={<ProtectedRoute adminOnly><Cetak8355 /></ProtectedRoute>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
