@@ -56,6 +56,8 @@ import {
   Building2,
   Inbox,
   Sparkles,
+  Table2,
+  Printer,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
@@ -178,7 +180,12 @@ function getGroupsAdmin(
         { to: '/hari-libur', label: 'Hari Libur', icon: CalendarOff },
         { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
         { to: '/backup', label: 'Backup Data', icon: DatabaseBackup },
-        // Manajemen Sekolah & Persetujuan Toko hanya untuk superadmin.
+        // Manajemen Sekolah, Persetujuan Toko, Data Ujian 8355 & Cetak 8355
+        // hanya untuk superadmin.
+        // TAMBAHAN: "Data Ujian 8355" (isian field tambahan Kelas 6) dan
+        // "Cetak 8355" (cetak kolektif Daftar Calon Peserta Ujian) — sengaja
+        // dibatasi superadmin dulu, sama seperti item superadmin-only lain
+        // di grup ini.
         ...(isSuperAdmin
           ? [
               { to: '/manajemen-sekolah', label: 'Manajemen Sekolah', icon: Building2 },
@@ -188,6 +195,8 @@ function getGroupsAdmin(
                 icon: ShieldCheck,
                 badge: jumlahPengajuanTokoMenunggu,
               },
+              { to: '/data-ujian-8355', label: 'Data Ujian 8355', icon: Table2 },
+              { to: '/cetak-8355', label: 'Cetak 8355 (Kelas 6)', icon: Printer },
             ]
           : []),
         // "Persetujuan Akun" dan "Profil Sekolah" hanya untuk admin utama / superadmin
