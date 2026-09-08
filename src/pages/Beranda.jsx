@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, LogIn, GraduationCap, Video, Download, Monitor, Apple, Share, SquarePlus, X, BookOpen, IdCard, Wallet, MessageCircle, Settings, Users, ShoppingBag, Phone, Send, Headset } from 'lucide-react'
+import { ArrowRight, LogIn, GraduationCap, Video, Download, Monitor, Apple, Share, SquarePlus, X, BookOpen, IdCard, Wallet, MessageCircle, Settings, Users, ShoppingBag, Phone, Send, Headset, Fish, Shell, Shirt, Pencil } from 'lucide-react'
 // PENTING: sesuaikan path import ini dengan lokasi client Supabase Anda
 // yang sudah ada di project (biasanya di src/lib/ atau src/services/).
 import { supabase } from '../lib/supabaseClient'
@@ -450,6 +450,17 @@ export default function Beranda() {
               <span className="cat-card-link-cta">
                 Buka Toko Sekolah
                 <ArrowRight size={14} strokeWidth={2.5} className="cat-card-cta-arrow" />
+              </span>
+              {/* BARU: skin ikon dekoratif produk toko (hasil laut, pakaian,
+                  ATK) — hiasan samar berkedip-kedip di area kosong kartu,
+                  warnanya bervariasi mengikuti kategori produk namun tetap
+                  senada dengan tema biru toko. Non-interaktif (pointer-events
+                  none) supaya tidak mengganggu klik kartu. */}
+              <span className="cat-card-toko-deco" aria-hidden="true">
+                <Fish size={22} strokeWidth={2} className="deco-icon deco-icon-ikan" />
+                <Shell size={18} strokeWidth={2} className="deco-icon deco-icon-kerang" />
+                <Shirt size={22} strokeWidth={2} className="deco-icon deco-icon-pakaian" />
+                <Pencil size={18} strokeWidth={2} className="deco-icon deco-icon-atk" />
               </span>
             </Link>
 
@@ -1492,6 +1503,36 @@ export default function Beranda() {
         }
         @media (prefers-reduced-motion: reduce) {
           .cat-card-toko { animation: none; }
+        }
+        /* BARU: ikon dekoratif produk toko (ikan, kerang, pakaian, ATK) —
+           tersebar samar di area kosong kartu Area 7, berkedip bergantian
+           dengan warna berbeda per kategori produk. */
+        .cat-card-toko-deco {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          z-index: 1;
+          overflow: hidden;
+          border-radius: inherit;
+        }
+        .deco-icon {
+          position: absolute;
+          opacity: 0.18;
+          animation: decoKedip 2.4s ease-in-out infinite;
+        }
+        .deco-icon-ikan { top: 44px; right: 62px; color: #0EA5E9; animation-delay: 0s; }
+        .deco-icon-kerang { top: 92px; right: 22px; color: #06B6D4; animation-delay: 0.5s; }
+        .deco-icon-pakaian { bottom: 56px; right: 76px; color: #EC4899; animation-delay: 1s; }
+        .deco-icon-atk { bottom: 22px; right: 26px; color: #F59E0B; animation-delay: 1.5s; }
+        @keyframes decoKedip {
+          0%, 100% { opacity: 0.12; transform: scale(0.9); }
+          50%      { opacity: 0.5; transform: scale(1.08); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .deco-icon { animation: none; opacity: 0.22; }
+        }
+        @media (max-width: 560px) {
+          .cat-card-toko-deco { display: none; }
         }
         .cat-tag {
           display: inline-block;
