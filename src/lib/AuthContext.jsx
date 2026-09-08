@@ -482,6 +482,9 @@ export function AuthProvider({ children }) {
   const isOrangTua =
     profil?.role === 'orang_tua'
 
+  const isKepalaSekolah =
+    profil?.role === 'kepala_sekolah'
+
   return (
     <AuthContext.Provider
       value={{
@@ -503,6 +506,7 @@ export function AuthProvider({ children }) {
         isAdminUtama,
         isSuperAdmin,
         isOrangTua,
+        isKepalaSekolah,
 
         tambahAnak,
         getAnakSaya,
