@@ -253,8 +253,7 @@ export default function Cetak8355() {
           .lembar-cetak { box-shadow: none !important; margin: 0 !important; max-width: none !important; width: 100% !important; }
           body { background: white; }
           @page { size: A4 landscape; margin: 8mm; }
-          .lampiran { page-break-before: always; }
-          .lampiran:first-child { page-break-before: auto; }
+          .lampiran-break { page-break-before: always; }
         }
         .tabel-8355 th, .tabel-8355 td {
           border: 1px solid #0B1220;
@@ -312,14 +311,14 @@ export default function Cetak8355() {
       </div>
 
       {/* ---------------- LAMPIRAN 2 ---------------- */}
-      <div className="lampiran lembar-cetak max-w-[1200px] mx-auto bg-white shadow-lg p-6 mt-8 print:mt-0 text-sm text-ink-950">
+      <div className="lampiran lampiran-break lembar-cetak max-w-[1200px] mx-auto bg-white shadow-lg p-6 mt-8 print:mt-0 text-sm text-ink-950">
         <KopSurat />
         <Judul nomorLampiran={2} />
         <TabelLampiran kolom={LAMPIRAN_2_KOLOM} />
       </div>
 
       {/* ---------------- LAMPIRAN 3 ---------------- */}
-      <div className="lampiran lembar-cetak max-w-[1200px] mx-auto bg-white shadow-lg p-6 mt-8 print:mt-0 text-sm text-ink-950">
+      <div className="lampiran lampiran-break lembar-cetak max-w-[1200px] mx-auto bg-white shadow-lg p-6 mt-8 print:mt-0 text-sm text-ink-950">
         <KopSurat />
         <Judul nomorLampiran={3} />
         <TabelLampiran kolom={LAMPIRAN_3_KOLOM} />
