@@ -69,6 +69,7 @@ import { supabase } from '../lib/supabaseClient'
 function getGroupsAdmin(
   isAdminUtama,
   isSuperAdmin,
+  isKepalaSekolah,
   jumlahMenunggu = 0,
   jumlahPesanBelumDibaca = 0,
   jumlahPesanPusatBelumDibaca = 0,
@@ -188,12 +189,7 @@ function getGroupsAdmin(
         { to: '/hari-libur', label: 'Hari Libur', icon: CalendarOff },
         { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
         { to: '/backup', label: 'Backup Data', icon: DatabaseBackup },
-        // Manajemen Sekolah, Persetujuan Toko, Data Ujian 8355 & Cetak 8355
-        // hanya untuk superadmin.
-        // TAMBAHAN: "Data Ujian 8355" (isian field tambahan Kelas 6) dan
-        // "Cetak 8355" (cetak kolektif Daftar Calon Peserta Ujian) — sengaja
-        // dibatasi superadmin dulu, sama seperti item superadmin-only lain
-        // di grup ini.
+        // Manajemen Sekolah dan Persetujuan Toko hanya untuk superadmin.
         ...(isSuperAdmin
           ? [
               { to: '/manajemen-sekolah', label: 'Manajemen Sekolah', icon: Building2 },
@@ -203,6 +199,11 @@ function getGroupsAdmin(
                 icon: ShieldCheck,
                 badge: jumlahPengajuanTokoMenunggu,
               },
+            ]
+          : []),
+        // Data Ujian 8355 & Cetak 8355 dapat diakses superadmin dan kepala sekolah.
+        ...(isSuperAdmin || isKepalaSekolah
+          ? [
               { to: '/data-ujian-8355', label: 'Data Ujian 8355', icon: Table2 },
               { to: '/cetak-8355', label: 'Cetak 8355 (Kelas 6)', icon: Printer },
             ]
@@ -395,7 +396,7 @@ function getLinksOrangTua(jumlahPesanBelumDibaca = 0, sekolahId = null) {
 }
 
 export default function Sidebar({ open = false, onClose = () => {} }) {
-  const { signOut, session, profil, isAdmin, isAdminUtama, isSuperAdmin, isOrangTua, sekolahId } = useAuth()
+  const { signOut, session, profil, isAdmin, isAdminUtama, isSuperAdmin, isKepalaSekolah, isOrangTua, sekolahId } = useAuth()
   const navigate = useNavigate()
   const fotoUrl = getFotoUrl(profil?.foto_profil_path)
   const namaTampil = profil?.nama_lengkap || session?.user?.email || 'Pengguna'
@@ -663,6 +664,7 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
   const groupsAdmin = getGroupsAdmin(
     isAdminUtama,
     isSuperAdmin,
+    isKepalaSekolah,
     jumlahMenunggu,
     jumlahPesanBelumDibaca,
     jumlahPesanPusatBelumDibaca,
