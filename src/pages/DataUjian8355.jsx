@@ -24,7 +24,7 @@ const KOLOM_TAMBAHAN = [
 ]
 
 export default function DataUjian8355() {
-  const { profil, isSuperAdmin } = useAuth()
+  const { profil, isAdmin } = useAuth()
   const sekolahId = profil?.sekolah_id
 
   const [loading, setLoading] = useState(true)
@@ -33,10 +33,10 @@ export default function DataUjian8355() {
   const [tersimpanId, setTersimpanId] = useState(null)
 
   useEffect(() => {
-    if (isSuperAdmin) muatData()
+    if (isAdmin) muatData()
     else setLoading(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sekolahId, isSuperAdmin])
+  }, [sekolahId, isAdmin])
 
   async function muatData() {
     if (!sekolahId) {
@@ -81,11 +81,11 @@ export default function DataUjian8355() {
     }
   }
 
-  if (!isSuperAdmin) {
+  if (!isAdmin) {
     return (
       <Layout title="Data Ujian 8355" subtitle="Lengkapi data tambahan Kelas 6 untuk Formulir 8355">
         <div className="card p-6 text-center text-sm text-ink-700/60">
-          Halaman ini khusus untuk Superadmin.
+          Halaman ini khusus untuk Admin, Admin Utama, dan Superadmin.
         </div>
       </Layout>
     )
