@@ -410,17 +410,32 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
 
   return (
     <>
-      {/* Overlay gelap di belakang drawer — hanya tampil di HP saat menu dibuka */}
+      {/* Overlay gelap di belakang drawer — hanya tampil di HP saat menu dibuka.
+          Tambahan class "no-print": overlay ini position:fixed inset-0, kalau
+          sampai lolos ke kertas (mis. saat user print persis ketika drawer
+          kebetulan open state true) dia bisa menutupi seluruh halaman cetak
+          jadi gelap/kosong. */}
       {open && (
         <div
           onClick={onClose}
-          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[1px] md:hidden"
+          className="no-print fixed inset-0 z-40 bg-black/50 backdrop-blur-[1px] md:hidden"
           aria-hidden="true"
         />
       )}
 
+      {/* Tambahan class "no-print" di sini: dipasang LANGSUNG di elemen root
+          <aside>, bukan lewat wrapper <div> dari Layout.jsx — karena posisi
+          "fixed md:sticky top-0" pada elemen ini bergantung pada dia menjadi
+          flex-item langsung di dalam <div className="flex ..."> milik
+          Layout.jsx. Kalau dibungkus <div> tambahan, sticky/fixed-nya bisa
+          rusak di layar normal. Dengan class di sini, CSS global
+          `.no-print { display: none !important }` (lihat index.css) akan
+          menyembunyikan sidebar SEPENUHNYA dari layout saat print — bukan
+          cuma visibility:hidden — supaya tidak makan ruang horizontal dan
+          bikin lembar cetak Cetak8355.jsx / Kuitansi / Nota jadi sempit
+          atau kosong. */}
       <aside
-        className={`w-72 max-w-[85vw] md:w-64 shrink-0 bg-blue-950 text-white flex flex-col h-screen fixed md:sticky top-0 left-0 z-50 border-r border-blue-900/50 transition-transform duration-300 ease-out
+        className={`no-print w-72 max-w-[85vw] md:w-64 shrink-0 bg-blue-950 text-white flex flex-col h-screen fixed md:sticky top-0 left-0 z-50 border-r border-blue-900/50 transition-transform duration-300 ease-out
           ${open ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}
       >
       <div className="relative overflow-hidden px-4 py-5 border-b border-white/10 bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-900">
