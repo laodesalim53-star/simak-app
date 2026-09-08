@@ -31,42 +31,57 @@ function hitungUsia(tanggalLahir, tanggalAcuan) {
   return `${tahun} Th ${bulan} Bl`
 }
 
-const KOLOM = [
-  { key: 'no', label: 'No', w: 30 },
-  { key: 'kode_provinsi', label: 'Kode Provinsi', w: 60, dariSekolah: 'kode_provinsi_ujian' },
-  { key: 'kode_rayon', label: 'Kode Rayon', w: 60, dariSekolah: 'kode_rayon_ujian' },
-  { key: 'kode_sekolah', label: 'Kode Sekolah', w: 60, dariSekolah: 'kode_sekolah_ujian' },
-  { key: 'paralel', label: 'Paralel', w: 50 },
-  { key: 'no_absen', label: 'Absen', w: 40 },
-  { key: 'kode_peserta_ujian', label: 'Kode Peserta', w: 70 },
-  { key: 'cek_kode', label: 'Cek Kode', w: 55 },
-  { key: 'no_peserta_ujian', label: 'No Peserta', w: 70 },
-  { key: 'nisn', label: 'NISN', w: 80 },
-  { key: 'nis', label: 'NIS', w: 60 },
-  { key: 'nama_lengkap', label: 'Nama Peserta', w: 130 },
-  { key: 'tempat_lahir', label: 'Tempat Lahir', w: 80 },
-  { key: 'tanggal_lahir_fmt', label: 'Tanggal Lahir', w: 90 },
-  { key: 'jenis_kelamin', label: 'L/P', w: 30 },
-  { key: 'nama_ayah', label: 'Nama Ayah', w: 110 },
-  { key: 'alamat', label: 'Alamat 1', w: 130 },
-  { key: 'alamat_tinggal', label: 'Alamat 2', w: 130 },
-  { key: 'kode_pos', label: 'Kode Pos', w: 55 },
-  { key: 'mengulang_fmt', label: 'Ket Mengulang', w: 70 },
-  { key: 'no_peserta_mengulang', label: 'No Pst Mengulang', w: 80 },
-  { key: 'agama', label: 'Agama', w: 70 },
-  { key: 'pekerjaan_ayah', label: 'Pekerjaan Ayah', w: 90 },
-  { key: 'nama_ibu', label: 'Nama Ibu', w: 110 },
-  { key: 'pekerjaan_ibu', label: 'Pekerjaan Ibu', w: 90 },
-  { key: 'hobi_anak', label: 'Hobi Anak', w: 80 },
-  { key: 'cita_cita_anak', label: 'Cita-cita Anak', w: 80 },
-  { key: 'pendidikan_ayah', label: 'Pend. Ayah', w: 70 },
-  { key: 'pendidikan_ibu', label: 'Pend. Ibu', w: 70 },
-  { key: 'gaji_orang_tua', label: 'Gaji Ortu', w: 80 },
-  { key: 'jarak_rumah_sekolah', label: 'Jarak Rumah-Sklh', w: 80 },
-  { key: 'transportasi_ke_sekolah', label: 'Transportasi', w: 80 },
-  { key: 'jumlah_saudara', label: 'Jml Saudara', w: 55 },
-  { key: 'usia_fmt', label: 'Usia', w: 65 },
-  { key: 'no_skhun', label: 'No SKHUN', w: 80 },
+// ---------------------------------------------------------------------------
+// Formulir 8355 aslinya (lihat 8355_TEMPLATE.docx) terdiri dari 3 tabel
+// TERPISAH — masing-masing dicetak sebagai satu lembar/lampiran sendiri,
+// bukan digabung jadi satu tabel raksasa. Kalau digabung, kolomnya kepepet
+// jadi font super kecil dan sebagian kepotong (itu bug yang dilaporkan).
+// Definisi kolom di bawah ini persis mengikuti pembagian 3 tabel di template.
+// ---------------------------------------------------------------------------
+const LAMPIRAN_1_KOLOM = [
+  { key: 'no', label: 'No', w: 32 },
+  { key: 'kode_provinsi', label: 'Kode Provinsi', w: 85, dariSekolah: 'kode_provinsi_ujian' },
+  { key: 'kode_rayon', label: 'Kode Rayon', w: 85, dariSekolah: 'kode_rayon_ujian' },
+  { key: 'kode_sekolah', label: 'Kode Sekolah', w: 85, dariSekolah: 'kode_sekolah_ujian' },
+  { key: 'paralel', label: 'Paralel', w: 60 },
+  { key: 'no_absen', label: 'Absen', w: 55 },
+  { key: 'kode_peserta_ujian', label: 'Kode Peserta', w: 95 },
+  { key: 'cek_kode', label: 'Cek Kode Peserta', w: 90 },
+  { key: 'no_peserta_ujian', label: 'No Peserta', w: 95 },
+  { key: 'nisn', label: 'NISN', w: 100 },
+  { key: 'nis', label: 'NIS', w: 80 },
+  { key: 'nama_lengkap', label: 'Nama Peserta', w: 220 },
+  { key: 'tempat_lahir', label: 'Tempat Lahir', w: 120 },
+  { key: 'tanggal_lahir_fmt', label: 'Tanggal Lahir', w: 130 },
+]
+
+const LAMPIRAN_2_KOLOM = [
+  { key: 'no', label: 'No', w: 32 },
+  { key: 'tanggal_lahir_fmt', label: 'Tanggal Lahir', w: 130 },
+  { key: 'jenis_kelamin', label: 'L/P', w: 45 },
+  { key: 'nama_ayah', label: 'Nama Ayah', w: 200 },
+  { key: 'alamat', label: 'Alamat 1', w: 220 },
+  { key: 'alamat_tinggal', label: 'Alamat 2', w: 220 },
+  { key: 'kode_pos', label: 'Kode Pos', w: 80 },
+  { key: 'mengulang_fmt', label: 'Ket', w: 90 },
+  { key: 'no_peserta_mengulang', label: 'No Peserta Mengulang', w: 130 },
+  { key: 'agama', label: 'Agama', w: 100 },
+  { key: 'pekerjaan_ayah', label: 'Pekerjaan Ayah', w: 140 },
+]
+
+const LAMPIRAN_3_KOLOM = [
+  { key: 'nama_ibu', label: 'Nama Ibu', w: 200 },
+  { key: 'pekerjaan_ibu', label: 'Pekerjaan Ibu', w: 140 },
+  { key: 'hobi_anak', label: 'Hobi Anak', w: 130 },
+  { key: 'cita_cita_anak', label: 'Cita-cita Anak', w: 130 },
+  { key: 'pendidikan_ayah', label: 'Pendidikan Ayah', w: 110 },
+  { key: 'pendidikan_ibu', label: 'Pendidikan Ibu', w: 110 },
+  { key: 'gaji_orang_tua', label: 'Gaji Orang Tua', w: 130 },
+  { key: 'jarak_rumah_sekolah', label: 'Jarak Rumah-Sekolah', w: 130 },
+  { key: 'transportasi_ke_sekolah', label: 'Transportasi', w: 130 },
+  { key: 'jumlah_saudara', label: 'Jumlah Saudara', w: 90 },
+  { key: 'usia_fmt', label: 'Usia', w: 90 },
+  { key: 'no_skhun', label: 'No SKHUN', w: 120 },
 ]
 
 export default function Cetak8355() {
@@ -146,6 +161,82 @@ export default function Cetak8355() {
     return <div className="p-10 text-center text-ink-700/60">Akun ini tidak terhubung ke satu sekolah spesifik.</div>
   }
 
+  // Kop surat + info sekolah diulang di tiap lampiran (tiap lampiran = 1 halaman cetak sendiri)
+  function KopSurat() {
+    return (
+      <>
+        <div className="flex items-center gap-4 mb-2">
+          <div className="w-16 h-16 shrink-0 flex items-center justify-center">
+            {logoUrl && <img src={logoUrl} alt="Logo sekolah" className="w-full h-full object-contain" />}
+          </div>
+          <div className="text-center flex-1">
+            {sekolah?.kabupaten && <p className="font-display font-bold uppercase text-xs">{sekolah.kabupaten}</p>}
+            {sekolah?.dinas_pendidikan && <p className="font-display font-bold uppercase text-xs">{sekolah.dinas_pendidikan}</p>}
+            <h1 className="font-display text-lg font-bold uppercase">{sekolah?.nama_sekolah || 'Nama Sekolah'}</h1>
+            {sekolah?.kecamatan && <p className="font-display font-bold uppercase text-[11px]">{sekolah.kecamatan}</p>}
+          </div>
+          <div className="w-16 shrink-0" />
+        </div>
+        <div className="border-t-4 border-double border-ink-950 mb-0.5" />
+        <div className="border-t border-ink-950 mb-3" />
+
+        <div className="grid grid-cols-2 gap-x-8 gap-y-0.5 text-xs mb-4">
+          <p><span className="text-ink-700/60">Nama Sekolah</span> : {sekolah?.nama_sekolah || '-'}</p>
+          <p><span className="text-ink-700/60">NPSN</span> : {sekolah?.npsn || '-'}</p>
+          <p><span className="text-ink-700/60">Status Sekolah</span> : {statusSekolah || '-'}</p>
+          <p><span className="text-ink-700/60">Alamat Sekolah</span> : {sekolah?.alamat || '-'}</p>
+          <p><span className="text-ink-700/60">Kecamatan</span> : {sekolah?.kecamatan || '-'}</p>
+          <p><span className="text-ink-700/60">Kabupaten</span> : {sekolah?.kabupaten || '-'}</p>
+          <p><span className="text-ink-700/60">Provinsi</span> : {sekolah?.provinsi || '-'}</p>
+        </div>
+      </>
+    )
+  }
+
+  function Judul({ nomorLampiran }) {
+    return (
+      <>
+        <h2 className="text-center font-display font-bold text-base uppercase mb-0.5">
+          Daftar Calon Peserta Ujian (8355)
+        </h2>
+        <p className="text-center text-xs text-ink-700/60 mb-1">
+          Kelas 6 · Tahun Pelajaran {tahunPelajaran || '.......................'}
+        </p>
+        <p className="text-center text-xs font-semibold uppercase mb-3">Lampiran {nomorLampiran}</p>
+      </>
+    )
+  }
+
+  function TabelLampiran({ kolom }) {
+    return (
+      <table className="tabel-8355 w-full border-collapse mb-6">
+        <thead>
+          <tr>
+            {kolom.map((k) => (
+              <th key={k.key} style={{ minWidth: k.w }}>{k.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {siswaList.map((s) => (
+            <tr key={s.id}>
+              {kolom.map((k) => (
+                <td key={k.key}>{nilaiSel(s, k)}</td>
+              ))}
+            </tr>
+          ))}
+          {siswaList.length === 0 && (
+            <tr>
+              <td colSpan={kolom.length} className="text-center py-3 text-ink-700/50">
+                Belum ada siswa Kelas 6.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-ink-950/5 py-8 print:bg-white print:py-0">
       <style>{`
@@ -154,12 +245,17 @@ export default function Cetak8355() {
           .lembar-cetak { box-shadow: none !important; margin: 0 !important; }
           body { background: white; }
           @page { size: A4 landscape; margin: 8mm; }
+          .lampiran { page-break-before: always; }
+          .lampiran:first-child { page-break-before: auto; }
         }
         .tabel-8355 th, .tabel-8355 td {
           border: 1px solid #0B1220;
-          padding: 2px 3px;
-          font-size: 8.5px;
-          line-height: 1.2;
+          padding: 3px 4px;
+          font-size: 10.5px;
+          line-height: 1.3;
+        }
+        .tabel-8355 th {
+          background: #f1f0ea;
         }
       `}</style>
 
@@ -198,68 +294,27 @@ export default function Cetak8355() {
         </button>
       </div>
 
-      <div className="lembar-cetak max-w-[1200px] mx-auto bg-white shadow-lg p-6 text-sm text-ink-950">
-        {/* ---------------- KOP SURAT ---------------- */}
-        <div className="flex items-center gap-4 mb-2">
-          <div className="w-16 h-16 shrink-0 flex items-center justify-center">
-            {logoUrl && <img src={logoUrl} alt="Logo sekolah" className="w-full h-full object-contain" />}
-          </div>
-          <div className="text-center flex-1">
-            {sekolah?.kabupaten && <p className="font-display font-bold uppercase text-xs">{sekolah.kabupaten}</p>}
-            {sekolah?.dinas_pendidikan && <p className="font-display font-bold uppercase text-xs">{sekolah.dinas_pendidikan}</p>}
-            <h1 className="font-display text-lg font-bold uppercase">{sekolah?.nama_sekolah || 'Nama Sekolah'}</h1>
-            {sekolah?.kecamatan && <p className="font-display font-bold uppercase text-[11px]">{sekolah.kecamatan}</p>}
-          </div>
-          <div className="w-16 shrink-0" />
-        </div>
-        <div className="border-t-4 border-double border-ink-950 mb-0.5" />
-        <div className="border-t border-ink-950 mb-3" />
+      {/* ---------------- LAMPIRAN 1 ---------------- */}
+      <div className="lampiran lembar-cetak max-w-[1200px] mx-auto bg-white shadow-lg p-6 text-sm text-ink-950">
+        <KopSurat />
+        <Judul nomorLampiran={1} />
+        <TabelLampiran kolom={LAMPIRAN_1_KOLOM} />
+      </div>
 
-        <div className="grid grid-cols-2 gap-x-8 gap-y-0.5 text-xs mb-4">
-          <p><span className="text-ink-700/60">Nama Sekolah</span> : {sekolah?.nama_sekolah || '-'}</p>
-          <p><span className="text-ink-700/60">NPSN</span> : {sekolah?.npsn || '-'}</p>
-          <p><span className="text-ink-700/60">Status Sekolah</span> : {statusSekolah || '-'}</p>
-          <p><span className="text-ink-700/60">Alamat Sekolah</span> : {sekolah?.alamat || '-'}</p>
-          <p><span className="text-ink-700/60">Kecamatan</span> : {sekolah?.kecamatan || '-'}</p>
-          <p><span className="text-ink-700/60">Kabupaten</span> : {sekolah?.kabupaten || '-'}</p>
-          <p><span className="text-ink-700/60">Provinsi</span> : {sekolah?.provinsi || '-'}</p>
-        </div>
+      {/* ---------------- LAMPIRAN 2 ---------------- */}
+      <div className="lampiran lembar-cetak max-w-[1200px] mx-auto bg-white shadow-lg p-6 mt-8 print:mt-0 text-sm text-ink-950">
+        <KopSurat />
+        <Judul nomorLampiran={2} />
+        <TabelLampiran kolom={LAMPIRAN_2_KOLOM} />
+      </div>
 
-        <h2 className="text-center font-display font-bold text-base uppercase mb-1">
-          Daftar Calon Peserta Ujian (8355)
-        </h2>
-        <p className="text-center text-xs text-ink-700/60 mb-3">
-          Kelas 6 · Tahun Pelajaran {tahunPelajaran || '.......................'}
-        </p>
+      {/* ---------------- LAMPIRAN 3 ---------------- */}
+      <div className="lampiran lembar-cetak max-w-[1200px] mx-auto bg-white shadow-lg p-6 mt-8 print:mt-0 text-sm text-ink-950">
+        <KopSurat />
+        <Judul nomorLampiran={3} />
+        <TabelLampiran kolom={LAMPIRAN_3_KOLOM} />
 
-        {/* ---------------- TABEL DATA ---------------- */}
-        <table className="tabel-8355 w-full border-collapse mb-6">
-          <thead>
-            <tr>
-              {KOLOM.map((k) => (
-                <th key={k.key} style={{ minWidth: k.w }}>{k.label}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {siswaList.map((s) => (
-              <tr key={s.id}>
-                {KOLOM.map((k) => (
-                  <td key={k.key}>{nilaiSel(s, k)}</td>
-                ))}
-              </tr>
-            ))}
-            {siswaList.length === 0 && (
-              <tr>
-                <td colSpan={KOLOM.length} className="text-center py-3 text-ink-700/50">
-                  Belum ada siswa Kelas 6.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-
-        {/* ---------------- TANDA TANGAN ---------------- */}
+        {/* ---------------- TANDA TANGAN (hanya di lampiran terakhir) ---------------- */}
         <div className="flex justify-end mt-8 text-xs">
           <div className="text-center">
             <p>
