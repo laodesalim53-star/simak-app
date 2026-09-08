@@ -88,8 +88,17 @@ function getGroupsAdmin(
         // Chat dua arah dengan Superadmin ("Admin Pusat") — khusus admin-tier,
         // guru tidak pernah melihat menu ini karena guru pakai getLinksGuru().
         { to: '/pesan-pusat', label: 'Admin Pusat', icon: Building2, badge: jumlahPesanPusatBelumDibaca },
-        // Live Chat: percakapan real-time dengan pengunjung publik di Beranda.
-        { to: '/live-chat', label: 'Live Chat', icon: MessagesSquare, badge: jumlahLiveChatBelumDibaca },
+        // PERBAIKAN: "Live Chat" (percakapan dengan pengunjung publik di
+        // Beranda) sebelumnya tampil untuk SEMUA admin-tier (admin,
+        // admin_utama, superadmin, kepala_sekolah), padahal tabel
+        // live_chat_pesan adalah satu kotak masuk GLOBAL milik superadmin
+        // (tidak ada kolom sekolah_id, RLS di Supabase juga sudah dikunci
+        // hanya untuk role 'superadmin'). Menu ini sekarang disembunyikan
+        // untuk admin sekolah, sama seperti pola item superadmin-only lain
+        // di bawah (Manajemen Sekolah, Persetujuan Toko, Pencairan Dana).
+        ...(isSuperAdmin
+          ? [{ to: '/live-chat', label: 'Live Chat', icon: MessagesSquare, badge: jumlahLiveChatBelumDibaca }]
+          : []),
         { to: '/toko', label: 'Toko', icon: Store },
         { to: '/riwayat-pesanan', label: 'Riwayat Pesanan', icon: Receipt },
         { to: '/pesanan-masuk', label: 'Pesanan Masuk (Toko)', icon: Inbox },
@@ -467,7 +476,7 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
   // Notifikasi real-time: jumlah pesanan yang sudah siap dicairkan tapi
   // belum ditransfer ke penjual. Hanya relevan untuk superadmin (satu-
   // satunya yang punya menu "Pencairan Dana" dan boleh memanggil RPC
-  // fn_cairkan_pesanan / fn_tahan_pencairan).
+  // fn_cairkan_pesanan / fn_tahan_pencairan.
   const [jumlahSiapDicairkan, setJumlahSiapDicairkan] = useState(0)
 
   useEffect(() => {
@@ -594,13 +603,16 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
   }, [session?.user?.id, isAdmin, isSuperAdmin, sekolahId])
 
   // Notifikasi real-time: jumlah pesan Live Chat dari pengunjung publik yang
-  // belum dibaca admin. Asumsi: kolom `pengirim` pada live_chat_pesan berisi
-  // 'pengunjung' untuk pesan dari pengunjung dan 'admin' untuk balasan admin
-  // — sesuaikan nilai string ini kalau berbeda di AdminLiveChat.jsx Anda.
+  // belum dibaca admin.
+  // PERBAIKAN: sebelumnya syaratnya "isAdmin" (mencakup admin sekolah biasa),
+  // padahal Live Chat sekarang khusus superadmin (lihat catatan di
+  // getGroupsAdmin di atas dan RLS live_chat_pesan di Supabase). Disamakan
+  // jadi "isSuperAdmin" supaya admin sekolah tidak lagi query tabel ini sama
+  // sekali dari Sidebar, dan tidak subscribe ke channel real-time-nya.
   const [jumlahLiveChatBelumDibaca, setJumlahLiveChatBelumDibaca] = useState(0)
 
   useEffect(() => {
-    if (!isAdmin) {
+    if (!isSuperAdmin) {
       setJumlahLiveChatBelumDibaca(0)
       return
     }
@@ -629,7 +641,7 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
       aktif = false
       supabase.removeChannel(channel)
     }
-  }, [isAdmin])
+  }, [isSuperAdmin])
 
   const groupsAdmin = getGroupsAdmin(
     isAdminUtama,
