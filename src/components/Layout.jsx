@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { Bell, MessageSquare, X, Menu, Store, Receipt } from 'lucide-react'
+import { Bell, MessageSquare, X, Menu, Store } from 'lucide-react'
 import Sidebar from './Sidebar'
 import { useAuth } from '../lib/AuthContext'
 import { usePresenceTracker } from '../hooks/usePresenceTracker'
@@ -204,7 +204,15 @@ export default function Layout({ children, title, subtitle, actions }) {
     <div className="flex min-h-screen bg-slate-50">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <main className="flex-1 min-w-0 w-full">
-        <header className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-slate-200 px-4 sm:px-6 md:px-8 py-3.5 md:py-5 flex items-center justify-between gap-3">
+        {/* class "no-print" ditambahkan di header: header ini "sticky top-0"
+            dan tetap ada di DOM saat halaman cetak (mis. Cetak8355.jsx,
+            Kuitansi, Nota) dirender di dalam {children} — kalau cuma
+            disembunyikan lewat visibility:hidden (dari aturan body * di
+            index.css), header ini TETAP MAKAN RUANG di layout print dan
+            bikin lembar cetak jadi sempit / salah posisi. display:none dari
+            .no-print benar-benar mengeluarkannya dari alur halaman saat
+            print. */}
+        <header className="no-print sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-slate-200 px-4 sm:px-6 md:px-8 py-3.5 md:py-5 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
               onClick={() => setSidebarOpen(true)}
@@ -230,23 +238,25 @@ export default function Layout({ children, title, subtitle, actions }) {
               <span className="hidden sm:inline">Toko</span>
             </Link>
 
-            {/* Tombol Riwayat Pesanan — akses cepat ke daftar transaksi pembeli,
-                ditaruh di sebelah tombol Toko supaya gampang ditemukan. */}
-            <Link
-              to="/riwayat-pesanan"
-              title="Riwayat Pesanan"
-              className="flex items-center gap-2 px-3 h-10 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
-            >
-              <Receipt size={18} strokeWidth={2} />
-              <span className="hidden sm:inline">Riwayat Pesanan</span>
-            </Link>
-
             <NotificationBell />
             {actions && <div className="flex items-center gap-2 sm:gap-3">{actions}</div>}
           </div>
         </header>
-        <PesanAdminBanner />
-        <div className="px-4 sm:px-6 md:px-8 py-5 md:py-7">{children}</div>
+
+        {/* Dibungkus div "no-print" karena PesanAdminBanner tidak punya
+            elemen root sendiri yang bisa ditempeli className langsung dari
+            sini tanpa mengubah komponennya — pembungkus div ini aman
+            (bukan flex-item ber-posisi khusus seperti Sidebar/header). */}
+        <div className="no-print">
+          <PesanAdminBanner />
+        </div>
+
+        {/* Tambahan "print:p-0": padding px-4/md:px-8 py-5/md:py-7 di sini
+            tetap ada di DOM saat halaman cetak (Cetak8355.jsx dkk) dirender
+            sebagai {children} — kalau tidak di-nol-kan saat print, dia
+            mengurangi lebar efektif kertas A4 yang tersedia untuk konten
+            cetak. */}
+        <div className="px-4 sm:px-6 md:px-8 py-5 md:py-7 print:p-0">{children}</div>
       </main>
     </div>
   )
