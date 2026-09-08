@@ -38,50 +38,53 @@ function hitungUsia(tanggalLahir, tanggalAcuan) {
 // jadi font super kecil dan sebagian kepotong (itu bug yang dilaporkan).
 // Definisi kolom di bawah ini persis mengikuti pembagian 3 tabel di template.
 // ---------------------------------------------------------------------------
+// `w` di sini adalah PERSENTASE lebar (bukan px) — dipakai lewat <colgroup>
+// dengan table-layout: fixed, supaya tabel selalu pas dengan lebar kertas
+// A4 landscape berapa pun jumlah kolomnya, tidak melebar/kepotong.
 const LAMPIRAN_1_KOLOM = [
-  { key: 'no', label: 'No', w: 32 },
-  { key: 'kode_provinsi', label: 'Kode Provinsi', w: 85, dariSekolah: 'kode_provinsi_ujian' },
-  { key: 'kode_rayon', label: 'Kode Rayon', w: 85, dariSekolah: 'kode_rayon_ujian' },
-  { key: 'kode_sekolah', label: 'Kode Sekolah', w: 85, dariSekolah: 'kode_sekolah_ujian' },
-  { key: 'paralel', label: 'Paralel', w: 60 },
-  { key: 'no_absen', label: 'Absen', w: 55 },
-  { key: 'kode_peserta_ujian', label: 'Kode Peserta', w: 95 },
-  { key: 'cek_kode', label: 'Cek Kode Peserta', w: 90 },
-  { key: 'no_peserta_ujian', label: 'No Peserta', w: 95 },
-  { key: 'nisn', label: 'NISN', w: 100 },
-  { key: 'nis', label: 'NIS', w: 80 },
-  { key: 'nama_lengkap', label: 'Nama Peserta', w: 220 },
-  { key: 'tempat_lahir', label: 'Tempat Lahir', w: 120 },
-  { key: 'tanggal_lahir_fmt', label: 'Tanggal Lahir', w: 130 },
+  { key: 'no', label: 'No', w: 3 },
+  { key: 'kode_provinsi', label: 'Kode Provinsi', w: 6, dariSekolah: 'kode_provinsi_ujian' },
+  { key: 'kode_rayon', label: 'Kode Rayon', w: 6, dariSekolah: 'kode_rayon_ujian' },
+  { key: 'kode_sekolah', label: 'Kode Sekolah', w: 6, dariSekolah: 'kode_sekolah_ujian' },
+  { key: 'paralel', label: 'Paralel', w: 5 },
+  { key: 'no_absen', label: 'Absen', w: 5 },
+  { key: 'kode_peserta_ujian', label: 'Kode Peserta', w: 7 },
+  { key: 'cek_kode', label: 'Cek Kode Peserta', w: 7 },
+  { key: 'no_peserta_ujian', label: 'No Peserta', w: 7 },
+  { key: 'nisn', label: 'NISN', w: 8 },
+  { key: 'nis', label: 'NIS', w: 5 },
+  { key: 'nama_lengkap', label: 'Nama Peserta', w: 16 },
+  { key: 'tempat_lahir', label: 'Tempat Lahir', w: 8 },
+  { key: 'tanggal_lahir_fmt', label: 'Tanggal Lahir', w: 11 },
 ]
 
 const LAMPIRAN_2_KOLOM = [
-  { key: 'no', label: 'No', w: 32 },
-  { key: 'tanggal_lahir_fmt', label: 'Tanggal Lahir', w: 130 },
-  { key: 'jenis_kelamin', label: 'L/P', w: 45 },
-  { key: 'nama_ayah', label: 'Nama Ayah', w: 200 },
-  { key: 'alamat', label: 'Alamat 1', w: 220 },
-  { key: 'alamat_tinggal', label: 'Alamat 2', w: 220 },
-  { key: 'kode_pos', label: 'Kode Pos', w: 80 },
-  { key: 'mengulang_fmt', label: 'Ket', w: 90 },
-  { key: 'no_peserta_mengulang', label: 'No Peserta Mengulang', w: 130 },
-  { key: 'agama', label: 'Agama', w: 100 },
-  { key: 'pekerjaan_ayah', label: 'Pekerjaan Ayah', w: 140 },
+  { key: 'no', label: 'No', w: 4 },
+  { key: 'tanggal_lahir_fmt', label: 'Tanggal Lahir', w: 9 },
+  { key: 'jenis_kelamin', label: 'L/P', w: 4 },
+  { key: 'nama_ayah', label: 'Nama Ayah', w: 15 },
+  { key: 'alamat', label: 'Alamat 1', w: 17 },
+  { key: 'alamat_tinggal', label: 'Alamat 2', w: 17 },
+  { key: 'kode_pos', label: 'Kode Pos', w: 6 },
+  { key: 'mengulang_fmt', label: 'Ket', w: 7 },
+  { key: 'no_peserta_mengulang', label: 'No Peserta Mengulang', w: 9 },
+  { key: 'agama', label: 'Agama', w: 5 },
+  { key: 'pekerjaan_ayah', label: 'Pekerjaan Ayah', w: 7 },
 ]
 
 const LAMPIRAN_3_KOLOM = [
-  { key: 'nama_ibu', label: 'Nama Ibu', w: 200 },
-  { key: 'pekerjaan_ibu', label: 'Pekerjaan Ibu', w: 140 },
-  { key: 'hobi_anak', label: 'Hobi Anak', w: 130 },
-  { key: 'cita_cita_anak', label: 'Cita-cita Anak', w: 130 },
-  { key: 'pendidikan_ayah', label: 'Pendidikan Ayah', w: 110 },
-  { key: 'pendidikan_ibu', label: 'Pendidikan Ibu', w: 110 },
-  { key: 'gaji_orang_tua', label: 'Gaji Orang Tua', w: 130 },
-  { key: 'jarak_rumah_sekolah', label: 'Jarak Rumah-Sekolah', w: 130 },
-  { key: 'transportasi_ke_sekolah', label: 'Transportasi', w: 130 },
-  { key: 'jumlah_saudara', label: 'Jumlah Saudara', w: 90 },
-  { key: 'usia_fmt', label: 'Usia', w: 90 },
-  { key: 'no_skhun', label: 'No SKHUN', w: 120 },
+  { key: 'nama_ibu', label: 'Nama Ibu', w: 14 },
+  { key: 'pekerjaan_ibu', label: 'Pekerjaan Ibu', w: 9 },
+  { key: 'hobi_anak', label: 'Hobi Anak', w: 8 },
+  { key: 'cita_cita_anak', label: 'Cita-cita Anak', w: 8 },
+  { key: 'pendidikan_ayah', label: 'Pendidikan Ayah', w: 8 },
+  { key: 'pendidikan_ibu', label: 'Pendidikan Ibu', w: 8 },
+  { key: 'gaji_orang_tua', label: 'Gaji Orang Tua', w: 9 },
+  { key: 'jarak_rumah_sekolah', label: 'Jarak Rumah-Sekolah', w: 9 },
+  { key: 'transportasi_ke_sekolah', label: 'Transportasi', w: 9 },
+  { key: 'jumlah_saudara', label: 'Jumlah Saudara', w: 6 },
+  { key: 'usia_fmt', label: 'Usia', w: 6 },
+  { key: 'no_skhun', label: 'No SKHUN', w: 6 },
 ]
 
 export default function Cetak8355() {
@@ -209,11 +212,16 @@ export default function Cetak8355() {
 
   function TabelLampiran({ kolom }) {
     return (
-      <table className="tabel-8355 w-full border-collapse mb-6">
+      <table className="tabel-8355 w-full border-collapse mb-6" style={{ tableLayout: 'fixed' }}>
+        <colgroup>
+          {kolom.map((k) => (
+            <col key={k.key} style={{ width: `${k.w}%` }} />
+          ))}
+        </colgroup>
         <thead>
           <tr>
             {kolom.map((k) => (
-              <th key={k.key} style={{ minWidth: k.w }}>{k.label}</th>
+              <th key={k.key}>{k.label}</th>
             ))}
           </tr>
         </thead>
@@ -242,7 +250,7 @@ export default function Cetak8355() {
       <style>{`
         @media print {
           .no-print { display: none !important; }
-          .lembar-cetak { box-shadow: none !important; margin: 0 !important; }
+          .lembar-cetak { box-shadow: none !important; margin: 0 !important; max-width: none !important; width: 100% !important; }
           body { background: white; }
           @page { size: A4 landscape; margin: 8mm; }
           .lampiran { page-break-before: always; }
@@ -253,6 +261,8 @@ export default function Cetak8355() {
           padding: 3px 4px;
           font-size: 10.5px;
           line-height: 1.3;
+          word-break: break-word;
+          overflow-wrap: break-word;
         }
         .tabel-8355 th {
           background: #f1f0ea;
