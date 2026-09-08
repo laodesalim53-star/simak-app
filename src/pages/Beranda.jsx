@@ -241,6 +241,14 @@ export default function Beranda() {
                   <LogIn size={15} strokeWidth={2.5} />
                   Sudah punya akun? Masuk
                 </Link>
+                {/* BARU: link ke Toko Sekolah — sengaja pakai <Link> biasa
+                    (bukan tombol instal/daftar) supaya pengunjung publik bisa
+                    langsung lihat-lihat toko TANPA perlu login/daftar dulu.
+                    Route "/toko" memang sudah publik di App.jsx. */}
+                <Link to="/toko" className="toko-pill">
+                  <ShoppingBag size={16} strokeWidth={2.5} />
+                  Lihat Toko Sekolah
+                </Link>
                 <a href="/simak-app.apk" download className="install-pill">
                   <Download size={16} strokeWidth={2.5} />
                   Instal untuk Android
@@ -334,11 +342,18 @@ export default function Beranda() {
               <p className="tile-label">Area 6</p>
               <p className="tile-name">Portal Orang Tua</p>
             </div>
-            <div className="tile" style={{ background: 'linear-gradient(135deg,#0EA5E9,#0284C7)' }}>
+            {/* BARU: tile Area 7 (Toko Sekolah) dijadikan <Link> langsung ke
+                /toko — dulunya cuma <div> dekoratif, sekarang jadi tautan
+                yang bisa diklik pengunjung untuk lihat-lihat toko. */}
+            <Link
+              to="/toko"
+              className="tile tile-link"
+              style={{ background: 'linear-gradient(135deg,#0EA5E9,#0284C7)' }}
+            >
               <div className="tile-icon"><ShoppingBag size={15} strokeWidth={2.4} /></div>
               <p className="tile-label">Area 7</p>
               <p className="tile-name">Toko Sekolah</p>
-            </div>
+            </Link>
             </div>
 
             <div className="cat-section">
@@ -413,7 +428,10 @@ export default function Beranda() {
               </ul>
             </div>
 
-            <div className="cat-card wide">
+            {/* BARU: kartu Area 7 (Toko Sekolah) dijadikan <Link> langsung ke
+                /toko juga — dulunya <div> biasa, sekarang bisa diklik dari
+                mana pun teksnya untuk membuka Toko tanpa perlu login. */}
+            <Link to="/toko" className="cat-card wide cat-card-link">
               <span className="cat-tag" style={{ background: '#0284C7' }}>Area 7 — fitur unggulan</span>
               <h2 className="cat-title"><ShoppingBag size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#0284C7' }} />Toko sekolah</h2>
               <ul className="cat-list" style={{ '--accent': '#0284C7' }}>
@@ -421,7 +439,11 @@ export default function Beranda() {
                 <li>Keranjang, checkout &amp; riwayat pesanan</li>
                 <li>Kelola pesanan masuk &amp; pencairan dana untuk penjual</li>
               </ul>
-            </div>
+              <span className="cat-card-link-cta">
+                Buka Toko Sekolah
+                <ArrowRight size={14} strokeWidth={2.5} />
+              </span>
+            </Link>
 
             </div>
           </div>
@@ -783,6 +805,25 @@ export default function Beranda() {
           text-decoration: none;
           border: 1px solid rgba(255,255,255,0.18);
           animation: kedipTeks 1.6s ease-in-out infinite;
+        }
+        /* BARU: tombol "Lihat Toko Sekolah" — warna biru langit (senada
+           dengan tile & cat-card Area 7 "Toko Sekolah" di bawah) supaya
+           konsisten sebagai identitas warna fitur Toko di seluruh halaman. */
+        .toko-pill {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          background: linear-gradient(135deg, #0EA5E9, #0284C7);
+          color: #fff;
+          font-weight: 700;
+          font-size: 14px;
+          padding: 13px 22px;
+          min-height: 44px;
+          border-radius: 999px;
+          white-space: nowrap;
+          text-decoration: none;
+          box-shadow: 0 10px 24px rgba(2, 132, 199, 0.35);
         }
         .install-pill {
           display: inline-flex;
@@ -1300,6 +1341,14 @@ export default function Beranda() {
           transform-style: preserve-3d;
           animation: tileGoyangPelan 3.6s ease-in-out infinite;
         }
+        /* BARU: tile Area 7 sekarang <Link> — pastikan gaya link default
+           (underline, warna ungu kunjungan, dsb) tidak ikut tampil supaya
+           terlihat identik dengan 6 tile lain yang masih <div>. */
+        .tile-link {
+          text-decoration: none;
+          display: block;
+          cursor: pointer;
+        }
         /* Jeda berbeda tiap kartu supaya tidak bergoyang bersamaan */
         .tile:nth-child(1) { animation-delay: 0s; }
         .tile:nth-child(2) { animation-delay: 0.3s; }
@@ -1343,6 +1392,29 @@ export default function Beranda() {
           box-shadow: 0 6px 18px rgba(23, 26, 46, 0.06);
         }
         .cat-card.wide { grid-column: span 2; }
+        /* BARU: kartu Area 7 sekarang <Link> — reset gaya link default,
+           tambahkan hover halus, dan siapkan tempat untuk teks CTA
+           "Buka Toko Sekolah" di bagian bawah kartu. */
+        .cat-card-link {
+          display: block;
+          text-decoration: none;
+          color: inherit;
+          cursor: pointer;
+          transition: box-shadow 0.15s ease, transform 0.15s ease;
+        }
+        .cat-card-link:hover {
+          box-shadow: 0 10px 26px rgba(2, 132, 199, 0.18);
+          transform: translateY(-2px);
+        }
+        .cat-card-link-cta {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          margin-top: 12px;
+          font-size: 12.5px;
+          font-weight: 700;
+          color: #0284C7;
+        }
         .cat-tag {
           display: inline-block;
           font-size: 11px;
@@ -1433,7 +1505,7 @@ export default function Beranda() {
           .cat-section { grid-template-columns: 1fr; padding: 14px 16px 24px; gap: 12px; }
           .cat-card.wide { grid-column: span 1; }
           .header-actions { flex-direction: column; align-items: stretch; gap: 10px; }
-          .promo-pill, .login-link, .install-pill { justify-content: center; width: 100%; }
+          .promo-pill, .login-link, .install-pill, .toko-pill { justify-content: center; width: 100%; }
           .aru-banner { margin: 14px 16px 0; }
           .aru-text { font-size: 14px; }
           .meet-join { margin: 12px 16px 0; padding: 12px; flex-direction: column; align-items: stretch; }
