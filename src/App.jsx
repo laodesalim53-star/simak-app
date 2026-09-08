@@ -258,9 +258,17 @@ export default function App() {
         <Route path="/dokumen" element={<ProtectedRoute><Dokumen /></ProtectedRoute>} />
         <Route path="/pesan" element={<ProtectedRoute><Pesan /></ProtectedRoute>} />
         <Route path="/pesan-pusat" element={<ProtectedRoute adminOnly><PesanPusat /></ProtectedRoute>} />
-        {/* Live Chat: percakapan real-time dengan pengunjung publik di Beranda,
-            dikelola admin sekolah — sama pola dengan /pesan-pusat. */}
-        <Route path="/live-chat" element={<ProtectedRoute adminOnly><AdminLiveChat /></ProtectedRoute>} />
+        {/* Live Chat: percakapan real-time dengan pengunjung publik di Beranda.
+            PERBAIKAN: sebelumnya "adminOnly" (mencakup admin, admin_utama,
+            superadmin, kepala_sekolah), padahal tabel live_chat_pesan adalah
+            satu kotak masuk GLOBAL tanpa kolom sekolah_id — bukan per sekolah.
+            Akibatnya semua admin sekolah bisa melihat & membalas percakapan
+            milik sekolah lain juga. RLS di Supabase sudah dikunci hanya untuk
+            role 'superadmin' (lihat policy SELECT/INSERT/UPDATE di
+            live_chat_pesan) — route di sini disamakan jadi superAdminOnly
+            supaya admin sekolah tidak diarahkan ke halaman yang datanya
+            memang tidak boleh mereka akses. */}
+        <Route path="/live-chat" element={<ProtectedRoute superAdminOnly><AdminLiveChat /></ProtectedRoute>} />
         {/* Scan Dokumen: OCR upload/foto dokumen jadi teks yang bisa diunduh sebagai
             Word/txt. Sengaja BUKAN adminOnly — guru juga butuh fitur ini. */}
         <Route path="/scan-dokumen" element={<ProtectedRoute><ScanDokumen /></ProtectedRoute>} />
