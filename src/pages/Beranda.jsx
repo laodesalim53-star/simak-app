@@ -344,12 +344,16 @@ export default function Beranda() {
             </div>
             {/* BARU: tile Area 7 (Toko Sekolah) dijadikan <Link> langsung ke
                 /toko — dulunya cuma <div> dekoratif, sekarang jadi tautan
-                yang bisa diklik pengunjung untuk lihat-lihat toko. */}
+                yang bisa diklik pengunjung untuk lihat-lihat toko.
+                DIPERBARUI: ditambahkan class "tile-toko" (glow pulsatif
+                biru, beda ritme dari goyangan tile lain) dan badge
+                "Tanpa Login" untuk menonjolkan fitur ini dari 6 tile lain. */}
             <Link
               to="/toko"
-              className="tile tile-link"
+              className="tile tile-link tile-toko"
               style={{ background: 'linear-gradient(135deg,#0EA5E9,#0284C7)' }}
             >
+              <span className="tile-toko-badge">Tanpa Login</span>
               <div className="tile-icon"><ShoppingBag size={15} strokeWidth={2.4} /></div>
               <p className="tile-label">Area 7</p>
               <p className="tile-name">Toko Sekolah</p>
@@ -430,8 +434,12 @@ export default function Beranda() {
 
             {/* BARU: kartu Area 7 (Toko Sekolah) dijadikan <Link> langsung ke
                 /toko juga — dulunya <div> biasa, sekarang bisa diklik dari
-                mana pun teksnya untuk membuka Toko tanpa perlu login. */}
-            <Link to="/toko" className="cat-card wide cat-card-link">
+                mana pun teksnya untuk membuka Toko tanpa perlu login.
+                DIPERBARUI: ditambahkan class "cat-card-toko" (border +
+                glow pulsatif biru) dan badge "Tanpa Login" di pojok kartu,
+                plus panah CTA yang meluncur saat di-hover. */}
+            <Link to="/toko" className="cat-card wide cat-card-link cat-card-toko">
+              <span className="cat-card-toko-badge">Tanpa Login</span>
               <span className="cat-tag" style={{ background: '#0284C7' }}>Area 7 — fitur unggulan</span>
               <h2 className="cat-title"><ShoppingBag size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#0284C7' }} />Toko sekolah</h2>
               <ul className="cat-list" style={{ '--accent': '#0284C7' }}>
@@ -441,7 +449,7 @@ export default function Beranda() {
               </ul>
               <span className="cat-card-link-cta">
                 Buka Toko Sekolah
-                <ArrowRight size={14} strokeWidth={2.5} />
+                <ArrowRight size={14} strokeWidth={2.5} className="cat-card-cta-arrow" />
               </span>
             </Link>
 
@@ -1377,6 +1385,40 @@ export default function Beranda() {
         .tile-label { font-size: 11.5px; opacity: 0.9; margin: 0 0 20px; }
         .tile-name { font-size: 15px; font-weight: 700; line-height: 1.25; margin: 0; }
 
+        /* BARU: penonjolan khusus tile Area 7 (Toko) — glow biru pulsatif,
+           beda ritme dari goyangan pelan tile lain, plus badge "Tanpa
+           Login" yang ikut berdenyut supaya langsung menarik perhatian. */
+        .tile-toko {
+          overflow: visible;
+          animation: tileGoyangPelan 3.6s ease-in-out infinite, tokoGlowPulse 2.4s ease-in-out infinite;
+        }
+        .tile-toko-badge {
+          position: absolute;
+          top: -8px;
+          right: -6px;
+          background: #FBBF24;
+          color: #78350F;
+          font-size: 9.5px;
+          font-weight: 800;
+          padding: 3px 8px;
+          border-radius: 999px;
+          box-shadow: 0 4px 10px rgba(0,0,0,0.18);
+          z-index: 2;
+          animation: badgePulse 1.8s ease-in-out infinite;
+        }
+        @keyframes tokoGlowPulse {
+          0%, 100% { box-shadow: 0 4px 14px rgba(2, 132, 199, 0.3); }
+          50%      { box-shadow: 0 4px 26px rgba(14, 165, 233, 0.75); }
+        }
+        @keyframes badgePulse {
+          0%, 100% { transform: scale(1); }
+          50%      { transform: scale(1.08); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .tile-toko { animation: none; }
+          .tile-toko-badge { animation: none; }
+        }
+
         .cat-section {
           position: relative;
           z-index: 1;
@@ -1414,6 +1456,42 @@ export default function Beranda() {
           font-size: 12.5px;
           font-weight: 700;
           color: #0284C7;
+        }
+        /* BARU: kartu Area 7 (Toko) — border + glow pulsatif biru, badge
+           "Tanpa Login" di pojok kartu, dan panah CTA yang meluncur ke
+           kanan saat kartu di-hover, supaya berbeda dari 6 cat-card lain
+           yang statis. */
+        .cat-card-toko {
+          position: relative;
+          overflow: visible;
+          border: 1.5px solid rgba(2, 132, 199, 0.25);
+          animation: cardGlowPulse 2.6s ease-in-out infinite;
+        }
+        .cat-card-toko-badge {
+          position: absolute;
+          top: -10px;
+          right: 16px;
+          background: #FBBF24;
+          color: #78350F;
+          font-size: 10.5px;
+          font-weight: 800;
+          padding: 4px 10px;
+          border-radius: 999px;
+          box-shadow: 0 4px 10px rgba(0,0,0,0.18);
+          z-index: 2;
+        }
+        @keyframes cardGlowPulse {
+          0%, 100% { box-shadow: 0 6px 18px rgba(23, 26, 46, 0.06); }
+          50%      { box-shadow: 0 10px 30px rgba(14, 165, 233, 0.35); }
+        }
+        .cat-card-cta-arrow {
+          transition: transform 0.2s ease;
+        }
+        .cat-card-link:hover .cat-card-cta-arrow {
+          transform: translateX(4px);
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .cat-card-toko { animation: none; }
         }
         .cat-tag {
           display: inline-block;
