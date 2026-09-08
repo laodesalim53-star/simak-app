@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
-import { Printer, Loader2 } from 'lucide-react'
+import { Printer, Loader2, Save, Check } from 'lucide-react'
 
 function formatTanggal(tgl) {
   if (!tgl) return '-'
@@ -102,6 +102,18 @@ export default function Cetak8355() {
     new Date().toISOString().slice(0, 10)
   )
 
+  // Kode Provinsi / Kode Rayon / Kode Sekolah (khusus formulir 8355) —
+  // sebelumnya cuma dibaca dari tabel profil_sekolah lewat kolom
+  // kode_provinsi_ujian / kode_rayon_ujian / kode_sekolah_ujian, TAPI
+  // tidak ada satupun menu/form di aplikasi ini untuk mengisinya, jadi
+  // selalu tampil "-". Ditambahkan input + tombol Simpan di sini supaya
+  // bisa langsung diisi dan disimpan ke profil_sekolah.
+  const [kodeProvinsi, setKodeProvinsi] = useState('')
+  const [kodeRayon, setKodeRayon] = useState('')
+  const [kodeSekolah, setKodeSekolah] = useState('')
+  const [menyimpanKode, setMenyimpanKode] = useState(false)
+  const [kodeTersimpan, setKodeTersimpan] = useState(false)
+
   useEffect(() => {
     if (isSuperAdmin) muatSemua()
     else setLoading(false)
@@ -128,6 +140,9 @@ export default function Cetak8355() {
 
     setSiswaList(siswaRows || [])
     setSekolah(sekolahRow || null)
+    setKodeProvinsi(sekolahRow?.kode_provinsi_ujian || '')
+    setKodeRayon(sekolahRow?.kode_rayon_ujian || '')
+    setKodeSekolah(sekolahRow?.kode_sekolah_ujian || '')
     if (sekolahRow?.logo_path) {
       const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(sekolahRow.logo_path)
       setLogoUrl(pub.publicUrl)
@@ -135,9 +150,52 @@ export default function Cetak8355() {
     setLoading(false)
   }
 
+  // Simpan Kode Provinsi/Rayon/Sekolah ke tabel profil_sekolah. Pakai upsert
+  // (bukan update biasa) berjaga-jaga kalau baris profil_sekolah untuk
+  // sekolah ini belum pernah dibuat sama sekali (sekolahRow bisa null).
+  async function simpanKodeUjian() {
+    if (!sekolahId) return
+    setMenyimpanKode(true)
+    setKodeTersimpan(false)
+
+    const { error } = await supabase.from('profil_sekolah').upsert(
+      {
+        sekolah_id: sekolahId,
+        kode_provinsi_ujian: kodeProvinsi || null,
+        kode_rayon_ujian: kodeRayon || null,
+        kode_sekolah_ujian: kodeSekolah || null,
+      },
+      { onConflict: 'sekolah_id' }
+    )
+
+    if (!error) {
+      setSekolah((prev) => ({
+        ...(prev || {}),
+        kode_provinsi_ujian: kodeProvinsi,
+        kode_rayon_ujian: kodeRayon,
+        kode_sekolah_ujian: kodeSekolah,
+      }))
+      setKodeTersimpan(true)
+      setTimeout(() => setKodeTersimpan(false), 2000)
+    } else {
+      alert('Gagal menyimpan Kode Provinsi/Rayon/Sekolah: ' + error.message)
+    }
+    setMenyimpanKode(false)
+  }
+
+  // Sumber nilai untuk 3 kolom yang sekarang bisa diedit langsung di halaman
+  // ini (lihat input Kode Provinsi/Rayon/Sekolah di toolbar) — diprioritaskan
+  // dari state lokal (yang langsung berubah saat diketik) daripada menunggu
+  // reload dari tabel profil_sekolah.
+  const kodeUjian = {
+    kode_provinsi_ujian: kodeProvinsi,
+    kode_rayon_ujian: kodeRayon,
+    kode_sekolah_ujian: kodeSekolah,
+  }
+
   function nilaiSel(siswa, kolom) {
     if (kolom.key === 'no') return siswaList.indexOf(siswa) + 1
-    if (kolom.dariSekolah) return sekolah?.[kolom.dariSekolah] || '-'
+    if (kolom.dariSekolah) return kodeUjian[kolom.dariSekolah] || '-'
     if (kolom.key === 'paralel') return siswa.kelas?.nama_kelas || '-'
     if (kolom.key === 'tanggal_lahir_fmt') return formatTanggal(siswa.tanggal_lahir)
     if (kolom.key === 'jenis_kelamin') return siswa.jenis_kelamin === 'L' ? 'L' : siswa.jenis_kelamin === 'P' ? 'P' : '-'
@@ -320,6 +378,59 @@ export default function Cetak8355() {
         <button className="btn-primary" onClick={() => window.print()}>
           <Printer size={16} /> Cetak / Simpan PDF
         </button>
+      </div>
+
+      {/* Kode Provinsi / Kode Rayon / Kode Sekolah — sebelumnya tidak ada
+          menu untuk mengisi ini sama sekali (dibaca dari profil_sekolah
+          tapi tidak pernah ada form-nya), makanya di kolom Lampiran 1
+          selalu tampil "-" dan tidak bisa diinput. Ditambahkan di sini
+          supaya bisa langsung diisi dan disimpan untuk sekolah ini. */}
+      <div className="no-print max-w-[1200px] mx-auto mb-6 card p-4 flex flex-wrap items-end gap-3">
+        <div>
+          <label className="label-field">Kode Provinsi</label>
+          <input
+            className="input-field w-32"
+            placeholder="Contoh: 21"
+            value={kodeProvinsi}
+            onChange={(e) => setKodeProvinsi(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="label-field">Kode Rayon</label>
+          <input
+            className="input-field w-32"
+            placeholder="Contoh: 01"
+            value={kodeRayon}
+            onChange={(e) => setKodeRayon(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="label-field">Kode Sekolah</label>
+          <input
+            className="input-field w-32"
+            placeholder="Contoh: 123"
+            value={kodeSekolah}
+            onChange={(e) => setKodeSekolah(e.target.value)}
+          />
+        </div>
+        <button
+          className="btn-secondary"
+          onClick={simpanKodeUjian}
+          disabled={menyimpanKode}
+        >
+          {kodeTersimpan ? (
+            <>
+              <Check size={16} /> Tersimpan
+            </>
+          ) : (
+            <>
+              <Save size={16} /> {menyimpanKode ? 'Menyimpan...' : 'Simpan Kode'}
+            </>
+          )}
+        </button>
+        <p className="text-xs text-ink-700/50 basis-full">
+          Kode ini dipakai untuk kolom Kode Provinsi / Kode Rayon / Kode Sekolah di Lampiran 1 dan tersimpan per sekolah (tidak perlu diisi ulang tiap cetak).
+        </p>
       </div>
 
       {/* ---------------- LAMPIRAN 1 ---------------- */}
