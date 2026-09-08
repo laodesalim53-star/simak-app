@@ -249,18 +249,6 @@ export default function Cetak8355() {
     <div className="min-h-screen bg-ink-950/5 py-8 print:bg-white print:py-0">
       <style>{`
         @media print {
-          /* Override .print-only bawaan (fixed + center, dipakai Kuitansi/Nota
-             lewat index.css) KHUSUS untuk laporan 8355 ini — supaya page-break
-             3 lampiran berjalan normal seperti dokumen biasa, tidak numpuk
-             ditengah seperti kuitansi 1 halaman. */
-          .cetak-8355-area.print-only {
-            position: static !important;
-            top: auto !important;
-            left: auto !important;
-            right: auto !important;
-            margin-left: 0 !important;
-            margin-right: 0 !important;
-          }
           .no-print { display: none !important; }
           .lembar-cetak { box-shadow: none !important; margin: 0 !important; max-width: none !important; width: 100% !important; }
           body { background: white; }
@@ -315,13 +303,6 @@ export default function Cetak8355() {
         </button>
       </div>
 
-      {/* Pembungkus wajib supaya konten kelihatan saat print — CSS global
-          (index.css) pakai pola opt-in .print-only: saat window.print()
-          dipanggil, SEMUA elemen disembunyikan (visibility:hidden) kecuali
-          yang berada di dalam .print-only. Tanpa wrapper ini, hasil cetak
-          akan kosong meski tampilan di layar terlihat normal. */}
-      <div className="cetak-8355-area print-only">
-
       {/* ---------------- LAMPIRAN 1 ---------------- */}
       <div className="lampiran lembar-cetak max-w-[1200px] mx-auto bg-white shadow-lg p-6 text-sm text-ink-950">
         <KopSurat />
@@ -359,8 +340,6 @@ export default function Cetak8355() {
           </div>
         </div>
       </div>
-
-      </div>{/* /.cetak-8355-area.print-only */}
     </div>
   )
 }
