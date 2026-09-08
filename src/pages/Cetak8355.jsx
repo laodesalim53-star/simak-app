@@ -31,6 +31,25 @@ function hitungUsia(tanggalLahir, tanggalAcuan) {
   return `${tahun} Th ${bulan} Bl`
 }
 
+// Field kecamatan/kabupaten di database disimpan lengkap dengan awalannya
+// (misal "KECAMATAN ARU UTARA TIMUR", "PEMERINTAH KABUPATEN KEPULAUAN ARU")
+// karena teks itu dipakai apa adanya di kop surat. Tapi di grid info sekolah
+// labelnya sendiri sudah menyebut "Kecamatan"/"Kabupaten", jadi kalau nilai
+// mentahnya ditampilkan langsung jadi dobel: "Kecamatan : KECAMATAN ...".
+// Fungsi ini HANYA dipakai di grid info — kop surat tetap pakai teks asli.
+function bersihkanAwalan(nilai, awalanList) {
+  if (!nilai) return nilai
+  let hasil = nilai.trim()
+  for (const awalan of awalanList) {
+    const regex = new RegExp(`^${awalan}\\s+`, 'i')
+    if (regex.test(hasil)) {
+      hasil = hasil.replace(regex, '')
+      break
+    }
+  }
+  return hasil || '-'
+}
+
 // ---------------------------------------------------------------------------
 // Formulir 8355 aslinya (lihat 8355_TEMPLATE.docx) terdiri dari 3 tabel
 // TERPISAH — masing-masing dicetak sebagai satu lembar/lampiran sendiri,
@@ -246,8 +265,8 @@ export default function Cetak8355() {
           <p><span className="text-ink-700/60">NPSN</span> : {sekolah?.npsn || '-'}</p>
           <p><span className="text-ink-700/60">Status Sekolah</span> : {statusSekolah || '-'}</p>
           <p><span className="text-ink-700/60">Alamat Sekolah</span> : {sekolah?.alamat || '-'}</p>
-          <p><span className="text-ink-700/60">Kecamatan</span> : {sekolah?.kecamatan || '-'}</p>
-          <p><span className="text-ink-700/60">Kabupaten</span> : {sekolah?.kabupaten || '-'}</p>
+          <p><span className="text-ink-700/60">Kecamatan</span> : {bersihkanAwalan(sekolah?.kecamatan, ['KECAMATAN'])}</p>
+          <p><span className="text-ink-700/60">Kabupaten</span> : {bersihkanAwalan(sekolah?.kabupaten, ['PEMERINTAH KABUPATEN', 'KABUPATEN', 'PEMERINTAH KOTA', 'KOTA'])}</p>
           <p><span className="text-ink-700/60">Provinsi</span> : {sekolah?.provinsi || '-'}</p>
         </div>
       </>
