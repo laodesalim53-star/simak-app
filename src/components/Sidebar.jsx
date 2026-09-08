@@ -64,7 +64,11 @@ function getGroupsAdmin(isAdminUtama, isSuperAdmin, jumlahMenunggu = 0, jumlahPe
     {
       label: null, // tanpa judul grup — selalu di atas
       links: [
-        { to: '/', label: 'Dasbor', icon: LayoutDashboard, end: true },
+        // PERBAIKAN: sebelumnya to: '/', yang sekarang adalah halaman
+        // Beranda publik (lihat App.jsx). Dashboard aplikasi ada di
+        // '/dashboard' — link ini diperbaiki supaya klik "Dasbor" tidak
+        // lagi terlempar ke Beranda.
+        { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
         { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
         { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
         // Chat dua arah dengan Superadmin ("Admin Pusat") — khusus admin-tier,
@@ -152,7 +156,9 @@ function getGroupsAdmin(isAdminUtama, isSuperAdmin, jumlahMenunggu = 0, jumlahPe
 // fitur ini admin-only (lihat RLS policy nota_hanya_admin di Supabase).
 function getLinksGuru(jumlahPesanBelumDibaca = 0) {
   return [
-  { to: '/', label: 'Dasbor', icon: LayoutDashboard, end: true },
+  // PERBAIKAN: sebelumnya to: '/' (kini halaman Beranda publik) — diarahkan
+  // ke '/dashboard' supaya klik "Dasbor" tidak terlempar ke Beranda.
+  { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
   { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
   { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
   { to: '/rapat', label: 'Rapat Video', icon: Video },
@@ -253,7 +259,9 @@ function getLabelPeran(profil, isSuperAdmin, isAdminUtama, isAdmin, isOrangTua) 
 // diedit untuk SEMUA siswa di kelas).
 function getLinksOrangTua(jumlahPesanBelumDibaca = 0) {
   return [
-    { to: '/', label: 'Dasbor', icon: LayoutDashboard, end: true },
+    // PERBAIKAN: sebelumnya to: '/' (kini halaman Beranda publik) —
+    // diarahkan ke '/dashboard' supaya klik "Dasbor" tidak terlempar ke Beranda.
+    { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
     { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
     { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
     { to: '/rapor-anak', label: 'Rapor Anak', icon: FileBadge },
