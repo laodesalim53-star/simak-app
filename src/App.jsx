@@ -24,6 +24,7 @@ import LaporanNominatifGuru from './pages/LaporanNominatifGuru'
 import LaporanBiodataGuru from './pages/LaporanBiodataGuru'
 import LaporanPendidikanGuru from './pages/LaporanPendidikanGuru'
 import LaporanKepangkatanGuru from './pages/LaporanKepangkatanGuru'
+import LaporanTanggunganKeluarga from './pages/LaporanTanggunganKeluarga'
 import PusatLaporanGuru from './pages/PusatLaporanGuru'
 import Kelas from './pages/Kelas'
 import Jadwal from './pages/Jadwal'
@@ -232,6 +233,9 @@ export default function App() {
 } />
         <Route path="/laporan-kepangkatan-guru" element={
   <ProtectedRoute adminOnly><LaporanKepangkatanGuru /></ProtectedRoute>
+} />
+        <Route path="/laporan-tanggungan-keluarga" element={
+  <ProtectedRoute adminOnly><LaporanTanggunganKeluarga /></ProtectedRoute>
 } />
         <Route path="/kelas" element={<ProtectedRoute adminOnly><Kelas /></ProtectedRoute>} />
         <Route path="/jadwal" element={<ProtectedRoute><Jadwal /></ProtectedRoute>} />
