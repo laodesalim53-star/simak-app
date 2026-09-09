@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
 import StoryBar from '../components/StoryBar'
 import StoryUploader from '../components/StoryUploader'
@@ -121,6 +122,8 @@ function aggregateNilai(rows) {
 }
 
 export default function Dashboard() {
+  const { sekolahId } = useAuth()
+
   const [stats, setStats] = useState({ siswa: 0, guru: 0, kelas: 0, pengumuman: 0 })
   const [genderData, setGenderData] = useState([])
   const [pengumuman, setPengumuman] = useState([])
@@ -134,6 +137,15 @@ export default function Dashboard() {
 
   useEffect(() => {
     async function load() {
+      // Belum tahu sekolah mana yang login -> jangan query dulu,
+      // supaya tidak sempat menampilkan data gabungan semua sekolah.
+      if (!sekolahId) {
+        setLoading(false)
+        return
+      }
+
+      setLoading(true)
+
       const since = new Date()
       since.setDate(since.getDate() - 13)
       const sinceStr = since.toISOString().slice(0, 10)
@@ -144,20 +156,34 @@ export default function Dashboard() {
         presensiRows, nilaiRows, rppMenunggu, rppDisetujui, rppDitolak,
         presensiHariIniRows, pengajuanMenungguCount,
       ] = await Promise.all([
-        supabase.from('siswa').select('*', { count: 'exact', head: true }),
-        supabase.from('guru').select('*', { count: 'exact', head: true }),
-        supabase.from('kelas').select('*', { count: 'exact', head: true }),
-        supabase.from('pengumuman').select('*', { count: 'exact', head: true }),
-        supabase.from('siswa').select('*', { count: 'exact', head: true }).eq('jenis_kelamin', 'L'),
-        supabase.from('siswa').select('*', { count: 'exact', head: true }).eq('jenis_kelamin', 'P'),
-        supabase.from('pengumuman').select('id, judul, kategori, dibuat_pada').order('dibuat_pada', { ascending: false }).limit(5),
-        supabase.from('presensi_siswa').select('tanggal, status').gte('tanggal', sinceStr),
-        supabase.from('nilai').select('mata_pelajaran, nilai'),
-        supabase.from('rpp').select('*', { count: 'exact', head: true }).eq('status', 'menunggu'),
-        supabase.from('rpp').select('*', { count: 'exact', head: true }).eq('status', 'disetujui'),
-        supabase.from('rpp').select('*', { count: 'exact', head: true }).eq('status', 'ditolak'),
-        supabase.from('presensi_siswa').select('status').eq('tanggal', todayStr),
-        supabase.from('pengajuan_izin').select('*', { count: 'exact', head: true }).eq('status', 'diajukan'),
+        supabase.from('siswa').select('*', { count: 'exact', head: true })
+          .eq('sekolah_id', sekolahId).eq('status', 'aktif'),
+        supabase.from('guru').select('*', { count: 'exact', head: true })
+          .eq('sekolah_id', sekolahId),
+        supabase.from('kelas').select('*', { count: 'exact', head: true })
+          .eq('sekolah_id', sekolahId),
+        supabase.from('pengumuman').select('*', { count: 'exact', head: true })
+          .eq('sekolah_id', sekolahId),
+        supabase.from('siswa').select('*', { count: 'exact', head: true })
+          .eq('sekolah_id', sekolahId).eq('status', 'aktif').eq('jenis_kelamin', 'L'),
+        supabase.from('siswa').select('*', { count: 'exact', head: true })
+          .eq('sekolah_id', sekolahId).eq('status', 'aktif').eq('jenis_kelamin', 'P'),
+        supabase.from('pengumuman').select('id, judul, kategori, dibuat_pada')
+          .eq('sekolah_id', sekolahId).order('dibuat_pada', { ascending: false }).limit(5),
+        supabase.from('presensi_siswa').select('tanggal, status')
+          .eq('sekolah_id', sekolahId).gte('tanggal', sinceStr),
+        supabase.from('nilai').select('mata_pelajaran, nilai')
+          .eq('sekolah_id', sekolahId),
+        supabase.from('rpp').select('*', { count: 'exact', head: true })
+          .eq('sekolah_id', sekolahId).eq('status', 'menunggu'),
+        supabase.from('rpp').select('*', { count: 'exact', head: true })
+          .eq('sekolah_id', sekolahId).eq('status', 'disetujui'),
+        supabase.from('rpp').select('*', { count: 'exact', head: true })
+          .eq('sekolah_id', sekolahId).eq('status', 'ditolak'),
+        supabase.from('presensi_siswa').select('status')
+          .eq('sekolah_id', sekolahId).eq('tanggal', todayStr),
+        supabase.from('pengajuan_izin').select('*', { count: 'exact', head: true })
+          .eq('sekolah_id', sekolahId).eq('status', 'diajukan'),
       ])
 
       setStats({
@@ -189,7 +215,7 @@ export default function Dashboard() {
       setLoading(false)
     }
     load()
-  }, [])
+  }, [sekolahId])
 
   const cards = [
     { label: 'Total Siswa', value: stats.siswa, icon: Users, theme: 'blue' },
