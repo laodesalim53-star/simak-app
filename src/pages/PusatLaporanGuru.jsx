@@ -58,7 +58,7 @@ const daftarLaporan = [
     deskripsi: 'Status perkawinan, data pasangan, dan jumlah anak yang menjadi tanggungan.',
     icon: Heart,
     path: '/laporan-tanggungan-keluarga',
-    siap: false,
+    siap: true,
   },
   {
     id: 'tenaga-pengajar',
