@@ -24,7 +24,7 @@ export default function LaporanNominatifGuru() {
   function prioritasStatus(statusText) {
     const t = (statusText || '').toLowerCase()
     if (t.includes('pns')) return 1
-    if (t.includes('gtt') || t.includes('kontrak')) return 2
+    if (t.includes('pppk') || t.includes('kontrak')) return 2
     if (t.includes('gty') || t.includes('honor')) return 3
     return 4
   }
@@ -89,7 +89,7 @@ export default function LaporanNominatifGuru() {
       }
 
       // PERBAIKAN: urutkan Kepala Sekolah di atas, lalu berdasarkan status
-      // kepegawaian (PNS -> GTT -> GTY/Honor), bukan abjad polos.
+      // kepegawaian (PNS -> PPPK -> GTY/Honor), bukan abjad polos.
       setDaftarGuru(urutkanGuru(guru || []))
       setLoading(false)
     }
@@ -115,12 +115,12 @@ export default function LaporanNominatifGuru() {
     return { tahun, bulan }
   }
 
-  // Tandai kolom status kepegawaian (PNS / GTT / GTY / Honor) dengan "v"
+  // Tandai kolom status kepegawaian (PNS / PPPK / GTY / Honor) dengan "v"
   // sesuai isi teks bebas di kolom status_kepegawaian.
   function tandaiStatus(statusText, target) {
     const t = (statusText || '').toLowerCase()
     if (target === 'pns') return t.includes('pns') ? 'v' : '-'
-    if (target === 'gtt') return t.includes('gtt') || t.includes('kontrak') ? 'v' : '-'
+    if (target === 'pppk') return t.includes('pppk') || t.includes('kontrak') ? 'v' : '-'
     if (target === 'gty' || target === 'honor') return t.includes('gty') || t.includes('honor') ? 'v' : '-'
     return '-'
   }
@@ -213,7 +213,7 @@ export default function LaporanNominatifGuru() {
               <th className="border border-black px-1 py-1 w-5">L</th>
               <th className="border border-black px-1 py-1 w-5">P</th>
               <th className="border border-black px-1 py-1 w-6">PNS</th>
-              <th className="border border-black px-1 py-1 w-6">GTT</th>
+              <th className="border border-black px-1 py-1 w-6">PPPK</th>
               <th className="border border-black px-1 py-1 w-6">GTY</th>
               <th className="border border-black px-1 py-1 w-8">Thn</th>
               <th className="border border-black px-1 py-1 w-8">Bln</th>
@@ -243,7 +243,7 @@ export default function LaporanNominatifGuru() {
                     </td>
                     <td className="border border-black px-1 py-1">{g.pangkat_golongan || '—'}</td>
                     <td className="border border-black px-1 py-1 text-center">{tandaiStatus(g.status_kepegawaian, 'pns')}</td>
-                    <td className="border border-black px-1 py-1 text-center">{tandaiStatus(g.status_kepegawaian, 'gtt')}</td>
+                    <td className="border border-black px-1 py-1 text-center">{tandaiStatus(g.status_kepegawaian, 'pppk')}</td>
                     <td className="border border-black px-1 py-1 text-center">{tandaiStatus(g.status_kepegawaian, 'gty')}</td>
                     <td className="border border-black px-1 py-1">{g.sk_pengangkatan || '—'}</td>
                     <td className="border border-black px-1 py-1">{formatTanggal(g.tmt_pengangkatan)}</td>
