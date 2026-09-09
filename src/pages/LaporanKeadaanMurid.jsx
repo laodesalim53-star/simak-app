@@ -50,11 +50,11 @@ function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 
   )
 }
 
-function hitungUsia(tanggalLahir, tahunRef) {
-  if (!tanggalLahir) return null
-  const birthYear = new Date(tanggalLahir).getFullYear()
-  if (isNaN(birthYear)) return null
-  return tahunRef - birthYear
+function parseUsia(tgl, tahunRef) {
+  if (!tgl) return null
+  const dt = new Date(tgl)
+  if (isNaN(dt.getTime())) return null
+  return tahunRef - dt.getFullYear()
 }
 
 export default function LaporanKeadaanMurid() {
@@ -64,7 +64,7 @@ export default function LaporanKeadaanMurid() {
   const [rekapUsia, setRekapUsia] = useState([])
   const [rekapAgama, setRekapAgama] = useState([])
   const [rekapKewarganegaraan, setRekapKewarganegaraan] = useState({ wniL: 0, wniP: 0, wnaL: 0, wnaP: 0 })
-  
+
   const [bulan, setBulan] = useState(new Date().getMonth() + 1)
   const [tahun, setTahun] = useState(new Date().getFullYear())
   const [showExportMenu, setShowExportMenu] = useState(false)
@@ -85,7 +85,7 @@ export default function LaporanKeadaanMurid() {
     { value: 12, label: 'Desember' },
   ]
 
-  const LIST_AGAMA = ['Islam', 'Kristen', 'Katolik', 'Hindu', 'Buddha', 'Khonghucu', 'Lainnya']
+  const LIST_AGAMA = ['Islam', 'Kristen', 'Katolik', 'Hindu', 'Buddha', 'Khonghucu']
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -107,29 +107,38 @@ export default function LaporanKeadaanMurid() {
     setLoading(true)
 
     try {
-      const [{ data: kelasList, error: kelasError }, { data: siswaList, error: siswaError }] = await Promise.all([
-        supabase
-          .from('kelas')
-          .select('id, nama_kelas, tingkat')
-          .eq('sekolah_id', sekolahId)
-          .order('nama_kelas'),
-        supabase
-          .from('siswa')
-          .select('id, kelas_id, jenis_kelamin, status, tanggal_lahir, agama, kewarganegaraan')
-          .eq('sekolah_id', sekolahId)
-          .eq('status', 'aktif')
-      ])
+      // 1. Ambil Kelas
+      const { data: kelasList, error: kelasErr } = await supabase
+        .from('kelas')
+        .select('id, nama_kelas, tingkat')
+        .eq('sekolah_id', sekolahId)
+        .order('nama_kelas')
 
-      if (kelasError) throw kelasError
-      if (siswaError) throw siswaError
+      if (kelasErr) console.warn('Peringatan kelas:', kelasErr.message)
 
-      const siswaAktif = siswaList || []
+      // 2. Ambil Siswa (Ambil seluruh siswa di sekolah tersebut tanpa filter kaku agar data pasti ditarik)
+      const { data: siswaList, error: siswaErr } = await supabase
+        .from('siswa')
+        .select('*')
+        .eq('sekolah_id', sekolahId)
 
-      // 1. Rekapitulasi Utama per Kelas
-      const rekap = (kelasList || []).map((k) => {
-        const siswaKelas = siswaAktif.filter((s) => s.kelas_id === k.id)
-        const l = siswaKelas.filter((s) => s.jenis_kelamin === 'L').length
-        const p = siswaKelas.filter((s) => s.jenis_kelamin === 'P').length
+      if (siswaErr) throw siswaErr
+
+      const allSiswa = siswaList || []
+
+      // Filter siswa aktif (toleran huruf besar/kecil & nilai null/kosong)
+      const siswaAktif = allSiswa.filter((s) => {
+        if (!s.status) return true // Jika status tidak diisi, anggap aktif
+        const st = String(s.status).toLowerCase().trim()
+        return st === 'aktif' || st === 'active' || st === '1' || st === 'true'
+      })
+
+      // A. REKAPITULASI KELAS
+      const classes = kelasList || []
+      const rekap = classes.map((k) => {
+        const siswaKelas = siswaAktif.filter((s) => String(s.kelas_id) === String(k.id))
+        const l = siswaKelas.filter((s) => String(s.jenis_kelamin).toUpperCase() === 'L').length
+        const p = siswaKelas.filter((s) => String(s.jenis_kelamin).toUpperCase() === 'P').length
         const total = l + p
 
         return {
@@ -143,48 +152,66 @@ export default function LaporanKeadaanMurid() {
       })
       setRekapData(rekap)
 
-      // 2. Rekapitulasi Menurut Usia (<6, 6, 7, 8, 9, 10, 11, 12, >12)
-      const kategoriUsia = [
-        { key: '<6', label: '< 6 Tahun', check: (u) => u !== null && u < 6 },
-        { key: '6', label: '6 Tahun', check: (u) => u === 6 },
-        { key: '7', label: '7 Tahun', check: (u) => u === 7 },
-        { key: '8', label: '8 Tahun', check: (u) => u === 8 },
-        { key: '9', label: '9 Tahun', check: (u) => u === 9 },
-        { key: '10', label: '10 Tahun', check: (u) => u === 10 },
-        { key: '11', label: '11 Tahun', check: (u) => u === 11 },
-        { key: '12', label: '12 Tahun', check: (u) => u === 12 },
-        { key: '>12', label: '> 12 Tahun', check: (u) => u !== null && u > 12 },
+      // B. REKAPITULASI USIA
+      const katUsia = [
+        { label: '< 6 Tahun', check: (u) => u !== null && u < 6 },
+        { label: '6 Tahun', check: (u) => u === 6 },
+        { label: '7 Tahun', check: (u) => u === 7 },
+        { label: '8 Tahun', check: (u) => u === 8 },
+        { label: '9 Tahun', check: (u) => u === 9 },
+        { label: '10 Tahun', check: (u) => u === 10 },
+        { label: '11 Tahun', check: (u) => u === 11 },
+        { label: '12 Tahun', check: (u) => u === 12 },
+        { label: '> 12 Tahun', check: (u) => u !== null && u > 12 },
       ]
 
-      const dataUsia = kategoriUsia.map((kat) => {
-        const filtered = siswaAktif.filter((s) => kat.check(hitungUsia(s.tanggal_lahir, tahun)))
-        const l = filtered.filter((s) => s.jenis_kelamin === 'L').length
-        const p = filtered.filter((s) => s.jenis_kelamin === 'P').length
+      const dataUsia = katUsia.map((kat) => {
+        const matched = siswaAktif.filter((s) => kat.check(parseUsia(s.tanggal_lahir, tahun)))
+        const l = matched.filter((s) => String(s.jenis_kelamin).toUpperCase() === 'L').length
+        const p = matched.filter((s) => String(s.jenis_kelamin).toUpperCase() === 'P').length
         return { label: kat.label, l, p, total: l + p }
       })
       setRekapUsia(dataUsia)
 
-      // 3. Rekapitulasi Menurut Agama
+      // C. REKAPITULASI AGAMA
+      let sisaL = siswaAktif.filter((s) => String(s.jenis_kelamin).toUpperCase() === 'L').length
+      let sisaP = siswaAktif.filter((s) => String(s.jenis_kelamin).toUpperCase() === 'P').length
+
       const dataAgama = LIST_AGAMA.map((agm) => {
-        const filtered = siswaAktif.filter((s) => (s.agama || '').toLowerCase() === agm.toLowerCase())
-        const l = filtered.filter((s) => s.jenis_kelamin === 'L').length
-        const p = filtered.filter((s) => s.jenis_kelamin === 'P').length
+        const matched = siswaAktif.filter(
+          (s) => s.agama && String(s.agama).trim().toLowerCase() === agm.toLowerCase()
+        )
+        const l = matched.filter((s) => String(s.jenis_kelamin).toUpperCase() === 'L').length
+        const p = matched.filter((s) => String(s.jenis_kelamin).toUpperCase() === 'P').length
+        sisaL -= l
+        sisaP -= p
         return { agama: agm, l, p, total: l + p }
       })
+
+      // Tambahkan baris Lainnya/Tidak Diisi jika ada
+      if (sisaL > 0 || sisaP > 0) {
+        dataAgama.push({ agama: 'Lainnya / Not Set', l: Math.max(0, sisaL), p: Math.max(0, sisaP), total: Math.max(0, sisaL) + Math.max(0, sisaP) })
+      }
       setRekapAgama(dataAgama)
 
-      // 4. Rekapitulasi Kewarganegaraan
-      const wni = siswaAktif.filter((s) => !s.kewarganegaraan || s.kewarganegaraan.toUpperCase() === 'WNI')
-      const wna = siswaAktif.filter((s) => s.kewarganegaraan && s.kewarganegaraan.toUpperCase() === 'WNA')
-      setRekapKewarganegaraan({
-        wniL: wni.filter((s) => s.jenis_kelamin === 'L').length,
-        wniP: wni.filter((s) => s.jenis_kelamin === 'P').length,
-        wnaL: wna.filter((s) => s.jenis_kelamin === 'L').length,
-        wnaP: wna.filter((s) => s.jenis_kelamin === 'P').length,
-      })
+      // D. REKAPITULASI KEWARGANEGARAAN
+      const wna = siswaAktif.filter(
+        (s) => s.kewarganegaraan && String(s.kewarganegaraan).trim().toUpperCase() === 'WNA'
+      )
+      const wnaL = wna.filter((s) => String(s.jenis_kelamin).toUpperCase() === 'L').length
+      const wnaP = wna.filter((s) => String(s.jenis_kelamin).toUpperCase() === 'P').length
 
+      const totalL = siswaAktif.filter((s) => String(s.jenis_kelamin).toUpperCase() === 'L').length
+      const totalP = siswaAktif.filter((s) => String(s.jenis_kelamin).toUpperCase() === 'P').length
+
+      setRekapKewarganegaraan({
+        wniL: totalL - wnaL,
+        wniP: totalP - wnaP,
+        wnaL,
+        wnaP,
+      })
     } catch (err) {
-      console.error('Gagal memuat laporan keadaan murid:', err)
+      console.error('Gagal memuat data laporan:', err)
     } finally {
       setLoading(false)
     }
@@ -354,7 +381,7 @@ export default function LaporanKeadaanMurid() {
               ) : rekapData.length === 0 ? (
                 <tr>
                   <td colSpan={12} className="py-8 text-center text-ink-700/50">
-                    Belum ada data murid terdaftar.
+                    Belum ada data kelas terdaftar.
                   </td>
                 </tr>
               ) : (
