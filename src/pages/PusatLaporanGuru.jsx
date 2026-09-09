@@ -34,7 +34,7 @@ const daftarLaporan = [
     deskripsi: 'Data diri ringkas: nama, tempat/tanggal lahir, agama, status pegawai, jabatan, dan alamat.',
     icon: FileText,
     path: '/laporan-biodata-guru',
-    siap: false,
+    siap: true,
   },
   {
     id: 'pendidikan',
