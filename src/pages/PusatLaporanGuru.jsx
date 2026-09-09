@@ -66,7 +66,7 @@ const daftarLaporan = [
     deskripsi: 'Beban mengajar per guru: kelas, mata pelajaran, jam mengajar, dan rekap kehadiran.',
     icon: BookOpen,
     path: '/laporan-tenaga-pengajar',
-    siap: false,
+    siap: true,
   },
   {
     id: 'keadaan-murid',
@@ -74,7 +74,7 @@ const daftarLaporan = [
     deskripsi: 'Rekap jumlah murid per kelas dan ruang belajar yang tersedia.',
     icon: School,
     path: '/laporan-keadaan-murid',
-    siap: false,
+    siap: true,
   },
 ]
 
