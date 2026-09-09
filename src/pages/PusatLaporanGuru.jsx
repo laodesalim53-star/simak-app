@@ -42,7 +42,7 @@ const daftarLaporan = [
     deskripsi: 'Riwayat pendidikan terakhir, lembaga, jurusan, tahun lulus, dan pelatihan yang pernah diikuti.',
     icon: GraduationCap,
     path: '/laporan-pendidikan-guru',
-    siap: false,
+    siap: true,
   },
   {
     id: 'kepangkatan',
