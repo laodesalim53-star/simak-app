@@ -186,6 +186,7 @@ function getGroupsAdmin(
         { to: '/surat-keterangan', label: 'Surat Keterangan', icon: FileSignature },
         { to: '/ppdb-admin', label: 'PPDB Siswa Baru', icon: UserPlus },
         { to: '/laporan', label: 'Laporan Bulanan', icon: FileText },
+        { to: '/laporan-guru', label: 'Laporan Kepegawaian Guru', icon: GraduationCap },
         { to: '/hari-libur', label: 'Hari Libur', icon: CalendarOff },
         { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
         { to: '/backup', label: 'Backup Data', icon: DatabaseBackup },
