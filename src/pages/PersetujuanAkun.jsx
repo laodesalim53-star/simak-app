@@ -11,6 +11,8 @@ import {
   KeyRound,
   RotateCcw,
   Trash2,
+  ShieldCheck,
+  Loader2,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
@@ -25,6 +27,7 @@ export default function PersetujuanAkun() {
   const [prosesId, setProsesId] = useState(null)
   const [modalGuru, setModalGuru] = useState(null) // akun yang sedang diproses link guru-nya
   const [modalEdit, setModalEdit] = useState(null) // akun yang sedang diedit datanya
+  const [modalPassword, setModalPassword] = useState(null) // akun yang sedang diganti password-nya
 
   // Anak-anak dari akun orang tua yang AKUNNYA SUDAH AKTIF, yang baru
   // ditambahkan lewat fitur "Tambah Anak" (bukan anak pertama saat
@@ -278,6 +281,37 @@ export default function PersetujuanAkun() {
       return
     }
     muatData()
+  }
+
+  // Ganti password akun secara langsung (tanpa lewat email reset) — dipanggil
+  // lewat Edge Function 'set-password-akun' karena butuh service role key
+  // yang tidak boleh dipakai di frontend. Edge Function juga memverifikasi
+  // ulang bahwa pemanggil memang berwenang (superadmin, atau admin/admin_utama/
+  // kepala_sekolah untuk sekolahnya sendiri) sebelum mengganti apa pun.
+  async function handleSimpanPassword(akun, passwordBaru) {
+    setProsesId(akun.id)
+    const { data, error } = await supabase.functions.invoke('set-password-akun', {
+      body: { akun_id: akun.id, password_baru: passwordBaru },
+    })
+    setProsesId(null)
+
+    if (error || data?.error) {
+      let pesan = data?.error || error?.message || 'Terjadi kesalahan tak terduga.'
+      // Kalau supabase-js melempar FunctionsHttpError, body JSON asli ada di error.context
+      if (error?.context?.json) {
+        try {
+          const body = await error.context.json()
+          if (body?.error) pesan = body.error
+        } catch {
+          // abaikan, pakai pesan default di atas
+        }
+      }
+      window.alert('Gagal mengganti password: ' + pesan)
+      return
+    }
+
+    setModalPassword(null)
+    window.alert('Password berhasil diganti.')
   }
 
   // Hapus akun secara PERMANEN — profil, data guru terkait (jika ada), DAN
@@ -548,6 +582,15 @@ export default function PersetujuanAkun() {
                         </button>
 
                         <button
+                          onClick={() => setModalPassword(akun)}
+                          disabled={prosesId === akun.id}
+                          title="Ganti password langsung"
+                          className="w-7 h-7 rounded-lg flex items-center justify-center text-orange-600 hover:bg-orange-50 disabled:opacity-60"
+                        >
+                          <ShieldCheck size={14} />
+                        </button>
+
+                        <button
                           onClick={() => handleHapus(akun)}
                           disabled={prosesId === akun.id}
                           title="Hapus akun"
@@ -632,6 +675,15 @@ export default function PersetujuanAkun() {
           akun={modalEdit}
           onClose={() => setModalEdit(null)}
           onSimpan={handleSimpanEdit}
+        />
+      )}
+
+      {modalPassword && (
+        <ModalGantiPassword
+          akun={modalPassword}
+          memproses={prosesId === modalPassword.id}
+          onClose={() => setModalPassword(null)}
+          onSimpan={handleSimpanPassword}
         />
       )}
     </Layout>
@@ -848,6 +900,97 @@ function ModalEditAkun({ akun, onClose, onSimpan }) {
           className="w-full mt-5 bg-blue-600 text-white text-sm font-medium py-2.5 rounded-lg disabled:opacity-50"
         >
           {menyimpan ? 'Menyimpan...' : 'Simpan Perubahan'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// Modal ganti password langsung — memanggil Edge Function 'set-password-akun'
+// (bukan mengirim email reset seperti tombol KeyRound). Dipakai saat pemilik
+// akun tidak bisa diakses lewat email, atau admin ingin set password
+// sementara secara langsung.
+function ModalGantiPassword({ akun, memproses, onClose, onSimpan }) {
+  const [password, setPassword] = useState('')
+  const [konfirmasi, setKonfirmasi] = useState('')
+  const [error, setError] = useState('')
+  const [tampilkan, setTampilkan] = useState(false)
+
+  function handleSimpan() {
+    setError('')
+    if (password.length < 6) {
+      setError('Password minimal 6 karakter.')
+      return
+    }
+    if (password !== konfirmasi) {
+      setError('Konfirmasi password tidak sama.')
+      return
+    }
+    onSimpan(akun, password)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center px-4 z-50">
+      <div className="bg-white rounded-2xl max-w-md w-full p-5">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="font-semibold text-slate-800">Ganti Password Akun</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <X size={18} />
+          </button>
+        </div>
+        <p className="text-xs text-slate-500 mb-4">
+          Set password baru untuk <span className="font-medium text-slate-700">
+            {akun.nama_lengkap_pendaftar || akun.email_pendaftar}
+          </span>{' '}
+          ({akun.email_pendaftar || 'tanpa email'}). Password akan berubah seketika — pastikan Anda
+          memberitahu pemilik akun secara langsung.
+        </p>
+
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-medium text-slate-500 mb-1 block">Password Baru</label>
+            <div className="relative">
+              <input
+                type={tampilkan ? 'text' : 'password'}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm pr-16"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Minimal 6 karakter"
+              />
+              <button
+                type="button"
+                onClick={() => setTampilkan((v) => !v)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-medium text-blue-600"
+              >
+                {tampilkan ? 'Sembunyikan' : 'Tampilkan'}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-500 mb-1 block">Konfirmasi Password</label>
+            <input
+              type={tampilkan ? 'text' : 'password'}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+              value={konfirmasi}
+              onChange={(e) => setKonfirmasi(e.target.value)}
+              placeholder="Ulangi password baru"
+            />
+          </div>
+        </div>
+
+        {error && (
+          <p className="text-xs text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-3">
+            {error}
+          </p>
+        )}
+
+        <button
+          onClick={handleSimpan}
+          disabled={memproses || !password || !konfirmasi}
+          className="w-full mt-5 flex items-center justify-center gap-2 bg-orange-600 text-white text-sm font-medium py-2.5 rounded-lg disabled:opacity-50"
+        >
+          {memproses ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+          {memproses ? 'Memproses...' : 'Ganti Password'}
         </button>
       </div>
     </div>
