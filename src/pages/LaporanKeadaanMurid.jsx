@@ -4,43 +4,6 @@ import { ArrowLeft, Printer, Loader2 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 
-// Halaman cetak GABUNGAN untuk 4 laporan murid, karena hanya
-// LaporanKeadaanMurid.jsx yang terdaftar di App.jsx:
-//   1) Daftar Keadaan Murid Tiap Kelas   (tab: 'keadaan')
-//   2) Daftar Perincian Murid Menurut Usia             (tab: 'usia')
-//   3) Daftar Perincian Murid Menurut Agama            (tab: 'agama')
-//   4) Daftar Perincian Murid Menurut Kewarganegaraan (tab: 'kewarganegaraan')
-//
-// Data sekolah/kelas/siswa diambil SEKALI saja (query gabungan), lalu
-// masing-masing tab menghitung tampilannya sendiri dari data yang sama.
-// Berpindah tab tidak memuat ulang data dari Supabase.
-//
-// KHUSUS tab "Keadaan Murid" (mengikuti versi repo terbaru):
-// - Ada pemilih Bulan/Tahun Laporan.
-// - Baris "Masuk Dalam Bulan Ini" & "Keluar Dalam Bulan Ini" diambil
-//   OTOMATIS dari tabel `mutasi_siswa` (diisi trigger DB saat status siswa
-//   berubah), difilter sesuai bulan & tahun yang dipilih. Kotak isian
-//   tetap ada untuk koreksi manual sebelum dicetak.
-// - Baris "Jumlah Akhir Dalam Bulan Ini" dihitung dari siswa berstatus
-//   'aktif' saat ini, dikelompokkan per tingkat kelas & jenis kelamin.
-// - Baris "Jumlah Akhir Bulan Lalu" = Akhir Bulan Ini − Masuk + Keluar.
-//
-// PENCETAKAN: mengikuti format dokumen referensi (DAFTAR_RINCIAN_SISWA),
-// yaitu keempat laporan dicetak SEKALIGUS dan berurutan dalam satu berkas
-// (Keadaan Murid → Usia → Agama → Kewarganegaraan), masing-masing dengan
-// judulnya sendiri, bukan hanya tab yang sedang aktif di layar. Di layar,
-// tab tetap berfungsi seperti biasa untuk melihat/mengisi data per laporan;
-// saat window.print() dipanggil, CSS @media print menampilkan semua
-// bagian sekaligus.
-//
-// CATATAN PERBAIKAN (case-insensitive):
-// - Sebelumnya jenis_kelamin ('L'/'P'), status siswa ('aktif'), dan
-//   tingkat kelas ('I','II',...) dibandingkan langsung tanpa normalisasi
-//   huruf besar/kecil, sehingga variasi input seperti 'l', 'Aktif', atau
-//   'vi' di database membuat kolom/baris tampil kosong (0). Sekarang
-//   semua nilai tersebut dinormalisasi terlebih dahulu (helper
-//   normalisasiJK, .toUpperCase() untuk tingkat, dan query status pakai
-//   ilike) sebelum dibandingkan atau dijumlahkan.
 export default function LaporanKeadaanMurid() {
   const navigate = useNavigate()
   const { sekolahId: sekolahIdSaya } = useAuth()
@@ -52,17 +15,18 @@ export default function LaporanKeadaanMurid() {
   const [loading, setLoading] = useState(true)
 
   const [kelasList, setKelasList] = useState([])
-  const [siswaList, setSiswaList] = useState([])
+  const [siswaRawList, setSiswaRawList] = useState([])
+  const [mutasiList, setMutasiList] = useState([])
   const [tingkatList, setTingkatList] = useState([])
   const [rombelPerTingkat, setRombelPerTingkat] = useState({})
 
-  // --- khusus tab "keadaan": Bulan/Tahun Laporan + mutasi otomatis ---
+  // --- Bulan/Tahun Laporan ---
   const NAMA_BULAN = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
     'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
   ]
   const sekarang = new Date()
-  const [bulanTerpilih, setBulanTerpilih] = useState(sekarang.getMonth() + 1) // 1-12
+  const [bulanTerpilih, setBulanTerpilih] = useState(sekarang.getMonth() + 1)
   const [tahunTerpilih, setTahunTerpilih] = useState(sekarang.getFullYear())
   const tahunOpsi = Array.from({ length: 5 }, (_, i) => sekarang.getFullYear() - 2 + i)
 
@@ -73,7 +37,6 @@ export default function LaporanKeadaanMurid() {
   const KATEGORI_KEWARGANEGARAAN = ['WNI asli', 'WNI Keturunan', 'WNA']
   const KATEGORI_AGAMA = ['Krist. Protestan', 'Krist. Katolik', 'Islam', 'Hindu', 'Budha', 'Konghucu', 'Lain-lain']
 
-  // Urutan sesuai dokumen referensi: Keadaan → Usia → Agama → Kewarganegaraan
   const TAB_LABEL = {
     keadaan: 'Keadaan Murid',
     usia: 'Usia',
@@ -99,8 +62,6 @@ export default function LaporanKeadaanMurid() {
     })
   }
 
-  // Normalisasi jenis kelamin: menerima 'L'/'l', 'P'/'p', atau varian kata
-  // seperti 'laki-laki' / 'perempuan' dengan huruf besar/kecil apa pun.
   function normalisasiJK(nilai) {
     const v = (nilai || '').toString().trim().toUpperCase()
     if (v === 'L' || v.startsWith('LAKI')) return 'L'
@@ -128,22 +89,19 @@ export default function LaporanKeadaanMurid() {
     return 'Lain-lain'
   }
 
-  function hitungUsia(tanggalLahir) {
+  function hitungUsiaPadaPeriode(tanggalLahir, tahunRef, bulanRef) {
     if (!tanggalLahir) return null
     const lahir = new Date(tanggalLahir)
     if (Number.isNaN(lahir.getTime())) return null
-    const referensi = new Date()
-    let usia = referensi.getFullYear() - lahir.getFullYear()
-    const belumUlangTahun =
-      referensi.getMonth() < lahir.getMonth() ||
-      (referensi.getMonth() === lahir.getMonth() && referensi.getDate() < lahir.getDate())
-    if (belumUlangTahun) usia -= 1
+    let usia = tahunRef - lahir.getFullYear()
+    const bulanLahir = lahir.getMonth() + 1
+    if (bulanRef < bulanLahir) {
+      usia -= 1
+    }
     return usia
   }
 
-  // Bagian 1: profil sekolah, daftar kelas, dan snapshot siswa aktif saat
-  // ini. Dipakai bersama oleh keempat tab (agama & kewarganegaraan & usia
-  // hanya perlu ini; tab keadaan menambah data mutasi terpisah di bawah).
+  // --- Load Data Sekolah, Kelas, Siswa & Mutasi ---
   useEffect(() => {
     async function muat() {
       setLoading(true)
@@ -153,16 +111,16 @@ export default function LaporanKeadaanMurid() {
         return
       }
 
-      const [{ data: sekolah }, { data: kelas }, { data: siswa }] = await Promise.all([
+      const [{ data: sekolah }, { data: kelas }, { data: siswa }, { data: mutasi }] = await Promise.all([
         supabase.from('profil_sekolah').select('*').eq('sekolah_id', sekolahId).maybeSingle(),
         supabase.from('kelas').select('id, tingkat').eq('sekolah_id', sekolahId),
         supabase
           .from('siswa')
-          .select('kelas_id, jenis_kelamin, status, kewarganegaraan, agama, tanggal_lahir')
-          .eq('sekolah_id', sekolahId)
-          // ilike (tanpa wildcard) = exact match tapi tidak peduli huruf
-          // besar/kecil, sehingga 'Aktif', 'AKTIF', 'aktif' semua terhitung.
-          .ilike('status', 'aktif'),
+          .select('id, kelas_id, jenis_kelamin, status, kewarganegaraan, agama, tanggal_lahir, created_at, tanggal_keluar'),
+        supabase
+          .from('mutasi_siswa')
+          .select('siswa_id, tingkat, jenis_kelamin, jenis, tanggal')
+          .eq('sekolah_id', sekolahId),
       ])
 
       setProfilSekolah(sekolah || null)
@@ -174,16 +132,12 @@ export default function LaporanKeadaanMurid() {
       }
 
       const daftarKelas = kelas || []
-      const daftarSiswa = siswa || []
-
       const tingkatByKelasId = {}
       daftarKelas.forEach((k) => {
-        // toUpperCase() supaya 'i', 'I', 'vi', 'VI', dll dianggap sama.
         if (k.tingkat) tingkatByKelasId[k.id] = String(k.tingkat).trim().toUpperCase()
       })
       const tingkatUnik = urutkanTingkat(Array.from(new Set(Object.values(tingkatByKelasId))))
 
-      // Rombongan belajar per tingkat (dipakai tab "Keadaan Murid")
       const rombel = {}
       tingkatUnik.forEach((t) => { rombel[t] = 0 })
       daftarKelas.forEach((k) => {
@@ -192,63 +146,15 @@ export default function LaporanKeadaanMurid() {
       })
 
       setKelasList(daftarKelas)
-      setSiswaList(daftarSiswa)
+      setSiswaRawList(siswa || [])
+      setMutasiList(mutasi || [])
       setTingkatList(tingkatUnik)
       setRombelPerTingkat(rombel)
       setLoading(false)
     }
     muat()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sekolahIdSaya])
 
-  // Bagian 2: Masuk & Keluar Dalam Bulan Ini — otomatis dari mutasi_siswa,
-  // difilter sesuai bulan/tahun yang dipilih. Dijalankan ulang setiap kali
-  // tingkatList sudah siap atau bulan/tahun diganti.
-  useEffect(() => {
-    async function muatMutasi() {
-      const sekolahId = sekolahIdSaya
-      if (!sekolahId || tingkatList.length === 0) return
-
-      const awalBulan = `${tahunTerpilih}-${String(bulanTerpilih).padStart(2, '0')}-01`
-      const tanggalAkhirObj = new Date(tahunTerpilih, bulanTerpilih, 0) // hari terakhir bulan itu
-      const akhirBulan = `${tahunTerpilih}-${String(bulanTerpilih).padStart(2, '0')}-${String(tanggalAkhirObj.getDate()).padStart(2, '0')}`
-
-      const { data: mutasi, error } = await supabase
-        .from('mutasi_siswa')
-        .select('tingkat, jenis_kelamin, jenis, tanggal')
-        .eq('sekolah_id', sekolahId)
-        .gte('tanggal', awalBulan)
-        .lte('tanggal', akhirBulan)
-
-      const masukBaru = {}
-      const keluarBaru = {}
-      tingkatList.forEach((t) => {
-        masukBaru[t] = { L: 0, P: 0 }
-        keluarBaru[t] = { L: 0, P: 0 }
-      })
-
-      if (!error && mutasi) {
-        mutasi.forEach((m) => {
-          // Normalisasi tingkat & jenis mutasi supaya tidak peduli huruf
-          // besar/kecil ('Masuk'/'MASUK'/'masuk', 'vi'/'VI', dst.).
-          const t = (m.tingkat || '').toString().trim().toUpperCase()
-          if (!t || !masukBaru[t]) return // tingkat sudah tidak ada / siswa sudah pindah tingkat
-          const jenis = (m.jenis || '').toString().trim().toLowerCase()
-          const target = jenis === 'masuk' ? masukBaru : jenis === 'keluar' ? keluarBaru : null
-          if (!target) return
-          const jk = normalisasiJK(m.jenis_kelamin)
-          if (jk === 'L') target[t].L += 1
-          else if (jk === 'P') target[t].P += 1
-        })
-      }
-
-      setMasuk(masukBaru)
-      setKeluar(keluarBaru)
-    }
-    muatMutasi()
-  }, [sekolahIdSaya, tingkatList, bulanTerpilih, tahunTerpilih])
-
-  // Peta kelas_id -> tingkat, dipakai oleh semua tab.
   const tingkatByKelasId = useMemo(() => {
     const peta = {}
     kelasList.forEach((k) => {
@@ -257,11 +163,66 @@ export default function LaporanKeadaanMurid() {
     return peta
   }, [kelasList])
 
-  // ---------- Data tab "Keadaan Murid" ----------
+  // --- Tanggal Awal & Akhir Bulan Laporan ---
+  const { awalBulanStr, akhirBulanStr } = useMemo(() => {
+    const awal = `${tahunTerpilih}-${String(bulanTerpilih).padStart(2, '0')}-01`
+    const tglAkhir = new Date(tahunTerpilih, bulanTerpilih, 0).getDate()
+    const akhir = `${tahunTerpilih}-${String(bulanTerpilih).padStart(2, '0')}-${String(tglAkhir).padStart(2, '0')}`
+    return { awalBulanStr: awal, akhirBulanStr: akhir }
+  }, [bulanTerpilih, tahunTerpilih])
+
+  // --- Hitung Mutasi Masuk & Keluar di Bulan Terpilih ---
+  useEffect(() => {
+    if (tingkatList.length === 0) return
+
+    const masukBaru = {}
+    const keluarBaru = {}
+    tingkatList.forEach((t) => {
+      masukBaru[t] = { L: 0, P: 0 }
+      keluarBaru[t] = { L: 0, P: 0 }
+    })
+
+    mutasiList.forEach((m) => {
+      if (!m.tanggal) return
+      const tglMutasi = m.tanggal.substring(0, 10)
+      if (tglMutasi >= awalBulanStr && tglMutasi <= akhirBulanStr) {
+        const t = (m.tingkat || '').toString().trim().toUpperCase()
+        if (!t || !masukBaru[t]) return
+        const jenis = (m.jenis || '').toString().trim().toLowerCase()
+        const target = jenis === 'masuk' ? masukBaru : jenis === 'keluar' ? keluarBaru : null
+        if (!target) return
+        const jk = normalisasiJK(m.jenis_kelamin)
+        if (jk === 'L') target[t].L += 1
+        else if (jk === 'P') target[t].P += 1
+      }
+    })
+
+    setMasuk(masukBaru)
+    setKeluar(keluarBaru)
+  }, [mutasiList, tingkatList, awalBulanStr, akhirBulanStr])
+
+  // --- Filter Siswa Aktif pada Akhir Bulan Terpilih ---
+  const siswaAktifBulanIni = useMemo(() => {
+    return siswaRawList.filter((s) => {
+      // 1. Cek tanggal masuk/terdaftar
+      const tglMasuk = s.created_at ? s.created_at.substring(0, 10) : null
+      if (tglMasuk && tglMasuk > akhirBulanStr) return false
+
+      // 2. Cek status & tanggal keluar
+      const st = (s.status || '').toLowerCase()
+      if (st !== 'aktif') {
+        const tglKeluar = s.tanggal_keluar ? s.tanggal_keluar.substring(0, 10) : null
+        if (!tglKeluar || tglKeluar <= akhirBulanStr) return false
+      }
+      return true
+    })
+  }, [siswaRawList, akhirBulanStr])
+
+  // ---------- Data Tab: Keadaan Murid ----------
   const akhirBulanIni = useMemo(() => {
     const counts = {}
     tingkatList.forEach((t) => { counts[t] = { L: 0, P: 0 } })
-    siswaList.forEach((s) => {
+    siswaAktifBulanIni.forEach((s) => {
       const t = tingkatByKelasId[s.kelas_id]
       if (!t || !counts[t]) return
       const jk = normalisasiJK(s.jenis_kelamin)
@@ -269,7 +230,7 @@ export default function LaporanKeadaanMurid() {
       else if (jk === 'P') counts[t].P += 1
     })
     return counts
-  }, [tingkatList, tingkatByKelasId, siswaList])
+  }, [tingkatList, tingkatByKelasId, siswaAktifBulanIni])
 
   const akhirBulanLalu = useMemo(() => {
     const hasil = {}
@@ -307,14 +268,14 @@ export default function LaporanKeadaanMurid() {
   const kolomKiri = tingkatList.slice(0, tengah)
   const kolomKanan = tingkatList.slice(tengah)
 
-  // ---------- Data tab "Kewarganegaraan" ----------
+  // ---------- Data Tab: Kewarganegaraan ----------
   const dataKewarganegaraan = useMemo(() => {
     const data = {}
     KATEGORI_KEWARGANEGARAAN.forEach((kat) => {
       data[kat] = {}
       tingkatList.forEach((t) => { data[kat][t] = { L: 0, P: 0 } })
     })
-    siswaList.forEach((s) => {
+    siswaAktifBulanIni.forEach((s) => {
       const t = tingkatByKelasId[s.kelas_id]
       if (!t) return
       const kat = normalisasiKewarganegaraan(s.kewarganegaraan)
@@ -324,8 +285,7 @@ export default function LaporanKeadaanMurid() {
       else if (jk === 'P') data[kat][t].P += 1
     })
     return data
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tingkatList, tingkatByKelasId, siswaList])
+  }, [tingkatList, tingkatByKelasId, siswaAktifBulanIni])
 
   const totalPerTingkatKewarganegaraan = useMemo(() => {
     const hasil = {}
@@ -338,7 +298,6 @@ export default function LaporanKeadaanMurid() {
       hasil[t] = { L, P }
     })
     return hasil
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tingkatList, dataKewarganegaraan])
 
   const totalKeseluruhanKewarganegaraan = useMemo(() => {
@@ -350,14 +309,14 @@ export default function LaporanKeadaanMurid() {
     return { L, P, TOTAL: L + P }
   }, [tingkatList, totalPerTingkatKewarganegaraan])
 
-  // ---------- Data tab "Agama" ----------
+  // ---------- Data Tab: Agama ----------
   const dataAgama = useMemo(() => {
     const data = {}
     tingkatList.forEach((t) => {
       data[t] = {}
       KATEGORI_AGAMA.forEach((kat) => { data[t][kat] = { L: 0, P: 0 } })
     })
-    siswaList.forEach((s) => {
+    siswaAktifBulanIni.forEach((s) => {
       const t = tingkatByKelasId[s.kelas_id]
       if (!t || !data[t]) return
       const kat = normalisasiAgama(s.agama)
@@ -366,8 +325,7 @@ export default function LaporanKeadaanMurid() {
       else if (jk === 'P') data[t][kat].P += 1
     })
     return data
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tingkatList, tingkatByKelasId, siswaList])
+  }, [tingkatList, tingkatByKelasId, siswaAktifBulanIni])
 
   function totalBarisTingkatAgama(t) {
     let L = 0, P = 0
@@ -389,7 +347,6 @@ export default function LaporanKeadaanMurid() {
       hasil[kat] = { L, P }
     })
     return hasil
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tingkatList, dataAgama])
 
   const totalKeseluruhanAgama = useMemo(() => {
@@ -400,13 +357,12 @@ export default function LaporanKeadaanMurid() {
       P += total.P
     })
     return { L, P, TOTAL: L + P }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tingkatList, dataAgama])
 
-  // ---------- Data tab "Usia" ----------
+  // ---------- Data Tab: Usia ----------
   const usiaKolom = useMemo(() => {
-    const usiaSiswa = siswaList
-      .map((s) => hitungUsia(s.tanggal_lahir))
+    const usiaSiswa = siswaAktifBulanIni
+      .map((s) => hitungUsiaPadaPeriode(s.tanggal_lahir, tahunTerpilih, bulanTerpilih))
       .filter((u) => u !== null && u >= 0 && u <= 25)
     let usiaMin = usiaSiswa.length ? Math.min(...usiaSiswa) : 6
     let usiaMax = usiaSiswa.length ? Math.max(...usiaSiswa) : 14
@@ -414,7 +370,7 @@ export default function LaporanKeadaanMurid() {
     const kolom = []
     for (let u = usiaMin; u <= usiaMax; u += 1) kolom.push(u)
     return kolom
-  }, [siswaList])
+  }, [siswaAktifBulanIni, tahunTerpilih, bulanTerpilih])
 
   const dataUsia = useMemo(() => {
     const data = {}
@@ -422,17 +378,17 @@ export default function LaporanKeadaanMurid() {
       data[t] = {}
       usiaKolom.forEach((u) => { data[t][u] = { L: 0, P: 0 } })
     })
-    siswaList.forEach((s) => {
+    siswaAktifBulanIni.forEach((s) => {
       const t = tingkatByKelasId[s.kelas_id]
       if (!t || !data[t]) return
-      const usia = hitungUsia(s.tanggal_lahir)
+      const usia = hitungUsiaPadaPeriode(s.tanggal_lahir, tahunTerpilih, bulanTerpilih)
       if (usia === null || !data[t][usia]) return
       const jk = normalisasiJK(s.jenis_kelamin)
       if (jk === 'L') data[t][usia].L += 1
       else if (jk === 'P') data[t][usia].P += 1
     })
     return data
-  }, [tingkatList, tingkatByKelasId, siswaList, usiaKolom])
+  }, [tingkatList, tingkatByKelasId, siswaAktifBulanIni, usiaKolom, tahunTerpilih, bulanTerpilih])
 
   function totalBarisTingkatUsia(t) {
     let L = 0, P = 0
@@ -464,7 +420,6 @@ export default function LaporanKeadaanMurid() {
       P += total.P
     })
     return { L, P, TOTAL: L + P }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tingkatList, dataUsia, usiaKolom])
 
   if (loading) {
@@ -509,19 +464,13 @@ export default function LaporanKeadaanMurid() {
     </div>
   )
 
-  // Tiap bagian laporan membawa judulnya sendiri (bukan satu judul tunggal
-  // di luar), karena saat cetak keempatnya tampil berurutan seperti pada
-  // dokumen referensi. className "laporan-section" + "tab-aktif"/
-  // "tab-nonaktif" mengatur mana yang tampil di LAYAR (hanya tab terpilih),
-  // sedangkan aturan @media print di bawah menampilkan SEMUA bagian saat
-  // dicetak, tanpa memengaruhi cara komponen ini dipanggil dari luar.
   function kelasBagian(kunciTab) {
     return `laporan-section ${tab === kunciTab ? 'tab-aktif' : 'tab-nonaktif'}`
   }
 
   return (
     <div className="min-h-screen bg-slate-100">
-      {/* Toolbar — hilang saat dicetak */}
+      {/* Toolbar */}
       <div className="no-print sticky top-0 z-10 bg-white border-b border-slate-200 px-4 py-3">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <button
@@ -531,9 +480,6 @@ export default function LaporanKeadaanMurid() {
             <ArrowLeft size={16} /> Kembali
           </button>
 
-          {/* Bulan/Tahun hanya relevan untuk tab "Keadaan Murid", tapi
-              tetap ditampilkan di toolbar utama karena ikut tercetak pada
-              bagian pertama saat "Cetak Semua Laporan" dijalankan. */}
           <div className="flex items-center gap-2 text-xs text-slate-600">
             <span>Bulan Laporan:</span>
             <select
@@ -579,9 +525,7 @@ export default function LaporanKeadaanMurid() {
           ))}
         </div>
         <p className="no-print text-center text-[11px] text-slate-400 mt-2">
-          Masuk/Keluar pada tab Keadaan Murid otomatis dari riwayat mutasi siswa bulan terpilih (tetap bisa dikoreksi
-          manual). Saat dicetak, keempat laporan (Keadaan Murid, Usia, Agama, Kewarganegaraan) akan tercetak sekaligus
-          berurutan.
+          Semua ringkasan (Keadaan, Usia, Agama, Kewarganegaraan) dihitung presisi berdasarkan periode bulan & tahun laporan yang dipilih.
         </p>
       </div>
 
@@ -847,7 +791,12 @@ export default function LaporanKeadaanMurid() {
                 </thead>
                 <tbody>
                   {KATEGORI_KEWARGANEGARAAN.map((kat) => {
-                    const total = totalBaris(dataKewarganegaraan[kat] || {})
+                    let totalL = 0
+                    let totalP = 0
+                    tingkatList.forEach((t) => {
+                      totalL += dataKewarganegaraan[kat]?.[t]?.L || 0
+                      totalP += dataKewarganegaraan[kat]?.[t]?.P || 0
+                    })
                     return (
                       <tr key={kat}>
                         <td className="border border-black px-1 py-1">{kat}</td>
@@ -861,9 +810,9 @@ export default function LaporanKeadaanMurid() {
                             </td>
                           </Fragment>
                         ))}
-                        <td className="border border-black px-1 py-1 text-center">{total.L}</td>
-                        <td className="border border-black px-1 py-1 text-center">{total.P}</td>
-                        <td className="border border-black px-1 py-1 text-center">{total.TOTAL}</td>
+                        <td className="border border-black px-1 py-1 text-center">{totalL}</td>
+                        <td className="border border-black px-1 py-1 text-center">{totalP}</td>
+                        <td className="border border-black px-1 py-1 text-center">{totalL + totalP}</td>
                       </tr>
                     )
                   })}
@@ -893,50 +842,60 @@ export default function LaporanKeadaanMurid() {
       </div>
 
       <style>{`
-        .sel-mutasi {
-          width: 32px;
-          border: none;
-          border-bottom: 1px dotted #94a3b8;
-          text-align: center;
-          font-size: 10px;
-          background: transparent;
-          outline: none;
-          -moz-appearance: textfield;
-        }
-        .sel-mutasi::-webkit-outer-spin-button,
-        .sel-mutasi::-webkit-inner-spin-button {
-          -webkit-appearance: none;
-          margin: 0;
-        }
-        .sel-mutasi:focus {
-          border-bottom: 1px solid #2563eb;
-        }
-
-        /* Di layar: hanya bagian tab aktif yang tampil; input isian
-           terlihat, angka statis (untuk versi cetak) disembunyikan. */
-        .laporan-section.tab-nonaktif { display: none; }
-        .only-print { display: none; }
-
         @media print {
-          .no-print { display: none !important; }
-          body { background: white; }
-          .lembar-cetak {
-            box-shadow: none !important;
-            margin: 0 !important;
-            width: 100% !important;
+          @page {
+            size: A4 landscape;
+            margin: 10mm;
           }
-          .sel-mutasi { display: none !important; }
-          .only-print { display: inline !important; }
-
-          /* Saat dicetak: SEMUA bagian laporan tampil berurutan, sesuai
-             dokumen referensi (Keadaan → Usia → Agama → Kewarganegaraan),
-             bukan hanya tab yang sedang aktif di layar. */
-          .laporan-section.tab-nonaktif { display: block !important; }
-          .page-break-before-print { break-before: page; page-break-before: always; }
+          body {
+            background-color: white !important;
+            padding: 0 !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+          .only-print {
+            display: inline !important;
+          }
+          .lembar-cetak {
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            box-shadow: none !important;
+          }
+          .laporan-section {
+            display: block !important;
+          }
+          .page-break-before-print {
+            page-break-before: always;
+            break-before: page;
+          }
+          .sel-mutasi {
+            display: none !important;
+          }
         }
-        @page {
-          size: A4 landscape;
-          margin: 12mm;
+        @media screen {
+          .only-print {
+            display: none;
+          }
+          .tab-nonaktif {
+            display: none;
+          }
+          .tab-aktif {
+            display: block;
+          }
+          .sel-mutasi {
+            width: 100%;
+            text-align: center;
+            background: transparent;
+            border: 1px dashed #cbd5e1;
+            border-radius: 2px;
+            padding: 1px 0;
+          }
+          .sel-mutasi:focus {
+            outline: 1px solid #2563eb;
+            background: #fff;
+          }
         }
       `}</style>
     </div>
