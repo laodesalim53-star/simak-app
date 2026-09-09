@@ -25,6 +25,8 @@ import LaporanBiodataGuru from './pages/LaporanBiodataGuru'
 import LaporanPendidikanGuru from './pages/LaporanPendidikanGuru'
 import LaporanKepangkatanGuru from './pages/LaporanKepangkatanGuru'
 import LaporanTanggunganKeluarga from './pages/LaporanTanggunganKeluarga'
+import LaporanTenagaPengajar from './pages/LaporanTenagaPengajar'
+import LaporanKeadaanMurid from './pages/LaporanKeadaanMurid'
 import PusatLaporanGuru from './pages/PusatLaporanGuru'
 import Kelas from './pages/Kelas'
 import Jadwal from './pages/Jadwal'
@@ -236,6 +238,15 @@ export default function App() {
 } />
         <Route path="/laporan-tanggungan-keluarga" element={
   <ProtectedRoute adminOnly><LaporanTanggunganKeluarga /></ProtectedRoute>
+} />
+        {/* Data Rincian Tenaga Pengajar & Data Keadaan Murid — dua kartu yang
+            sebelumnya "Segera Hadir" di PusatLaporanGuru.jsx, sekarang aktif.
+            Sama seperti laporan guru lain, dibatasi adminOnly. */}
+        <Route path="/laporan-tenaga-pengajar" element={
+  <ProtectedRoute adminOnly><LaporanTenagaPengajar /></ProtectedRoute>
+} />
+        <Route path="/laporan-keadaan-murid" element={
+  <ProtectedRoute adminOnly><LaporanKeadaanMurid /></ProtectedRoute>
 } />
         <Route path="/kelas" element={<ProtectedRoute adminOnly><Kelas /></ProtectedRoute>} />
         <Route path="/jadwal" element={<ProtectedRoute><Jadwal /></ProtectedRoute>} />
