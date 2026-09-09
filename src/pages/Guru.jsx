@@ -24,6 +24,7 @@ const emptyForm = {
   nama_pasangan: '',
   nip_pasangan: '',
   pekerjaan_pasangan: '',
+  jumlah_anak_tanggungan: '',
   pendidikan_terakhir: '',
   // Riwayat Pendidikan & Pelatihan
   nama_lembaga_pendidikan: '',
@@ -192,7 +193,15 @@ export default function Guru() {
   }
 
   function openEdit(row) {
-    setForm({ ...emptyForm, ...row, tanggal_lahir: row.tanggal_lahir ? String(row.tanggal_lahir).slice(0, 10) : '' })
+    setForm({
+      ...emptyForm,
+      ...row,
+      tanggal_lahir: row.tanggal_lahir ? String(row.tanggal_lahir).slice(0, 10) : '',
+      jumlah_anak_tanggungan:
+        row.jumlah_anak_tanggungan === null || row.jumlah_anak_tanggungan === undefined
+          ? ''
+          : String(row.jumlah_anak_tanggungan),
+    })
     setEditingId(row.id)
     setShowForm(true)
   }
@@ -215,6 +224,7 @@ export default function Guru() {
       lintang: form.lintang === '' ? null : Number(form.lintang),
       bujur: form.bujur === '' ? null : Number(form.bujur),
       tahun_lulus: form.tahun_lulus === '' ? null : Number(form.tahun_lulus),
+      jumlah_anak_tanggungan: form.jumlah_anak_tanggungan === '' ? null : Number(form.jumlah_anak_tanggungan),
     }
     const { error } = editingId
       ? await supabase.from('guru').update(payload).eq('id', editingId).eq('sekolah_id', sekolahId)
@@ -402,7 +412,16 @@ export default function Guru() {
               <Field label="Nama Ibu Kandung"><input className="input-field" value={form.nama_ibu_kandung} onChange={(e) => setForm({ ...form, nama_ibu_kandung: e.target.value })} /></Field>
               <Field label="Nama Suami/Istri"><input className="input-field" value={form.nama_pasangan} onChange={(e) => setForm({ ...form, nama_pasangan: e.target.value })} /></Field>
               <Field label="NIP Suami/Istri"><input className="input-field" value={form.nip_pasangan} onChange={(e) => setForm({ ...form, nip_pasangan: e.target.value })} /></Field>
-              <Field label="Pekerjaan Suami/Istri" full><input className="input-field" value={form.pekerjaan_pasangan} onChange={(e) => setForm({ ...form, pekerjaan_pasangan: e.target.value })} /></Field>
+              <Field label="Pekerjaan Suami/Istri"><input className="input-field" value={form.pekerjaan_pasangan} onChange={(e) => setForm({ ...form, pekerjaan_pasangan: e.target.value })} /></Field>
+              <Field label="Jumlah Anak Tanggungan">
+                <input
+                  type="number"
+                  min="0"
+                  className="input-field"
+                  value={form.jumlah_anak_tanggungan}
+                  onChange={(e) => setForm({ ...form, jumlah_anak_tanggungan: e.target.value })}
+                />
+              </Field>
             </SeksiForm>
 
             <SeksiForm judul="Riwayat Pendidikan & Pelatihan">
@@ -543,6 +562,7 @@ export default function Guru() {
                   <ProfilRow label="Nama Ibu Kandung" value={profilLihat.nama_ibu_kandung} />
                   <ProfilRow label="Nama Suami/Istri" value={profilLihat.nama_pasangan} />
                   <ProfilRow label="Pekerjaan Suami/Istri" value={profilLihat.pekerjaan_pasangan} />
+                  <ProfilRow label="Jumlah Anak Tanggungan" value={profilLihat.jumlah_anak_tanggungan} />
                 </SeksiProfil>
 
                 <SeksiProfil judul="Riwayat Pendidikan & Pelatihan">
@@ -604,7 +624,7 @@ export default function Guru() {
           'Alamat Jalan', 'RT', 'RW', 'Nama Dusun', 'Desa/Kelurahan', 'Kecamatan', 'Kode Pos', 'Telepon', 'HP', 'Email',
           'Tugas Tambahan', 'SK CPNS', 'Tanggal CPNS', 'SK Pengangkatan', 'TMT Pengangkatan', 'Lembaga Pengangkatan',
           'Pangkat Golongan', 'Sumber Gaji', 'Nama Ibu Kandung', 'Status Perkawinan', 'Nama Suami/Istri', 'NIP Suami/Istri',
-          'Pekerjaan Suami/Istri', 'TMT PNS', 'Sudah Lisensi Kepala Sekolah', 'Pernah Diklat Kepengawasan',
+          'Pekerjaan Suami/Istri', 'Jumlah Anak Tanggungan', 'TMT PNS', 'Sudah Lisensi Kepala Sekolah', 'Pernah Diklat Kepengawasan',
           'Keahlian Braille', 'Keahlian Bahasa Isyarat', 'NPWP', 'Nama Wajib Pajak', 'Kewarganegaraan', 'Bank',
           'Nomor Rekening Bank', 'Rekening Atas Nama', 'NIK', 'No KK', 'Karpeg', 'Karis/Karsu', 'Lintang', 'Bujur', 'NUKS',
         ]}
@@ -648,6 +668,10 @@ export default function Guru() {
             nama_pasangan: teks(row['Nama Suami/Istri']),
             nip_pasangan: teks(row['NIP Suami/Istri']),
             pekerjaan_pasangan: teks(row['Pekerjaan Suami/Istri']),
+            jumlah_anak_tanggungan:
+              row['Jumlah Anak Tanggungan'] === undefined || row['Jumlah Anak Tanggungan'] === '' || row['Jumlah Anak Tanggungan'] === null
+                ? null
+                : Number(row['Jumlah Anak Tanggungan']),
             tmt_pns: parseTanggalImpor(row['TMT PNS']),
             sudah_lisensi_kepsek: teks(row['Sudah Lisensi Kepala Sekolah']) || 'Tidak',
             pernah_diklat_pengawas: teks(row['Pernah Diklat Kepengawasan']) || 'Tidak',
