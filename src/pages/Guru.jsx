@@ -25,6 +25,12 @@ const emptyForm = {
   nip_pasangan: '',
   pekerjaan_pasangan: '',
   pendidikan_terakhir: '',
+  // Riwayat Pendidikan & Pelatihan
+  nama_lembaga_pendidikan: '',
+  fakultas: '',
+  jurusan: '',
+  tahun_lulus: '',
+  penataran_diklat: '',
   // Kepegawaian
   status_kepegawaian: '',
   jenis_ptk: '',
@@ -208,6 +214,7 @@ export default function Guru() {
       tmt_pns: form.tmt_pns || null,
       lintang: form.lintang === '' ? null : Number(form.lintang),
       bujur: form.bujur === '' ? null : Number(form.bujur),
+      tahun_lulus: form.tahun_lulus === '' ? null : Number(form.tahun_lulus),
     }
     const { error } = editingId
       ? await supabase.from('guru').update(payload).eq('id', editingId).eq('sekolah_id', sekolahId)
@@ -398,6 +405,16 @@ export default function Guru() {
               <Field label="Pekerjaan Suami/Istri" full><input className="input-field" value={form.pekerjaan_pasangan} onChange={(e) => setForm({ ...form, pekerjaan_pasangan: e.target.value })} /></Field>
             </SeksiForm>
 
+            <SeksiForm judul="Riwayat Pendidikan & Pelatihan">
+              <Field label="Nama Lembaga Pendidikan" full><input className="input-field" value={form.nama_lembaga_pendidikan} onChange={(e) => setForm({ ...form, nama_lembaga_pendidikan: e.target.value })} /></Field>
+              <Field label="Fakultas"><input className="input-field" value={form.fakultas} onChange={(e) => setForm({ ...form, fakultas: e.target.value })} /></Field>
+              <Field label="Jurusan"><input className="input-field" value={form.jurusan} onChange={(e) => setForm({ ...form, jurusan: e.target.value })} /></Field>
+              <Field label="Tahun Lulus"><input type="number" className="input-field" value={form.tahun_lulus} onChange={(e) => setForm({ ...form, tahun_lulus: e.target.value })} /></Field>
+              <Field label="Penataran/Diklat yang Pernah Diikuti" full>
+                <textarea className="input-field" rows={2} value={form.penataran_diklat} onChange={(e) => setForm({ ...form, penataran_diklat: e.target.value })} />
+              </Field>
+            </SeksiForm>
+
             <SeksiForm judul="Kepegawaian">
               <Field label="Status Kepegawaian">
                 <input className="input-field" placeholder="PNS / PPPK / Honor..." value={form.status_kepegawaian} onChange={(e) => setForm({ ...form, status_kepegawaian: e.target.value })} />
@@ -526,6 +543,14 @@ export default function Guru() {
                   <ProfilRow label="Nama Ibu Kandung" value={profilLihat.nama_ibu_kandung} />
                   <ProfilRow label="Nama Suami/Istri" value={profilLihat.nama_pasangan} />
                   <ProfilRow label="Pekerjaan Suami/Istri" value={profilLihat.pekerjaan_pasangan} />
+                </SeksiProfil>
+
+                <SeksiProfil judul="Riwayat Pendidikan & Pelatihan">
+                  <ProfilRow label="Lembaga Pendidikan" value={profilLihat.nama_lembaga_pendidikan} />
+                  <ProfilRow label="Fakultas" value={profilLihat.fakultas} />
+                  <ProfilRow label="Jurusan" value={profilLihat.jurusan} />
+                  <ProfilRow label="Tahun Lulus" value={profilLihat.tahun_lulus} />
+                  <ProfilRow label="Penataran/Diklat" value={profilLihat.penataran_diklat} />
                 </SeksiProfil>
 
                 <SeksiProfil judul="Kepegawaian">
