@@ -416,11 +416,26 @@ export default function LaporanKeadaanMurid() {
   )
 
   function kelasBagian(kunciTab) {
-    return `laporan-section ${tab === kunciTab ? 'tab-aktif' : 'tab-nonaktif'}`
+    return `laporan-section ${tab === kunciTab ? 'block' : 'hidden print:hidden'}`
   }
 
   return (
     <div className="min-h-screen bg-slate-100">
+      <style>{`
+        @media print {
+          .no-print { display: none !important; }
+          .only-print { display: inline !important; }
+          .sel-mutasi { display: none !important; }
+          body { background: white; }
+          .lembar-cetak { shadow: none; margin: 0; width: 100% !important; padding: 0 !important; }
+          .page-break-before-print { page-break-before: always; }
+        }
+        @media screen {
+          .only-print { display: none; }
+          .sel-mutasi { width: 40px; text-align: center; border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px; }
+        }
+      `}</style>
+
       {/* Toolbar */}
       <div className="no-print sticky top-0 z-10 bg-white border-b border-slate-200 px-4 py-3">
         <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -556,6 +571,7 @@ export default function LaporanKeadaanMurid() {
                   })}
                 </tbody>
               </table>
+              <TandaTangan />
             </div>
 
             {/* ===== BAGIAN: USIA ===== */}
@@ -621,6 +637,7 @@ export default function LaporanKeadaanMurid() {
                   </tr>
                 </tbody>
               </table>
+              <TandaTangan />
             </div>
 
             {/* ===== BAGIAN: AGAMA ===== */}
@@ -686,6 +703,7 @@ export default function LaporanKeadaanMurid() {
                   </tr>
                 </tbody>
               </table>
+              <TandaTangan />
             </div>
 
             {/* ===== BAGIAN: KEWARGANEGARAAN ===== */}
@@ -760,70 +778,11 @@ export default function LaporanKeadaanMurid() {
                   </tr>
                 </tbody>
               </table>
+              <TandaTangan />
             </div>
           </>
         )}
-
-        <TandaTangan />
       </div>
-
-      <style>{`
-        @media print {
-          @page {
-            size: A4 landscape;
-            margin: 10mm;
-          }
-          body {
-            background-color: white !important;
-            padding: 0 !important;
-          }
-          .no-print {
-            display: none !important;
-          }
-          .only-print {
-            display: inline !important;
-          }
-          .lembar-cetak {
-            width: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            box-shadow: none !important;
-          }
-          .laporan-section {
-            display: block !important;
-          }
-          .page-break-before-print {
-            page-break-before: always;
-            break-before: page;
-          }
-          .sel-mutasi {
-            display: none !important;
-          }
-        }
-        @media screen {
-          .only-print {
-            display: none;
-          }
-          .tab-nonaktif {
-            display: none;
-          }
-          .tab-aktif {
-            display: block;
-          }
-          .sel-mutasi {
-            width: 100%;
-            text-align: center;
-            background: transparent;
-            border: 1px dashed #cbd5e1;
-            border-radius: 2px;
-            padding: 1px 0;
-          }
-          .sel-mutasi:focus {
-            outline: 1px solid #2563eb;
-            background: #fff;
-          }
-        }
-      `}</style>
     </div>
   )
 }
