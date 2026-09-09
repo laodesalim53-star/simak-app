@@ -50,7 +50,7 @@ const daftarLaporan = [
     deskripsi: 'Riwayat SK pengangkatan pertama, SK terakhir, SK penempatan, dan gaji pokok.',
     icon: Award,
     path: '/laporan-kepangkatan-guru',
-    siap: false,
+    siap: true,
   },
   {
     id: 'tanggungan',
