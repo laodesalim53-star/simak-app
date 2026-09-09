@@ -21,6 +21,7 @@ import Siswa from './pages/Siswa'
 import HasilUjian from './pages/HasilUjian'
 import Guru from './pages/Guru'
 import LaporanNominatifGuru from './pages/LaporanNominatifGuru'
+import LaporanBiodataGuru from './pages/LaporanBiodataGuru'
 import PusatLaporanGuru from './pages/PusatLaporanGuru'
 import Kelas from './pages/Kelas'
 import Jadwal from './pages/Jadwal'
@@ -220,6 +221,9 @@ export default function App() {
         <Route path="/guru" element={<ProtectedRoute adminOnly><Guru /></ProtectedRoute>} />
         <Route path="/laporan-nominatif-guru" element={
   <ProtectedRoute adminOnly><LaporanNominatifGuru /></ProtectedRoute>
+} />
+        <Route path="/laporan-biodata-guru" element={
+  <ProtectedRoute adminOnly><LaporanBiodataGuru /></ProtectedRoute>
 } />
         <Route path="/kelas" element={<ProtectedRoute adminOnly><Kelas /></ProtectedRoute>} />
         <Route path="/jadwal" element={<ProtectedRoute><Jadwal /></ProtectedRoute>} />
