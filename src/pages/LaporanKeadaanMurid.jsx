@@ -313,30 +313,39 @@ export default function LaporanKeadaanMurid() {
         <meta charset="utf-8" />
         <title>Laporan Keadaan Murid - ${namaBulan} ${tahun}</title>
         <style>
-          @page { size: A4 portrait; margin: 15mm; }
-          body { font-family: Arial, sans-serif; font-size: 12px; color: #111; margin: 0; padding: 0; }
+          @page { size: A4 portrait; margin: 12mm; }
+          body { font-family: Arial, sans-serif; font-size: 11px; color: #111; margin: 0; padding: 0; }
           
           .page {
             page-break-after: always;
             box-sizing: border-box;
-            padding-top: 10px;
+            padding-top: 5px;
           }
           .page:last-child {
             page-break-after: auto;
           }
 
-          h2 { text-align: center; margin: 0 0 4px 0; font-size: 16px; text-transform: uppercase; }
-          .subtitle { text-align: center; margin: 0 0 20px 0; font-size: 12px; color: #444; }
+          h2 { text-align: center; margin: 0 0 2px 0; font-size: 15px; text-transform: uppercase; }
+          .subtitle { text-align: center; margin: 0 0 16px 0; font-size: 11px; color: #444; }
           
-          table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
-          th, td { border: 1px solid #333; padding: 8px; text-align: center; }
+          table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 11px; }
+          th, td { border: 1px solid #333; padding: 6px 8px; text-align: center; }
           th { background-color: #f2f2f2; font-weight: bold; }
-          .section-title { font-weight: bold; margin-bottom: 10px; font-size: 14px; }
+          .section-title { font-weight: bold; margin-bottom: 6px; font-size: 13px; }
           tfoot tr td { font-weight: bold; background-color: #f9f9f9; }
+
+          .grid-2 {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+          }
+          .grid-2 > div {
+            flex: 1;
+          }
         </style>
       </head>
       <body>
-        <!-- HALAMAN 1: REKAPITULASI KELAS -->
+        <!-- HALAMAN 1: REKAPITULASI PER KELAS -->
         <div class="page">
           <h2>LAPORAN KEADAAN MURID</h2>
           <div class="subtitle">Periode: ${namaBulan} ${tahun}</div>
@@ -344,7 +353,7 @@ export default function LaporanKeadaanMurid() {
           <table>
             <thead>
               <tr>
-                <th rowspan="2" style="width: 40px;">No</th>
+                <th rowspan="2" style="width: 35px;">No</th>
                 <th rowspan="2" style="text-align: left;">Kelas</th>
                 <th colspan="3">Awal Bulan</th>
                 <th colspan="2">Masuk</th>
@@ -379,64 +388,65 @@ export default function LaporanKeadaanMurid() {
           </table>
         </div>
 
-        <!-- HALAMAN 2: MENURUT USIA -->
+        <!-- HALAMAN 2: USIA DAN AGAMA (SIDE BY SIDE) -->
         <div class="page">
           <h2>LAPORAN KEADAAN MURID</h2>
           <div class="subtitle">Periode: ${namaBulan} ${tahun}</div>
-          <div class="section-title">2. Menurut Usia</div>
-          <table>
-            <thead>
-              <tr>
-                <th style="text-align: left;">Usia</th>
-                <th style="width: 80px;">L</th>
-                <th style="width: 80px;">P</th>
-                <th style="width: 100px;">Jml</th>
-              </tr>
-            </thead>
-            <tbody>${rowsUsiaHtml}</tbody>
-            <tfoot>
-              <tr>
-                <td style="text-align: left;">Total</td>
-                <td>${totalUsiaL}</td>
-                <td>${totalUsiaP}</td>
-                <td>${totalUsiaJml}</td>
-              </tr>
-            </tfoot>
-          </table>
+          <div class="grid-2">
+            <div>
+              <div class="section-title">2. Menurut Usia</div>
+              <table>
+                <thead>
+                  <tr>
+                    <th style="text-align: left;">Usia</th>
+                    <th style="width: 50px;">L</th>
+                    <th style="width: 50px;">P</th>
+                    <th style="width: 60px;">Jml</th>
+                  </tr>
+                </thead>
+                <tbody>${rowsUsiaHtml}</tbody>
+                <tfoot>
+                  <tr>
+                    <td style="text-align: left;">Total</td>
+                    <td>${totalUsiaL}</td>
+                    <td>${totalUsiaP}</td>
+                    <td>${totalUsiaJml}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            <div>
+              <div class="section-title">3. Menurut Agama</div>
+              <table>
+                <thead>
+                  <tr>
+                    <th style="text-align: left;">Agama</th>
+                    <th style="width: 50px;">L</th>
+                    <th style="width: 50px;">P</th>
+                    <th style="width: 60px;">Jml</th>
+                  </tr>
+                </thead>
+                <tbody>${rowsAgamaHtml}</tbody>
+                <tfoot>
+                  <tr>
+                    <td style="text-align: left;">Total</td>
+                    <td>${totalAgamaL}</td>
+                    <td>${totalAgamaP}</td>
+                    <td>${totalAgamaJml}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
         </div>
 
-        <!-- HALAMAN 3: MENURUT AGAMA -->
-        <div class="page">
-          <h2>LAPORAN KEADAAN MURID</h2>
-          <div class="subtitle">Periode: ${namaBulan} ${tahun}</div>
-          <div class="section-title">3. Menurut Agama</div>
-          <table>
-            <thead>
-              <tr>
-                <th style="text-align: left;">Agama</th>
-                <th style="width: 80px;">L</th>
-                <th style="width: 80px;">P</th>
-                <th style="width: 100px;">Jml</th>
-              </tr>
-            </thead>
-            <tbody>${rowsAgamaHtml}</tbody>
-            <tfoot>
-              <tr>
-                <td style="text-align: left;">Total</td>
-                <td>${totalAgamaL}</td>
-                <td>${totalAgamaP}</td>
-                <td>${totalAgamaJml}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-
-        <!-- HALAMAN 4: MENURUT KEWARGANEGARAAN -->
+        <!-- HALAMAN 3: KEWARGANEGARAAN -->
         <div class="page">
           <h2>LAPORAN KEADAAN MURID</h2>
           <div class="subtitle">Periode: ${namaBulan} ${tahun}</div>
           <div class="section-title">4. Menurut Kewarganegaraan</div>
-          <table>
+          <table style="max-width: 600px; margin: 0 auto;">
             <thead>
               <tr>
                 <th style="text-align: left;">Status</th>
