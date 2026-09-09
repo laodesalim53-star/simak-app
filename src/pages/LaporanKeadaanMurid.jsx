@@ -107,33 +107,20 @@ export default function LaporanKeadaanMurid() {
     setLoading(true)
 
     try {
-      // 1. Ambil Kelas
-      const { data: kelasList, error: kelasErr } = await supabase
-        .from('kelas')
-        .select('id, nama_kelas, tingkat')
-        .eq('sekolah_id', sekolahId)
-        .order('nama_kelas')
-
-      if (kelasErr) console.warn('Peringatan kelas:', kelasErr.message)
-
-      // 2. Ambil Siswa (Ambil seluruh siswa di sekolah tersebut tanpa filter kaku agar data pasti ditarik)
-      const { data: siswaList, error: siswaErr } = await supabase
-        .from('siswa')
-        .select('*')
-        .eq('sekolah_id', sekolahId)
-
-      if (siswaErr) throw siswaErr
+      const [{ data: kelasList }, { data: siswaList }] = await Promise.all([
+        supabase.from('kelas').select('id, nama_kelas, tingkat').eq('sekolah_id', sekolahId).order('nama_kelas'),
+        supabase.from('siswa').select('*').eq('sekolah_id', sekolahId)
+      ])
 
       const allSiswa = siswaList || []
 
-      // Filter siswa aktif (toleran huruf besar/kecil & nilai null/kosong)
       const siswaAktif = allSiswa.filter((s) => {
-        if (!s.status) return true // Jika status tidak diisi, anggap aktif
+        if (!s.status) return true
         const st = String(s.status).toLowerCase().trim()
         return st === 'aktif' || st === 'active' || st === '1' || st === 'true'
       })
 
-      // A. REKAPITULASI KELAS
+      // 1. Rekapitulasi per Kelas
       const classes = kelasList || []
       const rekap = classes.map((k) => {
         const siswaKelas = siswaAktif.filter((s) => String(s.kelas_id) === String(k.id))
@@ -152,7 +139,7 @@ export default function LaporanKeadaanMurid() {
       })
       setRekapData(rekap)
 
-      // B. REKAPITULASI USIA
+      // 2. Rekapitulasi Usia
       const katUsia = [
         { label: '< 6 Tahun', check: (u) => u !== null && u < 6 },
         { label: '6 Tahun', check: (u) => u === 6 },
@@ -173,7 +160,7 @@ export default function LaporanKeadaanMurid() {
       })
       setRekapUsia(dataUsia)
 
-      // C. REKAPITULASI AGAMA
+      // 3. Rekapitulasi Agama
       let sisaL = siswaAktif.filter((s) => String(s.jenis_kelamin).toUpperCase() === 'L').length
       let sisaP = siswaAktif.filter((s) => String(s.jenis_kelamin).toUpperCase() === 'P').length
 
@@ -188,13 +175,12 @@ export default function LaporanKeadaanMurid() {
         return { agama: agm, l, p, total: l + p }
       })
 
-      // Tambahkan baris Lainnya/Tidak Diisi jika ada
       if (sisaL > 0 || sisaP > 0) {
-        dataAgama.push({ agama: 'Lainnya / Not Set', l: Math.max(0, sisaL), p: Math.max(0, sisaP), total: Math.max(0, sisaL) + Math.max(0, sisaP) })
+        dataAgama.push({ agama: 'Lainnya / Tidak Diisi', l: Math.max(0, sisaL), p: Math.max(0, sisaP), total: Math.max(0, sisaL) + Math.max(0, sisaP) })
       }
       setRekapAgama(dataAgama)
 
-      // D. REKAPITULASI KEWARGANEGARAAN
+      // 4. Rekapitulasi Kewarganegaraan
       const wna = siswaAktif.filter(
         (s) => s.kewarganegaraan && String(s.kewarganegaraan).trim().toUpperCase() === 'WNA'
       )
@@ -266,7 +252,224 @@ export default function LaporanKeadaanMurid() {
 
   function handlePrintPDF() {
     setShowExportMenu(false)
-    window.print()
+    const namaBulan = BULAN_OPTIONS.find((b) => b.value === Number(bulan))?.label || ''
+
+    const rowsUtamaHtml = rekapData
+      .map(
+        (r, i) => `
+        <tr>
+          <td style="text-align: center;">${i + 1}</td>
+          <td style="text-align: left;">${r.nama_kelas}</td>
+          <td>${r.awal_l}</td>
+          <td>${r.awal_p}</td>
+          <td style="font-weight: bold;">${r.awal_total}</td>
+          <td>${r.masuk_l}</td>
+          <td>${r.masuk_p}</td>
+          <td>${r.keluar_l}</td>
+          <td>${r.keluar_p}</td>
+          <td>${r.akhir_l}</td>
+          <td>${r.akhir_p}</td>
+          <td style="font-weight: bold;">${r.akhir_total}</td>
+        </tr>`
+      )
+      .join('')
+
+    const rowsUsiaHtml = rekapUsia
+      .map(
+        (u) => `
+        <tr>
+          <td style="text-align: left;">${u.label}</td>
+          <td>${u.l}</td>
+          <td>${u.p}</td>
+          <td style="font-weight: bold;">${u.total}</td>
+        </tr>`
+      )
+      .join('')
+
+    const rowsAgamaHtml = rekapAgama
+      .map(
+        (a) => `
+        <tr>
+          <td style="text-align: left;">${a.agama}</td>
+          <td>${a.l}</td>
+          <td>${a.p}</td>
+          <td style="font-weight: bold;">${a.total}</td>
+        </tr>`
+      )
+      .join('')
+
+    const totalUsiaL = rekapUsia.reduce((a, b) => a + b.l, 0)
+    const totalUsiaP = rekapUsia.reduce((a, b) => a + b.p, 0)
+    const totalUsiaJml = rekapUsia.reduce((a, b) => a + b.total, 0)
+
+    const totalAgamaL = rekapAgama.reduce((a, b) => a + b.l, 0)
+    const totalAgamaP = rekapAgama.reduce((a, b) => a + b.p, 0)
+    const totalAgamaJml = rekapAgama.reduce((a, b) => a + b.total, 0)
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Laporan Keadaan Murid - ${namaBulan} ${tahun}</title>
+        <style>
+          @page { size: A4 landscape; margin: 10mm; }
+          body { font-family: Arial, sans-serif; font-size: 11px; color: #111; margin: 0; padding: 10px; }
+          h2 { text-align: center; margin: 0 0 4px 0; font-size: 16px; text-transform: uppercase; }
+          .subtitle { text-align: center; margin: 0 0 15px 0; font-size: 12px; color: #444; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 11px; }
+          th, td { border: 1px solid #333; padding: 4px 6px; text-align: center; }
+          th { background-color: #f2f2f2; font-weight: bold; }
+          .section-title { font-weight: bold; margin: 10px 0 5px 0; font-size: 12px; }
+          .grid-layout { display: flex; gap: 15px; justify-content: space-between; }
+          .grid-col { flex: 1; }
+          tfoot tr td { font-weight: bold; background-color: #f9f9f9; }
+        </style>
+      </head>
+      <body>
+        <h2>LAPORAN KEADAAN MURID</h2>
+        <div class="subtitle">Periode: ${namaBulan} ${tahun}</div>
+
+        <div class="section-title">1. Rekapitulasi Keadaan Murid Per Kelas</div>
+        <table>
+          <thead>
+            <tr>
+              <th rowspan="2" style="width: 30px;">No</th>
+              <th rowspan="2" style="text-align: left;">Kelas</th>
+              <th colspan="3">Awal Bulan</th>
+              <th colspan="2">Masuk</th>
+              <th colspan="2">Keluar</th>
+              <th colspan="3">Akhir Bulan</th>
+            </tr>
+            <tr>
+              <th style="width: 35px;">L</th><th style="width: 35px;">P</th><th style="width: 45px;">Jml</th>
+              <th style="width: 35px;">L</th><th style="width: 35px;">P</th>
+              <th style="width: 35px;">L</th><th style="width: 35px;">P</th>
+              <th style="width: 35px;">L</th><th style="width: 35px;">P</th><th style="width: 45px;">Jml</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsUtamaHtml}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="2">JUMLAH TOTAL</td>
+              <td>${totalSummary.awal_l}</td>
+              <td>${totalSummary.awal_p}</td>
+              <td>${totalSummary.awal_total}</td>
+              <td>${totalSummary.masuk_l}</td>
+              <td>${totalSummary.masuk_p}</td>
+              <td>${totalSummary.keluar_l}</td>
+              <td>${totalSummary.keluar_p}</td>
+              <td>${totalSummary.akhir_l}</td>
+              <td>${totalSummary.akhir_p}</td>
+              <td>${totalSummary.akhir_total}</td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <div class="grid-layout">
+          <!-- RINCIAN USIA -->
+          <div class="grid-col">
+            <div class="section-title">2. Menurut Usia</div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="text-align: left;">Usia</th>
+                  <th style="width: 35px;">L</th>
+                  <th style="width: 35px;">P</th>
+                  <th style="width: 45px;">Jml</th>
+                </tr>
+              </thead>
+              <tbody>${rowsUsiaHtml}</tbody>
+              <tfoot>
+                <tr>
+                  <td style="text-align: left;">Total</td>
+                  <td>${totalUsiaL}</td>
+                  <td>${totalUsiaP}</td>
+                  <td>${totalUsiaJml}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <!-- RINCIAN AGAMA -->
+          <div class="grid-col">
+            <div class="section-title">3. Menurut Agama</div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="text-align: left;">Agama</th>
+                  <th style="width: 35px;">L</th>
+                  <th style="width: 35px;">P</th>
+                  <th style="width: 45px;">Jml</th>
+                </tr>
+              </thead>
+              <tbody>${rowsAgamaHtml}</tbody>
+              <tfoot>
+                <tr>
+                  <td style="text-align: left;">Total</td>
+                  <td>${totalAgamaL}</td>
+                  <td>${totalAgamaP}</td>
+                  <td>${totalAgamaJml}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <!-- RINCIAN KEWARGANEGARAAN -->
+          <div class="grid-col">
+            <div class="section-title">4. Menurut Kewarganegaraan</div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="text-align: left;">Status</th>
+                  <th style="width: 35px;">L</th>
+                  <th style="width: 35px;">P</th>
+                  <th style="width: 45px;">Jml</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style="text-align: left;">WNI</td>
+                  <td>${rekapKewarganegaraan.wniL}</td>
+                  <td>${rekapKewarganegaraan.wniP}</td>
+                  <td style="font-weight: bold;">${rekapKewarganegaraan.wniL + rekapKewarganegaraan.wniP}</td>
+                </tr>
+                <tr>
+                  <td style="text-align: left;">WNA</td>
+                  <td>${rekapKewarganegaraan.wnaL}</td>
+                  <td>${rekapKewarganegaraan.wnaP}</td>
+                  <td style="font-weight: bold;">${rekapKewarganegaraan.wnaL + rekapKewarganegaraan.wnaP}</td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td style="text-align: left;">Total</td>
+                  <td>${rekapKewarganegaraan.wniL + rekapKewarganegaraan.wnaL}</td>
+                  <td>${rekapKewarganegaraan.wniP + rekapKewarganegaraan.wnaP}</td>
+                  <td>${rekapKewarganegaraan.wniL + rekapKewarganegaraan.wniP + rekapKewarganegaraan.wnaL + rekapKewarganegaraan.wnaP}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        <script>
+          window.onload = function() {
+            window.print();
+            setTimeout(function() { window.close(); }, 500);
+          }
+        </script>
+      </body>
+      </html>
+    `
+
+    const printWindow = window.open('', '_blank')
+    if (printWindow) {
+      printWindow.document.write(htmlContent)
+      printWindow.document.close()
+    }
   }
 
   if (!sekolahId) {
@@ -284,7 +487,7 @@ export default function LaporanKeadaanMurid() {
       title="Laporan Keadaan Murid"
       subtitle="Rekapitulasi jumlah siswa awal bulan, mutasi, akhir bulan, rincian usia, agama, dan kewarganegaraan"
       actions={
-        <div className="relative print:hidden" ref={exportMenuRef}>
+        <div className="relative" ref={exportMenuRef}>
           <button className="btn-secondary" onClick={() => setShowExportMenu((v) => !v)}>
             <Download size={16} /> Unduh / Cetak <ChevronDown size={14} />
           </button>
@@ -307,8 +510,8 @@ export default function LaporanKeadaanMurid() {
         </div>
       }
     >
-      {/* Banner / Filter Periode */}
-      <div className="relative overflow-hidden rounded-xl p-6 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-br from-blue-900 to-blue-950 text-white print:hidden">
+      {/* Banner Filter Periode */}
+      <div className="relative overflow-hidden rounded-xl p-6 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-br from-blue-900 to-blue-950 text-white">
         <BatikOverlay patternId="batikLaporanMurid" strokeColor="#d4af37" />
         <div className="relative z-10 flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-white/10 ring-2 ring-white/20 flex items-center justify-center shrink-0">
@@ -342,9 +545,9 @@ export default function LaporanKeadaanMurid() {
       </div>
 
       <div className="space-y-6">
-        {/* 1. TABEL REKAPITULASI UTAMA */}
+        {/* TABEL REKAPITULASI UTAMA */}
         <div className="card relative overflow-hidden overflow-x-auto">
-          <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-900 to-brass-400 print:hidden" />
+          <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-900 to-brass-400" />
           <div className="p-4 border-b border-ink-900/10">
             <h4 className="font-display font-bold text-ink-950 text-base">Rekapitulasi Keadaan Murid</h4>
           </div>
@@ -425,7 +628,7 @@ export default function LaporanKeadaanMurid() {
 
         {/* GRID RINCIAN 3 BAGIAN */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* 2. RINCIAN MENURUT USIA */}
+          {/* RINCIAN USIA */}
           <div className="card overflow-hidden">
             <div className="p-3.5 border-b border-ink-900/10 bg-ink-900/[0.02]">
               <h4 className="font-display font-bold text-ink-950 text-sm">Data Rinci Menurut Usia</h4>
@@ -460,7 +663,7 @@ export default function LaporanKeadaanMurid() {
             </table>
           </div>
 
-          {/* 3. RINCIAN MENURUT AGAMA */}
+          {/* RINCIAN AGAMA */}
           <div className="card overflow-hidden">
             <div className="p-3.5 border-b border-ink-900/10 bg-ink-900/[0.02]">
               <h4 className="font-display font-bold text-ink-950 text-sm">Data Rinci Menurut Agama</h4>
@@ -495,7 +698,7 @@ export default function LaporanKeadaanMurid() {
             </table>
           </div>
 
-          {/* 4. RINCIAN MENURUT KEWARGANEGARAAN */}
+          {/* RINCIAN KEWARGANEGARAAN */}
           <div className="card overflow-hidden">
             <div className="p-3.5 border-b border-ink-900/10 bg-ink-900/[0.02]">
               <h4 className="font-display font-bold text-ink-950 text-sm">Data Rinci Kewarganegaraan</h4>
