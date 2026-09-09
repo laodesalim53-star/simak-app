@@ -32,6 +32,15 @@ import { supabase } from '../lib/supabaseClient'
 // tab tetap berfungsi seperti biasa untuk melihat/mengisi data per laporan;
 // saat window.print() dipanggil, CSS @media print menampilkan semua
 // bagian sekaligus.
+//
+// CATATAN PERBAIKAN (case-insensitive):
+// - Sebelumnya jenis_kelamin ('L'/'P'), status siswa ('aktif'), dan
+//   tingkat kelas ('I','II',...) dibandingkan langsung tanpa normalisasi
+//   huruf besar/kecil, sehingga variasi input seperti 'l', 'Aktif', atau
+//   'vi' di database membuat kolom/baris tampil kosong (0). Sekarang
+//   semua nilai tersebut dinormalisasi terlebih dahulu (helper
+//   normalisasiJK, .toUpperCase() untuk tingkat, dan query status pakai
+//   ilike) sebelum dibandingkan atau dijumlahkan.
 export default function LaporanKeadaanMurid() {
   const navigate = useNavigate()
   const { sekolahId: sekolahIdSaya } = useAuth()
@@ -90,6 +99,15 @@ export default function LaporanKeadaanMurid() {
     })
   }
 
+  // Normalisasi jenis kelamin: menerima 'L'/'l', 'P'/'p', atau varian kata
+  // seperti 'laki-laki' / 'perempuan' dengan huruf besar/kecil apa pun.
+  function normalisasiJK(nilai) {
+    const v = (nilai || '').toString().trim().toUpperCase()
+    if (v === 'L' || v.startsWith('LAKI')) return 'L'
+    if (v === 'P' || v.startsWith('PER')) return 'P'
+    return null
+  }
+
   function normalisasiKewarganegaraan(nilai) {
     const v = (nilai || '').toString().trim().toLowerCase()
     if (!v) return 'WNI asli'
@@ -142,7 +160,9 @@ export default function LaporanKeadaanMurid() {
           .from('siswa')
           .select('kelas_id, jenis_kelamin, status, kewarganegaraan, agama, tanggal_lahir')
           .eq('sekolah_id', sekolahId)
-          .eq('status', 'aktif'),
+          // ilike (tanpa wildcard) = exact match tapi tidak peduli huruf
+          // besar/kecil, sehingga 'Aktif', 'AKTIF', 'aktif' semua terhitung.
+          .ilike('status', 'aktif'),
       ])
 
       setProfilSekolah(sekolah || null)
@@ -158,7 +178,8 @@ export default function LaporanKeadaanMurid() {
 
       const tingkatByKelasId = {}
       daftarKelas.forEach((k) => {
-        if (k.tingkat) tingkatByKelasId[k.id] = String(k.tingkat).trim()
+        // toUpperCase() supaya 'i', 'I', 'vi', 'VI', dll dianggap sama.
+        if (k.tingkat) tingkatByKelasId[k.id] = String(k.tingkat).trim().toUpperCase()
       })
       const tingkatUnik = urutkanTingkat(Array.from(new Set(Object.values(tingkatByKelasId))))
 
@@ -166,7 +187,7 @@ export default function LaporanKeadaanMurid() {
       const rombel = {}
       tingkatUnik.forEach((t) => { rombel[t] = 0 })
       daftarKelas.forEach((k) => {
-        const t = k.tingkat ? String(k.tingkat).trim() : null
+        const t = k.tingkat ? String(k.tingkat).trim().toUpperCase() : null
         if (t && rombel[t] !== undefined) rombel[t] += 1
       })
 
@@ -208,12 +229,16 @@ export default function LaporanKeadaanMurid() {
 
       if (!error && mutasi) {
         mutasi.forEach((m) => {
-          const t = m.tingkat
+          // Normalisasi tingkat & jenis mutasi supaya tidak peduli huruf
+          // besar/kecil ('Masuk'/'MASUK'/'masuk', 'vi'/'VI', dst.).
+          const t = (m.tingkat || '').toString().trim().toUpperCase()
           if (!t || !masukBaru[t]) return // tingkat sudah tidak ada / siswa sudah pindah tingkat
-          const target = m.jenis === 'masuk' ? masukBaru : m.jenis === 'keluar' ? keluarBaru : null
+          const jenis = (m.jenis || '').toString().trim().toLowerCase()
+          const target = jenis === 'masuk' ? masukBaru : jenis === 'keluar' ? keluarBaru : null
           if (!target) return
-          if (m.jenis_kelamin === 'L') target[t].L += 1
-          else if (m.jenis_kelamin === 'P') target[t].P += 1
+          const jk = normalisasiJK(m.jenis_kelamin)
+          if (jk === 'L') target[t].L += 1
+          else if (jk === 'P') target[t].P += 1
         })
       }
 
@@ -227,7 +252,7 @@ export default function LaporanKeadaanMurid() {
   const tingkatByKelasId = useMemo(() => {
     const peta = {}
     kelasList.forEach((k) => {
-      if (k.tingkat) peta[k.id] = String(k.tingkat).trim()
+      if (k.tingkat) peta[k.id] = String(k.tingkat).trim().toUpperCase()
     })
     return peta
   }, [kelasList])
@@ -239,8 +264,9 @@ export default function LaporanKeadaanMurid() {
     siswaList.forEach((s) => {
       const t = tingkatByKelasId[s.kelas_id]
       if (!t || !counts[t]) return
-      if (s.jenis_kelamin === 'L') counts[t].L += 1
-      else if (s.jenis_kelamin === 'P') counts[t].P += 1
+      const jk = normalisasiJK(s.jenis_kelamin)
+      if (jk === 'L') counts[t].L += 1
+      else if (jk === 'P') counts[t].P += 1
     })
     return counts
   }, [tingkatList, tingkatByKelasId, siswaList])
@@ -293,8 +319,9 @@ export default function LaporanKeadaanMurid() {
       if (!t) return
       const kat = normalisasiKewarganegaraan(s.kewarganegaraan)
       if (!data[kat] || !data[kat][t]) return
-      if (s.jenis_kelamin === 'L') data[kat][t].L += 1
-      else if (s.jenis_kelamin === 'P') data[kat][t].P += 1
+      const jk = normalisasiJK(s.jenis_kelamin)
+      if (jk === 'L') data[kat][t].L += 1
+      else if (jk === 'P') data[kat][t].P += 1
     })
     return data
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -334,8 +361,9 @@ export default function LaporanKeadaanMurid() {
       const t = tingkatByKelasId[s.kelas_id]
       if (!t || !data[t]) return
       const kat = normalisasiAgama(s.agama)
-      if (s.jenis_kelamin === 'L') data[t][kat].L += 1
-      else if (s.jenis_kelamin === 'P') data[t][kat].P += 1
+      const jk = normalisasiJK(s.jenis_kelamin)
+      if (jk === 'L') data[t][kat].L += 1
+      else if (jk === 'P') data[t][kat].P += 1
     })
     return data
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -399,8 +427,9 @@ export default function LaporanKeadaanMurid() {
       if (!t || !data[t]) return
       const usia = hitungUsia(s.tanggal_lahir)
       if (usia === null || !data[t][usia]) return
-      if (s.jenis_kelamin === 'L') data[t][usia].L += 1
-      else if (s.jenis_kelamin === 'P') data[t][usia].P += 1
+      const jk = normalisasiJK(s.jenis_kelamin)
+      if (jk === 'L') data[t][usia].L += 1
+      else if (jk === 'P') data[t][usia].P += 1
     })
     return data
   }, [tingkatList, tingkatByKelasId, siswaList, usiaKolom])
