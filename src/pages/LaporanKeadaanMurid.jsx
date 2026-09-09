@@ -19,13 +19,8 @@ export default function LaporanKeadaanMurid() {
   const [tingkatList, setTingkatList] = useState([])
   const [rombelPerTingkat, setRombelPerTingkat] = useState({})
 
-  // Form input manual untuk mutasi masuk/keluar di tab "Keadaan Murid"
   const [masuk, setMasuk] = useState({})
-  const [keluar, setKeluar] = useState({})
-
-  const URUTAN_ROMAWI = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII']
-  const KATEGORI_KEWARGANEGARAAN = ['WNI asli', 'WNI Keturunan', 'WNA']
-  const KATEGORI_AGAMA = ['Krist. Protestan', 'Krist. Katolik', 'Islam', 'Hindu', 'Budha', 'Konghucu', 'Lain-lain']
+  const [kelasarray, setKeluar] = useState({})
 
   const TAB_LABEL = {
     keadaan: 'Keadaan Murid',
@@ -40,22 +35,22 @@ export default function LaporanKeadaanMurid() {
     kewarganegaraan: 'Daftar Perincian Murid Menurut Kewarganegaraan',
   }
   const URUTAN_TAB = ['keadaan', 'usia', 'agama', 'kewarganegaraan']
+  const KATEGORI_KEWARGANEGARAAN = ['WNI asli', 'WNI Keturunan', 'WNA']
+  const KATEGORI_AGAMA = ['Krist. Protestan', 'Krist. Katolik', 'Islam', 'Hindu', 'Budha', 'Konghucu', 'Lain-lain']
 
-  function urutkanTingkat(daftar) {
-    return [...daftar].sort((a, b) => {
-      const ia = URUTAN_ROMAWI.indexOf(a)
-      const ib = URUTAN_ROMAWI.indexOf(b)
-      if (ia !== -1 && ib !== -1) return ia - ib
-      if (ia !== -1) return -1
-      if (ib !== -1) return 1
-      return a.localeCompare(b)
-    })
+  // Normalisasi Tingkat agar Angka (1, 2, 3) dan Romawi (I, II, III) saling sinkron
+  function normalisasiTingkat(val) {
+    if (!val && val !== 0) return ''
+    const str = String(val).trim().toUpperCase()
+    const mapAngkaKeRomawi = { '1': '1', '2': '2', '3': '3', '4': '4', '5': '5', '6': '6', '7': '7', '8': '8', '9': '9', '10': '10', '11': '11', '12': '12' }
+    return mapAngkaKeRomawi[str] || str
   }
 
   function normalisasiJK(nilai) {
-    const v = (nilai || '').toString().trim().toUpperCase()
-    if (v === 'L' || v.startsWith('LAKI')) return 'L'
-    if (v === 'P' || v.startsWith('PER')) return 'P'
+    if (!nilai) return null
+    const v = String(nilai).trim().toUpperCase()
+    if (v === 'L' || v.startsWith('LAKI') || v === 'PRIA') return 'L'
+    if (v === 'P' || v.startsWith('PER') || v === 'WANITA') return 'P'
     return null
   }
 
@@ -92,7 +87,6 @@ export default function LaporanKeadaanMurid() {
     return usia
   }
 
-  // --- Load Data dari Supabase ---
   useEffect(() => {
     async function muat() {
       setLoading(true)
@@ -104,7 +98,7 @@ export default function LaporanKeadaanMurid() {
 
       const [{ data: sekolah }, { data: kelas }, { data: siswa }] = await Promise.all([
         supabase.from('profil_sekolah').select('*').eq('sekolah_id', sekolahId).maybeSingle(),
-        supabase.from('kelas').select('id, tingkat').eq('sekolah_id', sekolahId),
+        supabase.from('kelas').select('id, tingkat, nama_kelas').eq('sekolah_id', sekolahId),
         supabase
           .from('siswa')
           .select('id, kelas_id, jenis_kelamin, kewarganegaraan, agama, tanggal_lahir, status')
@@ -115,35 +109,44 @@ export default function LaporanKeadaanMurid() {
       if (sekolah?.logo_path) {
         const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(sekolah.logo_path)
         setLogoUrl(pub?.publicUrl || '')
-      } else {
-        setLogoUrl('')
       }
 
       const daftarKelas = kelas || []
-      const tingkatByKelasId = {}
+      
+      // Ambil tingkat unik
+      const setTingkat = new Set()
       daftarKelas.forEach((k) => {
-        if (k.tingkat) tingkatByKelasId[k.id] = String(k.tingkat).trim().toUpperCase()
+        const t = normalisasiTingkat(k.tingkat)
+        if (t) setTingkat.add(t)
       })
-      const tingkatUnik = urutkanTingkat(Array.from(new Set(Object.values(tingkatByKelasId))))
+
+      let urutTingkat = Array.from(setTingkat).sort((a, b) => {
+        const na = parseInt(a, 10)
+        const nb = parseInt(b, 10)
+        if (!isNaN(na) && !isNaN(nb)) return na - nb
+        return a.localeCompare(b)
+      })
+
+      // Jika kelas tidak memiliki tingkat di DB, buat standar 1-6
+      if (urutTingkat.length === 0) urutTingkat = ['1', '2', '3', '4', '5', '6']
 
       const rombel = {}
-      tingkatUnik.forEach((t) => { rombel[t] = 0 })
+      urutTingkat.forEach((t) => { rombel[t] = 0 })
       daftarKelas.forEach((k) => {
-        const t = k.tingkat ? String(k.tingkat).trim().toUpperCase() : null
+        const t = normalisasiTingkat(k.tingkat)
         if (t && rombel[t] !== undefined) rombel[t] += 1
       })
 
-      // Inisialisasi state mutasi masuk & keluar
       const initMasuk = {}
       const initKeluar = {}
-      tingkatUnik.forEach((t) => {
+      urutTingkat.forEach((t) => {
         initMasuk[t] = { L: 0, P: 0 }
         initKeluar[t] = { L: 0, P: 0 }
       })
 
       setKelasList(daftarKelas)
       setDaftarSiswa(siswa || [])
-      setTingkatList(tingkatUnik)
+      setTingkatList(urutTingkat)
       setRombelPerTingkat(rombel)
       setMasuk(initMasuk)
       setKeluar(initKeluar)
@@ -152,30 +155,32 @@ export default function LaporanKeadaanMurid() {
     muat()
   }, [sekolahIdSaya])
 
-  // Map untuk mencari tingkat berdasarkan kelas_id
+  // Mapping ID Kelas -> Tingkat
   const tingkatByKelasId = useMemo(() => {
     const peta = {}
     kelasList.forEach((k) => {
-      if (k.tingkat) peta[k.id] = String(k.tingkat).trim().toUpperCase()
+      const t = normalisasiTingkat(k.tingkat)
+      if (t) peta[k.id] = t
     })
     return peta
   }, [kelasList])
 
-  // Filter siswa aktif saat ini
+  // Ambil Siswa Aktif (Toleran jika status di DB NULL, 'Aktif', atau 'aktif')
   const siswaAktif = useMemo(() => {
     return daftarSiswa.filter((s) => {
-      const st = (s.status || 'aktif').toLowerCase()
-      return st === 'aktif'
+      if (!s.status) return true // Anggap aktif jika status kosong
+      const st = String(s.status).toLowerCase().trim()
+      return st === 'aktif' || st === 'aktif ' || st === ''
     })
   }, [daftarSiswa])
 
-  // ---------- TAB: KEADAAN MURID ----------
+  // Hitung Keadaan Murid
   const akhirBulanIni = useMemo(() => {
     const counts = {}
     tingkatList.forEach((t) => { counts[t] = { L: 0, P: 0 } })
     siswaAktif.forEach((s) => {
       const t = tingkatByKelasId[s.kelas_id]
-      if (!t || !counts[t]) return
+      if (!t || counts[t] === undefined) return
       const jk = normalisasiJK(s.jenis_kelamin)
       if (jk === 'L') counts[t].L += 1
       else if (jk === 'P') counts[t].P += 1
@@ -188,11 +193,11 @@ export default function LaporanKeadaanMurid() {
     tingkatList.forEach((t) => {
       const ini = akhirBulanIni[t] || { L: 0, P: 0 }
       const m = masuk[t] || { L: 0, P: 0 }
-      const k = keluar[t] || { L: 0, P: 0 }
+      const k = kelasarray[t] || { L: 0, P: 0 }
       hasil[t] = { L: ini.L - m.L + k.L, P: ini.P - m.P + k.P }
     })
     return hasil
-  }, [tingkatList, akhirBulanIni, masuk, keluar])
+  }, [tingkatList, akhirBulanIni, masuk, kelasarray])
 
   function updateMutasi(setter, tingkat, gender, value) {
     const n = value === '' ? 0 : Number(value)
@@ -202,7 +207,7 @@ export default function LaporanKeadaanMurid() {
   const barisKeadaan = [
     { label: 'Jumlah Akhir Bulan Lalu', data: akhirBulanLalu, editable: false },
     { label: 'Masuk Dalam Bulan Ini', data: masuk, editable: true, setter: setMasuk },
-    { label: 'Keluar Dalam Bulan Ini', data: keluar, editable: true, setter: setKeluar },
+    { label: 'Keluar Dalam Bulan Ini', data: kelasarray, editable: true, setter: setKeluar },
     { label: 'Jumlah Akhir Dalam Bulan Ini', data: akhirBulanIni, editable: false, tebal: true },
   ]
 
@@ -215,52 +220,70 @@ export default function LaporanKeadaanMurid() {
     return { L, P, TOTAL: L + P }
   }
 
-  const tengah = Math.ceil(tingkatList.length / 2)
-  const kolomKiri = tingkatList.slice(0, tengah)
-  const kolomKanan = tingkatList.slice(tengah)
+  // Hitung Usia
+  const usiaKolom = useMemo(() => {
+    const usiaSiswa = siswaAktif
+      .map((s) => hitungUsia(s.tanggal_lahir))
+      .filter((u) => u !== null && u >= 0 && u <= 25)
+    let usiaMin = usiaSiswa.length ? Math.min(...usiaSiswa) : 6
+    let usiaMax = usiaSiswa.length ? Math.max(...usiaSiswa) : 14
+    if (usiaMax - usiaMin < 1) { usiaMin = 6; usiaMax = 14 }
+    const kolom = []
+    for (let u = usiaMin; u <= usiaMax; u += 1) kolom.push(u)
+    return kolom
+  }, [siswaAktif])
 
-  // ---------- TAB: KEWARGANEGARAAN ----------
-  const dataKewarganegaraan = useMemo(() => {
+  const dataUsia = useMemo(() => {
     const data = {}
-    KATEGORI_KEWARGANEGARAAN.forEach((kat) => {
-      data[kat] = {}
-      tingkatList.forEach((t) => { data[kat][t] = { L: 0, P: 0 } })
+    tingkatList.forEach((t) => {
+      data[t] = {}
+      usiaKolom.forEach((u) => { data[t][u] = { L: 0, P: 0 } })
     })
     siswaAktif.forEach((s) => {
       const t = tingkatByKelasId[s.kelas_id]
-      if (!t) return
-      const kat = normalisasiKewarganegaraan(s.kewarganegaraan)
-      if (!data[kat] || !data[kat][t]) return
+      if (!t || !data[t]) return
+      const usia = hitungUsia(s.tanggal_lahir)
+      if (usia === null || data[t][usia] === undefined) return
       const jk = normalisasiJK(s.jenis_kelamin)
-      if (jk === 'L') data[kat][t].L += 1
-      else if (jk === 'P') data[kat][t].P += 1
+      if (jk === 'L') data[t][usia].L += 1
+      else if (jk === 'P') data[t][usia].P += 1
     })
     return data
-  }, [tingkatList, tingkatByKelasId, siswaAktif])
+  }, [tingkatList, tingkatByKelasId, siswaAktif, usiaKolom])
 
-  const totalPerTingkatKewarganegaraan = useMemo(() => {
-    const hasil = {}
-    tingkatList.forEach((t) => {
-      let L = 0, P = 0
-      KATEGORI_KEWARGANEGARAAN.forEach((kat) => {
-        L += dataKewarganegaraan[kat]?.[t]?.L || 0
-        P += dataKewarganegaraan[kat]?.[t]?.P || 0
-      })
-      hasil[t] = { L, P }
-    })
-    return hasil
-  }, [tingkatList, dataKewarganegaraan])
-
-  const totalKeseluruhanKewarganegaraan = useMemo(() => {
+  function totalBarisTingkatUsia(t) {
     let L = 0, P = 0
-    tingkatList.forEach((t) => {
-      L += totalPerTingkatKewarganegaraan[t]?.L || 0
-      P += totalPerTingkatKewarganegaraan[t]?.P || 0
+    usiaKolom.forEach((u) => {
+      L += dataUsia[t]?.[u]?.L || 0
+      P += dataUsia[t]?.[u]?.P || 0
     })
     return { L, P, TOTAL: L + P }
-  }, [tingkatList, totalPerTingkatKewarganegaraan])
+  }
 
-  // ---------- TAB: AGAMA ----------
+  const totalKolomUsia = useMemo(() => {
+    const hasil = {}
+    usiaKolom.forEach((u) => {
+      let L = 0, P = 0
+      tingkatList.forEach((t) => {
+        L += dataUsia[t]?.[u]?.L || 0
+        P += dataUsia[t]?.[u]?.P || 0
+      })
+      hasil[u] = { L, P }
+    })
+    return hasil
+  }, [usiaKolom, tingkatList, dataUsia])
+
+  const totalKeseluruhanUsia = useMemo(() => {
+    let L = 0, P = 0
+    tingkatList.forEach((t) => {
+      const total = totalBarisTingkatUsia(t)
+      L += total.L
+      P += total.P
+    })
+    return { L, P, TOTAL: L + P }
+  }, [tingkatList, dataUsia, usiaKolom])
+
+  // Hitung Agama
   const dataAgama = useMemo(() => {
     const data = {}
     tingkatList.forEach((t) => {
@@ -310,73 +333,51 @@ export default function LaporanKeadaanMurid() {
     return { L, P, TOTAL: L + P }
   }, [tingkatList, dataAgama])
 
-  // ---------- TAB: USIA ----------
-  const usiaKolom = useMemo(() => {
-    const usiaSiswa = siswaAktif
-      .map((s) => hitungUsia(s.tanggal_lahir))
-      .filter((u) => u !== null && u >= 0 && u <= 25)
-    let usiaMin = usiaSiswa.length ? Math.min(...usiaSiswa) : 6
-    let usiaMax = usiaSiswa.length ? Math.max(...usiaSiswa) : 14
-    if (usiaMax - usiaMin < 1) { usiaMin = Math.min(usiaMin, 6); usiaMax = Math.max(usiaMax, 14) }
-    const kolom = []
-    for (let u = usiaMin; u <= usiaMax; u += 1) kolom.push(u)
-    return kolom
-  }, [siswaAktif])
-
-  const dataUsia = useMemo(() => {
+  // Hitung Kewarganegaraan
+  const dataKewarganegaraan = useMemo(() => {
     const data = {}
-    tingkatList.forEach((t) => {
-      data[t] = {}
-      usiaKolom.forEach((u) => { data[t][u] = { L: 0, P: 0 } })
+    KATEGORI_KEWARGANEGARAAN.forEach((kat) => {
+      data[kat] = {}
+      tingkatList.forEach((t) => { data[kat][t] = { L: 0, P: 0 } })
     })
     siswaAktif.forEach((s) => {
       const t = tingkatByKelasId[s.kelas_id]
-      if (!t || !data[t]) return
-      const usia = hitungUsia(s.tanggal_lahir)
-      if (usia === null || !data[t][usia]) return
+      if (!t) return
+      const kat = normalisasiKewarganegaraan(s.kewarganegaraan)
+      if (!data[kat] || !data[kat][t]) return
       const jk = normalisasiJK(s.jenis_kelamin)
-      if (jk === 'L') data[t][usia].L += 1
-      else if (jk === 'P') data[t][usia].P += 1
+      if (jk === 'L') data[kat][t].L += 1
+      else if (jk === 'P') data[kat][t].P += 1
     })
     return data
-  }, [tingkatList, tingkatByKelasId, siswaAktif, usiaKolom])
+  }, [tingkatList, tingkatByKelasId, siswaAktif])
 
-  function totalBarisTingkatUsia(t) {
-    let L = 0, P = 0
-    usiaKolom.forEach((u) => {
-      L += dataUsia[t]?.[u]?.L || 0
-      P += dataUsia[t]?.[u]?.P || 0
-    })
-    return { L, P, TOTAL: L + P }
-  }
-
-  const totalKolomUsia = useMemo(() => {
+  const totalPerTingkatKewarganegaraan = useMemo(() => {
     const hasil = {}
-    usiaKolom.forEach((u) => {
+    tingkatList.forEach((t) => {
       let L = 0, P = 0
-      tingkatList.forEach((t) => {
-        L += dataUsia[t]?.[u]?.L || 0
-        P += dataUsia[t]?.[u]?.P || 0
+      KATEGORI_KEWARGANEGARAAN.forEach((kat) => {
+        L += dataKewarganegaraan[kat]?.[t]?.L || 0
+        P += dataKewarganegaraan[kat]?.[t]?.P || 0
       })
-      hasil[u] = { L, P }
+      hasil[t] = { L, P }
     })
     return hasil
-  }, [usiaKolom, tingkatList, dataUsia])
+  }, [tingkatList, dataKewarganegaraan])
 
-  const totalKeseluruhanUsia = useMemo(() => {
+  const totalKeseluruhanKewarganegaraan = useMemo(() => {
     let L = 0, P = 0
     tingkatList.forEach((t) => {
-      const total = totalBarisTingkatUsia(t)
-      L += total.L
-      P += total.P
+      L += totalPerTingkatKewarganegaraan[t]?.L || 0
+      P += totalPerTingkatKewarganegaraan[t]?.P || 0
     })
     return { L, P, TOTAL: L + P }
-  }, [tingkatList, dataUsia, usiaKolom])
+  }, [tingkatList, totalPerTingkatKewarganegaraan])
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="animate-spin text-slate-400" size={28} />
+      <div className="min-h-screen flex items-center justify-center bg-slate-100">
+        <Loader2 className="animate-spin text-slate-500" size={32} />
       </div>
     )
   }
@@ -385,11 +386,11 @@ export default function LaporanKeadaanMurid() {
     <div className="flex items-center gap-4 border-b-4 border-black pb-3 mb-4">
       {logoUrl && <img src={logoUrl} alt="Logo" className="w-16 h-16 object-contain shrink-0" />}
       <div className="text-center flex-1">
-        <p className="text-sm font-medium uppercase">
-          {profilSekolah?.dinas_pendidikan || 'PEMERINTAH DAERAH'}
+        <p className="text-xs font-medium uppercase">
+          {profilSekolah?.dinas_pendidikan || 'DINAS PENDIDIKAN DAN KEBUDAYAAN'}
         </p>
-        <p className="text-lg font-bold uppercase">{profilSekolah?.nama_sekolah || 'Nama Sekolah'}</p>
-        <p className="text-xs">
+        <p className="text-base font-bold uppercase">{profilSekolah?.nama_sekolah || 'SD NEGERI WARIA'}</p>
+        <p className="text-[10px]">
           {[profilSekolah?.alamat, profilSekolah?.kecamatan, profilSekolah?.kabupaten, profilSekolah?.provinsi]
             .filter(Boolean)
             .join(', ')}
@@ -400,15 +401,15 @@ export default function LaporanKeadaanMurid() {
   )
 
   const TandaTangan = () => (
-    <div className="flex justify-end mt-10">
-      <div className="text-center text-xs w-64">
+    <div className="flex justify-end mt-8">
+      <div className="text-center text-[10px] w-60">
         <p>
-          {profilSekolah?.tempat_ttd || profilSekolah?.kecamatan || '............'},{' '}
+          {profilSekolah?.tempat_ttd || profilSekolah?.kecamatan || 'Waria'},{' '}
           {new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}
         </p>
         <p className="mt-1">Mengetahui,</p>
         <p>Kepala Sekolah</p>
-        <div className="h-16" />
+        <div className="h-14" />
         <p className="font-semibold underline">{profilSekolah?.kepala_sekolah || '............................'}</p>
         <p>NIP. {profilSekolah?.nip_kepala_sekolah || '............................'}</p>
       </div>
@@ -418,6 +419,10 @@ export default function LaporanKeadaanMurid() {
   function kelasBagian(kunciTab) {
     return `laporan-section ${tab === kunciTab ? 'block' : 'hidden print:hidden'}`
   }
+
+  const tengah = Math.ceil(tingkatList.length / 2)
+  const kolomKiri = tingkatList.slice(0, tengah)
+  const kolomKanan = tingkatList.slice(tengah)
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -432,11 +437,11 @@ export default function LaporanKeadaanMurid() {
         }
         @media screen {
           .only-print { display: none; }
-          .sel-mutasi { width: 40px; text-align: center; border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px; }
+          .sel-mutasi { width: 35px; text-align: center; border: 1px solid #cbd5e1; border-radius: 4px; padding: 1px; }
         }
       `}</style>
 
-      {/* Toolbar */}
+      {/* Toolbar Navigation */}
       <div className="no-print sticky top-0 z-10 bg-white border-b border-slate-200 px-4 py-3">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <button
@@ -458,7 +463,7 @@ export default function LaporanKeadaanMurid() {
             <button
               key={key}
               onClick={() => setTab(key)}
-              className={`text-xs font-medium px-3 py-1.5 rounded-full border ${
+              className={`text-xs font-medium px-4 py-1.5 rounded-full border ${
                 tab === key
                   ? 'bg-blue-600 text-white border-blue-600'
                   : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
@@ -470,318 +475,311 @@ export default function LaporanKeadaanMurid() {
         </div>
       </div>
 
+      {/* Lembar Cetak A4 Landscape */}
       <div className="lembar-cetak bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '297mm' }}>
         <KopSurat />
 
-        {tingkatList.length === 0 ? (
-          <p className="text-center text-sm text-slate-400 py-8">
-            Belum ada kelas dengan data tingkat untuk sekolah ini.
+        {/* ===== TAB: KEADAAN MURID ===== */}
+        <div className={kelasBagian('keadaan')}>
+          <h1 className="text-center font-bold text-sm uppercase mb-1">{TAB_JUDUL.keadaan}</h1>
+          <p className="text-center text-[10px] mb-4">
+            Semester Ganjil/Genap Tahun Pelajaran ................./................
           </p>
-        ) : (
-          <>
-            {/* ===== BAGIAN: KEADAAN MURID ===== */}
-            <div className={kelasBagian('keadaan')}>
-              <h1 className="text-center font-bold text-base uppercase mb-1">{TAB_JUDUL.keadaan}</h1>
-              <p className="text-center text-xs mb-6">
-                Semester Ganjil/Genap Tahun Pelajaran ................./................
-              </p>
 
-              <div className="grid grid-cols-2 gap-x-8 text-xs mb-5 max-w-3xl mx-auto">
-                <div>
-                  {kolomKiri.map((t) => (
-                    <p key={t} className="flex">
-                      <span className="w-40 shrink-0">Rom. Belajar Kelas {t}</span>
-                      <span className="w-4 shrink-0">:</span>
-                      <span>{rombelPerTingkat[t] ?? 0} Kelas</span>
-                    </p>
-                  ))}
-                </div>
-                <div>
-                  {kolomKanan.map((t) => (
-                    <p key={t} className="flex">
-                      <span className="w-40 shrink-0">Rom. Belajar Kelas {t}</span>
-                      <span className="w-4 shrink-0">:</span>
-                      <span>{rombelPerTingkat[t] ?? 0} Kelas</span>
-                    </p>
-                  ))}
-                </div>
-              </div>
-
-              <table className="w-full text-[10px] border-collapse border border-black">
-                <thead>
-                  <tr className="text-center">
-                    <th rowSpan={3} className="border border-black px-1 py-1">Keterangan</th>
-                    <th colSpan={tingkatList.length * 2} className="border border-black px-1 py-1">Murid Kelas</th>
-                    <th colSpan={3} className="border border-black px-1 py-1">Jumlah</th>
-                  </tr>
-                  <tr className="text-center">
-                    {tingkatList.map((t) => (
-                      <th key={t} colSpan={2} className="border border-black px-1 py-1">{t}</th>
-                    ))}
-                    <th rowSpan={2} className="border border-black px-1 py-1 w-8">L</th>
-                    <th rowSpan={2} className="border border-black px-1 py-1 w-8">P</th>
-                    <th rowSpan={2} className="border border-black px-1 py-1 w-10">Total</th>
-                  </tr>
-                  <tr className="text-center">
-                    {tingkatList.map((t) => (
-                      <Fragment key={t}>
-                        <th className="border border-black px-1 py-1 w-8">L</th>
-                        <th className="border border-black px-1 py-1 w-8">P</th>
-                      </Fragment>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {barisKeadaan.map((b) => {
-                    const total = totalBaris(b.data)
-                    return (
-                      <tr key={b.label} className={b.tebal ? 'font-semibold' : ''}>
-                        <td className="border border-black px-1 py-1">{b.label}</td>
-                        {tingkatList.map((t) => (
-                          <Fragment key={t}>
-                            <td className="border border-black px-1 py-1 text-center">
-                              {b.editable ? (
-                                <input
-                                  type="number"
-                                  className="sel-mutasi no-print"
-                                  value={b.data[t]?.L ?? 0}
-                                  onChange={(e) => updateMutasi(b.setter, t, 'L', e.target.value)}
-                                />
-                              ) : null}
-                              <span className={b.editable ? 'only-print' : ''}>{b.data[t]?.L ?? 0}</span>
-                            </td>
-                            <td className="border border-black px-1 py-1 text-center">
-                              {b.editable ? (
-                                <input
-                                  type="number"
-                                  className="sel-mutasi no-print"
-                                  value={b.data[t]?.P ?? 0}
-                                  onChange={(e) => updateMutasi(b.setter, t, 'P', e.target.value)}
-                                />
-                              ) : null}
-                              <span className={b.editable ? 'only-print' : ''}>{b.data[t]?.P ?? 0}</span>
-                            </td>
-                          </Fragment>
-                        ))}
-                        <td className="border border-black px-1 py-1 text-center">{total.L}</td>
-                        <td className="border border-black px-1 py-1 text-center">{total.P}</td>
-                        <td className="border border-black px-1 py-1 text-center">{total.TOTAL}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-              <TandaTangan />
+          <div className="grid grid-cols-2 gap-x-8 text-[11px] mb-4 max-w-2xl mx-auto">
+            <div>
+              {kolomKiri.map((t) => (
+                <p key={t} className="flex">
+                  <span className="w-36 shrink-0">Rom. Belajar Kelas {t}</span>
+                  <span className="w-4 shrink-0">:</span>
+                  <span>{rombelPerTingkat[t] ?? 0} Kelas</span>
+                </p>
+              ))}
             </div>
-
-            {/* ===== BAGIAN: USIA ===== */}
-            <div className={`${kelasBagian('usia')} page-break-before-print`}>
-              <h1 className="text-center font-bold text-base uppercase mb-6 mt-8">{TAB_JUDUL.usia}</h1>
-              <table className="w-full text-[10px] border-collapse border border-black">
-                <thead>
-                  <tr className="text-center">
-                    <th rowSpan={3} className="border border-black px-1 py-1">Kelas</th>
-                    <th colSpan={usiaKolom.length * 2} className="border border-black px-1 py-1">Usia</th>
-                    <th colSpan={3} className="border border-black px-1 py-1">Jumlah</th>
-                  </tr>
-                  <tr className="text-center">
-                    {usiaKolom.map((u) => (
-                      <th key={u} colSpan={2} className="border border-black px-1 py-1">{u} thn</th>
-                    ))}
-                    <th rowSpan={2} className="border border-black px-1 py-1 w-8">L</th>
-                    <th rowSpan={2} className="border border-black px-1 py-1 w-8">P</th>
-                    <th rowSpan={2} className="border border-black px-1 py-1 w-10">Total</th>
-                  </tr>
-                  <tr className="text-center">
-                    {usiaKolom.map((u) => (
-                      <Fragment key={u}>
-                        <th className="border border-black px-1 py-1 w-8">L</th>
-                        <th className="border border-black px-1 py-1 w-8">P</th>
-                      </Fragment>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {tingkatList.map((t) => {
-                    const total = totalBarisTingkatUsia(t)
-                    return (
-                      <tr key={t}>
-                        <td className="border border-black px-1 py-1 text-center">{t}</td>
-                        {usiaKolom.map((u) => (
-                          <Fragment key={u}>
-                            <td className="border border-black px-1 py-1 text-center">
-                              {dataUsia[t]?.[u]?.L || ''}
-                            </td>
-                            <td className="border border-black px-1 py-1 text-center">
-                              {dataUsia[t]?.[u]?.P || ''}
-                            </td>
-                          </Fragment>
-                        ))}
-                        <td className="border border-black px-1 py-1 text-center">{total.L}</td>
-                        <td className="border border-black px-1 py-1 text-center">{total.P}</td>
-                        <td className="border border-black px-1 py-1 text-center">{total.TOTAL}</td>
-                      </tr>
-                    )
-                  })}
-                  <tr className="font-semibold">
-                    <td className="border border-black px-1 py-1 text-center">Jumlah</td>
-                    {usiaKolom.map((u) => (
-                      <Fragment key={u}>
-                        <td className="border border-black px-1 py-1 text-center">{totalKolomUsia[u]?.L || ''}</td>
-                        <td className="border border-black px-1 py-1 text-center">{totalKolomUsia[u]?.P || ''}</td>
-                      </Fragment>
-                    ))}
-                    <td className="border border-black px-1 py-1 text-center">{totalKeseluruhanUsia.L}</td>
-                    <td className="border border-black px-1 py-1 text-center">{totalKeseluruhanUsia.P}</td>
-                    <td className="border border-black px-1 py-1 text-center">{totalKeseluruhanUsia.TOTAL}</td>
-                  </tr>
-                </tbody>
-              </table>
-              <TandaTangan />
+            <div>
+              {kolomKanan.map((t) => (
+                <p key={t} className="flex">
+                  <span className="w-36 shrink-0">Rom. Belajar Kelas {t}</span>
+                  <span className="w-4 shrink-0">:</span>
+                  <span>{rombelPerTingkat[t] ?? 0} Kelas</span>
+                </p>
+              ))}
             </div>
+          </div>
 
-            {/* ===== BAGIAN: AGAMA ===== */}
-            <div className={`${kelasBagian('agama')} page-break-before-print`}>
-              <h1 className="text-center font-bold text-base uppercase mb-6 mt-8">{TAB_JUDUL.agama}</h1>
-              <table className="w-full text-[10px] border-collapse border border-black">
-                <thead>
-                  <tr className="text-center">
-                    <th rowSpan={3} className="border border-black px-1 py-1">Kelas</th>
-                    <th colSpan={KATEGORI_AGAMA.length * 2} className="border border-black px-1 py-1">Agama</th>
-                    <th colSpan={3} className="border border-black px-1 py-1">Jumlah</th>
-                  </tr>
-                  <tr className="text-center">
-                    {KATEGORI_AGAMA.map((kat) => (
-                      <th key={kat} colSpan={2} className="border border-black px-1 py-1">{kat}</th>
-                    ))}
-                    <th rowSpan={2} className="border border-black px-1 py-1 w-8">L</th>
-                    <th rowSpan={2} className="border border-black px-1 py-1 w-8">P</th>
-                    <th rowSpan={2} className="border border-black px-1 py-1 w-10">Total</th>
-                  </tr>
-                  <tr className="text-center">
-                    {KATEGORI_AGAMA.map((kat) => (
-                      <Fragment key={kat}>
-                        <th className="border border-black px-1 py-1 w-8">L</th>
-                        <th className="border border-black px-1 py-1 w-8">P</th>
-                      </Fragment>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {tingkatList.map((t) => {
-                    const total = totalBarisTingkatAgama(t)
-                    return (
-                      <tr key={t}>
-                        <td className="border border-black px-1 py-1 text-center">{t}</td>
-                        {KATEGORI_AGAMA.map((kat) => (
-                          <Fragment key={kat}>
-                            <td className="border border-black px-1 py-1 text-center">
-                              {dataAgama[t]?.[kat]?.L || ''}
-                            </td>
-                            <td className="border border-black px-1 py-1 text-center">
-                              {dataAgama[t]?.[kat]?.P || ''}
-                            </td>
-                          </Fragment>
-                        ))}
-                        <td className="border border-black px-1 py-1 text-center">{total.L}</td>
-                        <td className="border border-black px-1 py-1 text-center">{total.P}</td>
-                        <td className="border border-black px-1 py-1 text-center">{total.TOTAL}</td>
-                      </tr>
-                    )
-                  })}
-                  <tr className="font-semibold">
-                    <td className="border border-black px-1 py-1 text-center">Jumlah</td>
-                    {KATEGORI_AGAMA.map((kat) => (
-                      <Fragment key={kat}>
-                        <td className="border border-black px-1 py-1 text-center">{totalKolomAgama[kat]?.L || ''}</td>
-                        <td className="border border-black px-1 py-1 text-center">{totalKolomAgama[kat]?.P || ''}</td>
-                      </Fragment>
-                    ))}
-                    <td className="border border-black px-1 py-1 text-center">{totalKeseluruhanAgama.L}</td>
-                    <td className="border border-black px-1 py-1 text-center">{totalKeseluruhanAgama.P}</td>
-                    <td className="border border-black px-1 py-1 text-center">{totalKeseluruhanAgama.TOTAL}</td>
-                  </tr>
-                </tbody>
-              </table>
-              <TandaTangan />
-            </div>
-
-            {/* ===== BAGIAN: KEWARGANEGARAAN ===== */}
-            <div className={`${kelasBagian('kewarganegaraan')} page-break-before-print`}>
-              <h1 className="text-center font-bold text-base uppercase mb-6 mt-8">{TAB_JUDUL.kewarganegaraan}</h1>
-              <table className="w-full text-[10px] border-collapse border border-black">
-                <thead>
-                  <tr className="text-center">
-                    <th rowSpan={3} className="border border-black px-1 py-1">Kewarganegaraan</th>
-                    <th colSpan={tingkatList.length * 2} className="border border-black px-1 py-1">Murid Kelas</th>
-                    <th colSpan={3} className="border border-black px-1 py-1">Jumlah</th>
-                  </tr>
-                  <tr className="text-center">
-                    {tingkatList.map((t) => (
-                      <th key={t} colSpan={2} className="border border-black px-1 py-1">{t}</th>
-                    ))}
-                    <th rowSpan={2} className="border border-black px-1 py-1 w-8">L</th>
-                    <th rowSpan={2} className="border border-black px-1 py-1 w-8">P</th>
-                    <th rowSpan={2} className="border border-black px-1 py-1 w-10">Total</th>
-                  </tr>
-                  <tr className="text-center">
-                    {tingkatList.map((t) => (
-                      <Fragment key={t}>
-                        <th className="border border-black px-1 py-1 w-8">L</th>
-                        <th className="border border-black px-1 py-1 w-8">P</th>
-                      </Fragment>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {KATEGORI_KEWARGANEGARAAN.map((kat) => {
-                    let totalL = 0
-                    let totalP = 0
-                    tingkatList.forEach((t) => {
-                      totalL += dataKewarganegaraan[kat]?.[t]?.L || 0
-                      totalP += dataKewarganegaraan[kat]?.[t]?.P || 0
-                    })
-                    return (
-                      <tr key={kat}>
-                        <td className="border border-black px-1 py-1">{kat}</td>
-                        {tingkatList.map((t) => (
-                          <Fragment key={t}>
-                            <td className="border border-black px-1 py-1 text-center">
-                              {dataKewarganegaraan[kat]?.[t]?.L || ''}
-                            </td>
-                            <td className="border border-black px-1 py-1 text-center">
-                              {dataKewarganegaraan[kat]?.[t]?.P || ''}
-                            </td>
-                          </Fragment>
-                        ))}
-                        <td className="border border-black px-1 py-1 text-center">{totalL}</td>
-                        <td className="border border-black px-1 py-1 text-center">{totalP}</td>
-                        <td className="border border-black px-1 py-1 text-center">{totalL + totalP}</td>
-                      </tr>
-                    )
-                  })}
-                  <tr className="font-semibold">
-                    <td className="border border-black px-1 py-1">Jumlah</td>
+          <table className="w-full text-[10px] border-collapse border border-black">
+            <thead>
+              <tr className="text-center bg-slate-50">
+                <th rowSpan={3} className="border border-black px-1 py-1">Keterangan</th>
+                <th colSpan={tingkatList.length * 2} className="border border-black px-1 py-1">Murid Kelas</th>
+                <th colSpan={3} className="border border-black px-1 py-1">Jumlah</th>
+              </tr>
+              <tr className="text-center bg-slate-50">
+                {tingkatList.map((t) => (
+                  <th key={t} colSpan={2} className="border border-black px-1 py-1">{t}</th>
+                ))}
+                <th rowSpan={2} className="border border-black px-1 py-1 w-8">L</th>
+                <th rowSpan={2} className="border border-black px-1 py-1 w-8">P</th>
+                <th rowSpan={2} className="border border-black px-1 py-1 w-10">Total</th>
+              </tr>
+              <tr className="text-center bg-slate-50">
+                {tingkatList.map((t) => (
+                  <Fragment key={t}>
+                    <th className="border border-black px-1 py-1 w-8">L</th>
+                    <th className="border border-black px-1 py-1 w-8">P</th>
+                  </Fragment>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {barisKeadaan.map((b) => {
+                const total = totalBaris(b.data)
+                return (
+                  <tr key={b.label} className={b.tebal ? 'font-bold bg-slate-50' : ''}>
+                    <td className="border border-black px-2 py-1">{b.label}</td>
                     {tingkatList.map((t) => (
                       <Fragment key={t}>
                         <td className="border border-black px-1 py-1 text-center">
-                          {totalPerTingkatKewarganegaraan[t]?.L || ''}
+                          {b.editable ? (
+                            <input
+                              type="number"
+                              className="sel-mutasi no-print"
+                              value={b.data[t]?.L || 0}
+                              onChange={(e) => updateMutasi(b.setter, t, 'L', e.target.value)}
+                            />
+                          ) : null}
+                          <span className={b.editable ? 'only-print' : ''}>{b.data[t]?.L || 0}</span>
                         </td>
                         <td className="border border-black px-1 py-1 text-center">
-                          {totalPerTingkatKewarganegaraan[t]?.P || ''}
+                          {b.editable ? (
+                            <input
+                              type="number"
+                              className="sel-mutasi no-print"
+                              value={b.data[t]?.P || 0}
+                              onChange={(e) => updateMutasi(b.setter, t, 'P', e.target.value)}
+                            />
+                          ) : null}
+                          <span className={b.editable ? 'only-print' : ''}>{b.data[t]?.P || 0}</span>
                         </td>
                       </Fragment>
                     ))}
-                    <td className="border border-black px-1 py-1 text-center">{totalKeseluruhanKewarganegaraan.L}</td>
-                    <td className="border border-black px-1 py-1 text-center">{totalKeseluruhanKewarganegaraan.P}</td>
-                    <td className="border border-black px-1 py-1 text-center">{totalKeseluruhanKewarganegaraan.TOTAL}</td>
+                    <td className="border border-black px-1 py-1 text-center">{total.L}</td>
+                    <td className="border border-black px-1 py-1 text-center">{total.P}</td>
+                    <td className="border border-black px-1 py-1 text-center">{total.TOTAL}</td>
                   </tr>
-                </tbody>
-              </table>
-              <TandaTangan />
-            </div>
-          </>
-        )}
+                )
+              })}
+            </tbody>
+          </table>
+          <TandaTangan />
+        </div>
+
+        {/* ===== TAB: USIA ===== */}
+        <div className={`${kelasBagian('usia')} page-break-before-print`}>
+          <h1 className="text-center font-bold text-sm uppercase mb-6">{TAB_JUDUL.usia}</h1>
+          <table className="w-full text-[10px] border-collapse border border-black">
+            <thead>
+              <tr className="text-center bg-slate-50">
+                <th rowSpan={3} className="border border-black px-1 py-1">Kelas</th>
+                <th colSpan={usiaKolom.length * 2} className="border border-black px-1 py-1">Usia</th>
+                <th colSpan={3} className="border border-black px-1 py-1">Jumlah</th>
+              </tr>
+              <tr className="text-center bg-slate-50">
+                {usiaKolom.map((u) => (
+                  <th key={u} colSpan={2} className="border border-black px-1 py-1">{u} thn</th>
+                ))}
+                <th rowSpan={2} className="border border-black px-1 py-1 w-8">L</th>
+                <th rowSpan={2} className="border border-black px-1 py-1 w-8">P</th>
+                <th rowSpan={2} className="border border-black px-1 py-1 w-10">Total</th>
+              </tr>
+              <tr className="text-center bg-slate-50">
+                {usiaKolom.map((u) => (
+                  <Fragment key={u}>
+                    <th className="border border-black px-1 py-1 w-8">L</th>
+                    <th className="border border-black px-1 py-1 w-8">P</th>
+                  </Fragment>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {tingkatList.map((t) => {
+                const total = totalBarisTingkatUsia(t)
+                return (
+                  <tr key={t}>
+                    <td className="border border-black px-1 py-1 text-center font-medium">{t}</td>
+                    {usiaKolom.map((u) => (
+                      <Fragment key={u}>
+                        <td className="border border-black px-1 py-1 text-center">
+                          {dataUsia[t]?.[u]?.L || 0}
+                        </td>
+                        <td className="border border-black px-1 py-1 text-center">
+                          {dataUsia[t]?.[u]?.P || 0}
+                        </td>
+                      </Fragment>
+                    ))}
+                    <td className="border border-black px-1 py-1 text-center font-semibold">{total.L}</td>
+                    <td className="border border-black px-1 py-1 text-center font-semibold">{total.P}</td>
+                    <td className="border border-black px-1 py-1 text-center font-bold bg-slate-50">{total.TOTAL}</td>
+                  </tr>
+                )
+              })}
+              <tr className="font-bold bg-slate-50">
+                <td className="border border-black px-1 py-1 text-center">Jumlah</td>
+                {usiaKolom.map((u) => (
+                  <Fragment key={u}>
+                    <td className="border border-black px-1 py-1 text-center">{totalKolomUsia[u]?.L || 0}</td>
+                    <td className="border border-black px-1 py-1 text-center">{totalKolomUsia[u]?.P || 0}</td>
+                  </Fragment>
+                ))}
+                <td className="border border-black px-1 py-1 text-center">{totalKeseluruhanUsia.L}</td>
+                <td className="border border-black px-1 py-1 text-center">{totalKeseluruhanUsia.P}</td>
+                <td className="border border-black px-1 py-1 text-center">{totalKeseluruhanUsia.TOTAL}</td>
+              </tr>
+            </tbody>
+          </table>
+          <TandaTangan />
+        </div>
+
+        {/* ===== TAB: AGAMA ===== */}
+        <div className={`${kelasBagian('agama')} page-break-before-print`}>
+          <h1 className="text-center font-bold text-sm uppercase mb-6">{TAB_JUDUL.agama}</h1>
+          <table className="w-full text-[10px] border-collapse border border-black">
+            <thead>
+              <tr className="text-center bg-slate-50">
+                <th rowSpan={3} className="border border-black px-1 py-1">Kelas</th>
+                <th colSpan={KATEGORI_AGAMA.length * 2} className="border border-black px-1 py-1">Agama</th>
+                <th colSpan={3} className="border border-black px-1 py-1">Jumlah</th>
+              </tr>
+              <tr className="text-center bg-slate-50">
+                {KATEGORI_AGAMA.map((kat) => (
+                  <th key={kat} colSpan={2} className="border border-black px-1 py-1">{kat}</th>
+                ))}
+                <th rowSpan={2} className="border border-black px-1 py-1 w-8">L</th>
+                <th rowSpan={2} className="border border-black px-1 py-1 w-8">P</th>
+                <th rowSpan={2} className="border border-black px-1 py-1 w-10">Total</th>
+              </tr>
+              <tr className="text-center bg-slate-50">
+                {KATEGORI_AGAMA.map((kat) => (
+                  <Fragment key={kat}>
+                    <th className="border border-black px-1 py-1 w-8">L</th>
+                    <th className="border border-black px-1 py-1 w-8">P</th>
+                  </Fragment>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {tingkatList.map((t) => {
+                const total = totalBarisTingkatAgama(t)
+                return (
+                  <tr key={t}>
+                    <td className="border border-black px-1 py-1 text-center font-medium">{t}</td>
+                    {KATEGORI_AGAMA.map((kat) => (
+                      <Fragment key={kat}>
+                        <td className="border border-black px-1 py-1 text-center">
+                          {dataAgama[t]?.[kat]?.L || 0}
+                        </td>
+                        <td className="border border-black px-1 py-1 text-center">
+                          {dataAgama[t]?.[kat]?.P || 0}
+                        </td>
+                      </Fragment>
+                    ))}
+                    <td className="border border-black px-1 py-1 text-center font-semibold">{total.L}</td>
+                    <td className="border border-black px-1 py-1 text-center font-semibold">{total.P}</td>
+                    <td className="border border-black px-1 py-1 text-center font-bold bg-slate-50">{total.TOTAL}</td>
+                  </tr>
+                )
+              })}
+              <tr className="font-bold bg-slate-50">
+                <td className="border border-black px-1 py-1 text-center">Jumlah</td>
+                {KATEGORI_AGAMA.map((kat) => (
+                  <Fragment key={kat}>
+                    <td className="border border-black px-1 py-1 text-center">{totalKolomAgama[kat]?.L || 0}</td>
+                    <td className="border border-black px-1 py-1 text-center">{totalKolomAgama[kat]?.P || 0}</td>
+                  </Fragment>
+                ))}
+                <td className="border border-black px-1 py-1 text-center">{totalKeseluruhanAgama.L}</td>
+                <td className="border border-black px-1 py-1 text-center">{totalKeseluruhanAgama.P}</td>
+                <td className="border border-black px-1 py-1 text-center">{totalKeseluruhanAgama.TOTAL}</td>
+              </tr>
+            </tbody>
+          </table>
+          <TandaTangan />
+        </div>
+
+        {/* ===== TAB: KEWARGANEGARAAN ===== */}
+        <div className={`${kelasBagian('kewarganegaraan')} page-break-before-print`}>
+          <h1 className="text-center font-bold text-sm uppercase mb-6">{TAB_JUDUL.kewarganegaraan}</h1>
+          <table className="w-full text-[10px] border-collapse border border-black">
+            <thead>
+              <tr className="text-center bg-slate-50">
+                <th rowSpan={3} className="border border-black px-1 py-1">Kewarganegaraan</th>
+                <th colSpan={tingkatList.length * 2} className="border border-black px-1 py-1">Murid Kelas</th>
+                <th colSpan={3} className="border border-black px-1 py-1">Jumlah</th>
+              </tr>
+              <tr className="text-center bg-slate-50">
+                {tingkatList.map((t) => (
+                  <th key={t} colSpan={2} className="border border-black px-1 py-1">{t}</th>
+                ))}
+                <th rowSpan={2} className="border border-black px-1 py-1 w-8">L</th>
+                <th rowSpan={2} className="border border-black px-1 py-1 w-8">P</th>
+                <th rowSpan={2} className="border border-black px-1 py-1 w-10">Total</th>
+              </tr>
+              <tr className="text-center bg-slate-50">
+                {tingkatList.map((t) => (
+                  <Fragment key={t}>
+                    <th className="border border-black px-1 py-1 w-8">L</th>
+                    <th className="border border-black px-1 py-1 w-8">P</th>
+                  </Fragment>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {KATEGORI_KEWARGANEGARAAN.map((kat) => {
+                let totalL = 0
+                let totalP = 0
+                tingkatList.forEach((t) => {
+                  totalL += dataKewarganegaraan[kat]?.[t]?.L || 0
+                  totalP += dataKewarganegaraan[kat]?.[t]?.P || 0
+                })
+                return (
+                  <tr key={kat}>
+                    <td className="border border-black px-2 py-1 font-medium">{kat}</td>
+                    {tingkatList.map((t) => (
+                      <Fragment key={t}>
+                        <td className="border border-black px-1 py-1 text-center">
+                          {dataKewarganegaraan[kat]?.[t]?.L || 0}
+                        </td>
+                        <td className="border border-black px-1 py-1 text-center">
+                          {dataKewarganegaraan[kat]?.[t]?.P || 0}
+                        </td>
+                      </Fragment>
+                    ))}
+                    <td className="border border-black px-1 py-1 text-center font-semibold">{totalL}</td>
+                    <td className="border border-black px-1 py-1 text-center font-semibold">{totalP}</td>
+                    <td className="border border-black px-1 py-1 text-center font-bold bg-slate-50">{totalL + totalP}</td>
+                  </tr>
+                )
+              })}
+              <tr className="font-bold bg-slate-50">
+                <td className="border border-black px-2 py-1">Jumlah</td>
+                {tingkatList.map((t) => (
+                  <Fragment key={t}>
+                    <td className="border border-black px-1 py-1 text-center">
+                      {totalPerTingkatKewarganegaraan[t]?.L || 0}
+                    </td>
+                    <td className="border border-black px-1 py-1 text-center">
+                      {totalPerTingkatKewarganegaraan[t]?.P || 0}
+                    </td>
+                  </Fragment>
+                ))}
+                <td className="border border-black px-1 py-1 text-center">{totalKeseluruhanKewarganegaraan.L}</td>
+                <td className="border border-black px-1 py-1 text-center">{totalKeseluruhanKewarganegaraan.P}</td>
+                <td className="border border-black px-1 py-1 text-center">{totalKeseluruhanKewarganegaraan.TOTAL}</td>
+              </tr>
+            </tbody>
+          </table>
+          <TandaTangan />
+        </div>
       </div>
     </div>
   )
