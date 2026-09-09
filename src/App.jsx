@@ -20,6 +20,8 @@ import Dashboard from './pages/Dashboard'
 import Siswa from './pages/Siswa'
 import HasilUjian from './pages/HasilUjian'
 import Guru from './pages/Guru'
+import LaporanNominatifGuru from './pages/LaporanNominatifGuru'
+import PusatLaporanGuru from './pages/PusatLaporanGuru'
 import Kelas from './pages/Kelas'
 import Jadwal from './pages/Jadwal'
 import Presensi from './pages/Presensi'
@@ -216,6 +218,9 @@ export default function App() {
         <Route path="/siswa" element={<ProtectedRoute><Siswa /></ProtectedRoute>} />
         <Route path="/hasil-ujian" element={<ProtectedRoute><HasilUjian /></ProtectedRoute>} />
         <Route path="/guru" element={<ProtectedRoute adminOnly><Guru /></ProtectedRoute>} />
+        <Route path="/laporan-nominatif-guru" element={
+  <ProtectedRoute adminOnly><LaporanNominatifGuru /></ProtectedRoute>
+} />
         <Route path="/kelas" element={<ProtectedRoute adminOnly><Kelas /></ProtectedRoute>} />
         <Route path="/jadwal" element={<ProtectedRoute><Jadwal /></ProtectedRoute>} />
         <Route path="/presensi" element={<ProtectedRoute><Presensi /></ProtectedRoute>} />
