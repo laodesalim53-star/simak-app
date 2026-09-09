@@ -643,12 +643,73 @@ export default function Guru() {
             status: 'aktif',
           }
         }}
+        // onImport: "Impor Update" — mencocokkan guru lewat NIP (fallback NUPTK bila NIP kosong).
+        // Guru yang sudah ada di database HANYA diperbarui pada kolom yang masih kosong;
+        // kolom yang sudah terisi (termasuk hasil edit manual) tidak pernah ditimpa oleh
+        // isi file impor. Guru yang belum ada sama sekali tetap ditambahkan sebagai baris baru.
         onImport={async (rows) => {
           if (!sekolahId) throw new Error('Belum ada sekolah aktif. Pilih sekolah terlebih dahulu.')
-          const rowsDenganSekolah = rows.map((row) => ({ ...row, sekolah_id: sekolahId }))
-          const { error } = await supabase.from('guru').insert(rowsDenganSekolah)
-          if (error) throw error
-          return { count: rows.length }
+
+          // Ambil semua data guru yang sudah ada di sekolah ini untuk dicocokkan
+          const { data: existingGuru, error: fetchError } = await supabase
+            .from('guru')
+            .select('*')
+            .eq('sekolah_id', sekolahId)
+          if (fetchError) throw fetchError
+
+          const byNip = new Map()
+          const byNuptk = new Map()
+          for (const g of existingGuru || []) {
+            if (g.nip) byNip.set(String(g.nip).trim(), g)
+            if (g.nuptk) byNuptk.set(String(g.nuptk).trim(), g)
+          }
+
+          const baruUntukInsert = []
+          const updatePromises = []
+          let jumlahDiperbarui = 0
+          let jumlahBaru = 0
+
+          for (const row of rows) {
+            const nipRow = row.nip ? String(row.nip).trim() : ''
+            const nuptkRow = row.nuptk ? String(row.nuptk).trim() : ''
+            // Cocokkan lewat NIP dulu; kalau tidak ada, coba lewat NUPTK
+            const existing = (nipRow && byNip.get(nipRow)) || (nuptkRow && byNuptk.get(nuptkRow)) || null
+
+            if (existing) {
+              // Guru sudah ada -> hanya isi kolom yang masih kosong di database.
+              // Kolom yang sudah terisi (termasuk hasil edit manual) TIDAK ditimpa.
+              const payload = {}
+              for (const [key, value] of Object.entries(row)) {
+                if (key === 'nip' || key === 'nuptk') continue // kunci pencocokan, jangan diubah
+                const kosongDiDb = existing[key] === null || existing[key] === undefined || existing[key] === ''
+                const adaIsiDiFile = value !== null && value !== undefined && value !== ''
+                if (kosongDiDb && adaIsiDiFile) payload[key] = value
+              }
+              if (Object.keys(payload).length > 0) {
+                updatePromises.push(
+                  supabase.from('guru').update(payload).eq('id', existing.id).eq('sekolah_id', sekolahId)
+                )
+                jumlahDiperbarui++
+              }
+            } else {
+              // Guru benar-benar baru -> insert seperti biasa
+              baruUntukInsert.push({ ...row, sekolah_id: sekolahId })
+              jumlahBaru++
+            }
+          }
+
+          if (baruUntukInsert.length > 0) {
+            const { error: insertError } = await supabase.from('guru').insert(baruUntukInsert)
+            if (insertError) throw insertError
+          }
+
+          if (updatePromises.length > 0) {
+            const hasilUpdate = await Promise.all(updatePromises)
+            const gagal = hasilUpdate.find((r) => r.error)
+            if (gagal) throw gagal.error
+          }
+
+          return { count: jumlahBaru + jumlahDiperbarui }
         }}
       />
     </Layout>
