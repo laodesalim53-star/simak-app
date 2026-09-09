@@ -15,8 +15,41 @@ export default function LaporanNominatifGuru() {
   const navigate = useNavigate()
   const { sekolahId: sekolahIdSaya, isSuperAdmin } = useAuth()
   const [profilSekolah, setProfilSekolah] = useState(null)
+  const [logoUrl, setLogoUrl] = useState('')
   const [daftarGuru, setDaftarGuru] = useState([])
   const [loading, setLoading] = useState(true)
+
+  // Urutan prioritas status kepegawaian untuk pengurutan tabel: PNS paling
+  // atas, lalu GTT, lalu GTY/Honor, sisanya (status tidak dikenali) di akhir.
+  function prioritasStatus(statusText) {
+    const t = (statusText || '').toLowerCase()
+    if (t.includes('pns')) return 1
+    if (t.includes('gtt') || t.includes('kontrak')) return 2
+    if (t.includes('gty') || t.includes('honor')) return 3
+    return 4
+  }
+
+  // Kepala Sekolah selalu ditempatkan paling atas, terlepas dari status
+  // kepegawaiannya — dideteksi dari kolom tugas_tambahan / jenis_ptk yang
+  // dipakai juga di kolom "Jabatan" tabel ini.
+  function isKepalaSekolah(g) {
+    const jabatan = `${g.tugas_tambahan || ''} ${g.jenis_ptk || ''}`.toLowerCase()
+    return jabatan.includes('kepala sekolah')
+  }
+
+  function urutkanGuru(daftar) {
+    return [...daftar].sort((a, b) => {
+      const aKS = isKepalaSekolah(a) ? 0 : 1
+      const bKS = isKepalaSekolah(b) ? 0 : 1
+      if (aKS !== bKS) return aKS - bKS
+
+      const prioA = prioritasStatus(a.status_kepegawaian)
+      const prioB = prioritasStatus(b.status_kepegawaian)
+      if (prioA !== prioB) return prioA - prioB
+
+      return (a.nama_lengkap || '').localeCompare(b.nama_lengkap || '')
+    })
+  }
 
   useEffect(() => {
     async function muat() {
@@ -40,12 +73,24 @@ export default function LaporanNominatifGuru() {
           .select(
             'id, nip, nama_lengkap, jenis_kelamin, tempat_lahir, tanggal_lahir, pangkat_golongan, status_kepegawaian, jenis_ptk, pendidikan_terakhir, tugas_tambahan, agama, nuptk, sk_pengangkatan, tmt_pengangkatan, status'
           )
-          .eq('sekolah_id', sekolahId)
-          .order('nama_lengkap'),
+          .eq('sekolah_id', sekolahId),
       ])
 
       setProfilSekolah(sekolah || null)
-      setDaftarGuru(guru || [])
+
+      // PERBAIKAN: logo_path adalah path di Supabase Storage, bukan URL
+      // lengkap — harus dikonversi lewat getPublicUrl() dulu, sama seperti
+      // pola yang sudah dipakai di LaporanBulanan.jsx (bucket 'profil-sekolah').
+      if (sekolah?.logo_path) {
+        const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(sekolah.logo_path)
+        setLogoUrl(pub?.publicUrl || '')
+      } else {
+        setLogoUrl('')
+      }
+
+      // PERBAIKAN: urutkan Kepala Sekolah di atas, lalu berdasarkan status
+      // kepegawaian (PNS -> GTT -> GTY/Honor), bukan abjad polos.
+      setDaftarGuru(urutkanGuru(guru || []))
       setLoading(false)
     }
     muat()
@@ -109,8 +154,8 @@ export default function LaporanNominatifGuru() {
       <div className="lembar-cetak bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '297mm', minHeight: '210mm' }}>
         {/* Kop Surat */}
         <div className="flex items-center gap-4 border-b-4 border-black pb-3 mb-4">
-          {profilSekolah?.logo_path && (
-            <img src={profilSekolah.logo_path} alt="Logo" className="w-16 h-16 object-contain shrink-0" />
+          {logoUrl && (
+            <img src={logoUrl} alt="Logo" className="w-16 h-16 object-contain shrink-0" />
           )}
           <div className="text-center flex-1">
             <p className="text-sm font-medium uppercase">
