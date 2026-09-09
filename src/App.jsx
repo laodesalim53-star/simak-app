@@ -242,6 +242,7 @@ export default function App() {
         <Route path="/surat" element={<ProtectedRoute adminOnly><Surat /></ProtectedRoute>} />
         <Route path="/surat-keterangan" element={<ProtectedRoute adminOnly><SuratKeterangan /></ProtectedRoute>} />
         <Route path="/laporan" element={<ProtectedRoute adminOnly><LaporanBulanan /></ProtectedRoute>} />
+        <Route path="/laporan-guru" element={<ProtectedRoute adminOnly><PusatLaporanGuru /></ProtectedRoute>} />
         <Route path="/hari-libur" element={<ProtectedRoute adminOnly><HariLibur /></ProtectedRoute>} />
         {/* Kalender Pendidikan: BUKAN adminOnly — guru tetap bisa melihat kalender,
             kontrol edit (klik tanggal untuk ubah status) sudah dibatasi di dalam
