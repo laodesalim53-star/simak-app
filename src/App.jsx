@@ -22,6 +22,7 @@ import HasilUjian from './pages/HasilUjian'
 import Guru from './pages/Guru'
 import LaporanNominatifGuru from './pages/LaporanNominatifGuru'
 import LaporanBiodataGuru from './pages/LaporanBiodataGuru'
+import LaporanPendidikanGuru from './pages/LaporanPendidikanGuru'
 import PusatLaporanGuru from './pages/PusatLaporanGuru'
 import Kelas from './pages/Kelas'
 import Jadwal from './pages/Jadwal'
@@ -224,6 +225,9 @@ export default function App() {
 } />
         <Route path="/laporan-biodata-guru" element={
   <ProtectedRoute adminOnly><LaporanBiodataGuru /></ProtectedRoute>
+} />
+        <Route path="/laporan-pendidikan-guru" element={
+  <ProtectedRoute adminOnly><LaporanPendidikanGuru /></ProtectedRoute>
 } />
         <Route path="/kelas" element={<ProtectedRoute adminOnly><Kelas /></ProtectedRoute>} />
         <Route path="/jadwal" element={<ProtectedRoute><Jadwal /></ProtectedRoute>} />
