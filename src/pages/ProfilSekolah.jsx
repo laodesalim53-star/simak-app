@@ -13,7 +13,9 @@ const emptyForm = {
   kepala_sekolah: '',
   nip_kepala_sekolah: '',
   // TAMBAHAN: nama & NIP pengawas sekolah — dipakai di blok tanda tangan
-  // rekap ijazah kelulusan (kolom "Mengetahui, Pengawas").
+  // rekap ijazah kelulusan (kolom "Mengetahui, Pengawas"). Field ini
+  // hanya relevan untuk tenant sekolah — disembunyikan untuk tenant kantor
+  // (lihat konstanta `teks` di bawah).
   pengawas: '',
   nip_pengawas: '',
   logo_path: '',
@@ -34,15 +36,66 @@ const emptyForm = {
   website: '',
 }
 
+// TENANT-AWARE UI: satu halaman & satu tabel (`profil_sekolah`) dipakai baik
+// untuk tenant "sekolah" maupun tenant "kantor" (menu "Profil Kantor" di
+// Sidebar.jsx cuma re-label ke route yang sama, /profil-sekolah). Supaya
+// tampilan benar-benar terasa seperti "Profil Kantor" untuk member kantor
+// TANPA mempengaruhi tampilan/skema data milik sekolah, semua istilah yang
+// tampil di layar diambil dari objek `teks` ini berdasarkan flag `isKantor`
+// dari useAuth(). Nama kolom di database TIDAK berubah sama sekali (supaya
+// tidak merusak file lain yang query ke profil_sekolah, mis. Nota, Kuitansi,
+// RaporCetak, Surat, dll) — hanya label yang ditampilkan ke pengguna yang
+// berbeda.
+function getTeks(isKantor) {
+  return {
+    judulHalaman: isKantor ? 'Profil Kantor' : 'Profil Sekolah',
+    subtitleHalaman: isKantor
+      ? 'Data ini dipakai untuk kop surat & dokumen resmi kantor'
+      : 'Data ini tampil di halaman PPDB publik dan dipakai untuk kop rapor & dokumen resmi lain',
+    labelLogo: isKantor ? 'Logo Kantor' : 'Logo Sekolah',
+    hintLogo: isKantor
+      ? 'Format PNG/JPG, dipakai di kop surat & dokumen resmi.'
+      : 'Format PNG/JPG, dipakai di kop rapor & dokumen resmi.',
+    judulTtd: isKantor ? 'Tanda Tangan Elektronik Kepala Kantor' : 'Tanda Tangan Elektronik Kepala Sekolah',
+    altTtd: isKantor ? 'Tanda tangan kepala kantor' : 'Tanda tangan kepala sekolah',
+    hintTtd: isKantor
+      ? 'Gunakan PNG dengan latar transparan agar rapi. Sekali diunggah, tanda tangan ini otomatis terpasang di setiap Surat Keterangan Izin/Cuti yang dicetak untuk pengajuan yang sudah disetujui.'
+      : 'Gunakan PNG dengan latar transparan agar rapi. Sekali diunggah, tanda tangan ini otomatis terpasang di setiap Surat Keterangan Izin/Cuti yang dicetak untuk pengajuan yang sudah disetujui.',
+    konfirmasiHapusTtd: isKantor ? 'Hapus tanda tangan kepala kantor?' : 'Hapus tanda tangan kepala sekolah?',
+    judulKopSurat: 'Kop Surat',
+    hintKopSurat: isKantor
+      ? 'Diisi kalau kop surat perlu menampilkan susunan pemerintahan lengkap (kabupaten, instansi induk, kecamatan) di atas nama kantor.'
+      : 'Diisi kalau kop rapor perlu menampilkan susunan pemerintahan lengkap (kabupaten, dinas, kecamatan) di atas nama sekolah.',
+    labelInstansiInduk: isKantor ? 'Instansi Induk' : 'Dinas Pendidikan',
+    placeholderInstansiInduk: isKantor ? 'Contoh: SEKRETARIAT DAERAH' : 'DINAS PENDIDIKAN DAN KEBUDAYAAN',
+    judulDataUmum: 'Data Umum',
+    labelNama: isKantor ? 'Nama Kantor' : 'Nama Sekolah',
+    labelKepala: isKantor ? 'Kepala Kantor' : 'Kepala Sekolah',
+    labelNipKepala: isKantor ? 'NIP Kepala Kantor' : 'NIP Kepala Sekolah',
+    labelEmail: isKantor ? 'Email Kantor' : 'Email Sekolah',
+    labelWebsite: isKantor ? 'Website Kantor' : 'Website Sekolah',
+    tanpaTenantId: isKantor
+      ? 'Akun Anda tidak terikat ke satu kantor spesifik, jadi halaman ini tidak tersedia. Hubungi admin kantor terkait untuk mengubah profil kantor mereka.'
+      : 'Akun Anda tidak terikat ke satu sekolah spesifik, jadi halaman ini tidak tersedia. Pilih sekolah terlebih dahulu (kalau ada fitur pilih-sekolah untuk superadmin), atau hubungi admin sekolah terkait untuk mengubah profil sekolah mereka.',
+  }
+}
+
 export default function ProfilSekolah() {
   // sekolah_id dari akun admin/kepsek yang login — dipakai untuk membedakan
-  // profil_sekolah milik sekolah masing-masing (dulu semua akun baca/tulis
-  // ke baris id=1 yang sama, jadi sekolah baru selalu melihat data sekolah lain).
-  const { profil } = useAuth()
+  // profil_sekolah milik sekolah/kantor masing-masing (dulu semua akun
+  // baca/tulis ke baris id=1 yang sama, jadi tenant baru selalu melihat data
+  // tenant lain).
+  // isKantor: flag tenant (relasi profil -> sekolah.jenis_organisasi) yang
+  // sama dipakai Sidebar.jsx untuk memilih set menu kantor vs sekolah.
+  // Dipakai di sini HANYA untuk memilih teks/label yang ditampilkan —
+  // TIDAK mengubah query maupun skema data sama sekali, jadi tampilan &
+  // perilaku untuk member sekolah/guru tetap identik seperti sebelumnya.
+  const { profil, isKantor } = useAuth()
   const sekolahId = profil?.sekolah_id
+  const teks = getTeks(isKantor)
 
   const [form, setForm] = useState(emptyForm)
-  const [rowId, setRowId] = useState(null) // id baris profil_sekolah milik sekolah ini
+  const [rowId, setRowId] = useState(null) // id baris profil_sekolah milik tenant ini
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
@@ -59,7 +112,7 @@ export default function ProfilSekolah() {
     setLoading(true)
     // ASUMSI: migrasi SQL sudah dijalankan sehingga setiap sekolah_id di tabel
     // `sekolah` punya tepat satu baris profil_sekolah. Kalau belum, baris ini
-    // bisa saja tidak ketemu (maybeSingle -> null) untuk sekolah yang baru
+    // bisa saja tidak ketemu (maybeSingle -> null) untuk tenant yang baru
     // daftar sebelum migrasi dijalankan.
     const { data } = await supabase
       .from('profil_sekolah')
@@ -78,8 +131,8 @@ export default function ProfilSekolah() {
         setTtdUrl(pub.publicUrl)
       }
     } else {
-      // Sekolah ini belum punya baris profil_sekolah sama sekali (mis. migrasi
-      // belum sempat jalan untuk sekolah ini) — buatkan baris kosong sekarang
+      // Tenant ini belum punya baris profil_sekolah sama sekali (mis. migrasi
+      // belum sempat jalan untuk tenant ini) — buatkan baris kosong sekarang
       // supaya halaman tetap bisa dipakai untuk mengisi data pertama kali.
       const { data: baru } = await supabase
         .from('profil_sekolah')
@@ -141,8 +194,8 @@ export default function ProfilSekolah() {
     setUploadingLogo(false)
   }
 
-  // Upload gambar tanda tangan elektronik kepala sekolah — dipakai otomatis
-  // di setiap surat yang dicetak untuk pengajuan yang sudah disetujui.
+  // Upload gambar tanda tangan elektronik kepala sekolah/kantor — dipakai
+  // otomatis di setiap surat yang dicetak untuk pengajuan yang sudah disetujui.
   async function handleTtdChange(e) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -167,10 +220,10 @@ export default function ProfilSekolah() {
     setUploadingTtd(false)
   }
 
-  // Hapus tanda tangan elektronik kepala sekolah — menghapus file dari
+  // Hapus tanda tangan elektronik kepala sekolah/kantor — menghapus file dari
   // storage (kalau ada) lalu mengosongkan state & field form terkait.
   async function handleTtdDelete() {
-    if (!confirm('Hapus tanda tangan kepala sekolah?')) return
+    if (!confirm(teks.konfirmasiHapusTtd)) return
 
     if (form.ttd_kepala_sekolah_path) {
       const { error } = await supabase.storage
@@ -193,40 +246,33 @@ export default function ProfilSekolah() {
 
   if (loading) {
     return (
-      <Layout title="Profil Sekolah" subtitle="Data umum, visi, misi, dan sejarah sekolah">
+      <Layout title={teks.judulHalaman} subtitle={teks.subtitleHalaman}>
         <p className="text-center py-8 text-ink-700/50 text-sm">Memuat data...</p>
       </Layout>
     )
   }
 
-  // Superadmin tidak terikat ke satu sekolah spesifik (sekolah_id kosong), jadi
-  // halaman "Profil Sekolah" per-sekolah ini tidak relevan untuknya.
+  // Superadmin tidak terikat ke satu tenant spesifik (sekolah_id kosong), jadi
+  // halaman "Profil Sekolah"/"Profil Kantor" per-tenant ini tidak relevan untuknya.
   if (!sekolahId) {
     return (
-      <Layout title="Profil Sekolah" subtitle="Data umum, visi, misi, dan sejarah sekolah">
+      <Layout title={teks.judulHalaman} subtitle={teks.subtitleHalaman}>
         <div className="card p-6">
-          <p className="text-sm text-ink-700/60">
-            Akun Anda tidak terikat ke satu sekolah spesifik, jadi halaman ini tidak tersedia. Pilih
-            sekolah terlebih dahulu (kalau ada fitur pilih-sekolah untuk superadmin), atau hubungi admin
-            sekolah terkait untuk mengubah profil sekolah mereka.
-          </p>
+          <p className="text-sm text-ink-700/60">{teks.tanpaTenantId}</p>
         </div>
       </Layout>
     )
   }
 
   return (
-    <Layout
-      title="Profil Sekolah"
-      subtitle="Data ini tampil di halaman PPDB publik dan dipakai untuk kop rapor & dokumen resmi lain"
-    >
+    <Layout title={teks.judulHalaman} subtitle={teks.subtitleHalaman}>
       <form onSubmit={handleSubmit} className="space-y-5 max-w-3xl">
         <div className="card p-6">
-          <h3 className="font-display font-semibold text-ink-950 mb-4">Logo Sekolah</h3>
+          <h3 className="font-display font-semibold text-ink-950 mb-4">{teks.labelLogo}</h3>
           <div className="flex items-center gap-4">
             <div className="w-20 h-20 rounded-lg border border-ink-900/[0.1] flex items-center justify-center overflow-hidden bg-ink-900/[0.02] shrink-0">
               {logoUrl ? (
-                <img src={logoUrl} alt="Logo sekolah" className="w-full h-full object-contain" />
+                <img src={logoUrl} alt={teks.labelLogo} className="w-full h-full object-contain" />
               ) : (
                 <ImagePlus size={24} className="text-ink-700/30" />
               )}
@@ -234,20 +280,20 @@ export default function ProfilSekolah() {
             <div>
               <label className="btn-secondary cursor-pointer inline-flex">
                 {uploadingLogo ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />}
-                {uploadingLogo ? 'Mengunggah...' : 'Upload Logo'}
+                {uploadingLogo ? 'Mengunggah...' : `Upload ${teks.labelLogo}`}
                 <input type="file" accept="image/*" className="hidden" onChange={handleLogoChange} disabled={uploadingLogo} />
               </label>
-              <p className="text-xs text-ink-700/50 mt-1.5">Format PNG/JPG, dipakai di kop rapor & dokumen resmi.</p>
+              <p className="text-xs text-ink-700/50 mt-1.5">{teks.hintLogo}</p>
             </div>
           </div>
         </div>
 
         <div className="card p-6">
-          <h3 className="font-display font-semibold text-ink-950 mb-4">Tanda Tangan Elektronik Kepala Sekolah</h3>
+          <h3 className="font-display font-semibold text-ink-950 mb-4">{teks.judulTtd}</h3>
           <div className="flex items-center gap-4">
             <div className="w-32 h-20 rounded-lg border border-ink-900/[0.1] flex items-center justify-center overflow-hidden bg-ink-900/[0.02] shrink-0">
               {ttdUrl ? (
-                <img src={ttdUrl} alt="Tanda tangan kepala sekolah" className="w-full h-full object-contain" />
+                <img src={ttdUrl} alt={teks.altTtd} className="w-full h-full object-contain" />
               ) : (
                 <PenTool size={24} className="text-ink-700/30" />
               )}
@@ -271,19 +317,14 @@ export default function ProfilSekolah() {
                   </button>
                 )}
               </div>
-              <p className="text-xs text-ink-700/50 mt-1.5">
-                Gunakan PNG dengan latar transparan agar rapi. Sekali diunggah, tanda tangan ini otomatis
-                terpasang di setiap Surat Keterangan Izin/Cuti yang dicetak untuk pengajuan yang sudah disetujui.
-              </p>
+              <p className="text-xs text-ink-700/50 mt-1.5">{teks.hintTtd}</p>
             </div>
           </div>
         </div>
 
         <div className="card p-6">
-          <h3 className="font-display font-semibold text-ink-950 mb-4">Kop Surat / Kop Rapor</h3>
-          <p className="text-xs text-ink-700/50 mb-4">
-            Diisi kalau kop rapor perlu menampilkan susunan pemerintahan lengkap (kabupaten, dinas, kecamatan) di atas nama sekolah.
-          </p>
+          <h3 className="font-display font-semibold text-ink-950 mb-4">{teks.judulKopSurat}</h3>
+          <p className="text-xs text-ink-700/50 mb-4">{teks.hintKopSurat}</p>
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
               <label className="label-field">Kabupaten/Kota</label>
@@ -295,10 +336,10 @@ export default function ProfilSekolah() {
               />
             </div>
             <div>
-              <label className="label-field">Dinas Pendidikan</label>
+              <label className="label-field">{teks.labelInstansiInduk}</label>
               <input
                 className="input-field"
-                placeholder="DINAS PENDIDIKAN DAN KEBUDAYAAN"
+                placeholder={teks.placeholderInstansiInduk}
                 value={form.dinas_pendidikan}
                 onChange={(e) => ubah('dinas_pendidikan', e.target.value)}
               />
@@ -322,59 +363,73 @@ export default function ProfilSekolah() {
                 onChange={(e) => ubah('tempat_ttd', e.target.value)}
               />
               <p className="text-xs text-ink-700/50 mt-1.5">
-                Muncul di baris tanggal sebelum tanda tangan kepala sekolah, contoh: "Masidang, 30 Juni 2026".
+                Muncul di baris tanggal sebelum tanda tangan {isKantor ? 'kepala kantor' : 'kepala sekolah'}, contoh: "Masidang, 30 Juni 2026".
               </p>
             </div>
           </div>
         </div>
 
         <div className="card p-6">
-          <h3 className="font-display font-semibold text-ink-950 mb-4">Data Umum</h3>
+          <h3 className="font-display font-semibold text-ink-950 mb-4">{teks.judulDataUmum}</h3>
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
-              <label className="label-field">Nama Sekolah</label>
+              <label className="label-field">{teks.labelNama}</label>
               <input className="input-field" value={form.nama_sekolah} onChange={(e) => ubah('nama_sekolah', e.target.value)} />
             </div>
+            {/* NPSN: khusus identitas sekolah — disembunyikan untuk tenant kantor */}
+            {!isKantor && (
+              <div>
+                <label className="label-field">NPSN</label>
+                <input className="input-field" value={form.npsn} onChange={(e) => ubah('npsn', e.target.value)} />
+              </div>
+            )}
             <div>
-              <label className="label-field">NPSN</label>
-              <input className="input-field" value={form.npsn} onChange={(e) => ubah('npsn', e.target.value)} />
-            </div>
-            <div>
-              <label className="label-field">Kepala Sekolah</label>
+              <label className="label-field">{teks.labelKepala}</label>
               <input className="input-field" value={form.kepala_sekolah} onChange={(e) => ubah('kepala_sekolah', e.target.value)} />
             </div>
             <div>
-              <label className="label-field">NIP Kepala Sekolah</label>
+              <label className="label-field">{teks.labelNipKepala}</label>
               <input className="input-field" value={form.nip_kepala_sekolah} onChange={(e) => ubah('nip_kepala_sekolah', e.target.value)} />
             </div>
-            {/* TAMBAHAN: dipakai di blok tanda tangan rekap ijazah kelulusan */}
-            <div>
-              <label className="label-field">Nama Pengawas</label>
-              <input className="input-field" value={form.pengawas} onChange={(e) => ubah('pengawas', e.target.value)} />
-            </div>
-            <div>
-              <label className="label-field">NIP Pengawas</label>
-              <input className="input-field" value={form.nip_pengawas} onChange={(e) => ubah('nip_pengawas', e.target.value)} />
-            </div>
+            {/* Nama & NIP Pengawas: dipakai khusus di blok tanda tangan rekap
+                ijazah kelulusan — hanya relevan untuk tenant sekolah, kantor
+                tidak punya proses kelulusan/ijazah, jadi disembunyikan. */}
+            {!isKantor && (
+              <>
+                <div>
+                  <label className="label-field">Nama Pengawas</label>
+                  <input className="input-field" value={form.pengawas} onChange={(e) => ubah('pengawas', e.target.value)} />
+                </div>
+                <div>
+                  <label className="label-field">NIP Pengawas</label>
+                  <input className="input-field" value={form.nip_pengawas} onChange={(e) => ubah('nip_pengawas', e.target.value)} />
+                </div>
+              </>
+            )}
             <div>
               <label className="label-field">Tahun Berdiri</label>
               <input className="input-field" value={form.tahun_berdiri} onChange={(e) => ubah('tahun_berdiri', e.target.value)} />
             </div>
-            <div>
-              <label className="label-field">Akreditasi</label>
-              <input className="input-field" placeholder="A / B / C" value={form.akreditasi} onChange={(e) => ubah('akreditasi', e.target.value)} />
-            </div>
+            {/* Akreditasi: konsep khusus sekolah (A/B/C) — disembunyikan untuk kantor */}
+            {!isKantor && (
+              <div>
+                <label className="label-field">Akreditasi</label>
+                <input className="input-field" placeholder="A / B / C" value={form.akreditasi} onChange={(e) => ubah('akreditasi', e.target.value)} />
+              </div>
+            )}
             <div>
               <label className="label-field">Telepon</label>
               <input className="input-field" value={form.telepon} onChange={(e) => ubah('telepon', e.target.value)} />
             </div>
             <div>
-              <label className="label-field">Email Sekolah</label>
+              <label className="label-field">{teks.labelEmail}</label>
               <input className="input-field" value={form.email} onChange={(e) => ubah('email', e.target.value)} />
             </div>
-            {/* TAMBAHAN: dipakai di Halaman Identitas Rapor */}
+            {/* TAMBAHAN: dipakai di Halaman Identitas Rapor (khusus sekolah), tapi
+                field website/kode pos/kelurahan/provinsi tetap relevan untuk kantor
+                sebagai data alamat umum, jadi tetap ditampilkan untuk keduanya. */}
             <div>
-              <label className="label-field">Website Sekolah</label>
+              <label className="label-field">{teks.labelWebsite}</label>
               <input className="input-field" placeholder="https://..." value={form.website} onChange={(e) => ubah('website', e.target.value)} />
             </div>
             <div>
@@ -408,7 +463,11 @@ export default function ProfilSekolah() {
               <textarea
                 className="input-field"
                 rows={5}
-                placeholder={'Contoh:\nMenyelenggarakan pendidikan yang berkualitas\nMembentuk karakter siswa yang berakhlak mulia'}
+                placeholder={
+                  isKantor
+                    ? 'Contoh:\nMemberikan pelayanan publik yang cepat dan transparan\nMeningkatkan kapasitas dan integritas pegawai'
+                    : 'Contoh:\nMenyelenggarakan pendidikan yang berkualitas\nMembentuk karakter siswa yang berakhlak mulia'
+                }
                 value={form.misi}
                 onChange={(e) => ubah('misi', e.target.value)}
               />
