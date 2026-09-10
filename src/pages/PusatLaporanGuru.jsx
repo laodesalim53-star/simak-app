@@ -7,6 +7,7 @@ import {
   Heart,
   BookOpen,
   School,
+  ClipboardList,
   Lock,
 } from 'lucide-react'
 import Layout from '../components/Layout'
@@ -74,6 +75,14 @@ const daftarLaporan = [
     deskripsi: 'Rekap jumlah murid per kelas dan ruang belajar yang tersedia.',
     icon: School,
     path: '/laporan-keadaan-murid',
+    siap: true,
+  },
+  {
+    id: 'semester',
+    judul: 'Laporan Semester',
+    deskripsi: 'Jam pelajaran per mata pelajaran per kelas, keadaan gedung/ruang sekolah, dan keadaan buku KTSP & K-13.',
+    icon: ClipboardList,
+    path: '/laporan-semester',
     siap: true,
   },
 ]
