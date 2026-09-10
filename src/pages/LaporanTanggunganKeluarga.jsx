@@ -5,9 +5,10 @@ import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 
 // Halaman cetak "DATA TANGGUNGAN KELUARGA" — kolektif semua guru di satu
-// sekolah sekaligus. Mengikuti pola LaporanKepangkatanGuru.jsx /
-// LaporanNominatifGuru.jsx (kop surat, toolbar no-print, lembar-cetak A4,
-// blok tanda tangan, Kepala Sekolah selalu di baris paling atas).
+// sekolah sekaligus. Mengikuti pola LaporanBiodataGuru.jsx (kop surat,
+// toolbar no-print, panel input Semester/Tahun Pelajaran, lembar-cetak
+// print-only A4, blok tanda tangan, Kepala Sekolah selalu di baris paling
+// atas).
 //
 // UPDATE: kolom "Jumlah Anak" sekarang diisi dari kolom baru
 // `jumlah_anak_tanggungan` (integer, nullable) di tabel guru. Jalankan
@@ -21,6 +22,15 @@ export default function LaporanTanggunganKeluarga() {
   const [logoUrl, setLogoUrl] = useState('')
   const [daftarGuru, setDaftarGuru] = useState([])
   const [loading, setLoading] = useState(true)
+
+  // Input manual Semester & Tahun Pelajaran — ditampilkan di panel
+  // (no-print) di atas lembar cetak, lalu disisipkan ke teks judul
+  // lembar cetak. Jika tahun dikosongkan, teks tetap fallback ke
+  // titik-titik seperti format aslinya. Pola sama seperti
+  // LaporanBiodataGuru.jsx.
+  const [semester, setSemester] = useState('Ganjil')
+  const [tahunAwal, setTahunAwal] = useState('')
+  const [tahunAkhir, setTahunAkhir] = useState('')
 
   // Kepala Sekolah dideteksi dari kolom tugas_tambahan / jenis_ptk, sama
   // seperti pola yang sudah dipakai di laporan-laporan guru lainnya.
@@ -104,7 +114,47 @@ export default function LaporanTanggunganKeluarga() {
         </button>
       </div>
 
-      <div className="lembar-cetak bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '297mm', minHeight: '210mm' }}>
+      {/* Panel input Semester & Tahun Pelajaran — hilang saat print.
+          Nilainya dipakai untuk mengisi teks "Semester .../Tahun
+          Pelajaran ..." di lembar cetak di bawah. Pola sama seperti
+          LaporanBiodataGuru.jsx. */}
+      <div className="no-print max-w-md mx-auto mt-4 bg-white border border-slate-200 rounded-lg p-3 flex flex-wrap items-center gap-3 text-sm">
+        <label className="font-medium text-slate-600">Semester</label>
+        <select
+          value={semester}
+          onChange={(e) => setSemester(e.target.value)}
+          className="border border-slate-300 rounded px-2 py-1"
+        >
+          <option value="Ganjil">Ganjil</option>
+          <option value="Genap">Genap</option>
+        </select>
+
+        <label className="font-medium text-slate-600">Tahun Pelajaran</label>
+        <input
+          type="text"
+          value={tahunAwal}
+          onChange={(e) => setTahunAwal(e.target.value)}
+          placeholder="2024"
+          className="border border-slate-300 rounded px-2 py-1 w-20"
+        />
+        <span>/</span>
+        <input
+          type="text"
+          value={tahunAkhir}
+          onChange={(e) => setTahunAkhir(e.target.value)}
+          placeholder="2025"
+          className="border border-slate-300 rounded px-2 py-1 w-20"
+        />
+      </div>
+
+      {/* PENTING: class "print-only" ditambahkan di sini. CSS global
+          (index.css) menyembunyikan SEMUA elemen saat print kecuali yang
+          berkelas print-only (body * { visibility: hidden } lalu
+          .print-only, .print-only * { visibility: visible }). Tanpa class
+          ini, div lembar cetak ikut tersembunyi dan hasil print jadi
+          kosong total. Pola sama seperti Cetak8355.jsx / LaporanBiodataGuru.jsx
+          yang sudah terbukti berhasil. */}
+      <div className="lembar-cetak print-only bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '297mm', minHeight: '210mm' }}>
         {/* Kop Surat */}
         <div className="flex items-center gap-4 border-b-4 border-black pb-3 mb-4">
           {logoUrl && (
@@ -129,9 +179,12 @@ export default function LaporanTanggunganKeluarga() {
           </div>
         </div>
 
-        <h1 className="text-center font-bold text-base uppercase underline mb-4">
+        <h1 className="text-center font-bold text-base uppercase underline mb-1">
           Data Tanggungan Keluarga Guru/Pegawai
         </h1>
+        <p className="text-center text-xs mb-4">
+          Semester {semester} Tahun Pelajaran {tahunAwal || '................'}/{tahunAkhir || '................'}
+        </p>
 
         <div className="text-xs mb-4 grid grid-cols-[120px_1fr] gap-y-0.5 max-w-xs">
           <span>Sekolah</span>
@@ -199,8 +252,11 @@ export default function LaporanTanggunganKeluarga() {
         </div>
       </div>
 
-      {/* CSS cetak — mengikuti pola @page A4 landscape yang sudah dipakai di
-          laporan guru lainnya, karena tabel ini juga lebar (9 kolom). */}
+      {/* CSS cetak — A4 landscape (tabel ini lebar, 9 kolom). Blok
+          "position: static" override mengikuti pola LaporanBiodataGuru.jsx
+          supaya kalau daftar guru panjang (lebih dari 1 halaman), isinya
+          mengalir normal mengikuti page-break bawaan browser, bukan
+          terpotong atau menumpuk di satu titik fixed. */}
       <style>{`
         @media print {
           .no-print { display: none !important; }
@@ -209,6 +265,25 @@ export default function LaporanTanggunganKeluarga() {
             box-shadow: none !important;
             margin: 0 !important;
             width: 100% !important;
+          }
+
+          /* CSS global (index.css) punya aturan:
+               body * { visibility: hidden; }
+               .print-only, .print-only * { visibility: visible; }
+             yang tadinya dibuat khusus untuk Kuitansi/Nota (1 lembar) dan
+             kemungkinan memberi .print-only posisi "fixed" secara default.
+             Di sini di-override jadi "static" supaya kalau daftar guru
+             panjang (lebih dari 1 halaman A4), isinya tetap mengalir
+             normal mengikuti page-break bawaan browser, bukan terpotong
+             atau menumpuk di satu titik fixed. Pola sama seperti
+             Cetak8355.jsx / LaporanBiodataGuru.jsx yang sudah terbukti berhasil. */
+          .lembar-cetak.print-only {
+            position: static !important;
+            top: auto !important;
+            left: auto !important;
+            right: auto !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
           }
         }
         @page {
