@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import QRCode from 'qrcode'
 import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
 import { Camera, Loader2, IdCard, Library, Download, Eye, X } from 'lucide-react'
 
@@ -187,6 +188,8 @@ function PreviewKartuModal({ jenis, siswaList, fotoUrl, profilSekolah, generatin
 }
 
 export default function KartuSiswa() {
+  const { profil } = useAuth()
+  const sekolahId = profil?.sekolah_id
   const [kelasList, setKelasList] = useState([])
   const [kelasId, setKelasId] = useState('')
   const [siswaList, setSiswaList] = useState([])
@@ -204,8 +207,14 @@ export default function KartuSiswa() {
       setKelasList(data || [])
       if (data?.length) setKelasId(data[0].id)
     })
-    loadProfilSekolah()
   }, [])
+
+  // Profil sekolah baru dimuat setelah sekolahId dari AuthContext tersedia,
+  // supaya tidak sempat mengambil baris profil_sekolah milik sekolah lain.
+  useEffect(() => {
+    if (sekolahId) loadProfilSekolah()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sekolahId])
 
   useEffect(() => {
     if (kelasId) loadSiswa()
@@ -215,10 +224,14 @@ export default function KartuSiswa() {
   // ⚠️ SESUAIKAN: nama tabel/kolom profil sekolah & bucket tanda tangan
   // sesuai skema Supabase Anda yang sebenarnya.
   async function loadProfilSekolah() {
+    // PERBAIKAN: sebelumnya query ini tidak difilter sekolah_id, sehingga
+    // .single() bisa mengambil baris profil_sekolah milik sekolah lain
+    // (mis. superadmin) — itu sebabnya nama sekolah yang tercetak salah.
     const { data, error } = await supabase
       .from('profil_sekolah')
       .select('nama_sekolah, alamat, nama_kepala_sekolah, ttd_path')
-      .single()
+      .eq('sekolah_id', sekolahId)
+      .maybeSingle()
 
     if (error || !data) {
       console.warn('Profil sekolah belum tersedia:', error?.message)
