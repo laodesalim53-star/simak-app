@@ -545,7 +545,14 @@ export default function LaporanKeadaanMurid() {
         )}
       </div>
 
-      <div className="lembar-cetak bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '297mm' }}>
+      {/* PENTING: class "print-only" ditambahkan di sini. CSS global
+          (index.css) menyembunyikan SEMUA elemen saat print kecuali yang
+          berkelas print-only (body * { visibility: hidden } lalu
+          .print-only, .print-only * { visibility: visible }). Tanpa class
+          ini, div lembar cetak ikut tersembunyi dan hasil print jadi
+          kosong total — pola sama seperti LaporanNominatifGuru.jsx /
+          Cetak8355.jsx / LaporanBiodataGuru.jsx yang sudah terbukti berhasil. */}
+      <div className="lembar-cetak print-only bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '297mm' }}>
         <KopSurat />
 
         {tingkatList.length === 0 ? (
@@ -892,6 +899,24 @@ export default function LaporanKeadaanMurid() {
              bukan hanya tab yang sedang aktif di layar. */
           .laporan-section.tab-nonaktif { display: block !important; }
           .page-break-before-print { break-before: page; page-break-before: always; }
+
+          /* CSS global (index.css) punya aturan:
+               body * { visibility: hidden; }
+               .print-only, .print-only * { visibility: visible; }
+             yang kemungkinan memberi .print-only posisi "fixed" secara
+             default. Di sini di-override jadi "static" supaya keempat
+             laporan (lebih dari 1 halaman A4 kalau digabung) tetap
+             mengalir normal mengikuti page-break bawaan browser, bukan
+             terpotong atau menumpuk di satu titik fixed. Pola sama seperti
+             LaporanNominatifGuru.jsx / Cetak8355.jsx / LaporanBiodataGuru.jsx. */
+          .lembar-cetak.print-only {
+            position: static !important;
+            top: auto !important;
+            left: auto !important;
+            right: auto !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
+          }
         }
         @page {
           size: A4 landscape;
