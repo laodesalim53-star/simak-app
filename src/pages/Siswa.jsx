@@ -10,6 +10,11 @@ import { matchKelasByName } from '../lib/kelasMatch'
 import { Plus, UploadCloud, Pencil, Trash2, Search, X, Loader2, Download, FileSpreadsheet, Printer, ChevronDown, Camera, IdCard } from 'lucide-react'
 
 const AGAMA_OPTIONS = ['Islam', 'Kristen', 'Katolik', 'Hindu', 'Buddha', 'Khonghucu', 'Lainnya']
+// Opsi ini HARUS sama persis dengan KATEGORI_KEWARGANEGARAAN di
+// LaporanKeadaanMurid.jsx supaya laporan "Perincian Murid Menurut
+// Kewarganegaraan" benar-benar mencerminkan data yang diisi di sini,
+// bukan selalu default 'WNI asli' karena kolomnya tidak pernah diisi.
+const KEWARGANEGARAAN_OPTIONS = ['WNI asli', 'WNI Keturunan', 'WNA']
 
 const emptyForm = {
   nis: '',
@@ -23,6 +28,7 @@ const emptyForm = {
   nama_lengkap: '',
   jenis_kelamin: 'L',
   agama: '',
+  kewarganegaraan: 'WNI asli',
   tempat_lahir: '',
   tanggal_lahir: '',
   tahun_lahir: '',
@@ -98,7 +104,7 @@ const emptyForm = {
 // Header ini HARUS sama persis dengan templateHeaders di BulkImportModal (Impor Massal)
 // supaya file yang diunduh dari sini bisa langsung diupload ulang tanpa perlu diubah nama kolomnya.
 const EXCEL_HEADERS = [
-  'nama_lengkap', 'nis', 'nisn', 'nik', 'no_kk', 'nomor_ujian', 'no_seri_ijazah', 'skhun', 'kelas', 'jenis_kelamin(L/P)', 'agama',
+  'nama_lengkap', 'nis', 'nisn', 'nik', 'no_kk', 'nomor_ujian', 'no_seri_ijazah', 'skhun', 'kelas', 'jenis_kelamin(L/P)', 'agama', 'kewarganegaraan(WNI asli/WNI Keturunan/WNA)',
   'tempat_lahir', 'tanggal_lahir(YYYY-MM-DD)', 'tahun_lahir',
   'nama_ayah', 'nik_ayah', 'tahun_lahir_ayah', 'pendidikan_ayah', 'pekerjaan_ayah', 'penghasilan_ayah',
   'nama_ibu', 'nik_ibu', 'tahun_lahir_ibu', 'pendidikan_ibu', 'pekerjaan_ibu', 'penghasilan_ibu',
@@ -514,6 +520,7 @@ export default function Siswa() {
       kelas: s.kelas?.nama_kelas || '',
       'jenis_kelamin(L/P)': s.jenis_kelamin || '',
       agama: s.agama || '',
+      'kewarganegaraan(WNI asli/WNI Keturunan/WNA)': s.kewarganegaraan || '',
       tempat_lahir: s.tempat_lahir || '',
       'tanggal_lahir(YYYY-MM-DD)': s.tanggal_lahir || '',
       tahun_lahir: s.tahun_lahir || '',
@@ -969,6 +976,12 @@ export default function Siswa() {
                   {AGAMA_OPTIONS.map((a) => <option key={a} value={a}>{a}</option>)}
                 </select>
               </Field>
+              <Field label="Kewarganegaraan">
+                <select className="input-field" value={form.kewarganegaraan}
+                  onChange={(e) => setForm({ ...form, kewarganegaraan: e.target.value })}>
+                  {KEWARGANEGARAAN_OPTIONS.map((k) => <option key={k} value={k}>{k}</option>)}
+                </select>
+              </Field>
               <Field label="Kelas">
                 <select className="input-field" value={form.kelas_id}
                   onChange={(e) => setForm({ ...form, kelas_id: e.target.value })}>
@@ -1201,6 +1214,7 @@ export default function Siswa() {
                   <ProfilRow label="Kelas" value={profilLihat.kelas?.nama_kelas} />
                   <ProfilRow label="Jenis Kelamin" value={profilLihat.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan'} />
                   <ProfilRow label="Agama" value={profilLihat.agama} />
+                  <ProfilRow label="Kewarganegaraan" value={profilLihat.kewarganegaraan} />
                   <ProfilRow label="Tempat, Tanggal Lahir" value={tempatTanggalLahir(profilLihat)} />
                   <ProfilRow label="Anak ke-berapa" value={profilLihat.anak_ke} />
                   <ProfilRow label="Jumlah Saudara Kandung" value={profilLihat.jumlah_saudara_kandung} />
@@ -1330,6 +1344,7 @@ export default function Siswa() {
             kelas_id: matchedKelas ? matchedKelas.id : null,
             jenis_kelamin: teks(row['jenis_kelamin(L/P)'] || row.jenis_kelamin || 'L').toUpperCase(),
             agama: teks(row.agama),
+            kewarganegaraan: teks(row['kewarganegaraan(WNI asli/WNI Keturunan/WNA)'] || row.kewarganegaraan) || 'WNI asli',
             tempat_lahir: teks(row.tempat_lahir),
             tanggal_lahir: row['tanggal_lahir(YYYY-MM-DD)'] || row.tanggal_lahir || null,
             tahun_lahir: toIntOrNull(row.tahun_lahir),
