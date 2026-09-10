@@ -96,6 +96,8 @@ import UpgradeFitur from './pages/UpgradeFitur'
 // --- Fitur Data/Cetak Ujian 8355 (superadmin only) ---
 import DataUjian8355 from './pages/DataUjian8355'
 import Cetak8355 from './pages/Cetak8355'
+// --- Fitur Cetak Sampul Laporan (generik, kop otomatis dari profil_sekolah) ---
+import CetakSampul from './pages/CetakSampul'
 import { CartProvider } from './lib/CartContext'
 
 // Halaman "dashboard" (setelah login) — semua redirect kegagalan akses
@@ -261,6 +263,13 @@ export default function App() {
             guru/murid lain, dibatasi adminOnly. */}
         <Route path="/laporan-semester" element={
   <ProtectedRoute adminOnly><LaporanSemester /></ProtectedRoute>
+} />
+        {/* Cetak Sampul Laporan — halaman generik untuk mencetak halaman
+            sampul (cover) berbagai laporan; kop/logo diambil otomatis dari
+            profil_sekolah, sama seperti LaporanSemester.jsx. Dibatasi
+            adminOnly seperti laporan-laporan lain. */}
+        <Route path="/cetak-sampul" element={
+  <ProtectedRoute adminOnly><CetakSampul /></ProtectedRoute>
 } />
         <Route path="/kelas" element={<ProtectedRoute adminOnly><Kelas /></ProtectedRoute>} />
         <Route path="/jadwal" element={<ProtectedRoute><Jadwal /></ProtectedRoute>} />
