@@ -21,6 +21,9 @@ import Siswa from './pages/Siswa'
 import SiswaNonaktif from './pages/SiswaNonaktif'
 import HasilUjian from './pages/HasilUjian'
 import Guru from './pages/Guru'
+// Data Pegawai (tenant kantor) — komponen & tabel TERPISAH dari Guru/`guru`.
+// Lihat DataPegawaiKantor.jsx: menulis ke tabel `pegawai_kantor`.
+import DataPegawaiKantor from './pages/DataPegawaiKantor'
 import LaporanNominatifGuru from './pages/LaporanNominatifGuru'
 import LaporanBiodataGuru from './pages/LaporanBiodataGuru'
 import LaporanPendidikanGuru from './pages/LaporanPendidikanGuru'
@@ -218,6 +221,10 @@ export default function App() {
         <Route path="/siswa-nonaktif" element={<ProtectedRoute adminOnly><SiswaNonaktif /></ProtectedRoute>} />
         <Route path="/hasil-ujian" element={<ProtectedRoute><HasilUjian /></ProtectedRoute>} />
         <Route path="/guru" element={<ProtectedRoute adminOnly><Guru /></ProtectedRoute>} />
+        {/* Data Pegawai (tenant kantor) — route BARU & TERPISAH dari /guru,
+            supaya "Data Guru" milik sekolah tidak tersentuh sama sekali.
+            Menulis ke tabel `pegawai_kantor` (lihat DataPegawaiKantor.jsx). */}
+        <Route path="/data-pegawai-kantor" element={<ProtectedRoute adminOnly><DataPegawaiKantor /></ProtectedRoute>} />
         <Route path="/kelas" element={<ProtectedRoute adminOnly><Kelas /></ProtectedRoute>} />
 
         {/* ============================================================
