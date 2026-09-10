@@ -129,6 +129,21 @@ export default function LaporanKepangkatanGuru() {
     return new Date(tgl).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
   }
 
+  // Membuang awalan "PEMERINTAH KABUPATEN" / "KABUPATEN" pada nilai supaya
+  // tidak dobel dengan label "Kabupaten" yang sudah ada di depannya
+  // (mis. field profilSekolah.kabupaten berisi "PEMERINTAH KABUPATEN
+  // KEPULAUAN ARU", padahal labelnya sudah "Kabupaten"). Data mentah di
+  // profilSekolah TIDAK diubah — cuma cara menampilkannya di baris ini.
+  function formatKabupaten(teks) {
+    if (!teks) return '—'
+    return (
+      teks
+        .replace(/^PEMERINTAH\s+KABUPATEN\s+/i, '')
+        .replace(/^KABUPATEN\s+/i, '')
+        .trim() || '—'
+    )
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -233,7 +248,7 @@ export default function LaporanKepangkatanGuru() {
           <span>Kecamatan</span>
           <span>: {profilSekolah?.kecamatan || '—'}</span>
           <span>Kabupaten</span>
-          <span>: {profilSekolah?.kabupaten || '—'}</span>
+          <span>: {formatKabupaten(profilSekolah?.kabupaten)}</span>
         </div>
 
         <table className="w-full text-[10px] border-collapse border border-black">
