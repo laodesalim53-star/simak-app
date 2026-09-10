@@ -60,6 +60,7 @@ import {
   Sparkles,
   Table2,
   Printer,
+  FileStack,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
@@ -201,6 +202,9 @@ function getGroupsAdmin(
         // admin_utama, superadmin, kepala sekolah) sekarang dapat akses.
         { to: '/data-ujian-8355', label: 'Data Ujian 8355', icon: Table2 },
         { to: '/cetak-8355', label: 'Cetak 8355 (Kelas 6)', icon: Printer },
+        // Cetak Sampul: ditaruh berdekatan dengan menu cetak lainnya
+        // (Cetak 8355 & Cetak Kartu) supaya mudah ditemukan admin.
+        { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
         // Manajemen Sekolah dan Persetujuan Toko hanya untuk superadmin.
         ...(isSuperAdmin
           ? [
