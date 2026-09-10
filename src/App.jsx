@@ -18,6 +18,7 @@ import MenungguPersetujuan from './pages/MenungguPersetujuan'
 import PersetujuanAkun from './pages/PersetujuanAkun'
 import Dashboard from './pages/Dashboard'
 import Siswa from './pages/Siswa'
+import SiswaNonaktif from './pages/SiswaNonaktif'
 import HasilUjian from './pages/HasilUjian'
 import Guru from './pages/Guru'
 import LaporanNominatifGuru from './pages/LaporanNominatifGuru'
@@ -222,6 +223,11 @@ export default function App() {
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
 
         <Route path="/siswa" element={<ProtectedRoute><Siswa /></ProtectedRoute>} />
+        {/* Siswa Nonaktif: arsip siswa berstatus 'nonaktif', dengan aksi
+            "Aktifkan Kembali" untuk mengembalikan status ke 'aktif'. Dibatasi
+            adminOnly, sama seperti halaman Data Siswa yang mengizinkan
+            tambah/ubah/hapus. */}
+        <Route path="/siswa-nonaktif" element={<ProtectedRoute adminOnly><SiswaNonaktif /></ProtectedRoute>} />
         <Route path="/hasil-ujian" element={<ProtectedRoute><HasilUjian /></ProtectedRoute>} />
         <Route path="/guru" element={<ProtectedRoute adminOnly><Guru /></ProtectedRoute>} />
         <Route path="/laporan-nominatif-guru" element={
