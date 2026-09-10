@@ -18,6 +18,12 @@ import { supabase } from '../lib/supabaseClient'
 // LaporanBiodataGuru.jsx — termasuk mode print print-only dan panel input
 // manual Semester & Tahun Pelajaran. Akses: admin, admin_utama,
 // kepala_sekolah, superadmin (lewat ProtectedRoute adminOnly di App.jsx).
+//
+// UPDATE POLA PRINT: ditambahkan override @media screen untuk `display`
+// (mengikuti pola LaporanSemester.jsx), karena override `position: static`
+// yang sudah ada sebelumnya saja tidak cukup — kalau aturan global
+// index.css menyembunyikan .print-only lewat display:none di layar,
+// position:static tidak menolong elemen itu tampil.
 export default function LaporanPendidikanGuru() {
   const navigate = useNavigate()
   const { sekolahId: sekolahIdSaya } = useAuth()
@@ -204,139 +210,4 @@ export default function LaporanPendidikanGuru() {
             <p className="text-sm font-medium uppercase">
               Pemerintah Kabupaten {formatKabupaten(profilSekolah?.kabupaten)}
             </p>
-            <p className="text-sm font-medium uppercase">
-              {profilSekolah?.dinas_pendidikan || 'Dinas Pendidikan'}
-            </p>
-            <p className="text-lg font-bold uppercase">{profilSekolah?.nama_sekolah || 'Nama Sekolah'}</p>
-            <p className="text-xs">
-              {[profilSekolah?.alamat, profilSekolah?.kecamatan, profilSekolah?.kabupaten, profilSekolah?.provinsi]
-                .filter(Boolean)
-                .join(', ')}
-              {profilSekolah?.kode_pos ? ` ${profilSekolah.kode_pos}` : ''}
-            </p>
-            {(profilSekolah?.telepon || profilSekolah?.email || profilSekolah?.website) && (
-              <p className="text-xs">
-                {[profilSekolah?.telepon, profilSekolah?.email, profilSekolah?.website].filter(Boolean).join(' | ')}
-              </p>
-            )}
-          </div>
-        </div>
-
-        <h1 className="text-center font-bold text-base uppercase underline mb-1">
-          Data Pendidikan Guru / Pegawai
-        </h1>
-        <p className="text-center text-xs mb-4">
-          Semester {semester} Tahun Pelajaran {tahunAwal || '................'}/{tahunAkhir || '................'}
-        </p>
-
-        <div className="text-xs mb-4 grid grid-cols-[120px_1fr] gap-y-0.5 max-w-xs">
-          <span>Sekolah</span>
-          <span>: {profilSekolah?.nama_sekolah || '—'}</span>
-          <span>Kecamatan</span>
-          <span>: {profilSekolah?.kecamatan || '—'}</span>
-          <span>Kabupaten</span>
-          <span>: {formatKabupaten(profilSekolah?.kabupaten)}</span>
-        </div>
-
-        <table className="w-full text-[10px] border-collapse border border-black">
-          <thead>
-            <tr className="text-center">
-              <th rowSpan={2} className="border border-black px-1 py-1 w-6">No</th>
-              <th rowSpan={2} className="border border-black px-1 py-1">Nama Guru / Pegawai</th>
-              <th colSpan={5} className="border border-black px-1 py-1">Pendidikan / Ijazah Terakhir</th>
-              <th rowSpan={2} className="border border-black px-1 py-1">Penataran yang Pernah Diikuti</th>
-              <th rowSpan={2} className="border border-black px-1 py-1">Mulai Kerja Di Sini</th>
-            </tr>
-            <tr className="text-center">
-              <th className="border border-black px-1 py-1">Nama Lembaga Pendidikan</th>
-              <th className="border border-black px-1 py-1 w-16">Jenjang</th>
-              <th className="border border-black px-1 py-1">Fakultas</th>
-              <th className="border border-black px-1 py-1">Jurusan</th>
-              <th className="border border-black px-1 py-1 w-12">Tahun</th>
-            </tr>
-          </thead>
-          <tbody>
-            {daftarGuru.length === 0 ? (
-              <tr>
-                <td colSpan={9} className="border border-black text-center py-4 text-slate-400">
-                  Belum ada data guru untuk sekolah ini.
-                </td>
-              </tr>
-            ) : (
-              daftarGuru.map((g, i) => (
-                <tr key={g.id}>
-                  <td className="border border-black px-1 py-1 text-center">{i + 1}</td>
-                  <td className="border border-black px-1 py-1">{g.nama_lengkap || '—'}</td>
-                  <td className="border border-black px-1 py-1">{g.nama_lembaga_pendidikan || '—'}</td>
-                  <td className="border border-black px-1 py-1">{g.pendidikan_terakhir || '—'}</td>
-                  <td className="border border-black px-1 py-1">{g.fakultas || '—'}</td>
-                  <td className="border border-black px-1 py-1">{g.jurusan || '—'}</td>
-                  <td className="border border-black px-1 py-1 text-center">{g.tahun_lulus || '—'}</td>
-                  <td className="border border-black px-1 py-1">{g.penataran_diklat || '—'}</td>
-                  <td className="border border-black px-1 py-1">{formatTanggal(g.tmt_pengangkatan)}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-
-        {/* Blok tanda tangan kepala sekolah */}
-        <div className="flex justify-end mt-10">
-          <div className="text-center text-xs w-64">
-            <p>
-              {profilSekolah?.tempat_ttd || profilSekolah?.kecamatan || '............'},{' '}
-              {new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}
-            </p>
-            <p className="mt-1">Mengetahui,</p>
-            <p>Kepala Sekolah</p>
-            <div className="h-16" />
-            <p className="font-semibold underline">{profilSekolah?.kepala_sekolah || '............................'}</p>
-            <p>NIP. {profilSekolah?.nip_kepala_sekolah || '............................'}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* CSS cetak — A4 landscape, kolom pendidikan cukup banyak & lebar.
-          Blok "position: static" override mengikuti pola
-          LaporanBiodataGuru.jsx supaya kalau daftar guru panjang (lebih
-          dari 1 halaman), isinya mengalir normal mengikuti page-break
-          bawaan browser, bukan terpotong atau menumpuk di satu titik fixed. */}
-      <style>{`
-        /* CSS global (index.css) punya aturan:
-             body * { visibility: hidden; }
-             .print-only, .print-only * { visibility: visible; }
-           yang tadinya dibuat khusus untuk Kuitansi/Nota (1 lembar) dan
-           kemungkinan memberi .print-only posisi "fixed" secara default.
-           PENTING: override "static" ini SENGAJA ditaruh DI LUAR
-           @media print (bukan di dalamnya) — supaya berlaku setiap saat,
-           baik di layar (preview normal sebelum klik Cetak) maupun saat
-           benar-benar mencetak. Kalau cuma diletakkan di dalam
-           @media print, lembar cetak yang ukurannya besar (297mm) akan
-           "terlempar" ke luar area yang terlihat gara-gara position:fixed
-           bawaan dari index.css, sehingga tampak kosong di layar dan baru
-           muncul normal saat proses print/print-preview dijalankan. */
-        .lembar-cetak.print-only {
-          position: static !important;
-          top: auto !important;
-          left: auto !important;
-          right: auto !important;
-          margin-left: auto !important;
-          margin-right: auto !important;
-        }
-        @media print {
-          .no-print { display: none !important; }
-          body { background: white; }
-          .lembar-cetak {
-            box-shadow: none !important;
-            margin: 0 !important;
-            width: 100% !important;
-          }
-        }
-        @page {
-          size: A4 landscape;
-          margin: 12mm;
-        }
-      `}</style>
-    </div>
-  )
-}
+            <p className="text-sm font-medium
