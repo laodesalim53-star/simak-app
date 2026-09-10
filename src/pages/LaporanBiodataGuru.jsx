@@ -13,6 +13,12 @@ import { supabase } from '../lib/supabaseClient'
 // sumber data, tombol cetak) — hanya kolom tabelnya yang disesuaikan dengan
 // format Biodata. Akses: admin, admin_utama, kepala_sekolah, superadmin
 // (lewat ProtectedRoute adminOnly di App.jsx).
+//
+// UPDATE POLA PRINT: ditambahkan override @media screen untuk `display`
+// (mengikuti pola LaporanSemester.jsx), karena override `position: static`
+// yang sudah ada sebelumnya saja tidak cukup — kalau aturan global
+// index.css menyembunyikan .print-only lewat display:none di layar,
+// position:static tidak menolong elemen itu tampil.
 export default function LaporanBiodataGuru() {
   const navigate = useNavigate()
   const { sekolahId: sekolahIdSaya } = useAuth()
@@ -21,16 +27,10 @@ export default function LaporanBiodataGuru() {
   const [daftarGuru, setDaftarGuru] = useState([])
   const [loading, setLoading] = useState(true)
 
-  // Input manual Semester & Tahun Pelajaran — ditampilkan di panel
-  // (no-print) di atas lembar cetak, lalu disisipkan ke teks judul
-  // lembar cetak. Jika tahun dikosongkan, teks tetap fallback ke
-  // titik-titik seperti format aslinya.
   const [semester, setSemester] = useState('Ganjil')
   const [tahunAwal, setTahunAwal] = useState('')
   const [tahunAkhir, setTahunAkhir] = useState('')
 
-  // Urutan prioritas status kepegawaian untuk pengurutan tabel: PNS paling
-  // atas, lalu PPPK/Kontrak, lalu GTY/Honor, sisanya di akhir.
   function prioritasStatus(statusText) {
     const t = (statusText || '').toLowerCase()
     if (t.includes('pns')) return 1
@@ -39,8 +39,6 @@ export default function LaporanBiodataGuru() {
     return 4
   }
 
-  // Kepala Sekolah selalu ditempatkan paling atas, terlepas dari status
-  // kepegawaiannya — dideteksi dari kolom tugas_tambahan / jenis_ptk.
   function isKepalaSekolah(g) {
     const jabatan = `${g.tugas_tambahan || ''} ${g.jenis_ptk || ''}`.toLowerCase()
     return jabatan.includes('kepala sekolah')
@@ -100,15 +98,6 @@ export default function LaporanBiodataGuru() {
     return new Date(tgl).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
   }
 
-  // Membuang awalan "PEMERINTAH KABUPATEN" / "KABUPATEN" pada nilai supaya
-  // tidak dobel dengan label/teks "Kabupaten" atau "Pemerintah Kabupaten"
-  // yang sudah ada di depannya (mis. field profilSekolah.kabupaten berisi
-  // "PEMERINTAH KABUPATEN KEPULAUAN ARU", padahal labelnya sudah
-  // "Kabupaten"/"Pemerintah Kabupaten"). Data mentah di profilSekolah TIDAK
-  // diubah — cuma cara menampilkannya. Dipakai di kop surat, grid identitas,
-  // dan baris alamat. Pola sama seperti LaporanKepangkatanGuru.jsx /
-  // LaporanNominatifGuru.jsx / LaporanPendidikanGuru.jsx /
-  // LaporanTanggunganKeluarga.jsx / LaporanTenagaPengajar.jsx.
   function formatKabupaten(teks) {
     if (!teks) return '—'
     return (
@@ -119,7 +108,6 @@ export default function LaporanBiodataGuru() {
     )
   }
 
-  // Alamat gabungan — pola sama seperti Modal Lihat Profil di halaman Guru.
   function alamatLengkap(g) {
     return (
       [g.alamat_jalan, g.rt && `RT ${g.rt}`, g.rw && `RW ${g.rw}`, g.nama_dusun, g.desa_kelurahan, g.kecamatan, g.kode_pos]
@@ -128,10 +116,6 @@ export default function LaporanBiodataGuru() {
     )
   }
 
-  // Dua sub-kolom "Status Pegawai" mengikuti format Excel asli: kolom "PNS"
-  // hanya berisi tulisan PNS kalau memang PNS (kosong kalau bukan), kolom
-  // "PS" berisi tanda "-" kalau PNS, atau teks status aslinya kalau bukan
-  // PNS (mis. Kontrak/GTY/Honor).
   function kolomPns(g) {
     return (g.status_kepegawaian || '').toLowerCase().includes('pns') ? 'PNS' : ''
   }
@@ -151,7 +135,6 @@ export default function LaporanBiodataGuru() {
 
   return (
     <div className="min-h-screen bg-slate-100">
-      {/* Toolbar — hilang saat dicetak */}
       <div className="no-print sticky top-0 z-10 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
         <button
           onClick={() => navigate(-1)}
@@ -167,9 +150,6 @@ export default function LaporanBiodataGuru() {
         </button>
       </div>
 
-      {/* Panel input Semester & Tahun Pelajaran — hilang saat print.
-          Nilainya dipakai untuk mengisi teks "Semester .../Tahun
-          Pelajaran ..." di lembar cetak di bawah. */}
       <div className="no-print max-w-md mx-auto mt-4 bg-white border border-slate-200 rounded-lg p-3 flex flex-wrap items-center gap-3 text-sm">
         <label className="font-medium text-slate-600">Semester</label>
         <select
@@ -199,20 +179,7 @@ export default function LaporanBiodataGuru() {
         />
       </div>
 
-      {/* PENTING: class "print-only" ditambahkan di sini. CSS global
-          (index.css) menyembunyikan SEMUA elemen saat print kecuali yang
-          berkelas print-only (body * { visibility: hidden } lalu
-          .print-only, .print-only * { visibility: visible }). Tanpa class
-          ini, div lembar cetak ikut tersembunyi dan hasil print jadi
-          kosong total — itu penyebab bug sebelumnya. Pola ini mengikuti
-          Cetak8355.jsx yang sudah terbukti berhasil. */}
       <div className="lembar-cetak print-only bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '210mm', minHeight: '297mm' }}>
-        {/* Kop Surat — urutan resmi: Pemerintah Kabupaten / Dinas
-            Pendidikan / Nama Sekolah / Alamat. Nama kabupaten dilewatkan
-            lewat formatKabupaten() di semua baris supaya tidak dobel kalau
-            data mentahnya sudah mengandung prefix "Pemerintah Kabupaten"/
-            "Kabupaten" (kasus nyata: field kabupaten berisi "PEMERINTAH
-            KABUPATEN KEPULAUAN ARU"). */}
         <div className="flex items-center gap-4 border-b-4 border-black pb-3 mb-4">
           {logoUrl && (
             <img src={logoUrl} alt="Logo" className="w-16 h-16 object-contain shrink-0" />
@@ -310,7 +277,6 @@ export default function LaporanBiodataGuru() {
           </tbody>
         </table>
 
-        {/* Blok tanda tangan kepala sekolah */}
         <div className="flex justify-end mt-10">
           <div className="text-center text-xs w-64">
             <p>
@@ -355,6 +321,18 @@ export default function LaporanBiodataGuru() {
             right: auto !important;
             margin-left: auto !important;
             margin-right: auto !important;
+          }
+        }
+
+        /* Override aturan global "@media screen { .print-only { display: none } }"
+           (index.css) — override position di dalam @media print di atas
+           saja TIDAK CUKUP kalau aturan global menyembunyikan .print-only
+           lewat display:none saat @media screen; elemen display:none
+           tetap tidak terlihat di layar meski posisinya static. Ditambahkan
+           di sini, mengikuti pola LaporanSemester.jsx. */
+        @media screen {
+          .lembar-cetak.print-only {
+            display: block !important;
           }
         }
         @page {
