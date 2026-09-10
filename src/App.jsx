@@ -98,6 +98,11 @@ import DataUjian8355 from './pages/DataUjian8355'
 import Cetak8355 from './pages/Cetak8355'
 // --- Fitur Cetak Sampul Laporan (generik, kop otomatis dari profil_sekolah) ---
 import CetakSampul from './pages/CetakSampul'
+// Cabang CetakSampul.jsx dengan jenis laporan terkunci — dipakai supaya
+// guru/admin tidak perlu memilih dari dropdown lagi saat mencetak sampul
+// Laporan Semester atau Daftar Calon Peserta Ujian (8355).
+import CetakSampulSemester from './pages/CetakSampulSemester'
+import CetakSampul8355 from './pages/CetakSampul8355'
 import { CartProvider } from './lib/CartContext'
 
 // Halaman "dashboard" (setelah login) — semua redirect kegagalan akses
@@ -270,6 +275,15 @@ export default function App() {
             adminOnly seperti laporan-laporan lain. */}
         <Route path="/cetak-sampul" element={
   <ProtectedRoute adminOnly><CetakSampul /></ProtectedRoute>
+} />
+        {/* Cabang CetakSampul.jsx dengan jenis laporan sudah terkunci —
+            jenis laporan tidak perlu dipilih lagi lewat dropdown. Dibatasi
+            adminOnly, sama seperti /cetak-sampul. */}
+        <Route path="/cetak-sampul-semester" element={
+  <ProtectedRoute adminOnly><CetakSampulSemester /></ProtectedRoute>
+} />
+        <Route path="/cetak-sampul-8355" element={
+  <ProtectedRoute adminOnly><CetakSampul8355 /></ProtectedRoute>
 } />
         <Route path="/kelas" element={<ProtectedRoute adminOnly><Kelas /></ProtectedRoute>} />
         <Route path="/jadwal" element={<ProtectedRoute><Jadwal /></ProtectedRoute>} />
