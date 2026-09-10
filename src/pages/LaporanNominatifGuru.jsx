@@ -110,6 +110,22 @@ export default function LaporanNominatifGuru() {
     return new Date(tgl).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
   }
 
+  // Membuang awalan "PEMERINTAH KABUPATEN" / "KABUPATEN" pada nilai supaya
+  // tidak dobel dengan label "Kabupaten" yang sudah ada di depannya
+  // (mis. field profilSekolah.kabupaten berisi "PEMERINTAH KABUPATEN
+  // KEPULAUAN ARU", padahal labelnya sudah "Kabupaten"). Data mentah di
+  // profilSekolah TIDAK diubah — cuma cara menampilkannya di baris ini.
+  // Pola sama seperti LaporanKepangkatanGuru.jsx.
+  function formatKabupaten(teks) {
+    if (!teks) return '—'
+    return (
+      teks
+        .replace(/^PEMERINTAH\s+KABUPATEN\s+/i, '')
+        .replace(/^KABUPATEN\s+/i, '')
+        .trim() || '—'
+    )
+  }
+
   // Hitung masa kerja (tahun & bulan) dari tmt_pengangkatan sampai hari ini
   function hitungMasaKerja(tmt) {
     if (!tmt) return { tahun: '—', bulan: '—' }
@@ -238,7 +254,7 @@ export default function LaporanNominatifGuru() {
           <span>Kecamatan</span>
           <span>: {profilSekolah?.kecamatan || '—'}</span>
           <span>Kabupaten</span>
-          <span>: {profilSekolah?.kabupaten || '—'}</span>
+          <span>: {formatKabupaten(profilSekolah?.kabupaten)}</span>
         </div>
 
         <table className="w-full text-[10px] border-collapse border border-black">
