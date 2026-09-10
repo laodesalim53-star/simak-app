@@ -233,6 +233,54 @@ function getGroupsAdmin(
   ]
 }
 
+// Menu ADMIN untuk tenant "kantor" (isKantor) — versi ringkas dari
+// getGroupsAdmin() di atas, hanya fitur umum yang diminta: data pegawai,
+// presensi, surat-menyurat, dan dokumen. Semua item akademik (siswa, kelas,
+// rapor, nilai, ijazah, RPP, bank soal, PPDB, dst) dan Toko/Keuangan sengaja
+// TIDAK disertakan supaya menu tidak membingungkan untuk tenant kantor.
+// Rute yang dipakai tetap sama dengan versi sekolah (mis. /guru, /presensi)
+// — cuma labelnya diganti supaya sesuai konteks kantor.
+function getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelumDibaca = 0) {
+  return [
+    {
+      label: null,
+      links: [
+        { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
+        { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
+        { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
+        { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
+        { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
+        { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
+        { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
+      ],
+    },
+    {
+      label: 'Kepegawaian',
+      links: [
+        { to: '/guru', label: 'Data Pegawai', icon: GraduationCap },
+        { to: '/presensi', label: 'Presensi Pegawai', icon: ClipboardCheck },
+        { to: '/laporan-guru', label: 'Laporan Kepegawaian', icon: GraduationCap },
+      ],
+    },
+    {
+      label: 'Administrasi',
+      links: [
+        { to: '/agenda', label: 'Agenda Kantor', icon: CalendarDays },
+        { to: '/surat', label: 'Surat Masuk/Keluar', icon: Mail },
+        { to: '/surat-keterangan', label: 'Surat Keterangan', icon: FileSignature },
+        { to: '/backup', label: 'Backup Data', icon: DatabaseBackup },
+        // "Persetujuan Akun" dan "Profil Kantor" hanya untuk admin utama.
+        ...(isAdminUtama
+          ? [
+              { to: '/persetujuan-akun', label: 'Persetujuan Akun', icon: ShieldCheck, badge: jumlahMenunggu },
+              { to: '/profil-sekolah', label: 'Profil Kantor', icon: Landmark },
+            ]
+          : []),
+      ],
+    },
+  ]
+}
+
 // Menu GURU: tetap ringkas, tidak perlu dikelompokkan
 // Kuitansi, Kuitansi Jasa & Nota Belanja SENGAJA TIDAK ada di sini — ketiga
 // fitur ini admin-only (lihat RLS policy nota_hanya_admin di Supabase).
@@ -280,6 +328,24 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
   { to: '/agenda', label: 'Agenda Sekolah', icon: CalendarDays },
   { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
+  ]
+}
+
+// Menu PEGAWAI (non-admin) untuk tenant "kantor" — versi ringkas dari
+// getLinksGuru() di atas, dipakai kalau isKantor true. Sama seperti
+// getGroupsKantorAdmin(), rute tetap sama, cuma item akademik/toko
+// dihilangkan dan labelnya disesuaikan.
+function getLinksKantorPegawai(jumlahPesanBelumDibaca = 0) {
+  return [
+    { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
+    { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
+    { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
+    { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
+    { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
+    { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
+    { to: '/presensi', label: 'Presensi', icon: ClipboardCheck },
+    { to: '/agenda', label: 'Agenda Kantor', icon: CalendarDays },
+    { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
   ]
 }
 
@@ -409,7 +475,18 @@ function getLinksOrangTua(jumlahPesanBelumDibaca = 0, sekolahId = null) {
 }
 
 export default function Sidebar({ open = false, onClose = () => {} }) {
-  const { signOut, session, profil, isAdmin, isAdminUtama, isSuperAdmin, isKepalaSekolah, isOrangTua, sekolahId } = useAuth()
+  const {
+    signOut,
+    session,
+    profil,
+    isAdmin,
+    isAdminUtama,
+    isSuperAdmin,
+    isKepalaSekolah,
+    isOrangTua,
+    sekolahId,
+    isKantor,
+  } = useAuth()
   const navigate = useNavigate()
   const fotoUrl = getFotoUrl(profil?.foto_profil_path)
   const namaTampil = profil?.nama_lengkap || session?.user?.email || 'Pengguna'
@@ -674,18 +751,24 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
     }
   }, [isSuperAdmin])
 
-  const groupsAdmin = getGroupsAdmin(
-    isAdminUtama,
-    isSuperAdmin,
-    isKepalaSekolah,
-    jumlahMenunggu,
-    jumlahPesanBelumDibaca,
-    jumlahPesanPusatBelumDibaca,
-    jumlahPengajuanTokoMenunggu,
-    jumlahSiapDicairkan,
-    jumlahLiveChatBelumDibaca
-  )
-  const linksGuru = getLinksGuru(jumlahPesanBelumDibaca, sekolahId)
+  // Pilih set menu admin & non-admin sesuai jenis tenant (sekolah vs kantor).
+  // isKantor datang dari AuthContext (relasi profil -> sekolah.jenis_organisasi).
+  const groupsAdmin = isKantor
+    ? getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu, jumlahPesanBelumDibaca)
+    : getGroupsAdmin(
+        isAdminUtama,
+        isSuperAdmin,
+        isKepalaSekolah,
+        jumlahMenunggu,
+        jumlahPesanBelumDibaca,
+        jumlahPesanPusatBelumDibaca,
+        jumlahPengajuanTokoMenunggu,
+        jumlahSiapDicairkan,
+        jumlahLiveChatBelumDibaca
+      )
+  const linksGuru = isKantor
+    ? getLinksKantorPegawai(jumlahPesanBelumDibaca)
+    : getLinksGuru(jumlahPesanBelumDibaca, sekolahId)
   const linksOrangTua = getLinksOrangTua(jumlahPesanBelumDibaca, sekolahId)
 
   return (
