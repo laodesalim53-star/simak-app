@@ -4,43 +4,36 @@ import { ArrowLeft, Printer, Loader2 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 
-// Halaman cetak "DATA KEPANGKATAN GURU/PEGAWAI" — kolektif semua guru di
-// satu sekolah sekaligus. Mengikuti pola LaporanBiodataGuru.jsx (kop surat,
-// toolbar no-print, panel input Semester/Tahun Pelajaran, lembar-cetak
-// print-only A4 landscape, blok tanda tangan).
+// Halaman cetak "DATA KEPANGKATAN PEGAWAI" — versi KANTOR dari
+// LaporanKepangkatanGuru.jsx. Bedanya:
+// - Sumber data dari tabel `pegawai_kantor` (bukan `guru`).
+// - Judul tidak menyebut "Guru" sama sekali ("Data Kepangkatan Pegawai").
+// - Panel & label Semester / Tahun Pelajaran (konsep akademik) DIHAPUS
+//   total — tidak ada state semester/tahunAwal/tahunAkhir, tidak ada
+//   panel input, dan tidak ada baris keterangan semester di kop cetak.
+// - Label "Kepala Sekolah" pada blok tanda tangan diganti "Pimpinan".
 //
-// Urutan baris tabel:
-// 1. Kepala Sekolah SELALU paling atas, terlepas dari golongannya.
+// Urutan baris tabel (sama seperti versi guru):
+// 1. Pimpinan SELALU paling atas, terlepas dari golongannya.
 // 2. Sisanya diurutkan berdasarkan tingkat Pangkat/Golongan, dari yang
-//    TERTINGGI ke yang TERENDAH (mis. IV lebih atas dari III, III/D lebih
-//    atas dari III/A) — mengikuti pola "yang lebih senior tampil lebih
-//    atas" seperti di Daftar Nominatif.
-// 3. Guru yang golongannya SAMA diurutkan berdasarkan abjad nama (A-Z).
+//    TERTINGGI ke yang TERENDAH.
+// 3. Pegawai yang golongannya SAMA diurutkan berdasarkan abjad nama (A-Z).
 //
-// CATATAN: kalau ternyata urutan yang diinginkan sekolah justru golongan
-// terendah dulu (I sebelum IV), tinggal balik tanda pengurangan di
-// bandingkanGolongan() — cukup 1 baris (lihat komentar di dalamnya).
-//
-// UPDATE POLA PRINT: ditambahkan override @media screen untuk `display`
-// (mengikuti pola LaporanSemester.jsx), karena override `position: static`
-// yang sudah ada sebelumnya saja tidak cukup — kalau aturan global
-// index.css menyembunyikan .print-only lewat display:none di layar,
-// position:static tidak menolong elemen itu tampil.
-export default function LaporanKepangkatanGuru() {
+// CATATAN ASUMSI: kolom karpeg, sk_cpns, tanggal_cpns, lembaga_pengangkatan,
+// tmt_pns mengasumsikan tabel `pegawai_kantor` sudah punya kolom yang sama
+// seperti tabel `guru`. Lihat migration_kepangkatan_pegawai_kantor.sql
+// yang menambahkannya kalau belum ada.
+export default function LaporanKepangkatanPegawai() {
   const navigate = useNavigate()
   const { sekolahId: sekolahIdSaya } = useAuth()
-  const [profilSekolah, setProfilSekolah] = useState(null)
+  const [profilKantor, setProfilKantor] = useState(null)
   const [logoUrl, setLogoUrl] = useState('')
-  const [daftarGuru, setDaftarGuru] = useState([])
+  const [daftarPegawai, setDaftarPegawai] = useState([])
   const [loading, setLoading] = useState(true)
 
-  const [semester, setSemester] = useState('Ganjil')
-  const [tahunAwal, setTahunAwal] = useState('')
-  const [tahunAkhir, setTahunAkhir] = useState('')
-
-  function isKepalaSekolah(g) {
-    const jabatan = `${g.tugas_tambahan || ''} ${g.jenis_ptk || ''}`.toLowerCase()
-    return jabatan.includes('kepala sekolah')
+  function isPimpinan(p) {
+    const jabatan = `${p.tugas_tambahan || ''} ${p.jenis_ptk || ''} ${p.jabatan || ''}`.toLowerCase()
+    return jabatan.includes('kepala') || jabatan.includes('pimpinan')
   }
 
   function peringkatGolongan(teks) {
@@ -63,11 +56,11 @@ export default function LaporanKepangkatanGuru() {
     return golB - golA
   }
 
-  function urutkanGuru(daftar) {
+  function urutkanPegawai(daftar) {
     return [...daftar].sort((a, b) => {
-      const aKS = isKepalaSekolah(a) ? 0 : 1
-      const bKS = isKepalaSekolah(b) ? 0 : 1
-      if (aKS !== bKS) return aKS - bKS
+      const aPim = isPimpinan(a) ? 0 : 1
+      const bPim = isPimpinan(b) ? 0 : 1
+      if (aPim !== bPim) return aPim - bPim
 
       const bandingGol = bandingkanGolongan(a, b)
       if (bandingGol !== 0) return bandingGol
@@ -86,27 +79,27 @@ export default function LaporanKepangkatanGuru() {
         return
       }
 
-      const [{ data: sekolah }, { data: guru }] = await Promise.all([
+      const [{ data: kantor }, { data: pegawai }] = await Promise.all([
         supabase.from('profil_sekolah').select('*').eq('sekolah_id', sekolahId).maybeSingle(),
         supabase
-          .from('guru')
+          .from('pegawai_kantor')
           .select(
-            'id, nip, nama_lengkap, pangkat_golongan, karpeg, sk_cpns, tanggal_cpns, sk_pengangkatan, tmt_pengangkatan, lembaga_pengangkatan, tmt_pns, tugas_tambahan, jenis_ptk, status'
+            'id, nip, nama_lengkap, pangkat_golongan, karpeg, sk_cpns, tanggal_cpns, sk_pengangkatan, tmt_pengangkatan, lembaga_pengangkatan, tmt_pns, tugas_tambahan, jenis_ptk, jabatan, status'
           )
           .eq('sekolah_id', sekolahId)
           .eq('status', 'aktif'),
       ])
 
-      setProfilSekolah(sekolah || null)
+      setProfilKantor(kantor || null)
 
-      if (sekolah?.logo_path) {
-        const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(sekolah.logo_path)
+      if (kantor?.logo_path) {
+        const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(kantor.logo_path)
         setLogoUrl(pub?.publicUrl || '')
       } else {
         setLogoUrl('')
       }
 
-      setDaftarGuru(urutkanGuru(guru || []))
+      setDaftarPegawai(urutkanPegawai(pegawai || []))
       setLoading(false)
     }
     muat()
@@ -152,35 +145,6 @@ export default function LaporanKepangkatanGuru() {
         </button>
       </div>
 
-      <div className="no-print max-w-md mx-auto mt-4 bg-white border border-slate-200 rounded-lg p-3 flex flex-wrap items-center gap-3 text-sm">
-        <label className="font-medium text-slate-600">Semester</label>
-        <select
-          value={semester}
-          onChange={(e) => setSemester(e.target.value)}
-          className="border border-slate-300 rounded px-2 py-1"
-        >
-          <option value="Ganjil">Ganjil</option>
-          <option value="Genap">Genap</option>
-        </select>
-
-        <label className="font-medium text-slate-600">Tahun Pelajaran</label>
-        <input
-          type="text"
-          value={tahunAwal}
-          onChange={(e) => setTahunAwal(e.target.value)}
-          placeholder="2024"
-          className="border border-slate-300 rounded px-2 py-1 w-20"
-        />
-        <span>/</span>
-        <input
-          type="text"
-          value={tahunAkhir}
-          onChange={(e) => setTahunAkhir(e.target.value)}
-          placeholder="2025"
-          className="border border-slate-300 rounded px-2 py-1 w-20"
-        />
-      </div>
-
       <div className="lembar-cetak print-only bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '297mm', minHeight: '210mm' }}>
         <div className="flex items-center gap-4 border-b-4 border-black pb-3 mb-4">
           {logoUrl && (
@@ -188,40 +152,37 @@ export default function LaporanKepangkatanGuru() {
           )}
           <div className="text-center flex-1">
             <p className="text-sm font-medium uppercase">
-              Pemerintah Kabupaten {formatKabupaten(profilSekolah?.kabupaten)}
+              Pemerintah Kabupaten {formatKabupaten(profilKantor?.kabupaten)}
             </p>
             <p className="text-sm font-medium uppercase">
-              {profilSekolah?.dinas_pendidikan || 'Dinas Pendidikan'}
+              {profilKantor?.dinas_pendidikan || profilKantor?.instansi_induk || ''}
             </p>
-            <p className="text-lg font-bold uppercase">{profilSekolah?.nama_sekolah || 'Nama Sekolah'}</p>
+            <p className="text-lg font-bold uppercase">{profilKantor?.nama_sekolah || 'Nama Instansi'}</p>
             <p className="text-xs">
-              {[profilSekolah?.alamat, profilSekolah?.kecamatan, profilSekolah?.kabupaten, profilSekolah?.provinsi]
+              {[profilKantor?.alamat, profilKantor?.kecamatan, profilKantor?.kabupaten, profilKantor?.provinsi]
                 .filter(Boolean)
                 .join(', ')}
-              {profilSekolah?.kode_pos ? ` ${profilSekolah.kode_pos}` : ''}
+              {profilKantor?.kode_pos ? ` ${profilKantor.kode_pos}` : ''}
             </p>
-            {(profilSekolah?.telepon || profilSekolah?.email || profilSekolah?.website) && (
+            {(profilKantor?.telepon || profilKantor?.email || profilKantor?.website) && (
               <p className="text-xs">
-                {[profilSekolah?.telepon, profilSekolah?.email, profilSekolah?.website].filter(Boolean).join(' | ')}
+                {[profilKantor?.telepon, profilKantor?.email, profilKantor?.website].filter(Boolean).join(' | ')}
               </p>
             )}
           </div>
         </div>
 
-        <h1 className="text-center font-bold text-base uppercase underline mb-1">
-          Data Kepangkatan Guru/Pegawai
+        <h1 className="text-center font-bold text-base uppercase underline mb-4">
+          Data Kepangkatan Pegawai
         </h1>
-        <p className="text-center text-xs mb-4">
-          Semester {semester} Tahun Pelajaran {tahunAwal || '................'}/{tahunAkhir || '................'}
-        </p>
 
         <div className="text-xs mb-4 grid grid-cols-[120px_1fr] gap-y-0.5 max-w-xs">
-          <span>Sekolah</span>
-          <span>: {profilSekolah?.nama_sekolah || '—'}</span>
+          <span>Instansi</span>
+          <span>: {profilKantor?.nama_sekolah || '—'}</span>
           <span>Kecamatan</span>
-          <span>: {profilSekolah?.kecamatan || '—'}</span>
+          <span>: {profilKantor?.kecamatan || '—'}</span>
           <span>Kabupaten</span>
-          <span>: {formatKabupaten(profilSekolah?.kabupaten)}</span>
+          <span>: {formatKabupaten(profilKantor?.kabupaten)}</span>
         </div>
 
         <table className="w-full text-[10px] border-collapse border border-black">
@@ -241,26 +202,26 @@ export default function LaporanKepangkatanGuru() {
             </tr>
           </thead>
           <tbody>
-            {daftarGuru.length === 0 ? (
+            {daftarPegawai.length === 0 ? (
               <tr>
                 <td colSpan={11} className="border border-black text-center py-4 text-slate-400">
-                  Belum ada data guru untuk sekolah ini.
+                  Belum ada data pegawai untuk instansi ini.
                 </td>
               </tr>
             ) : (
-              daftarGuru.map((g, i) => (
-                <tr key={g.id}>
+              daftarPegawai.map((p, i) => (
+                <tr key={p.id}>
                   <td className="border border-black px-1 py-1 text-center">{i + 1}</td>
-                  <td className="border border-black px-1 py-1">{g.nama_lengkap || '—'}</td>
-                  <td className="border border-black px-1 py-1">{g.nip || '—'}</td>
-                  <td className="border border-black px-1 py-1">{g.pangkat_golongan || '—'}</td>
-                  <td className="border border-black px-1 py-1">{g.karpeg || '—'}</td>
-                  <td className="border border-black px-1 py-1">{g.sk_cpns || '—'}</td>
-                  <td className="border border-black px-1 py-1">{formatTanggal(g.tanggal_cpns)}</td>
-                  <td className="border border-black px-1 py-1">{g.sk_pengangkatan || '—'}</td>
-                  <td className="border border-black px-1 py-1">{formatTanggal(g.tmt_pengangkatan)}</td>
-                  <td className="border border-black px-1 py-1">{g.lembaga_pengangkatan || '—'}</td>
-                  <td className="border border-black px-1 py-1">{formatTanggal(g.tmt_pns)}</td>
+                  <td className="border border-black px-1 py-1">{p.nama_lengkap || '—'}</td>
+                  <td className="border border-black px-1 py-1">{p.nip || '—'}</td>
+                  <td className="border border-black px-1 py-1">{p.pangkat_golongan || '—'}</td>
+                  <td className="border border-black px-1 py-1">{p.karpeg || '—'}</td>
+                  <td className="border border-black px-1 py-1">{p.sk_cpns || '—'}</td>
+                  <td className="border border-black px-1 py-1">{formatTanggal(p.tanggal_cpns)}</td>
+                  <td className="border border-black px-1 py-1">{p.sk_pengangkatan || '—'}</td>
+                  <td className="border border-black px-1 py-1">{formatTanggal(p.tmt_pengangkatan)}</td>
+                  <td className="border border-black px-1 py-1">{p.lembaga_pengangkatan || '—'}</td>
+                  <td className="border border-black px-1 py-1">{formatTanggal(p.tmt_pns)}</td>
                 </tr>
               ))
             )}
@@ -270,14 +231,14 @@ export default function LaporanKepangkatanGuru() {
         <div className="flex justify-end mt-10">
           <div className="text-center text-xs w-64">
             <p>
-              {profilSekolah?.tempat_ttd || profilSekolah?.kecamatan || '............'},{' '}
+              {profilKantor?.tempat_ttd || profilKantor?.kecamatan || '............'},{' '}
               {new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}
             </p>
             <p className="mt-1">Mengetahui,</p>
-            <p>Kepala Sekolah</p>
+            <p>Pimpinan</p>
             <div className="h-16" />
-            <p className="font-semibold underline">{profilSekolah?.kepala_sekolah || '............................'}</p>
-            <p>NIP. {profilSekolah?.nip_kepala_sekolah || '............................'}</p>
+            <p className="font-semibold underline">{profilKantor?.kepala_sekolah || '............................'}</p>
+            <p>NIP. {profilKantor?.nip_kepala_sekolah || '............................'}</p>
           </div>
         </div>
       </div>
