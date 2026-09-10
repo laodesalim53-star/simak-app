@@ -140,7 +140,14 @@ export default function LaporanBiodataGuru() {
         </button>
       </div>
 
-      <div className="lembar-cetak bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '210mm', minHeight: '297mm' }}>
+      {/* PENTING: class "print-only" ditambahkan di sini. CSS global
+          (index.css) menyembunyikan SEMUA elemen saat print kecuali yang
+          berkelas print-only (body * { visibility: hidden } lalu
+          .print-only, .print-only * { visibility: visible }). Tanpa class
+          ini, div lembar cetak ikut tersembunyi dan hasil print jadi
+          kosong total — itu penyebab bug sebelumnya. Pola ini mengikuti
+          Cetak8355.jsx yang sudah terbukti berhasil. */}
+      <div className="lembar-cetak print-only bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '210mm', minHeight: '297mm' }}>
         {/* Kop Surat */}
         <div className="flex items-center gap-4 border-b-4 border-black pb-3 mb-4">
           {logoUrl && (
@@ -255,6 +262,25 @@ export default function LaporanBiodataGuru() {
             box-shadow: none !important;
             margin: 0 !important;
             width: 100% !important;
+          }
+
+          /* CSS global (index.css) punya aturan:
+               body * { visibility: hidden; }
+               .print-only, .print-only * { visibility: visible; }
+             yang tadinya dibuat khusus untuk Kuitansi/Nota (1 lembar) dan
+             kemungkinan memberi .print-only posisi "fixed" secara default.
+             Di sini di-override jadi "static" supaya kalau daftar guru
+             panjang (lebih dari 1 halaman A4), isinya tetap mengalir
+             normal mengikuti page-break bawaan browser, bukan terpotong
+             atau menumpuk di satu titik fixed. Pola sama seperti
+             Cetak8355.jsx yang sudah terbukti berhasil. */
+          .lembar-cetak.print-only {
+            position: static !important;
+            top: auto !important;
+            left: auto !important;
+            right: auto !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
           }
         }
         @page {
