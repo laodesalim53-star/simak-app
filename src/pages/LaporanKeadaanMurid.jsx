@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Printer, Loader2 } from 'lucide-react'
+import { ArrowLeft, Printer, Loader2, AlertTriangle } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 
@@ -33,6 +33,12 @@ export default function LaporanKeadaanMurid() {
   const [profilSekolah, setProfilSekolah] = useState(null)
   const [logoUrl, setLogoUrl] = useState('')
   const [loading, setLoading] = useState(true)
+  // PERBAIKAN: sebelumnya error dari Supabase diabaikan begitu saja, jadi
+  // kalau salah satu query gagal (mis. kolom yang di-select belum ada di
+  // tabel), halaman ini diam-diam menampilkan SEMUA laporan bernilai 0
+  // tanpa petunjuk apa pun kenapa. Sekarang errornya ditangkap dan
+  // ditampilkan sebagai banner supaya langsung ketahuan.
+  const [errorMuat, setErrorMuat] = useState('')
 
   const [kelasList, setKelasList] = useState([])
   const [siswaList, setSiswaList] = useState([])
@@ -46,6 +52,10 @@ export default function LaporanKeadaanMurid() {
   const URUTAN_ROMAWI = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII']
   const KATEGORI_KEWARGANEGARAAN = ['WNI asli', 'WNI Keturunan', 'WNA']
   const KATEGORI_AGAMA = ['Krist. Protestan', 'Krist. Katolik', 'Islam', 'Hindu', 'Budha', 'Konghucu', 'Lain-lain']
+  // Label kolom untuk siswa yang tanggal lahirnya kosong/tidak valid, supaya
+  // mereka tetap terhitung di tabel Usia (dulu diam-diam dibuang, sehingga
+  // totalnya bisa lebih kecil dari total di tab Keadaan Murid).
+  const KOLOM_USIA_TIDAK_DIKETAHUI = 'Tidak diketahui'
 
   // Urutan sesuai dokumen referensi: Keadaan → Usia → Agama → Kewarganegaraan
   const TAB_LABEL = {
@@ -109,13 +119,18 @@ export default function LaporanKeadaanMurid() {
   useEffect(() => {
     async function muat() {
       setLoading(true)
+      setErrorMuat('')
       const sekolahId = sekolahIdSaya
       if (!sekolahId) {
         setLoading(false)
         return
       }
 
-      const [{ data: sekolah }, { data: kelas }, { data: siswa }] = await Promise.all([
+      const [
+        { data: sekolah, error: sekolahError },
+        { data: kelas, error: kelasError },
+        { data: siswa, error: siswaError },
+      ] = await Promise.all([
         supabase.from('profil_sekolah').select('*').eq('sekolah_id', sekolahId).maybeSingle(),
         supabase.from('kelas').select('id, tingkat').eq('sekolah_id', sekolahId),
         supabase
@@ -124,6 +139,28 @@ export default function LaporanKeadaanMurid() {
           .eq('sekolah_id', sekolahId)
           .eq('status', 'aktif'),
       ])
+
+      // PERBAIKAN: errornya sekarang dicatat DAN ditampilkan, bukan diam-diam
+      // ditelan. Sebelumnya kalau query siswa gagal (mis. kolom yang
+      // di-select belum ada di tabel), `siswa` bernilai null, lalu jatuh ke
+      // `[]` di bawah — hasilnya semua laporan tampil 0 tanpa keterangan.
+      if (sekolahError) console.error('Gagal memuat profil sekolah:', sekolahError)
+      if (kelasError) console.error('Gagal memuat data kelas:', kelasError)
+      if (siswaError) console.error('Gagal memuat data siswa:', siswaError)
+
+      const pesanError = [
+        sekolahError ? 'profil sekolah' : null,
+        kelasError ? 'data kelas' : null,
+        siswaError ? 'data siswa' : null,
+      ].filter(Boolean)
+      if (pesanError.length > 0) {
+        const detailAsli = siswaError?.message || kelasError?.message || sekolahError?.message || ''
+        setErrorMuat(
+          `Gagal memuat ${pesanError.join(', ')} dari database, sehingga angka di laporan ini bisa 0/kosong. ` +
+          `Coba muat ulang halaman; kalau masih gagal, periksa console browser (F12).` +
+          (detailAsli ? ` Detail: ${detailAsli}` : '')
+        )
+      }
 
       setProfilSekolah(sekolah || null)
       if (sekolah?.logo_path) {
@@ -173,6 +210,16 @@ export default function LaporanKeadaanMurid() {
     })
     return peta
   }, [kelasList])
+
+  // Siswa yang kelas_id-nya kosong atau tidak cocok dengan kelas manapun di
+  // atas tidak akan pernah muncul di laporan manapun (Keadaan/Usia/Agama/
+  // Kewarganegaraan semuanya dikelompokkan per tingkat kelas). Dihitung di
+  // sini supaya bisa diberi tahu ke admin, bukan cuma bikin total "kelihatan"
+  // tidak sinkron dengan jumlah siswa aktif yang sebenarnya.
+  const jumlahSiswaTanpaTingkat = useMemo(
+    () => siswaList.filter((s) => !tingkatByKelasId[s.kelas_id]).length,
+    [siswaList, tingkatByKelasId]
+  )
 
   // ---------- Data tab "Keadaan Murid" ----------
   const akhirBulanIni = useMemo(() => {
@@ -318,6 +365,12 @@ export default function LaporanKeadaanMurid() {
   }, [tingkatList, dataAgama])
 
   // ---------- Data tab "Usia" ----------
+  // PERBAIKAN: kolom usia sebelumnya HANYA dibuat dari rentang usia yang
+  // valid (0-25 tahun) berdasarkan siswa yang tanggal lahirnya terisi.
+  // Siswa dengan tanggal_lahir kosong/tidak valid tidak masuk kolom manapun
+  // -> "hilang" dari tabel ini, sehingga totalnya lebih kecil dari total di
+  // tab Keadaan Murid. Sekarang mereka masuk ke kolom "Tidak diketahui" di
+  // ujung tabel supaya totalnya selalu sinkron dengan jumlah siswa aktif.
   const usiaKolom = useMemo(() => {
     const usiaSiswa = siswaList
       .map((s) => hitungUsia(s.tanggal_lahir))
@@ -327,6 +380,11 @@ export default function LaporanKeadaanMurid() {
     if (usiaMax - usiaMin < 1) { usiaMin = Math.min(usiaMin, 6); usiaMax = Math.max(usiaMax, 14) }
     const kolom = []
     for (let u = usiaMin; u <= usiaMax; u += 1) kolom.push(u)
+    const adaTanpaUsia = siswaList.some((s) => {
+      const u = hitungUsia(s.tanggal_lahir)
+      return u === null || u < 0 || u > 25
+    })
+    if (adaTanpaUsia) kolom.push(KOLOM_USIA_TIDAK_DIKETAHUI)
     return kolom
   }, [siswaList])
 
@@ -339,8 +397,9 @@ export default function LaporanKeadaanMurid() {
     siswaList.forEach((s) => {
       const t = tingkatByKelasId[s.kelas_id]
       if (!t || !data[t]) return
-      const usia = hitungUsia(s.tanggal_lahir)
-      if (usia === null || !data[t][usia]) return
+      const usiaHitung = hitungUsia(s.tanggal_lahir)
+      const usia = data[t][usiaHitung] ? usiaHitung : KOLOM_USIA_TIDAK_DIKETAHUI
+      if (!data[t][usia]) return
       if (s.jenis_kelamin === 'L') data[t][usia].L += 1
       else if (s.jenis_kelamin === 'P') data[t][usia].P += 1
     })
@@ -468,6 +527,22 @@ export default function LaporanKeadaanMurid() {
         <p className="no-print text-center text-[11px] text-slate-400 mt-2">
           Saat dicetak, keempat laporan (Keadaan Murid, Usia, Agama, Kewarganegaraan) akan tercetak sekaligus berurutan.
         </p>
+
+        {errorMuat && (
+          <div className="no-print mt-3 flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700">
+            <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+            <span>{errorMuat}</span>
+          </div>
+        )}
+        {!errorMuat && !loading && jumlahSiswaTanpaTingkat > 0 && (
+          <div className="no-print mt-3 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700">
+            <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+            <span>
+              {jumlahSiswaTanpaTingkat} siswa aktif belum punya kelas (atau kelasnya belum diisi "tingkat"), jadi tidak
+              terhitung di laporan ini. Perbaiki lewat menu Data Siswa / Kelas.
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="lembar-cetak bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '297mm' }}>
@@ -582,7 +657,9 @@ export default function LaporanKeadaanMurid() {
                   </tr>
                   <tr className="text-center">
                     {usiaKolom.map((u) => (
-                      <th key={u} colSpan={2} className="border border-black px-1 py-1">{u} thn</th>
+                      <th key={u} colSpan={2} className="border border-black px-1 py-1">
+                        {u === KOLOM_USIA_TIDAK_DIKETAHUI ? u : `${u} thn`}
+                      </th>
                     ))}
                     <th rowSpan={2} className="border border-black px-1 py-1 w-8">L</th>
                     <th rowSpan={2} className="border border-black px-1 py-1 w-8">P</th>
