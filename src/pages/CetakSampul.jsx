@@ -29,7 +29,8 @@ export default function CetakSampul() {
   const [subJudul, setSubJudul] = useState('BANTUAN OPERASIONAL SEKOLAH (BOS)')
   const [tahunAnggaran, setTahunAnggaran] = useState('')
   const [namaBank, setNamaBank] = useState('')
-  const [websiteSekolah, setWebsiteSekolah] = useState('')
+  const [desaKelurahan, setDesaKelurahan] = useState('')
+  const [emailSekolah, setEmailSekolah] = useState('')
   const [dibuatOleh, setDibuatOleh] = useState('')
 
   const judulTampil = jenisLaporan === 'Lainnya (isi bebas)' ? judulBebas : jenisLaporan
@@ -59,7 +60,10 @@ export default function CetakSampul() {
 
       setProfilSekolah(sekolah || null)
       setNamaBank(sekolah?.nama_bank || '')
-      setWebsiteSekolah(sekolah?.website || sekolah?.website_sekolah || '')
+      // Kolom desa_kelurahan/desa belum tentu ada di tabel profil_sekolah.
+      // Kalau nanti sudah ditambahkan, baris ini otomatis mem-prefill isiannya.
+      setDesaKelurahan(sekolah?.desa_kelurahan || sekolah?.desa || '')
+      setEmailSekolah(sekolah?.email || sekolah?.website || '')
       setDibuatOleh(sekolah?.kepala_sekolah || '')
 
       if (sekolah?.logo_path) {
@@ -86,13 +90,13 @@ export default function CetakSampul() {
     { label: 'Nama Sekolah', nilai: profilSekolah?.nama_sekolah },
     { label: 'NPSN', nilai: profilSekolah?.npsn },
     { label: 'Alamat', nilai: profilSekolah?.alamat },
-    { label: 'Desa/Kelurahan', nilai: profilSekolah?.desa_kelurahan || profilSekolah?.desa },
+    { label: 'Desa/Kelurahan', nilai: desaKelurahan },
     { label: 'Kecamatan', nilai: profilSekolah?.kecamatan },
     { label: 'Kab/Kota', nilai: profilSekolah?.kabupaten },
     { label: 'Provinsi', nilai: profilSekolah?.provinsi },
     { label: 'Kode Pos', nilai: profilSekolah?.kode_pos },
     { label: 'Nama Bank', nilai: namaBank },
-    { label: 'Website Sekolah', nilai: websiteSekolah },
+    { label: 'E-mail Sekolah', nilai: emailSekolah },
   ]
 
   return (
@@ -163,6 +167,17 @@ export default function CetakSampul() {
             />
           </label>
 
+          <label className="text-xs text-slate-500">
+            Desa/Kelurahan <span className="text-slate-400">(belum ada di profil sekolah)</span>
+            <input
+              type="text"
+              value={desaKelurahan}
+              onChange={(e) => setDesaKelurahan(e.target.value)}
+              placeholder="mis. Waria"
+              className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
+            />
+          </label>
+
           <div className="grid grid-cols-2 gap-2">
             <label className="text-xs text-slate-500">
               Nama Bank
@@ -175,11 +190,11 @@ export default function CetakSampul() {
               />
             </label>
             <label className="text-xs text-slate-500">
-              Website Sekolah
+              E-mail Sekolah
               <input
                 type="text"
-                value={websiteSekolah}
-                onChange={(e) => setWebsiteSekolah(e.target.value)}
+                value={emailSekolah}
+                onChange={(e) => setEmailSekolah(e.target.value)}
                 placeholder="opsional"
                 className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
               />
@@ -204,63 +219,99 @@ export default function CetakSampul() {
             <span>{errorMuat}</span>
           </div>
         )}
+
+        <div className="no-print mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 max-w-md mx-auto">
+          Saat mencetak, pastikan opsi <strong>"Background graphics" / "Grafis latar belakang"</strong> dicentang
+          di kotak dialog Print, supaya banner hitam dan gelombang birunya ikut tercetak.
+        </div>
       </div>
 
       {/* Sampul — hanya tampil saat print */}
       <div
-        className="lembar-cetak print-only bg-white mx-auto my-6 flex flex-col"
+        className="lembar-cetak print-only bg-white mx-auto my-6 flex flex-col relative overflow-hidden"
         style={{ width: '210mm', height: '297mm', padding: '10mm' }}
       >
-        {/* Bingkai luar, mengikuti referensi */}
         <div
-          className="flex-1 flex flex-col"
-          style={{ border: '2px solid #1e293b', padding: '14mm 16mm' }}
+          className="flex-1 flex flex-col relative overflow-hidden"
+          style={{ border: '2px solid #1e293b', borderRadius: '10px' }}
         >
-          {/* Logo & Judul */}
-          <div className="flex flex-col items-center text-center">
+          {/* Banner atas — hitam gradasi */}
+          <div
+            className="flex flex-col items-center text-center px-10 pt-8 pb-7"
+            style={{ background: 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)' }}
+          >
             {logoUrl && (
-              <img src={logoUrl} alt="Logo" className="object-contain mb-4" style={{ width: '90px', height: '90px' }} />
+              <div
+                className="flex items-center justify-center bg-white rounded-full mb-3 shadow"
+                style={{ width: '90px', height: '90px' }}
+              >
+                <img src={logoUrl} alt="Logo" className="object-contain" style={{ width: '70px', height: '70px' }} />
+              </div>
             )}
 
-            <h1 className="text-base font-bold uppercase leading-snug text-blue-700 max-w-[150mm]">
+            <h1
+              className="text-xl font-extrabold uppercase leading-snug max-w-[150mm] bg-clip-text text-transparent"
+              style={{ backgroundImage: 'linear-gradient(90deg, #60a5fa, #a78bfa)' }}
+            >
               {judulTampil || 'Judul Laporan'}
             </h1>
             {subJudul && (
-              <h2 className="text-sm font-semibold uppercase mt-1 text-slate-800">{subJudul}</h2>
+              <h2 className="text-sm font-bold uppercase mt-2 tracking-wide" style={{ color: '#fb923c' }}>
+                {subJudul}
+              </h2>
             )}
             {tahunAnggaran && (
-              <p className="text-sm font-semibold uppercase mt-1 text-slate-800">
+              <p className="text-sm font-bold uppercase mt-1 tracking-wide" style={{ color: '#facc15' }}>
                 Tahun Anggaran {tahunAnggaran}
               </p>
             )}
           </div>
 
-          {/* Identitas sekolah — rata kiri, model Label : Isi */}
-          <div className="mt-16 text-sm text-slate-800">
+          {/* Identitas sekolah — rata kiri, label berwarna */}
+          <div className="mt-14 px-10 text-sm">
             <table>
               <tbody>
                 {barisIdentitas.map((baris) => (
                   <tr key={baris.label}>
-                    <td className="pr-2 py-0.5 align-top whitespace-nowrap">{baris.label}</td>
-                    <td className="pr-2 py-0.5 align-top">:</td>
-                    <td className="py-0.5 align-top">{baris.nilai || '-'}</td>
+                    <td className="pr-2 py-1 align-top whitespace-nowrap font-semibold" style={{ color: '#dc2626' }}>
+                      {baris.label}
+                    </td>
+                    <td className="pr-2 py-1 align-top text-slate-700">:</td>
+                    <td className="py-1 align-top text-slate-800">{baris.nilai || '-'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
-          {/* Dibuat Oleh — kanan bawah */}
-          <div className="flex-1 flex items-end justify-end">
+          {/* Dibuat Oleh — kanan bawah, di atas gelombang */}
+          <div className="flex-1 flex items-end justify-end px-10 pb-10 relative" style={{ zIndex: 2 }}>
             {dibuatOleh && (
               <p className="text-sm italic text-slate-800">Dibuat Oleh : {dibuatOleh}</p>
             )}
           </div>
+
+          {/* Gelombang biru dekoratif */}
+          <svg
+            viewBox="0 0 800 160"
+            preserveAspectRatio="none"
+            className="absolute bottom-0 left-0 w-full"
+            style={{ height: '90px', zIndex: 1 }}
+          >
+            <path d="M0,80 C150,140 350,10 800,90 L800,160 L0,160 Z" fill="#0369a1" opacity="0.55" />
+            <path d="M0,110 C200,60 500,150 800,70 L800,160 L0,160 Z" fill="#0284c7" opacity="0.75" />
+            <path d="M0,130 C250,90 550,160 800,110 L800,160 L0,160 Z" fill="#38bdf8" />
+          </svg>
         </div>
       </div>
 
       <style>{`
         .only-print { display: none; }
+
+        html, body {
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
 
         @media print {
           .no-print { display: none !important; }
@@ -269,6 +320,8 @@ export default function CetakSampul() {
             box-shadow: none !important;
             margin: 0 !important;
             width: 100% !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
           .only-print { display: inline !important; }
 
