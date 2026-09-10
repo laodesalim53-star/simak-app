@@ -4,6 +4,7 @@ import {
   X,
   LayoutDashboard,
   Users,
+  UserX,
   GraduationCap,
   DoorOpen,
   CalendarClock,
@@ -124,6 +125,7 @@ function getGroupsAdmin(
       label: 'Akademik',
       links: [
         { to: '/siswa', label: 'Data Siswa', icon: Users },
+        { to: '/siswa-nonaktif', label: 'Siswa Nonaktif', icon: UserX },
         { to: '/guru', label: 'Data Guru', icon: GraduationCap },
         { to: '/kelas', label: 'Kelas', icon: DoorOpen },
         { to: '/jadwal', label: 'Jadwal Pelajaran', icon: CalendarClock },
@@ -243,6 +245,7 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
   { to: '/keuangan-kelas', label: 'Keuangan Kelas', icon: PiggyBank },
   { to: '/siswa', label: 'Data Siswa', icon: Users },
+  { to: '/siswa-nonaktif', label: 'Siswa Nonaktif', icon: UserX },
   { to: '/presensi', label: 'Presensi', icon: ClipboardCheck },
   { to: '/nilai', label: 'Nilai Siswa', icon: BookOpenCheck },
   { to: '/nilai-asesmen', label: 'Nilai Asesmen', icon: FileSpreadsheet },
