@@ -9,7 +9,6 @@ export default function CetakSampulSemester() {
       kunciJenisLaporan
       subJudulAwal="LAPORAN HASIL BELAJAR PESERTA DIDIK"
       labelTahun="Tahun Ajaran"
-      tampilkanBank
       labelHalaman="Cetak Sampul Laporan Semester"
     />
   )
