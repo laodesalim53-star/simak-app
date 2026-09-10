@@ -61,6 +61,7 @@ import {
   Table2,
   Printer,
   FileStack,
+  Briefcase,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
@@ -238,8 +239,13 @@ function getGroupsAdmin(
 // presensi, surat-menyurat, dan dokumen. Semua item akademik (siswa, kelas,
 // rapor, nilai, ijazah, RPP, bank soal, PPDB, dst) dan Toko/Keuangan sengaja
 // TIDAK disertakan supaya menu tidak membingungkan untuk tenant kantor.
-// Rute yang dipakai tetap sama dengan versi sekolah (mis. /guru, /presensi)
-// — cuma labelnya diganti supaya sesuai konteks kantor.
+// CATATAN: "Data Pegawai" SEKARANG mengarah ke /data-pegawai-kantor (route
+// & tabel `pegawai_kantor` terpisah dari /guru & tabel `guru`) — sebelumnya
+// sempat reuse /guru, tapi itu bikin data pegawai kantor tercampur ke tabel
+// guru yang penuh field khas Dapodik (NUPTK, mata pelajaran, dll) yang
+// tidak relevan untuk kantor. Rute lain (Presensi, Laporan Kepegawaian,
+// Profil Kantor) untuk saat ini MASIH reuse rute sekolah — lihat catatan di
+// komponen halaman masing-masing kalau nanti perlu dipisah juga.
 function getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelumDibaca = 0) {
   return [
     {
@@ -257,7 +263,9 @@ function getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelum
     {
       label: 'Kepegawaian',
       links: [
-        { to: '/guru', label: 'Data Pegawai', icon: GraduationCap },
+        // Data Pegawai: route BARU, komponen DataPegawaiKantor.jsx, tabel
+        // `pegawai_kantor` — TERPISAH dari Data Guru (/guru, tabel `guru`).
+        { to: '/data-pegawai-kantor', label: 'Data Pegawai', icon: Briefcase },
         { to: '/presensi', label: 'Presensi Pegawai', icon: ClipboardCheck },
         { to: '/laporan-guru', label: 'Laporan Kepegawaian', icon: GraduationCap },
       ],
