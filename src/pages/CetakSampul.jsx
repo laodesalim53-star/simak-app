@@ -226,7 +226,6 @@ function SampulAlam({ logoUrl, judulTampil, subJudul, tahunAnggaran, barisIdenti
             </div>
           )}
           <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#166534' }}>
-            Laporan Pertanggungjawaban (LPJ)
           </p>
           <h1 className="text-xl font-extrabold uppercase leading-snug max-w-[150mm] mt-1" style={{ color: '#15803d' }}>
             {judulTampil || 'Judul Laporan'}
@@ -372,7 +371,6 @@ function SampulEmas({ logoUrl, judulTampil, subJudul, tahunAnggaran, barisIdenti
             </div>
           )}
           <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#e5c76b' }}>
-            Laporan Pertanggungjawaban (LPJ)
           </p>
           <h1 className="text-xl font-extrabold uppercase leading-snug max-w-[150mm] mt-1" style={{ color: '#facc15' }}>
             {judulTampil || 'Judul Laporan'}
@@ -438,7 +436,6 @@ function SampulKlasik({ logoUrl, judulTampil, subJudul, tahunAnggaran, barisIden
             </div>
           )}
           <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-            Laporan Pertanggungjawaban (LPJ)
           </p>
           <h1 className="text-xl font-extrabold uppercase leading-snug max-w-[150mm] mt-1" style={{ color: '#7f1d1d' }}>
             {judulTampil || 'Judul Laporan'}
