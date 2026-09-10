@@ -28,6 +28,7 @@ import LaporanKepangkatanGuru from './pages/LaporanKepangkatanGuru'
 import LaporanTanggunganKeluarga from './pages/LaporanTanggunganKeluarga'
 import LaporanTenagaPengajar from './pages/LaporanTenagaPengajar'
 import LaporanKeadaanMurid from './pages/LaporanKeadaanMurid'
+import LaporanSemester from './pages/LaporanSemester'
 import PusatLaporanGuru from './pages/PusatLaporanGuru'
 import Kelas from './pages/Kelas'
 import Jadwal from './pages/Jadwal'
@@ -253,6 +254,13 @@ export default function App() {
 } />
         <Route path="/laporan-keadaan-murid" element={
   <ProtectedRoute adminOnly><LaporanKeadaanMurid /></ProtectedRoute>
+} />
+        {/* Laporan Semester — kartu baru di PusatLaporanGuru.jsx, dari format
+            LAPORAN_BULANAN_-_Copy.docx (jam pelajaran per kelas, keadaan
+            gedung/ruang, dan keadaan buku KTSP & K-13). Sama seperti laporan
+            guru/murid lain, dibatasi adminOnly. */}
+        <Route path="/laporan-semester" element={
+  <ProtectedRoute adminOnly><LaporanSemester /></ProtectedRoute>
 } />
         <Route path="/kelas" element={<ProtectedRoute adminOnly><Kelas /></ProtectedRoute>} />
         <Route path="/jadwal" element={<ProtectedRoute><Jadwal /></ProtectedRoute>} />
