@@ -28,6 +28,7 @@ export function AuthProvider({ children }) {
         role,
         jabatan,
         guru_id,
+        pegawai_id,
         sekolah_id,
         status_akun,
         catatan_admin,
@@ -79,7 +80,28 @@ export function AuthProvider({ children }) {
     // atau sebelum migrasi kolom dijalankan).
     const jenisOrganisasi = data.sekolah?.jenis_organisasi || 'sekolah'
 
-    // Ambil nama & foto dari tabel guru jika punya guru_id
+    // Untuk tenant KANTOR: ambil nama & foto dari tabel pegawai_kantor
+    // kalau akun ini sudah ditautkan lewat pegawai_id (paralel dengan
+    // guru_id di tenant sekolah).
+    if (jenisOrganisasi === 'kantor' && data.pegawai_id) {
+      const { data: pegawai } = await supabase
+        .from('pegawai_kantor')
+        .select('nama_lengkap, foto_profil_path')
+        .eq('id', data.pegawai_id)
+        .maybeSingle()
+
+      if (requestId !== profilRequestIdRef.current) return
+
+      setProfil({
+        ...data,
+        jenis_organisasi: jenisOrganisasi,
+        nama_lengkap: pegawai?.nama_lengkap || data.nama_lengkap_pendaftar,
+        foto_profil_path: pegawai?.foto_profil_path || data.foto_profil_path,
+      })
+      return
+    }
+
+    // Tenant SEKOLAH: ambil nama & foto dari tabel guru jika punya guru_id
     if (data.guru_id) {
       const { data: guru } = await supabase
         .from('guru')
@@ -495,9 +517,10 @@ export function AuthProvider({ children }) {
   const isKepalaSekolah =
     profil?.role === 'kepala_sekolah'
 
-  // Tenant kantor (bukan sekolah) — dipakai Sidebar.jsx untuk menampilkan
-  // menu ringkas (pegawai, presensi, surat-menyurat, dokumen) dan
-  // menyembunyikan menu akademik (siswa, kelas, rapor, dst).
+  // Tenant kantor (bukan sekolah) — dipakai Sidebar.jsx & halaman-halaman
+  // seperti Presensi.jsx untuk memilih set menu/tampilan yang sesuai
+  // (pegawai, presensi, surat-menyurat, dokumen) dan menyembunyikan
+  // menu/logic akademik (siswa, kelas, rapor, dst).
   const isKantor =
     (profil?.jenis_organisasi ?? 'sekolah') === 'kantor'
 
