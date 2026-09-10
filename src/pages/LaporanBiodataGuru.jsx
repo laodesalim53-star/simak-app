@@ -100,6 +100,25 @@ export default function LaporanBiodataGuru() {
     return new Date(tgl).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
   }
 
+  // Membuang awalan "PEMERINTAH KABUPATEN" / "KABUPATEN" pada nilai supaya
+  // tidak dobel dengan label/teks "Kabupaten" atau "Pemerintah Kabupaten"
+  // yang sudah ada di depannya (mis. field profilSekolah.kabupaten berisi
+  // "PEMERINTAH KABUPATEN KEPULAUAN ARU", padahal labelnya sudah
+  // "Kabupaten"/"Pemerintah Kabupaten"). Data mentah di profilSekolah TIDAK
+  // diubah — cuma cara menampilkannya. Dipakai di kop surat, grid identitas,
+  // dan baris alamat. Pola sama seperti LaporanKepangkatanGuru.jsx /
+  // LaporanNominatifGuru.jsx / LaporanPendidikanGuru.jsx /
+  // LaporanTanggunganKeluarga.jsx / LaporanTenagaPengajar.jsx.
+  function formatKabupaten(teks) {
+    if (!teks) return '—'
+    return (
+      teks
+        .replace(/^PEMERINTAH\s+KABUPATEN\s+/i, '')
+        .replace(/^KABUPATEN\s+/i, '')
+        .trim() || '—'
+    )
+  }
+
   // Alamat gabungan — pola sama seperti Modal Lihat Profil di halaman Guru.
   function alamatLengkap(g) {
     return (
@@ -189,22 +208,30 @@ export default function LaporanBiodataGuru() {
           Cetak8355.jsx yang sudah terbukti berhasil. */}
       <div className="lembar-cetak print-only bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '210mm', minHeight: '297mm' }}>
         {/* Kop Surat — urutan resmi: Pemerintah Kabupaten / Dinas
-            Pendidikan / Nama Sekolah / Alamat, sesuai format surat
-            dinas yang berlaku. */}
+            Pendidikan / Nama Sekolah / Alamat. Nama kabupaten dilewatkan
+            lewat formatKabupaten() di semua baris supaya tidak dobel kalau
+            data mentahnya sudah mengandung prefix "Pemerintah Kabupaten"/
+            "Kabupaten" (kasus nyata: field kabupaten berisi "PEMERINTAH
+            KABUPATEN KEPULAUAN ARU"). */}
         <div className="flex items-center gap-4 border-b-4 border-black pb-3 mb-4">
           {logoUrl && (
             <img src={logoUrl} alt="Logo" className="w-16 h-16 object-contain shrink-0" />
           )}
           <div className="text-center flex-1">
             <p className="text-sm font-medium uppercase">
-              Pemerintah Kabupaten {profilSekolah?.kabupaten || '...........'}
+              Pemerintah Kabupaten {formatKabupaten(profilSekolah?.kabupaten)}
             </p>
             <p className="text-sm font-medium uppercase">
               {profilSekolah?.dinas_pendidikan || 'Dinas Pendidikan'}
             </p>
             <p className="text-lg font-bold uppercase">{profilSekolah?.nama_sekolah || 'Nama Sekolah'}</p>
             <p className="text-xs">
-              {[profilSekolah?.alamat, profilSekolah?.kecamatan, profilSekolah?.kabupaten, profilSekolah?.provinsi]
+              {[
+                profilSekolah?.alamat,
+                profilSekolah?.kecamatan,
+                profilSekolah?.kabupaten ? `Kabupaten ${formatKabupaten(profilSekolah.kabupaten)}` : null,
+                profilSekolah?.provinsi,
+              ]
                 .filter(Boolean)
                 .join(', ')}
               {profilSekolah?.kode_pos ? ` ${profilSekolah.kode_pos}` : ''}
@@ -230,7 +257,7 @@ export default function LaporanBiodataGuru() {
           <span>Kecamatan</span>
           <span>: {profilSekolah?.kecamatan || '—'}</span>
           <span>Kabupaten</span>
-          <span>: {profilSekolah?.kabupaten || '—'}</span>
+          <span>: {formatKabupaten(profilSekolah?.kabupaten)}</span>
         </div>
 
         <table className="w-full text-[10px] border-collapse border border-black">
