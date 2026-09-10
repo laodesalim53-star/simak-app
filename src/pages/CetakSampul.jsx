@@ -4,32 +4,11 @@ import { ArrowLeft, Printer, Loader2, AlertTriangle } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 
-// Halaman "Cetak Sampul Laporan" — generik, dipakai untuk membuat halaman
-// sampul (cover) berbagai jenis laporan (Laporan Bulanan, Laporan Semester,
-// Hasil Ujian, Keuangan, Inventaris, dll).
-//
-// Mengikuti pola yang sudah berjalan di LaporanSemester.jsx:
-//   - Kop/logo/nama sekolah diambil OTOMATIS dari tabel profil_sekolah
-//     (query by sekolah_id, logo dari bucket storage 'profil-sekolah')
-//   - Toolbar (tombol Kembali & Cetak) diberi class "no-print" supaya
-//     hilang saat dicetak
-//   - Area sampul diberi class "lembar-cetak print-only" + lebar 210mm,
-//     sama seperti LaporanSemester.jsx, supaya konsisten dengan
-//     override CSS print-only yang sudah ada di index.css/halaman lain
-//   - Field yang bisa diedit dibuat dengan pola input (no-print) + span
-//     (only-print) seperti BarisIdentitas, jadi hasil isian ikut tercetak
-//
-// PENTING — sesuaikan bila perlu:
-// Nama kolom profil_sekolah yang dipakai di sini (dinas_pendidikan,
-// nama_sekolah, alamat, kecamatan, kabupaten, provinsi, kode_pos,
-// logo_path, kepala_sekolah, nip_kepala_sekolah) diambil dari
-// LaporanSemester.jsx yang sudah terbukti jalan — kalau ada kolom lain
-// yang ingin ditambah (mis. npsn/nss), tinggal tambah di KopSekolah().
-
 const JENIS_LAPORAN_PRESET = [
   'Laporan Bulanan',
   'Laporan Semester',
   'Laporan Hasil Ujian',
+  'Laporan Pertanggungjawaban (LPJ) Penggunaan Dana BOS',
   'Laporan Keuangan (BKU)',
   'Laporan Inventaris Sarana & Prasarana',
   'Laporan Kegiatan Sekolah',
@@ -45,11 +24,13 @@ export default function CetakSampul() {
   const [loading, setLoading] = useState(true)
   const [errorMuat, setErrorMuat] = useState('')
 
-  // --- isian sampul (tidak disimpan ke Supabase, hanya untuk cetak) ---
-  const [jenisLaporan, setJenisLaporan] = useState(JENIS_LAPORAN_PRESET[0])
+  const [jenisLaporan, setJenisLaporan] = useState(JENIS_LAPORAN_PRESET[3])
   const [judulBebas, setJudulBebas] = useState('')
-  const [subJudul, setSubJudul] = useState('') // mis. "Semester Ganjil"
-  const [tahunPelajaran, setTahunPelajaran] = useState('')
+  const [subJudul, setSubJudul] = useState('BANTUAN OPERASIONAL SEKOLAH (BOS)')
+  const [tahunAnggaran, setTahunAnggaran] = useState('')
+  const [namaBank, setNamaBank] = useState('')
+  const [websiteSekolah, setWebsiteSekolah] = useState('')
+  const [dibuatOleh, setDibuatOleh] = useState('')
 
   const judulTampil = jenisLaporan === 'Lainnya (isi bebas)' ? judulBebas : jenisLaporan
 
@@ -77,6 +58,10 @@ export default function CetakSampul() {
       }
 
       setProfilSekolah(sekolah || null)
+      setNamaBank(sekolah?.nama_bank || '')
+      setWebsiteSekolah(sekolah?.website || sekolah?.website_sekolah || '')
+      setDibuatOleh(sekolah?.kepala_sekolah || '')
+
       if (sekolah?.logo_path) {
         const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(sekolah.logo_path)
         setLogoUrl(pub?.publicUrl || '')
@@ -97,14 +82,18 @@ export default function CetakSampul() {
     )
   }
 
-  const alamatLengkap = [
-    profilSekolah?.alamat,
-    profilSekolah?.kecamatan,
-    profilSekolah?.kabupaten,
-    profilSekolah?.provinsi,
+  const barisIdentitas = [
+    { label: 'Nama Sekolah', nilai: profilSekolah?.nama_sekolah },
+    { label: 'NPSN', nilai: profilSekolah?.npsn },
+    { label: 'Alamat', nilai: profilSekolah?.alamat },
+    { label: 'Desa/Kelurahan', nilai: profilSekolah?.desa_kelurahan || profilSekolah?.desa },
+    { label: 'Kecamatan', nilai: profilSekolah?.kecamatan },
+    { label: 'Kab/Kota', nilai: profilSekolah?.kabupaten },
+    { label: 'Provinsi', nilai: profilSekolah?.provinsi },
+    { label: 'Kode Pos', nilai: profilSekolah?.kode_pos },
+    { label: 'Nama Bank', nilai: namaBank },
+    { label: 'Website Sekolah', nilai: websiteSekolah },
   ]
-    .filter(Boolean)
-    .join(', ') + (profilSekolah?.kode_pos ? ` ${profilSekolah.kode_pos}` : '')
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -153,23 +142,57 @@ export default function CetakSampul() {
           )}
 
           <label className="text-xs text-slate-500">
-            Sub Judul / Periode <span className="text-slate-400">(opsional)</span>
+            Sub Judul <span className="text-slate-400">(opsional)</span>
             <input
               type="text"
               value={subJudul}
               onChange={(e) => setSubJudul(e.target.value)}
-              placeholder="mis. Semester Ganjil"
+              placeholder="mis. BANTUAN OPERASIONAL SEKOLAH (BOS)"
               className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
             />
           </label>
 
           <label className="text-xs text-slate-500">
-            Tahun Pelajaran
+            Tahun Anggaran
             <input
               type="text"
-              value={tahunPelajaran}
-              onChange={(e) => setTahunPelajaran(e.target.value)}
-              placeholder="mis. 2026/2027"
+              value={tahunAnggaran}
+              onChange={(e) => setTahunAnggaran(e.target.value)}
+              placeholder="mis. 2026"
+              className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
+            />
+          </label>
+
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-xs text-slate-500">
+              Nama Bank
+              <input
+                type="text"
+                value={namaBank}
+                onChange={(e) => setNamaBank(e.target.value)}
+                placeholder="mis. Bank Pembangunan Daerah Maluku"
+                className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
+              />
+            </label>
+            <label className="text-xs text-slate-500">
+              Website Sekolah
+              <input
+                type="text"
+                value={websiteSekolah}
+                onChange={(e) => setWebsiteSekolah(e.target.value)}
+                placeholder="opsional"
+                className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
+              />
+            </label>
+          </div>
+
+          <label className="text-xs text-slate-500">
+            Dibuat Oleh
+            <input
+              type="text"
+              value={dibuatOleh}
+              onChange={(e) => setDibuatOleh(e.target.value)}
+              placeholder="mis. LD.SALIM, S.Pd"
               className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
             />
           </label>
@@ -183,33 +206,56 @@ export default function CetakSampul() {
         )}
       </div>
 
-      {/* Sampul — hanya tampil saat print (sama seperti LaporanSemester.jsx) */}
+      {/* Sampul — hanya tampil saat print */}
       <div
-        className="lembar-cetak print-only bg-white mx-auto my-6 p-8 shadow-sm flex flex-col"
-        style={{ width: '210mm', height: '297mm' }}
+        className="lembar-cetak print-only bg-white mx-auto my-6 flex flex-col"
+        style={{ width: '210mm', height: '297mm', padding: '10mm' }}
       >
-        <div className="flex-1 flex flex-col items-center justify-center text-center px-10">
-          {logoUrl && (
-            <img src={logoUrl} alt="Logo" className="w-32 h-32 object-contain mb-8" />
-          )}
+        {/* Bingkai luar, mengikuti referensi */}
+        <div
+          className="flex-1 flex flex-col"
+          style={{ border: '2px solid #1e293b', padding: '14mm 16mm' }}
+        >
+          {/* Logo & Judul */}
+          <div className="flex flex-col items-center text-center">
+            {logoUrl && (
+              <img src={logoUrl} alt="Logo" className="object-contain mb-4" style={{ width: '90px', height: '90px' }} />
+            )}
 
-          <h1 className="text-2xl font-bold uppercase tracking-wide leading-snug mb-2">
-            {judulTampil || 'Judul Laporan'}
-          </h1>
-          {subJudul && (
-            <h2 className="text-lg font-medium uppercase mb-2">{subJudul}</h2>
-          )}
-          {tahunPelajaran && (
-            <p className="text-base mt-1">Tahun Pelajaran {tahunPelajaran}</p>
-          )}
-        </div>
+            <h1 className="text-base font-bold uppercase leading-snug text-blue-700 max-w-[150mm]">
+              {judulTampil || 'Judul Laporan'}
+            </h1>
+            {subJudul && (
+              <h2 className="text-sm font-semibold uppercase mt-1 text-slate-800">{subJudul}</h2>
+            )}
+            {tahunAnggaran && (
+              <p className="text-sm font-semibold uppercase mt-1 text-slate-800">
+                Tahun Anggaran {tahunAnggaran}
+              </p>
+            )}
+          </div>
 
-        <div className="text-center pb-6">
-          <p className="text-lg font-bold uppercase">{profilSekolah?.nama_sekolah || 'Nama Sekolah'}</p>
-          {profilSekolah?.dinas_pendidikan && (
-            <p className="text-sm uppercase">{profilSekolah.dinas_pendidikan}</p>
-          )}
-          <p className="text-sm mt-1">{alamatLengkap}</p>
+          {/* Identitas sekolah — rata kiri, model Label : Isi */}
+          <div className="mt-16 text-sm text-slate-800">
+            <table>
+              <tbody>
+                {barisIdentitas.map((baris) => (
+                  <tr key={baris.label}>
+                    <td className="pr-2 py-0.5 align-top whitespace-nowrap">{baris.label}</td>
+                    <td className="pr-2 py-0.5 align-top">:</td>
+                    <td className="py-0.5 align-top">{baris.nilai || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Dibuat Oleh — kanan bawah */}
+          <div className="flex-1 flex items-end justify-end">
+            {dibuatOleh && (
+              <p className="text-sm italic text-slate-800">Dibuat Oleh : {dibuatOleh}</p>
+            )}
+          </div>
         </div>
       </div>
 
