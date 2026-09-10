@@ -134,6 +134,9 @@ export default function LaporanKepangkatanGuru() {
   // (mis. field profilSekolah.kabupaten berisi "PEMERINTAH KABUPATEN
   // KEPULAUAN ARU", padahal labelnya sudah "Kabupaten"). Data mentah di
   // profilSekolah TIDAK diubah — cuma cara menampilkannya di baris ini.
+  // Dipakai juga di kop surat (Pemerintah Kabupaten ...) supaya nama
+  // kabupatennya tidak dobel walau data mentahnya sudah mengandung
+  // prefix "Pemerintah Kabupaten"/"Kabupaten".
   function formatKabupaten(teks) {
     if (!teks) return '—'
     return (
@@ -211,14 +214,20 @@ export default function LaporanKepangkatanGuru() {
           kosong total. Pola sama seperti Cetak8355.jsx / LaporanBiodataGuru.jsx
           yang sudah terbukti berhasil. */}
       <div className="lembar-cetak print-only bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '297mm', minHeight: '210mm' }}>
-        {/* Kop Surat */}
+        {/* Kop Surat — urutan resmi: Pemerintah Kabupaten / Dinas
+            Pendidikan / Nama Sekolah / Alamat. Nama kabupaten dilewatkan
+            lewat formatKabupaten() supaya tidak dobel kalau data mentahnya
+            sudah mengandung prefix "Pemerintah Kabupaten"/"Kabupaten". */}
         <div className="flex items-center gap-4 border-b-4 border-black pb-3 mb-4">
           {logoUrl && (
             <img src={logoUrl} alt="Logo" className="w-16 h-16 object-contain shrink-0" />
           )}
           <div className="text-center flex-1">
             <p className="text-sm font-medium uppercase">
-              {profilSekolah?.dinas_pendidikan || 'PEMERINTAH DAERAH'}
+              Pemerintah Kabupaten {formatKabupaten(profilSekolah?.kabupaten)}
+            </p>
+            <p className="text-sm font-medium uppercase">
+              {profilSekolah?.dinas_pendidikan || 'Dinas Pendidikan'}
             </p>
             <p className="text-lg font-bold uppercase">{profilSekolah?.nama_sekolah || 'Nama Sekolah'}</p>
             <p className="text-xs">
