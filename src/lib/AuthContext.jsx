@@ -41,7 +41,8 @@ export function AuthProvider({ children }) {
         pendidikan_terakhir,
         alamat,
         paket,
-        paket_berlaku_sampai
+        paket_berlaku_sampai,
+        sekolah:sekolah_id ( jenis_organisasi )
       `)
       .eq('id', userId)
       .maybeSingle()
@@ -71,6 +72,13 @@ export function AuthProvider({ children }) {
       return
     }
 
+    // "jenis_organisasi" diambil dari relasi ke tabel sekolah — dipakai
+    // Sidebar.jsx untuk memilih set menu ('sekolah' = menu akademik penuh,
+    // 'kantor' = menu ringkas: pegawai, presensi, surat-menyurat, dokumen).
+    // Default 'sekolah' kalau relasi kosong (mis. superadmin tanpa sekolah_id,
+    // atau sebelum migrasi kolom dijalankan).
+    const jenisOrganisasi = data.sekolah?.jenis_organisasi || 'sekolah'
+
     // Ambil nama & foto dari tabel guru jika punya guru_id
     if (data.guru_id) {
       const { data: guru } = await supabase
@@ -83,12 +91,14 @@ export function AuthProvider({ children }) {
 
       setProfil({
         ...data,
+        jenis_organisasi: jenisOrganisasi,
         nama_lengkap: guru?.nama_lengkap || data.nama_lengkap_pendaftar,
         foto_profil_path: guru?.foto_profil_path || data.foto_profil_path,
       })
     } else {
       setProfil({
         ...data,
+        jenis_organisasi: jenisOrganisasi,
         nama_lengkap: data.nama_lengkap_pendaftar,
       })
     }
@@ -485,6 +495,12 @@ export function AuthProvider({ children }) {
   const isKepalaSekolah =
     profil?.role === 'kepala_sekolah'
 
+  // Tenant kantor (bukan sekolah) — dipakai Sidebar.jsx untuk menampilkan
+  // menu ringkas (pegawai, presensi, surat-menyurat, dokumen) dan
+  // menyembunyikan menu akademik (siswa, kelas, rapor, dst).
+  const isKantor =
+    (profil?.jenis_organisasi ?? 'sekolah') === 'kantor'
+
   return (
     <AuthContext.Provider
       value={{
@@ -507,6 +523,7 @@ export function AuthProvider({ children }) {
         isSuperAdmin,
         isOrangTua,
         isKepalaSekolah,
+        isKantor,
 
         tambahAnak,
         getAnakSaya,
