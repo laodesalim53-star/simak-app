@@ -258,15 +258,16 @@ export default function LaporanSemester() {
         )}
       </div>
 
-      {/* CATATAN: SENGAJA TIDAK memakai class "print-only" (beda dari
-          KuitansiPrintTemplate/NotaPrintTemplate). Aturan global di
-          index.css punya `@media screen { .print-only { display: none } }`
-          yang didesain untuk template cetak yang memang tidak pernah
-          tampil di layar. Halaman ini butuh tampil (untuk diisi manual)
-          DAN tercetak, jadi cukup andalkan `.no-print` untuk sembunyikan
-          toolbar saat print — tidak perlu isolasi body* karena halaman
-          ini berdiri sendiri, tanpa Sidebar/Layout aplikasi di sekitarnya. */}
-      <div className="lembar-cetak bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '210mm' }}>
+      {/* CATATAN: class "print-only" dipertahankan (dibutuhkan supaya
+          elemen ini TETAP terlihat saat print, karena aturan global di
+          index.css: body* disembunyikan saat print KECUALI .print-only).
+          Override untuk kasus khusus halaman ini ada di <style> di bawah
+          (selector .lembar-cetak.print-only, lebih spesifik dari .print-only
+          saja) supaya tidak ikut disembunyikan di LAYAR oleh aturan global
+          `@media screen { .print-only { display: none } }` — aturan itu
+          didesain untuk PrintTemplate terpisah (Kuitansi/Nota) yang memang
+          tidak pernah tampil di layar, beda kebutuhan dengan halaman ini. */}
+      <div className="lembar-cetak print-only bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '210mm' }}>
         <KopSurat />
 
         <h1 className="text-center font-bold text-base uppercase mb-4">Laporan Semester</h1>
@@ -481,6 +482,30 @@ export default function LaporanSemester() {
           }
           .only-print { display: inline !important; }
           .page-break-before-print { break-before: page; page-break-before: always; }
+
+          /* Override posisi "fixed" bawaan .print-only (dari index.css)
+             supaya laporan yang lebih dari satu halaman (page-break di
+             atas) mengalir normal per halaman A4, bukan menumpuk di satu
+             titik fixed. Sama seperti pola Cetak8355.jsx. */
+          .lembar-cetak.print-only {
+            position: static !important;
+            top: auto !important;
+            left: auto !important;
+            right: auto !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
+          }
+        }
+
+        /* Override aturan global `@media screen { .print-only { display: none } }`
+           (index.css) — di halaman ini kertas laporan MEMANG harus tampil di
+           layar supaya bisa diisi manual, bukan template tersembunyi seperti
+           Kuitansi/Nota. Selector 2-class ini lebih spesifik daripada
+           `.print-only` saja, jadi menang tanpa perlu ubah index.css. */
+        @media screen {
+          .lembar-cetak.print-only {
+            display: block !important;
+          }
         }
         @page {
           size: A4 portrait;
