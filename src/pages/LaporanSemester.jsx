@@ -497,11 +497,11 @@ export default function LaporanSemester() {
           }
         }
 
-        /* Override aturan global `@media screen { .print-only { display: none } }`
+        /* Override aturan global "@media screen { .print-only { display: none } }"
            (index.css) — di halaman ini kertas laporan MEMANG harus tampil di
            layar supaya bisa diisi manual, bukan template tersembunyi seperti
            Kuitansi/Nota. Selector 2-class ini lebih spesifik daripada
-           `.print-only` saja, jadi menang tanpa perlu ubah index.css. */
+           ".print-only" saja, jadi menang tanpa perlu ubah index.css. */
         @media screen {
           .lembar-cetak.print-only {
             display: block !important;
