@@ -61,7 +61,6 @@ import {
   Table2,
   Printer,
   FileStack,
-  Palette,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
@@ -194,12 +193,18 @@ function getGroupsAdmin(
         { to: '/hari-libur', label: 'Hari Libur', icon: CalendarOff },
         { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
         { to: '/backup', label: 'Backup Data', icon: DatabaseBackup },
-        // Data Ujian 8355 & Cetak 8355
+        // PERBAIKAN: Data Ujian 8355 & Cetak 8355 sebelumnya dikunci ke
+        // `isSuperAdmin || isKepalaSekolah` saja, jadi admin sekolah biasa
+        // (dan admin_utama yang bukan kepsek) tidak pernah melihat menu ini.
+        // Grup "Administrasi" ini sendiri hanya dirender saat isAdmin true
+        // (lihat cabang render di komponen Sidebar di bawah), jadi tidak
+        // perlu gate tambahan di sini — semua role admin-tier (admin,
+        // admin_utama, superadmin, kepala sekolah) sekarang dapat akses.
         { to: '/data-ujian-8355', label: 'Data Ujian 8355', icon: Table2 },
         { to: '/cetak-8355', label: 'Cetak 8355 (Kelas 6)', icon: Printer },
-        // Cetak Sampul & Pusat Tema Sampul
+        // Cetak Sampul: ditaruh berdekatan dengan menu cetak lainnya
+        // (Cetak 8355 & Cetak Kartu) supaya mudah ditemukan admin.
         { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
-        { to: '/pusat-tema-sampul', label: 'Pusat Tema Sampul', icon: Palette },
         // Manajemen Sekolah dan Persetujuan Toko hanya untuk superadmin.
         ...(isSuperAdmin
           ? [
@@ -230,43 +235,48 @@ function getGroupsAdmin(
 // fitur ini admin-only (lihat RLS policy nota_hanya_admin di Supabase).
 function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   return [
-    { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
-    { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
-    { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
-    { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
-    { to: '/toko', label: 'Toko', icon: Store },
-    { to: '/riwayat-pesanan', label: 'Riwayat Pesanan', icon: Receipt },
-    { to: '/pesanan-masuk', label: 'Pesanan Masuk (Toko)', icon: Inbox },
-    { to: '/rapat', label: 'Rapat Video', icon: Video },
-    { to: '/galeri', label: 'Galeri Kegiatan', icon: Images },
-    { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
-    { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
-    { to: '/keuangan-kelas', label: 'Keuangan Kelas', icon: PiggyBank },
-    { to: '/siswa', label: 'Data Siswa', icon: Users },
-    { to: '/siswa-nonaktif', label: 'Siswa Nonaktif', icon: UserX },
-    { to: '/presensi', label: 'Presensi', icon: ClipboardCheck },
-    { to: '/nilai', label: 'Nilai Siswa', icon: BookOpenCheck },
-    { to: '/nilai-asesmen', label: 'Nilai Asesmen', icon: FileSpreadsheet },
-    { to: '/rapor', label: 'Rapor Siswa', icon: FileBadge },
-    { to: '/ijazah', label: 'Ijazah', icon: ScrollText },
-    { to: '/skl', label: 'Surat Keterangan Lulus', icon: Stamp },
-    { to: '/portofolio-siswa', label: 'Portofolio Siswa', icon: FolderHeart },
-    { to: '/rpp', label: 'RPP', icon: NotebookPen },
-    { to: '/arsip-rpp', label: 'Arsip RPP', icon: Archive },
-    { to: '/sertifikat', label: 'Sertifikat & Penghargaan', icon: Award },
-    { to: '/pengajuan-surat-aktif', label: 'Pengajuan Surat Aktif', icon: FileCheck2 },
-    { to: '/perbaikan-data-siswa', label: 'Perbaikan Data Siswa', icon: UserCog },
-    { to: '/pengajuan-kebutuhan-kelas', label: 'Kebutuhan Kelas', icon: PackagePlus },
-    { to: sekolahIdGuru ? `/ppdb/${sekolahIdGuru}` : '/ppdb', label: 'PPDB Siswa Baru', icon: UserPlus, external: true },
-    { to: '/buat-ujian', label: 'Buat Ujian', icon: FilePlus },
-    { to: '/hasil-ujian', label: 'Hasil Ujian', icon: ClipboardList },
-    { to: '/bank-soal', label: 'Bank Soal', icon: Database },
-    { to: '/buat-kuis-seru', label: 'Kuis Seru (Kls 1-3)', icon: Gamepad2 },
-    { to: '/perpustakaan', label: 'Perpustakaan', icon: Library },
-    { to: '/jadwal', label: 'Jadwal Pelajaran', icon: CalendarClock },
-    { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
-    { to: '/agenda', label: 'Agenda Sekolah', icon: CalendarDays },
-    { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
+  // PERBAIKAN: "/" sekarang halaman Beranda publik, Dashboard di "/dashboard".
+  { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
+  { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
+  { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
+  { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
+  { to: '/toko', label: 'Toko', icon: Store },
+  { to: '/riwayat-pesanan', label: 'Riwayat Pesanan', icon: Receipt },
+  { to: '/pesanan-masuk', label: 'Pesanan Masuk (Toko)', icon: Inbox },
+  { to: '/rapat', label: 'Rapat Video', icon: Video },
+  { to: '/galeri', label: 'Galeri Kegiatan', icon: Images },
+  { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
+  { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
+  { to: '/keuangan-kelas', label: 'Keuangan Kelas', icon: PiggyBank },
+  { to: '/siswa', label: 'Data Siswa', icon: Users },
+  { to: '/siswa-nonaktif', label: 'Siswa Nonaktif', icon: UserX },
+  { to: '/presensi', label: 'Presensi', icon: ClipboardCheck },
+  { to: '/nilai', label: 'Nilai Siswa', icon: BookOpenCheck },
+  { to: '/nilai-asesmen', label: 'Nilai Asesmen', icon: FileSpreadsheet },
+  { to: '/rapor', label: 'Rapor Siswa', icon: FileBadge },
+  { to: '/ijazah', label: 'Ijazah', icon: ScrollText },
+  { to: '/skl', label: 'Surat Keterangan Lulus', icon: Stamp },
+  { to: '/portofolio-siswa', label: 'Portofolio Siswa', icon: FolderHeart },
+  { to: '/rpp', label: 'RPP', icon: NotebookPen },
+  { to: '/arsip-rpp', label: 'Arsip RPP', icon: Archive },
+  { to: '/sertifikat', label: 'Sertifikat & Penghargaan', icon: Award },
+  { to: '/pengajuan-surat-aktif', label: 'Pengajuan Surat Aktif', icon: FileCheck2 },
+  { to: '/perbaikan-data-siswa', label: 'Perbaikan Data Siswa', icon: UserCog },
+  { to: '/pengajuan-kebutuhan-kelas', label: 'Kebutuhan Kelas', icon: PackagePlus },
+  // Hanya tautan pintasan ke form publik, sama seperti menu orang tua —
+  // approval pendaftar PPDB tetap khusus admin lewat /ppdb-admin.
+  // PERBAIKAN: /ppdb/:sekolahId, bukan "/ppdb" polos (lihat catatan di
+  // getLinksOrangTua di atas).
+  { to: sekolahIdGuru ? `/ppdb/${sekolahIdGuru}` : '/ppdb', label: 'PPDB Siswa Baru', icon: UserPlus, external: true },
+  { to: '/buat-ujian', label: 'Buat Ujian', icon: FilePlus },
+  { to: '/hasil-ujian', label: 'Hasil Ujian', icon: ClipboardList },
+  { to: '/bank-soal', label: 'Bank Soal', icon: Database },
+  { to: '/buat-kuis-seru', label: 'Kuis Seru (Kls 1-3)', icon: Gamepad2 },
+  { to: '/perpustakaan', label: 'Perpustakaan', icon: Library },
+  { to: '/jadwal', label: 'Jadwal Pelajaran', icon: CalendarClock },
+  { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
+  { to: '/agenda', label: 'Agenda Sekolah', icon: CalendarDays },
+  { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
   ]
 }
 
@@ -288,6 +298,12 @@ function NavItem({ to, label, icon: Icon, end, badge, onNavigate, external }) {
     </>
   )
 
+  // PERBAIKAN: beberapa halaman (mis. /ppdb) sengaja berdiri sendiri tanpa
+  // Sidebar/tombol kembali, karena memang dibuat untuk diakses publik dari
+  // luar aplikasi. Kalau dibuka lewat navigasi SPA biasa (NavLink), orang
+  // tua yang sedang login akan "terdampar" di sana tanpa jalan kembali ke
+  // dasbornya. Untuk item bertanda `external`, buka di tab baru supaya
+  // dasbor tetap terbuka.
   if (external) {
     return (
       <a
@@ -320,6 +336,8 @@ function NavItem({ to, label, icon: Icon, end, badge, onNavigate, external }) {
   )
 }
 
+// Ambil URL foto guru dari kolom foto_profil_path (isinya path storage,
+// bukan URL lengkap) di bucket "foto-profil".
 function getFotoUrl(fotoProfilPath) {
   if (!fotoProfilPath) return null
   if (fotoProfilPath.startsWith('http')) return fotoProfilPath
@@ -334,6 +352,15 @@ function getInisial(nama) {
   return inisial.toUpperCase()
 }
 
+// Label peran yang tampil di header sidebar — utamakan jabatan yang dipilih
+// sendiri saat daftar (mis. "Kepala Sekolah"), baru fallback ke role teknis.
+// PERBAIKAN: sebelumnya fungsi ini selalu jatuh ke 'Guru' sebagai default
+// kalau semua pengecekan role di atas bernilai false — termasuk saat
+// PROFIL BELUM DIMUAT atau user BELUM LOGIN (mis. tamu yang lihat-lihat
+// halaman Toko, atau sesaat setelah klik Logout). Akibatnya sidebar
+// sempat menampilkan "Guru" padahal orangnya tamu / bukan guru sama
+// sekali. Sekarang: tanpa sesi -> 'Tamu', dan 'Guru' hanya dipakai kalau
+// memang jabatan/role di profil benar-benar 'guru'.
 function getLabelPeran(profil, isSuperAdmin, isAdminUtama, isAdmin, isOrangTua, hasSession) {
   if (!hasSession) return 'Tamu'
   if (isSuperAdmin) return 'Superadmin'
@@ -342,11 +369,17 @@ function getLabelPeran(profil, isSuperAdmin, isAdminUtama, isAdmin, isOrangTua, 
   if (isAdmin) return 'Admin'
   if (isOrangTua) return 'Orang Tua/Wali'
   if (profil?.jabatan === 'guru' || profil?.role === 'guru') return 'Guru'
+  // Sesi ada tapi profil belum selesai dimuat / tidak dikenali perannya.
   return 'Memuat...'
 }
 
+// Menu ORANG TUA: sangat ringkas, hanya halaman read-only milik anak
+// mereka sendiri — TIDAK PERNAH pakai getLinksGuru(), supaya orang tua
+// tidak pernah melihat menu kerja guru (Presensi, Nilai, dsb yang bisa
+// diedit untuk SEMUA siswa di kelas).
 function getLinksOrangTua(jumlahPesanBelumDibaca = 0, sekolahId = null) {
   return [
+    // PERBAIKAN: "/" sekarang halaman Beranda publik, Dashboard di "/dashboard".
     { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
     { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
     { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
@@ -360,6 +393,13 @@ function getLinksOrangTua(jumlahPesanBelumDibaca = 0, sekolahId = null) {
     { to: '/portofolio-anak', label: 'Portofolio Anak', icon: Image },
     { to: '/galeri-orang-tua', label: 'Galeri Kegiatan', icon: Images },
     { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
+    // Kalender pendidikan (read-only untuk orang tua — halaman
+    // KalenderPendidikan.jsx sudah otomatis menyembunyikan kontrol edit
+    // untuk siapa pun yang bukan admin) dan tautan pintasan ke form
+    // pendaftaran siswa baru (PPDB) yang memang sudah publik.
+    // PERBAIKAN: link sekarang menyertakan sekolahId akun ini sendiri
+    // (/ppdb/:sekolahId) — sebelumnya "/ppdb" polos selalu terbaca sebagai
+    // sekolah yang salah (lihat perbaikan di PPDBPublik.jsx).
     { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
     { to: sekolahId ? `/ppdb/${sekolahId}` : '/ppdb', label: 'PPDB Siswa Baru', icon: UserPlus, external: true },
   ]
@@ -373,11 +413,20 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
 
   const labelPeran = getLabelPeran(profil, isSuperAdmin, isAdminUtama, isAdmin, isOrangTua, !!session)
 
+  // PERBAIKAN: sebelumnya tombol ini cuma memanggil signOut() dan
+  // menunggu redirect otomatis dari ProtectedRoute. Itu tidak berlaku di
+  // halaman publik seperti /toko (sengaja bisa diakses tamu), jadi kalau
+  // Logout diklik di sana, sesi Supabase sudah berakhir di baliknya tapi
+  // tampilannya diam saja (terasa seperti "tidak langsung keluar", baru
+  // ke-apply setelah diklik dua kali). Sekarang kita eksplisit arahkan ke
+  // /login begitu proses signOut selesai, di halaman manapun.
   const handleLogout = async () => {
     await signOut()
     navigate('/login', { replace: true })
   }
 
+  // Notifikasi real-time: jumlah pendaftaran akun yang masih menunggu persetujuan.
+  // Hanya relevan untuk admin utama / superadmin yang punya menu "Persetujuan Akun".
   const [jumlahMenunggu, setJumlahMenunggu] = useState(0)
 
   useEffect(() => {
@@ -402,6 +451,8 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
 
     muatJumlahMenunggu()
 
+    // Dengarkan perubahan tabel profil secara real-time (pendaftar baru, disetujui, ditolak, dll)
+    // supaya badge notifikasi ter-update otomatis tanpa perlu refresh halaman.
     const channel = supabase
       .channel('persetujuan-akun-notifikasi')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profil' }, () => {
@@ -415,6 +466,8 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
     }
   }, [isAdminUtama, isSuperAdmin, sekolahId])
 
+  // Notifikasi real-time: jumlah pengajuan toko yang masih menunggu persetujuan.
+  // Hanya relevan untuk superadmin (satu-satunya yang punya menu "Persetujuan Toko").
   const [jumlahPengajuanTokoMenunggu, setJumlahPengajuanTokoMenunggu] = useState(0)
 
   useEffect(() => {
@@ -448,6 +501,10 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
     }
   }, [isSuperAdmin])
 
+  // Notifikasi real-time: jumlah pesanan yang sudah siap dicairkan tapi
+  // belum ditransfer ke penjual. Hanya relevan untuk superadmin (satu-
+  // satunya yang punya menu "Pencairan Dana" dan boleh memanggil RPC
+  // fn_cairkan_pesanan / fn_tahan_pencairan.
   const [jumlahSiapDicairkan, setJumlahSiapDicairkan] = useState(0)
 
   useEffect(() => {
@@ -481,6 +538,7 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
     }
   }, [isSuperAdmin])
 
+  // Notifikasi real-time: jumlah pesan masuk yang belum dibaca (fitur Pesan).
   const [jumlahPesanBelumDibaca, setJumlahPesanBelumDibaca] = useState(0)
 
   useEffect(() => {
@@ -498,6 +556,8 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
         .eq('penerima_id', session.user.id)
         .eq('dibaca', false)
 
+      // Siaran: RLS otomatis menyaring hanya yang sesuai target_role saya.
+      // Belum dibaca = belum ada baris di pesan_siaran_dibaca untuk saya.
       const { data: semuaSiaran } = await supabase.from('pesan_siaran').select('id')
       const { data: siaranDibaca } = await supabase
         .from('pesan_siaran_dibaca')
@@ -530,6 +590,8 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
     }
   }, [session?.user?.id])
 
+  // Notifikasi real-time: jumlah pesan Admin Pusat yang belum dibaca.
+  // Guru tidak pernah masuk sini (isAdmin selalu false untuk guru).
   const [jumlahPesanPusatBelumDibaca, setJumlahPesanPusatBelumDibaca] = useState(0)
 
   useEffect(() => {
@@ -568,6 +630,13 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
     }
   }, [session?.user?.id, isAdmin, isSuperAdmin, sekolahId])
 
+  // Notifikasi real-time: jumlah pesan Live Chat dari pengunjung publik yang
+  // belum dibaca admin.
+  // PERBAIKAN: sebelumnya syaratnya "isAdmin" (mencakup admin sekolah biasa),
+  // padahal Live Chat sekarang khusus superadmin (lihat catatan di
+  // getGroupsAdmin di atas dan RLS live_chat_pesan di Supabase). Disamakan
+  // jadi "isSuperAdmin" supaya admin sekolah tidak lagi query tabel ini sama
+  // sekali dari Sidebar, dan tidak subscribe ke channel real-time-nya.
   const [jumlahLiveChatBelumDibaca, setJumlahLiveChatBelumDibaca] = useState(0)
 
   useEffect(() => {
@@ -631,108 +700,110 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
         className={`w-72 max-w-[85vw] md:w-64 shrink-0 bg-blue-950 text-white flex flex-col h-screen fixed md:sticky top-0 left-0 z-50 border-r border-blue-900/50 transition-transform duration-300 ease-out
           ${open ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}
       >
-        <div className="relative overflow-hidden px-4 py-5 border-b border-white/10 bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-900">
-          {/* Tombol tutup — hanya tampil di HP */}
-          <button
-            onClick={onClose}
-            title="Tutup menu"
-            className="absolute top-3 right-3 z-10 w-8 h-8 rounded-lg flex items-center justify-center text-white/70 hover:bg-white/10 hover:text-white transition-colors md:hidden"
-          >
-            <X size={18} />
-          </button>
-          {/* Motif batik dekoratif */}
-          <svg
-            className="absolute inset-0 w-full h-full opacity-[0.35] pointer-events-none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <defs>
-              <pattern id="batikSidebar" width="46" height="46" patternUnits="userSpaceOnUse">
-                <circle cx="23" cy="23" r="12" fill="none" stroke="#fbbf24" strokeWidth="1.4" />
-                <circle cx="23" cy="23" r="4" fill="none" stroke="#fbbf24" strokeWidth="1.4" />
-                <path d="M23 5 v8 M23 33 v8 M5 23 h8 M33 23 h8" stroke="#fbbf24" strokeWidth="1.4" />
-                <path d="M10 10 l4 4 M32 10 l-4 4 M10 36 l4 -4 M32 36 l-4 -4" stroke="#fbbf24" strokeWidth="1" />
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#batikSidebar)" />
-          </svg>
+      <div className="relative overflow-hidden px-4 py-5 border-b border-white/10 bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-900">
+        {/* Tombol tutup — hanya tampil di HP */}
+        <button
+          onClick={onClose}
+          title="Tutup menu"
+          className="absolute top-3 right-3 z-10 w-8 h-8 rounded-lg flex items-center justify-center text-white/70 hover:bg-white/10 hover:text-white transition-colors md:hidden"
+        >
+          <X size={18} />
+        </button>
+        {/* Motif batik dekoratif (senada dengan banner dashboard) */}
+        <svg
+          className="absolute inset-0 w-full h-full opacity-[0.35] pointer-events-none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <defs>
+            <pattern id="batikSidebar" width="46" height="46" patternUnits="userSpaceOnUse">
+              <circle cx="23" cy="23" r="12" fill="none" stroke="#fbbf24" strokeWidth="1.4" />
+              <circle cx="23" cy="23" r="4" fill="none" stroke="#fbbf24" strokeWidth="1.4" />
+              <path d="M23 5 v8 M23 33 v8 M5 23 h8 M33 23 h8" stroke="#fbbf24" strokeWidth="1.4" />
+              <path d="M10 10 l4 4 M32 10 l-4 4 M10 36 l4 -4 M32 36 l-4 -4" stroke="#fbbf24" strokeWidth="1" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#batikSidebar)" />
+        </svg>
 
-          <div className="relative flex items-center gap-3">
-            {fotoUrl ? (
-              <img
-                src={fotoUrl}
-                alt={namaTampil}
-                className="w-11 h-11 rounded-full object-cover shrink-0 border-2 border-white/20"
-              />
-            ) : (
-              <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-indigo-400 flex items-center justify-center font-display font-bold text-white text-sm shrink-0 border-2 border-white/20">
-                {getInisial(namaTampil)}
-              </div>
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="font-display font-semibold text-[13px] leading-tight truncate text-white">{namaTampil}</p>
-              <p className="text-[11px] text-white/50 mt-0.5">{labelPeran}</p>
+        <div className="relative flex items-center gap-3">
+          {fotoUrl ? (
+            <img
+              src={fotoUrl}
+              alt={namaTampil}
+              className="w-11 h-11 rounded-full object-cover shrink-0 border-2 border-white/20"
+            />
+          ) : (
+            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-indigo-400 flex items-center justify-center font-display font-bold text-white text-sm shrink-0 border-2 border-white/20">
+              {getInisial(namaTampil)}
             </div>
-            <button
-              onClick={session ? handleLogout : () => navigate('/login')}
-              title={session ? 'Keluar' : 'Masuk'}
-              className="w-10 h-10 rounded-lg flex items-center justify-center text-red-400 hover:bg-red-500/15 hover:text-red-300 transition-colors shrink-0"
-            >
-              <Power size={20} strokeWidth={2.2} />
-            </button>
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="font-display font-semibold text-[13px] leading-tight truncate text-white">{namaTampil}</p>
+            <p className="text-[11px] text-white/50 mt-0.5">{labelPeran}</p>
           </div>
-        </div>
-
-        <nav className="relative flex-1 overflow-y-auto py-4 px-3 bg-gradient-to-b from-blue-950 via-blue-900 to-indigo-950 space-y-6">
-          {/* Motif batik area menu */}
-          <svg
-            className="absolute inset-0 w-full h-full opacity-[0.22] pointer-events-none"
-            xmlns="http://www.w3.org/2000/svg"
+          <button
+            onClick={session ? handleLogout : () => navigate('/login')}
+            title={session ? 'Keluar' : 'Masuk'}
+            className="w-10 h-10 rounded-lg flex items-center justify-center text-red-400 hover:bg-red-500/15 hover:text-red-300 transition-colors shrink-0"
           >
-            <defs>
-              <pattern
-                id="batikMenu"
-                width="36"
-                height="36"
-                patternUnits="userSpaceOnUse"
-                patternTransform="rotate(45)"
-              >
-                <rect x="12" y="0" width="12" height="12" fill="none" stroke="#fbbf24" strokeWidth="1.2" />
-                <circle cx="18" cy="6" r="2.6" fill="#fbbf24" />
-                <path d="M0 18 L18 0 M18 36 L36 18" stroke="#fbbf24" strokeWidth="1" />
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#batikMenu)" />
-          </svg>
+            <Power size={20} strokeWidth={2.2} />
+          </button>
+        </div>
+      </div>
 
-          <div className="relative space-y-6">
-            {isAdmin ? (
-              groupsAdmin.map((group, idx) => (
-                <div key={idx} className="space-y-1">
-                  {group.label && (
-                    <div className="px-3 pb-1 text-[11px] font-semibold text-white/40 uppercase tracking-wider">
-                      {group.label}
-                    </div>
-                  )}
-                  {group.links.map((link) => (
-                    <NavItem key={link.to} {...link} onNavigate={onClose} />
-                  ))}
-                </div>
-              ))
-            ) : isOrangTua ? (
+      <nav className="relative flex-1 overflow-y-auto py-4 px-3 bg-gradient-to-b from-blue-950 via-blue-900 to-indigo-950">
+        {/* Motif batik area menu — gaya berbeda dari header (kawung/diamond, bukan lingkaran) */}
+        <svg
+          className="absolute inset-0 w-full h-full opacity-[0.22] pointer-events-none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <defs>
+            <pattern
+              id="batikMenu"
+              width="36"
+              height="36"
+              patternUnits="userSpaceOnUse"
+              patternTransform="rotate(45)"
+            >
+              <rect x="12" y="0" width="12" height="12" fill="none" stroke="#fbbf24" strokeWidth="1.2" />
+              <circle cx="18" cy="6" r="2.6" fill="#fbbf24" />
+              <path d="M0 18 L18 0 M18 36 L36 18" stroke="#fbbf24" strokeWidth="1" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#batikMenu)" />
+        </svg>
+
+        <div className="relative">
+        {isAdmin ? (
+          groupsAdmin.map((group, i) => (
+            <div key={group.label ?? `top-${i}`} className={i > 0 ? 'mt-5' : ''}>
+              {group.label && (
+                <p className="px-3 mb-1.5 text-[10px] font-semibold tracking-wider uppercase text-white/35">
+                  {group.label}
+                </p>
+              )}
               <div className="space-y-1">
-                {linksOrangTua.map((link) => (
+                {group.links.map((link) => (
                   <NavItem key={link.to} {...link} onNavigate={onClose} />
                 ))}
               </div>
-            ) : (
-              <div className="space-y-1">
-                {linksGuru.map((link) => (
-                  <NavItem key={link.to} {...link} onNavigate={onClose} />
-                ))}
-              </div>
-            )}
+            </div>
+          ))
+        ) : isOrangTua ? (
+          <div className="space-y-1">
+            {linksOrangTua.map((link) => (
+              <NavItem key={link.to} {...link} onNavigate={onClose} />
+            ))}
           </div>
-        </nav>
+        ) : (
+          <div className="space-y-1">
+            {linksGuru.map((link) => (
+              <NavItem key={link.to} {...link} onNavigate={onClose} />
+            ))}
+          </div>
+        )}
+        </div>
+      </nav>
       </aside>
     </>
   )
