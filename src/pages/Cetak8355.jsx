@@ -351,6 +351,20 @@ export default function Cetak8355() {
             margin-right: auto !important;
           }
         }
+
+        /* Override aturan global "@media screen { .print-only { display: none } }"
+           (index.css) — ketiga lembar Lampiran 1/2/3 di bawah memang harus
+           tetap tampil di layar sebagai pratinjau sebelum dicetak, mengikuti
+           pola yang sama seperti LaporanTenagaPengajar.jsx / LaporanSemester.jsx.
+           Tanpa override ini, Lampiran 1-3 hanya kelihatan saat proses print
+           (kosong di layar), dan lembar cetak sebelumnya jadi susah dicek
+           dulu isinya sebelum ditekan Cetak. */
+        @media screen {
+          .lembar-cetak.print-only {
+            display: block !important;
+          }
+        }
+
         .tabel-8355 th, .tabel-8355 td {
           border: 1px solid #0B1220;
           padding: 3px 4px;
