@@ -316,6 +316,27 @@ export default function LaporanKepangkatanGuru() {
           mengalir normal mengikuti page-break bawaan browser, bukan
           terpotong atau menumpuk di satu titik fixed. */}
       <style>{`
+        /* CSS global (index.css) punya aturan:
+             body * { visibility: hidden; }
+             .print-only, .print-only * { visibility: visible; }
+           yang tadinya dibuat khusus untuk Kuitansi/Nota (1 lembar) dan
+           kemungkinan memberi .print-only posisi "fixed" secara default.
+           PENTING: override "static" ini SENGAJA ditaruh DI LUAR
+           @media print (bukan di dalamnya) — supaya berlaku setiap saat,
+           baik di layar (preview normal sebelum klik Cetak) maupun saat
+           benar-benar mencetak. Kalau cuma diletakkan di dalam
+           @media print, lembar cetak yang ukurannya besar (297mm) akan
+           "terlempar" ke luar area yang terlihat gara-gara position:fixed
+           bawaan dari index.css, sehingga tampak kosong di layar dan baru
+           muncul normal saat proses print/print-preview dijalankan. */
+        .lembar-cetak.print-only {
+          position: static !important;
+          top: auto !important;
+          left: auto !important;
+          right: auto !important;
+          margin-left: auto !important;
+          margin-right: auto !important;
+        }
         @media print {
           .no-print { display: none !important; }
           body { background: white; }
@@ -323,25 +344,6 @@ export default function LaporanKepangkatanGuru() {
             box-shadow: none !important;
             margin: 0 !important;
             width: 100% !important;
-          }
-
-          /* CSS global (index.css) punya aturan:
-               body * { visibility: hidden; }
-               .print-only, .print-only * { visibility: visible; }
-             yang tadinya dibuat khusus untuk Kuitansi/Nota (1 lembar) dan
-             kemungkinan memberi .print-only posisi "fixed" secara default.
-             Di sini di-override jadi "static" supaya kalau daftar guru
-             panjang (lebih dari 1 halaman A4), isinya tetap mengalir
-             normal mengikuti page-break bawaan browser, bukan terpotong
-             atau menumpuk di satu titik fixed. Pola sama seperti
-             Cetak8355.jsx / LaporanBiodataGuru.jsx yang sudah terbukti berhasil. */
-          .lembar-cetak.print-only {
-            position: static !important;
-            top: auto !important;
-            left: auto !important;
-            right: auto !important;
-            margin-left: auto !important;
-            margin-right: auto !important;
           }
         }
         @page {
