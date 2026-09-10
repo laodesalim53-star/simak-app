@@ -20,6 +20,12 @@ import { supabase } from '../lib/supabaseClient'
 // CATATAN: kalau ternyata urutan yang diinginkan sekolah justru golongan
 // terendah dulu (I sebelum IV), tinggal balik tanda pengurangan di
 // bandingkanGolongan() — cukup 1 baris (lihat komentar di dalamnya).
+//
+// UPDATE POLA PRINT: ditambahkan override @media screen untuk `display`
+// (mengikuti pola LaporanSemester.jsx), karena override `position: static`
+// yang sudah ada sebelumnya saja tidak cukup — kalau aturan global
+// index.css menyembunyikan .print-only lewat display:none di layar,
+// position:static tidak menolong elemen itu tampil.
 export default function LaporanKepangkatanGuru() {
   const navigate = useNavigate()
   const { sekolahId: sekolahIdSaya } = useAuth()
@@ -28,38 +34,25 @@ export default function LaporanKepangkatanGuru() {
   const [daftarGuru, setDaftarGuru] = useState([])
   const [loading, setLoading] = useState(true)
 
-  // Input manual Semester & Tahun Pelajaran — ditampilkan di panel
-  // (no-print) di atas lembar cetak, lalu disisipkan ke teks judul
-  // lembar cetak. Jika tahun dikosongkan, teks tetap fallback ke
-  // titik-titik seperti format aslinya. Pola sama seperti
-  // LaporanBiodataGuru.jsx.
   const [semester, setSemester] = useState('Ganjil')
   const [tahunAwal, setTahunAwal] = useState('')
   const [tahunAkhir, setTahunAkhir] = useState('')
 
-  // Kepala Sekolah dideteksi dari kolom tugas_tambahan / jenis_ptk, sama
-  // seperti pola yang sudah dipakai di LaporanNominatifGuru.jsx.
   function isKepalaSekolah(g) {
     const jabatan = `${g.tugas_tambahan || ''} ${g.jenis_ptk || ''}`.toLowerCase()
     return jabatan.includes('kepala sekolah')
   }
 
-  // Mengubah teks pangkat/golongan bebas (mis. "Penata Muda / III-b",
-  // "Pengatur / IIC", "penata muda /II-d", "Golongan IX (Ahli Pertama)")
-  // menjadi 1 angka peringkat yang bisa dibandingkan.
-  // Angka romawi (I..IX) jadi puluhan, huruf sub-golongan (a-d) jadi satuan.
   function peringkatGolongan(teks) {
     if (!teks) return 0
     const t = teks.toUpperCase()
 
-    // Urutan alternasi SENGAJA dari romawi terpanjang ke terpendek, supaya
-    // "VIII" tidak salah kebaca sebagai "II" duluan, dst.
     const cocok = t.match(/(IX|VIII|VII|VI|IV|III|II|I|V)[\s./-]?([A-D])?/)
     if (!cocok) return 0
 
     const angkaRomawi = { I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9 }
     const nilaiRomawi = angkaRomawi[cocok[1]] || 0
-    const nilaiHuruf = cocok[2] ? cocok[2].charCodeAt(0) - 64 : 0 // A=1, B=2, C=3, D=4
+    const nilaiHuruf = cocok[2] ? cocok[2].charCodeAt(0) - 64 : 0
 
     return nilaiRomawi * 10 + nilaiHuruf
   }
@@ -67,8 +60,6 @@ export default function LaporanKepangkatanGuru() {
   function bandingkanGolongan(a, b) {
     const golA = peringkatGolongan(a.pangkat_golongan)
     const golB = peringkatGolongan(b.pangkat_golongan)
-    // Golongan tertinggi lebih dulu (descending). Untuk membalik jadi
-    // terendah dulu (ascending), tinggal tukar golA dan golB di baris ini.
     return golB - golA
   }
 
@@ -108,9 +99,6 @@ export default function LaporanKepangkatanGuru() {
 
       setProfilSekolah(sekolah || null)
 
-      // logo_path adalah path di Supabase Storage, bukan URL lengkap — harus
-      // dikonversi lewat getPublicUrl() dulu, sama seperti pola di
-      // LaporanNominatifGuru.jsx / LaporanBulanan.jsx (bucket 'profil-sekolah').
       if (sekolah?.logo_path) {
         const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(sekolah.logo_path)
         setLogoUrl(pub?.publicUrl || '')
@@ -129,14 +117,6 @@ export default function LaporanKepangkatanGuru() {
     return new Date(tgl).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
   }
 
-  // Membuang awalan "PEMERINTAH KABUPATEN" / "KABUPATEN" pada nilai supaya
-  // tidak dobel dengan label "Kabupaten" yang sudah ada di depannya
-  // (mis. field profilSekolah.kabupaten berisi "PEMERINTAH KABUPATEN
-  // KEPULAUAN ARU", padahal labelnya sudah "Kabupaten"). Data mentah di
-  // profilSekolah TIDAK diubah — cuma cara menampilkannya di baris ini.
-  // Dipakai juga di kop surat (Pemerintah Kabupaten ...) supaya nama
-  // kabupatennya tidak dobel walau data mentahnya sudah mengandung
-  // prefix "Pemerintah Kabupaten"/"Kabupaten".
   function formatKabupaten(teks) {
     if (!teks) return '—'
     return (
@@ -157,7 +137,6 @@ export default function LaporanKepangkatanGuru() {
 
   return (
     <div className="min-h-screen bg-slate-100">
-      {/* Toolbar — hilang saat dicetak */}
       <div className="no-print sticky top-0 z-10 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
         <button
           onClick={() => navigate(-1)}
@@ -173,10 +152,6 @@ export default function LaporanKepangkatanGuru() {
         </button>
       </div>
 
-      {/* Panel input Semester & Tahun Pelajaran — hilang saat print.
-          Nilainya dipakai untuk mengisi teks "Semester .../Tahun
-          Pelajaran ..." di lembar cetak di bawah. Pola sama seperti
-          LaporanBiodataGuru.jsx. */}
       <div className="no-print max-w-md mx-auto mt-4 bg-white border border-slate-200 rounded-lg p-3 flex flex-wrap items-center gap-3 text-sm">
         <label className="font-medium text-slate-600">Semester</label>
         <select
@@ -206,18 +181,7 @@ export default function LaporanKepangkatanGuru() {
         />
       </div>
 
-      {/* PENTING: class "print-only" ditambahkan di sini. CSS global
-          (index.css) menyembunyikan SEMUA elemen saat print kecuali yang
-          berkelas print-only (body * { visibility: hidden } lalu
-          .print-only, .print-only * { visibility: visible }). Tanpa class
-          ini, div lembar cetak ikut tersembunyi dan hasil print jadi
-          kosong total. Pola sama seperti Cetak8355.jsx / LaporanBiodataGuru.jsx
-          yang sudah terbukti berhasil. */}
       <div className="lembar-cetak print-only bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '297mm', minHeight: '210mm' }}>
-        {/* Kop Surat — urutan resmi: Pemerintah Kabupaten / Dinas
-            Pendidikan / Nama Sekolah / Alamat. Nama kabupaten dilewatkan
-            lewat formatKabupaten() supaya tidak dobel kalau data mentahnya
-            sudah mengandung prefix "Pemerintah Kabupaten"/"Kabupaten". */}
         <div className="flex items-center gap-4 border-b-4 border-black pb-3 mb-4">
           {logoUrl && (
             <img src={logoUrl} alt="Logo" className="w-16 h-16 object-contain shrink-0" />
@@ -303,7 +267,6 @@ export default function LaporanKepangkatanGuru() {
           </tbody>
         </table>
 
-        {/* Blok tanda tangan kepala sekolah */}
         <div className="flex justify-end mt-10">
           <div className="text-center text-xs w-64">
             <p>
@@ -319,25 +282,7 @@ export default function LaporanKepangkatanGuru() {
         </div>
       </div>
 
-      {/* CSS cetak — A4 landscape (tabel ini lebar, 11 kolom). Blok
-          "position: static" override mengikuti pola LaporanBiodataGuru.jsx
-          supaya kalau daftar guru panjang (lebih dari 1 halaman), isinya
-          mengalir normal mengikuti page-break bawaan browser, bukan
-          terpotong atau menumpuk di satu titik fixed. */}
       <style>{`
-        /* CSS global (index.css) punya aturan:
-             body * { visibility: hidden; }
-             .print-only, .print-only * { visibility: visible; }
-           yang tadinya dibuat khusus untuk Kuitansi/Nota (1 lembar) dan
-           kemungkinan memberi .print-only posisi "fixed" secara default.
-           PENTING: override "static" ini SENGAJA ditaruh DI LUAR
-           @media print (bukan di dalamnya) — supaya berlaku setiap saat,
-           baik di layar (preview normal sebelum klik Cetak) maupun saat
-           benar-benar mencetak. Kalau cuma diletakkan di dalam
-           @media print, lembar cetak yang ukurannya besar (297mm) akan
-           "terlempar" ke luar area yang terlihat gara-gara position:fixed
-           bawaan dari index.css, sehingga tampak kosong di layar dan baru
-           muncul normal saat proses print/print-preview dijalankan. */
         .lembar-cetak.print-only {
           position: static !important;
           top: auto !important;
@@ -345,6 +290,16 @@ export default function LaporanKepangkatanGuru() {
           right: auto !important;
           margin-left: auto !important;
           margin-right: auto !important;
+        }
+
+        /* Override aturan global "@media screen { .print-only { display: none } }"
+           (index.css) — override position di atas saja TIDAK CUKUP kalau
+           aturan global menyembunyikan .print-only lewat display:none di
+           layar. Ditambahkan mengikuti pola LaporanSemester.jsx. */
+        @media screen {
+          .lembar-cetak.print-only {
+            display: block !important;
+          }
         }
         @media print {
           .no-print { display: none !important; }
