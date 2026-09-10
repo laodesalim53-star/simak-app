@@ -221,15 +221,19 @@ export default function KartuSiswa() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kelasId])
 
-  // ⚠️ SESUAIKAN: nama tabel/kolom profil sekolah & bucket tanda tangan
-  // sesuai skema Supabase Anda yang sebenarnya.
+  // Nama kolom & bucket storage di sini SUDAH disamakan dengan yang dipakai
+  // ProfilSekolah.jsx: tabel profil_sekolah kolomnya `kepala_sekolah` (bukan
+  // `nama_kepala_sekolah`) dan `ttd_kepala_sekolah_path` (bukan `ttd_path`),
+  // file tanda tangan disimpan di bucket `profil-sekolah` (bukan `tanda-tangan`).
+  // Alias `nama_kepala_sekolah:kepala_sekolah` dan `ttd_path:ttd_kepala_sekolah_path`
+  // dipakai supaya kode di bawah (PreviewKartuModal, generateKartu) tidak perlu diubah.
   async function loadProfilSekolah() {
     // PERBAIKAN: sebelumnya query ini tidak difilter sekolah_id, sehingga
     // .single() bisa mengambil baris profil_sekolah milik sekolah lain
     // (mis. superadmin) — itu sebabnya nama sekolah yang tercetak salah.
     const { data, error } = await supabase
       .from('profil_sekolah')
-      .select('nama_sekolah, alamat, nama_kepala_sekolah, ttd_path')
+      .select('nama_sekolah, alamat, nama_kepala_sekolah:kepala_sekolah, ttd_path:ttd_kepala_sekolah_path')
       .eq('sekolah_id', sekolahId)
       .maybeSingle()
 
@@ -241,7 +245,7 @@ export default function KartuSiswa() {
 
     let ttd_url = null
     if (data.ttd_path) {
-      ttd_url = supabase.storage.from('tanda-tangan').getPublicUrl(data.ttd_path).data.publicUrl
+      ttd_url = supabase.storage.from('profil-sekolah').getPublicUrl(data.ttd_path).data.publicUrl
     }
     setProfilSekolah({ ...data, ttd_url })
   }
