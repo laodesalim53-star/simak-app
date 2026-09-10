@@ -19,7 +19,8 @@ import { supabase } from '../lib/supabaseClient'
 //   diketik TIDAK disimpan ke database — hanya untuk keperluan cetak saat itu.
 //
 // Struktur file ini mengikuti pola LaporanBiodataGuru.jsx (kop surat, sumber
-// data, tombol cetak) supaya konsisten dengan laporan lain.
+// data, tombol cetak, mode print print-only, panel input Semester/Tahun
+// Pelajaran) supaya konsisten dengan laporan lain.
 export default function LaporanTenagaPengajar() {
   const navigate = useNavigate()
   const { sekolahId: sekolahIdSaya } = useAuth()
@@ -27,6 +28,15 @@ export default function LaporanTenagaPengajar() {
   const [logoUrl, setLogoUrl] = useState('')
   const [loading, setLoading] = useState(true)
   const [rows, setRows] = useState([])
+
+  // Input manual Semester & Tahun Pelajaran — ditampilkan di panel
+  // (no-print) di atas lembar cetak, lalu disisipkan ke teks judul
+  // lembar cetak. Jika tahun dikosongkan, teks tetap fallback ke
+  // titik-titik seperti format aslinya. Pola sama seperti
+  // LaporanBiodataGuru.jsx.
+  const [semester, setSemester] = useState('Ganjil')
+  const [tahunAwal, setTahunAwal] = useState('')
+  const [tahunAkhir, setTahunAkhir] = useState('')
 
   // Kolom bidang studi manual — disederhanakan dari sheet asli (kolom Agama
   // digabung jadi satu, bukan dipecah Islam/Kristen/Katolik) supaya tabel
@@ -137,7 +147,47 @@ export default function LaporanTenagaPengajar() {
         </button>
       </div>
 
-      <div className="lembar-cetak bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '330mm', minHeight: '210mm' }}>
+      {/* Panel input Semester & Tahun Pelajaran — hilang saat print.
+          Nilainya dipakai untuk mengisi teks "Semester .../Tahun
+          Pelajaran ..." di lembar cetak di bawah. Pola sama seperti
+          LaporanBiodataGuru.jsx. */}
+      <div className="no-print max-w-md mx-auto mt-4 bg-white border border-slate-200 rounded-lg p-3 flex flex-wrap items-center gap-3 text-sm">
+        <label className="font-medium text-slate-600">Semester</label>
+        <select
+          value={semester}
+          onChange={(e) => setSemester(e.target.value)}
+          className="border border-slate-300 rounded px-2 py-1"
+        >
+          <option value="Ganjil">Ganjil</option>
+          <option value="Genap">Genap</option>
+        </select>
+
+        <label className="font-medium text-slate-600">Tahun Pelajaran</label>
+        <input
+          type="text"
+          value={tahunAwal}
+          onChange={(e) => setTahunAwal(e.target.value)}
+          placeholder="2024"
+          className="border border-slate-300 rounded px-2 py-1 w-20"
+        />
+        <span>/</span>
+        <input
+          type="text"
+          value={tahunAkhir}
+          onChange={(e) => setTahunAkhir(e.target.value)}
+          placeholder="2025"
+          className="border border-slate-300 rounded px-2 py-1 w-20"
+        />
+      </div>
+
+      {/* PENTING: class "print-only" ditambahkan di sini. CSS global
+          (index.css) menyembunyikan SEMUA elemen saat print kecuali yang
+          berkelas print-only (body * { visibility: hidden } lalu
+          .print-only, .print-only * { visibility: visible }). Tanpa class
+          ini, div lembar cetak ikut tersembunyi dan hasil print jadi
+          kosong total. Pola sama seperti Cetak8355.jsx / LaporanBiodataGuru.jsx
+          yang sudah terbukti berhasil. */}
+      <div className="lembar-cetak print-only bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '330mm', minHeight: '210mm' }}>
         {/* Kop Surat */}
         <div className="flex items-center gap-4 border-b-4 border-black pb-3 mb-4">
           {logoUrl && <img src={logoUrl} alt="Logo" className="w-16 h-16 object-contain shrink-0" />}
@@ -155,9 +205,12 @@ export default function LaporanTenagaPengajar() {
           </div>
         </div>
 
-        <h1 className="text-center font-bold text-base uppercase underline mb-4">
+        <h1 className="text-center font-bold text-base uppercase underline mb-1">
           Data Rincian Tenaga Pengajar
         </h1>
+        <p className="text-center text-xs mb-4">
+          Semester {semester} Tahun Pelajaran {tahunAwal || '................'}/{tahunAkhir || '................'}
+        </p>
 
         <table className="w-full text-[9px] border-collapse border border-black">
           <thead>
@@ -253,7 +306,11 @@ export default function LaporanTenagaPengajar() {
         </div>
       </div>
 
-      {/* CSS cetak — A4 landscape (tabelnya lebar, banyak kolom) */}
+      {/* CSS cetak — A3 landscape (tabelnya lebar, banyak kolom). Blok
+          "position: static" override mengikuti pola LaporanBiodataGuru.jsx
+          supaya kalau daftar guru panjang (lebih dari 1 halaman), isinya
+          mengalir normal mengikuti page-break bawaan browser, bukan
+          terpotong atau menumpuk di satu titik fixed. */}
       <style>{`
         .sel-isian {
           border: none;
@@ -277,6 +334,25 @@ export default function LaporanTenagaPengajar() {
           }
           .sel-isian {
             border-bottom: none;
+          }
+
+          /* CSS global (index.css) punya aturan:
+               body * { visibility: hidden; }
+               .print-only, .print-only * { visibility: visible; }
+             yang tadinya dibuat khusus untuk Kuitansi/Nota (1 lembar) dan
+             kemungkinan memberi .print-only posisi "fixed" secara default.
+             Di sini di-override jadi "static" supaya kalau daftar guru
+             panjang (lebih dari 1 halaman), isinya tetap mengalir normal
+             mengikuti page-break bawaan browser, bukan terpotong atau
+             menumpuk di satu titik fixed. Pola sama seperti Cetak8355.jsx /
+             LaporanBiodataGuru.jsx yang sudah terbukti berhasil. */
+          .lembar-cetak.print-only {
+            position: static !important;
+            top: auto !important;
+            left: auto !important;
+            right: auto !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
           }
         }
         @page {
