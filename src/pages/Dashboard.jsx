@@ -4,7 +4,7 @@ import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
 import StoryBar from '../components/StoryBar'
 import StoryUploader from '../components/StoryUploader'
-import { Users, GraduationCap, DoorOpen, Megaphone, LayoutDashboard, ClipboardCheck, FileClock } from 'lucide-react'
+import { Users, GraduationCap, DoorOpen, Megaphone, LayoutDashboard, ClipboardCheck, FileClock, Briefcase, UserCheck } from 'lucide-react'
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -92,6 +92,8 @@ function formatRelativeDate(iso) {
   return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
 }
 
+// Generik: bisa dipakai untuk presensi_siswa MAUPUN presensi_pegawai,
+// selama baris punya kolom tanggal & status.
 function aggregateAttendance(rows) {
   const map = {}
   rows.forEach((r) => {
@@ -121,9 +123,10 @@ function aggregateNilai(rows) {
     .slice(0, 8)
 }
 
-export default function Dashboard() {
-  const { sekolahId } = useAuth()
-
+/* ================================================================
+   ==================  DASBOR SEKOLAH (tidak berubah)  =============
+   ================================================================ */
+function DashboardSekolah({ sekolahId }) {
   const [stats, setStats] = useState({ siswa: 0, guru: 0, kelas: 0, pengumuman: 0 })
   const [genderData, setGenderData] = useState([])
   const [pengumuman, setPengumuman] = useState([])
@@ -137,8 +140,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     async function load() {
-      // Belum tahu sekolah mana yang login -> jangan query dulu,
-      // supaya tidak sempat menampilkan data gabungan semua sekolah.
       if (!sekolahId) {
         setLoading(false)
         return
@@ -264,7 +265,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* --- Fitur Story/Status --- */}
         <StoryBar key={storyRefreshKey} />
         <StoryUploader onPosted={() => setStoryRefreshKey((k) => k + 1)} />
 
@@ -414,4 +414,211 @@ export default function Dashboard() {
       </div>
     </Layout>
   )
+}
+
+/* ================================================================
+   ==================  DASBOR KANTOR (baru)  ========================
+   Tidak ada siswa/kelas/guru/RPP/nilai — cuma pegawai, presensi
+   pegawai, pengumuman, dan akun yang menunggu persetujuan.
+   ================================================================ */
+function DashboardKantor({ sekolahId }) {
+  const [stats, setStats] = useState({ pegawai: 0, pengumuman: 0 })
+  const [pengumuman, setPengumuman] = useState([])
+  const [attendanceTrend, setAttendanceTrend] = useState([])
+  const [presensiHariIni, setPresensiHariIni] = useState({ terisi: 0, hadir: 0, izin: 0, alpa: 0 })
+  const [akunMenunggu, setAkunMenunggu] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [storyRefreshKey, setStoryRefreshKey] = useState(0)
+
+  useEffect(() => {
+    async function load() {
+      if (!sekolahId) {
+        setLoading(false)
+        return
+      }
+
+      setLoading(true)
+
+      const since = new Date()
+      since.setDate(since.getDate() - 13)
+      const sinceStr = since.toISOString().slice(0, 10)
+      const todayStr = new Date().toISOString().slice(0, 10)
+
+      const [
+        pegawaiCount, pengumumanCount, pengumumanRecent, pegawaiRows, akunMenungguCount,
+      ] = await Promise.all([
+        supabase.from('pegawai_kantor').select('*', { count: 'exact', head: true })
+          .eq('sekolah_id', sekolahId).eq('status', 'aktif'),
+        supabase.from('pengumuman').select('*', { count: 'exact', head: true })
+          .eq('sekolah_id', sekolahId),
+        supabase.from('pengumuman').select('id, judul, kategori, dibuat_pada')
+          .eq('sekolah_id', sekolahId).order('dibuat_pada', { ascending: false }).limit(5),
+        supabase.from('pegawai_kantor').select('id')
+          .eq('sekolah_id', sekolahId).eq('status', 'aktif'),
+        supabase.from('profil').select('*', { count: 'exact', head: true })
+          .eq('sekolah_id', sekolahId).eq('status_akun', 'menunggu'),
+      ])
+
+      const pegawaiIds = (pegawaiRows.data || []).map((p) => p.id)
+
+      // presensi_pegawai tidak punya kolom sekolah_id langsung, jadi
+      // di-scope lewat daftar id pegawai tenant ini.
+      const [presensiTrenRows, presensiHariIniRows] = await Promise.all([
+        pegawaiIds.length
+          ? supabase.from('presensi_pegawai').select('tanggal, status')
+              .in('pegawai_id', pegawaiIds).gte('tanggal', sinceStr)
+          : Promise.resolve({ data: [] }),
+        pegawaiIds.length
+          ? supabase.from('presensi_pegawai').select('status')
+              .in('pegawai_id', pegawaiIds).eq('tanggal', todayStr)
+          : Promise.resolve({ data: [] }),
+      ])
+
+      setStats({
+        pegawai: pegawaiCount.count || 0,
+        pengumuman: pengumumanCount.count || 0,
+      })
+      setPengumuman(pengumumanRecent.data || [])
+      setAttendanceTrend(aggregateAttendance(presensiTrenRows.data || []))
+
+      const rekapHariIni = { hadir: 0, izin: 0, alpa: 0 }
+      for (const p of presensiHariIniRows.data || []) {
+        if (rekapHariIni[p.status] !== undefined) rekapHariIni[p.status]++
+      }
+      setPresensiHariIni({ terisi: (presensiHariIniRows.data || []).length, ...rekapHariIni })
+      setAkunMenunggu(akunMenungguCount.count || 0)
+
+      setLoading(false)
+    }
+    load()
+  }, [sekolahId])
+
+  const cards = [
+    { label: 'Total Pegawai', value: stats.pegawai, icon: Briefcase, theme: 'blue' },
+    { label: 'Pengumuman', value: stats.pengumuman, icon: Megaphone, theme: 'purple' },
+    {
+      label: 'Presensi Hari Ini',
+      value: `${presensiHariIni.terisi}/${stats.pegawai}`,
+      sublabel: `${presensiHariIni.hadir} hadir · ${presensiHariIni.izin} izin · ${presensiHariIni.alpa} alpa`,
+      icon: ClipboardCheck,
+      theme: 'orange',
+    },
+    {
+      label: 'Akun Menunggu',
+      value: akunMenunggu,
+      sublabel: akunMenunggu > 0 ? 'menunggu persetujuan Anda' : 'tidak ada yang menunggu',
+      icon: UserCheck,
+      theme: akunMenunggu > 0 ? 'rose' : 'green',
+    },
+  ]
+
+  return (
+    <Layout title="Dasbor" subtitle="Ringkasan data kantor Anda hari ini">
+      <style>{`
+        @keyframes dashFadeInUp {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .dash-fade-in {
+          animation: dashFadeInUp 0.5s ease-out forwards;
+        }
+      `}</style>
+
+      <div className="relative">
+        <div className="dash-fade-in opacity-0 relative overflow-hidden rounded-xl p-6 mb-6 flex items-center gap-4 bg-gradient-to-br from-blue-900 to-blue-950">
+          <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/5 pointer-events-none" />
+          <div className="absolute -bottom-14 -left-6 w-32 h-32 rounded-full bg-white/5 pointer-events-none" />
+          <BatikOverlay patternId="batikBannerKantor" strokeColor="#d4af37" />
+          <div className="relative w-12 h-12 rounded-full bg-white/10 ring-2 ring-white/20 text-white flex items-center justify-center shrink-0">
+            <LayoutDashboard size={22} />
+          </div>
+          <div className="relative">
+            <p className="font-display font-semibold text-lg text-white">Selamat datang kembali</p>
+            <p className="text-sm text-blue-200/70">Semua ringkasan data kantor ada di bawah ini.</p>
+          </div>
+        </div>
+
+        <StoryBar key={storyRefreshKey} />
+        <StoryUploader onPosted={() => setStoryRefreshKey((k) => k + 1)} />
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {cards.map(({ label, value, icon: Icon, theme, sublabel }, i) => {
+            const t = CARD_THEME[theme]
+            return (
+              <div
+                key={label}
+                className={`dash-fade-in opacity-0 relative overflow-hidden rounded-2xl p-5 text-white shadow-md bg-gradient-to-br ${t.gradient} transition-transform duration-300 ease-out hover:-translate-y-1`}
+                style={{ animationDelay: `${i * 90}ms` }}
+              >
+                <BatikOverlay patternId={`batikCardKantor-${theme}-${i}`} strokeColor="#ffffff" opacity={0.5} size={56} />
+                <div className="relative flex items-start justify-between mb-4">
+                  <p className="text-sm font-medium text-white/90">{label}</p>
+                  <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                    <Icon size={18} />
+                  </div>
+                </div>
+                <p className="relative text-3xl font-display font-bold">
+                  {loading ? '—' : value}
+                </p>
+                {sublabel && !loading && (
+                  <p className="relative text-xs text-white/80 mt-1.5">{sublabel}</p>
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="card p-6 mb-8">
+          <h3 className="font-display text-lg font-semibold mb-4">Pengumuman Terbaru</h3>
+          {pengumuman.length === 0 ? (
+            <p className="text-sm text-ink-700/50">Belum ada pengumuman.</p>
+          ) : (
+            <ul className="divide-y divide-ink-900/[0.06]">
+              {pengumuman.map((p) => (
+                <li key={p.id} className="py-3 flex items-center gap-3">
+                  <span
+                    className={`text-[11px] font-medium px-2 py-0.5 rounded-md shrink-0 ${
+                      KATEGORI_STYLE[p.kategori] || KATEGORI_STYLE.Informasi
+                    }`}
+                  >
+                    {p.kategori || 'Informasi'}
+                  </span>
+                  <span className="text-sm text-ink-900 truncate flex-1">{p.judul}</span>
+                  <span className="text-xs text-ink-700/40 shrink-0">
+                    {formatRelativeDate(p.dibuat_pada)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <h2 className="font-display text-xl font-semibold text-ink-950 mt-8 mb-4">Analitik</h2>
+        <div className="card p-6">
+          <h3 className="font-display text-lg font-semibold mb-4">Tren Kehadiran Pegawai (14 Hari Terakhir)</h3>
+          {attendanceTrend.length === 0 ? (
+            <p className="text-sm text-ink-700/50">Belum ada data presensi.</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={240}>
+              <LineChart data={attendanceTrend}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
+                <XAxis dataKey="tanggal" tick={{ fontSize: 11 }} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} unit="%" width={40} />
+                <Tooltip formatter={(v) => [`${v}%`, 'Kehadiran']} />
+                <Line type="monotone" dataKey="persen" stroke="#4C7A6E" strokeWidth={2} dot={{ r: 3 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+    </Layout>
+  )
+}
+
+// ============================================================
+// Entry point: pilih tampilan berdasarkan jenis_organisasi.
+// ============================================================
+export default function Dashboard() {
+  const { sekolahId, isKantor } = useAuth()
+  return isKantor ? <DashboardKantor sekolahId={sekolahId} /> : <DashboardSekolah sekolahId={sekolahId} />
 }
