@@ -7,20 +7,12 @@ import { supabase } from '../lib/supabaseClient'
 // Halaman cetak "DATA RINCIAN TENAGA PENGAJAR" — mengikuti format sheet
 // "DATA RINCIAN TENAGA PENGAJAR" pada LAPORAN_BULANAN_JULI_2023.xlsx.
 //
-// CATATAN PENTING soal sumber data:
-// - Kolom NO, NAMA GURU/PEGAWAI diambil OTOMATIS dari tabel `guru`.
-// - Kolom KELAS diisi otomatis kalau guru tsb menjadi wali kelas (dicocokkan
-//   lewat kelas.wali_kelas_id), kalau tidak ada wali kelas maka dikosongkan
-//   dan bisa diisi manual.
-// - Kolom jam mengajar per bidang studi, jumlah jam, wajib/kelebihan/
-//   kekurangan, dan absen (S/I/A) TIDAK ADA di database (tidak ada tabel
-//   beban-mengajar), jadi kolom-kolom itu berupa kotak isian (input) yang
-//   bisa diketik langsung di layar sebelum menekan tombol Cetak. Nilai yang
-//   diketik TIDAK disimpan ke database — hanya untuk keperluan cetak saat itu.
-//
-// Struktur file ini mengikuti pola LaporanBiodataGuru.jsx (kop surat, sumber
-// data, tombol cetak, mode print print-only, panel input Semester/Tahun
-// Pelajaran) supaya konsisten dengan laporan lain.
+// Pola print disamakan dengan LaporanSemester.jsx:
+// - sel isian tabel pakai input (no-print, untuk layar) + span (only-print,
+//   untuk cetak) supaya hasil cetak berupa teks polos, bukan kotak input.
+// - ditambahkan override @media screen supaya .lembar-cetak.print-only
+//   TETAP tampil di layar (butuh diisi manual sebelum cetak), menang atas
+//   aturan global index.css yang menyembunyikan .print-only di layar.
 export default function LaporanTenagaPengajar() {
   const navigate = useNavigate()
   const { sekolahId: sekolahIdSaya } = useAuth()
@@ -29,18 +21,10 @@ export default function LaporanTenagaPengajar() {
   const [loading, setLoading] = useState(true)
   const [rows, setRows] = useState([])
 
-  // Input manual Semester & Tahun Pelajaran — ditampilkan di panel
-  // (no-print) di atas lembar cetak, lalu disisipkan ke teks judul
-  // lembar cetak. Jika tahun dikosongkan, teks tetap fallback ke
-  // titik-titik seperti format aslinya. Pola sama seperti
-  // LaporanBiodataGuru.jsx.
   const [semester, setSemester] = useState('Ganjil')
   const [tahunAwal, setTahunAwal] = useState('')
   const [tahunAkhir, setTahunAkhir] = useState('')
 
-  // Kolom bidang studi manual — disederhanakan dari sheet asli (kolom Agama
-  // digabung jadi satu, bukan dipecah Islam/Kristen/Katolik) supaya tabel
-  // tetap rapi dan mudah diketik.
   const KOLOM_MAPEL = [
     { key: 'ppkn', label: 'PPKN' },
     { key: 'agama', label: 'AGAMA' },
@@ -106,13 +90,6 @@ export default function LaporanTenagaPengajar() {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [key]: value } : r)))
   }
 
-  // Membuang awalan "PEMERINTAH KABUPATEN" / "KABUPATEN" pada nilai supaya
-  // tidak dobel dengan label "Pemerintah Kabupaten" yang sudah ada di kop
-  // surat (mis. field profilSekolah.kabupaten berisi "PEMERINTAH KABUPATEN
-  // KEPULAUAN ARU"). Data mentah di profilSekolah TIDAK diubah — cuma cara
-  // menampilkannya di baris kop surat. Pola sama seperti
-  // LaporanKepangkatanGuru.jsx / LaporanNominatifGuru.jsx /
-  // LaporanPendidikanGuru.jsx / LaporanTanggunganKeluarga.jsx.
   function formatKabupaten(teks) {
     if (!teks) return '—'
     return (
@@ -123,15 +100,20 @@ export default function LaporanTenagaPengajar() {
     )
   }
 
-  // Sel isian kecil dipakai berulang untuk kolom-kolom manual di tabel.
+  // Sel isian tabel — sekarang mengikuti pola LaporanSemester.jsx:
+  // input untuk layar (no-print) + span untuk hasil cetak (only-print),
+  // supaya di kertas hanya muncul teks polos tanpa kotak/garis input.
   function SelIsian({ value, onChange, width = 34 }) {
     return (
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="sel-isian"
-        style={{ width }}
-      />
+      <>
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="sel-isian no-print"
+          style={{ width }}
+        />
+        <span className="only-print">{value}</span>
+      </>
     )
   }
 
@@ -164,10 +146,6 @@ export default function LaporanTenagaPengajar() {
         </button>
       </div>
 
-      {/* Panel input Semester & Tahun Pelajaran — hilang saat print.
-          Nilainya dipakai untuk mengisi teks "Semester .../Tahun
-          Pelajaran ..." di lembar cetak di bawah. Pola sama seperti
-          LaporanBiodataGuru.jsx. */}
       <div className="no-print max-w-md mx-auto mt-4 bg-white border border-slate-200 rounded-lg p-3 flex flex-wrap items-center gap-3 text-sm">
         <label className="font-medium text-slate-600">Semester</label>
         <select
@@ -197,18 +175,7 @@ export default function LaporanTenagaPengajar() {
         />
       </div>
 
-      {/* PENTING: class "print-only" ditambahkan di sini. CSS global
-          (index.css) menyembunyikan SEMUA elemen saat print kecuali yang
-          berkelas print-only (body * { visibility: hidden } lalu
-          .print-only, .print-only * { visibility: visible }). Tanpa class
-          ini, div lembar cetak ikut tersembunyi dan hasil print jadi
-          kosong total. Pola sama seperti Cetak8355.jsx / LaporanBiodataGuru.jsx
-          yang sudah terbukti berhasil. */}
       <div className="lembar-cetak print-only bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '330mm', minHeight: '210mm' }}>
-        {/* Kop Surat — urutan resmi: Pemerintah Kabupaten / Dinas
-            Pendidikan / Nama Sekolah / Alamat. Nama kabupaten dilewatkan
-            lewat formatKabupaten() supaya tidak dobel kalau data mentahnya
-            sudah mengandung prefix "Pemerintah Kabupaten"/"Kabupaten". */}
         <div className="flex items-center gap-4 border-b-4 border-black pb-3 mb-4">
           {logoUrl && <img src={logoUrl} alt="Logo" className="w-16 h-16 object-contain shrink-0" />}
           <div className="text-center flex-1">
@@ -272,39 +239,39 @@ export default function LaporanTenagaPengajar() {
                 <tr key={r.id}>
                   <td className="border border-black px-1 py-1 text-center">{i + 1}</td>
                   <td className="border border-black px-1 py-1 whitespace-nowrap">{r.nama_lengkap}</td>
-                  <td className="border border-black px-1 py-1">
+                  <td className="border border-black px-1 py-1 text-center">
                     <SelIsian value={r.kelas} onChange={(v) => updateCell(r.id, 'kelas', v)} width={44} />
                   </td>
                   {KOLOM_MAPEL.map((m) => (
-                    <td key={m.key} className="border border-black px-0.5 py-1">
+                    <td key={m.key} className="border border-black px-0.5 py-1 text-center">
                       <SelIsian value={r[m.key]} onChange={(v) => updateCell(r.id, m.key, v)} width={28} />
                     </td>
                   ))}
-                  <td className="border border-black px-0.5 py-1">
+                  <td className="border border-black px-0.5 py-1 text-center">
                     <SelIsian value={r.jumlah} onChange={(v) => updateCell(r.id, 'jumlah', v)} width={28} />
                   </td>
-                  <td className="border border-black px-0.5 py-1">
+                  <td className="border border-black px-0.5 py-1 text-center">
                     <SelIsian value={r.wajib} onChange={(v) => updateCell(r.id, 'wajib', v)} width={26} />
                   </td>
-                  <td className="border border-black px-0.5 py-1">
+                  <td className="border border-black px-0.5 py-1 text-center">
                     <SelIsian value={r.kelebihan} onChange={(v) => updateCell(r.id, 'kelebihan', v)} width={26} />
                   </td>
-                  <td className="border border-black px-0.5 py-1">
+                  <td className="border border-black px-0.5 py-1 text-center">
                     <SelIsian value={r.kekurangan} onChange={(v) => updateCell(r.id, 'kekurangan', v)} width={26} />
                   </td>
-                  <td className="border border-black px-0.5 py-1">
+                  <td className="border border-black px-0.5 py-1 text-center">
                     <SelIsian value={r.absen_s} onChange={(v) => updateCell(r.id, 'absen_s', v)} width={20} />
                   </td>
-                  <td className="border border-black px-0.5 py-1">
+                  <td className="border border-black px-0.5 py-1 text-center">
                     <SelIsian value={r.absen_i} onChange={(v) => updateCell(r.id, 'absen_i', v)} width={20} />
                   </td>
-                  <td className="border border-black px-0.5 py-1">
+                  <td className="border border-black px-0.5 py-1 text-center">
                     <SelIsian value={r.absen_a} onChange={(v) => updateCell(r.id, 'absen_a', v)} width={20} />
                   </td>
-                  <td className="border border-black px-0.5 py-1">
+                  <td className="border border-black px-0.5 py-1 text-center">
                     <SelIsian value={r.absen_jumlah} onChange={(v) => updateCell(r.id, 'absen_jumlah', v)} width={20} />
                   </td>
-                  <td className="border border-black px-0.5 py-1">
+                  <td className="border border-black px-0.5 py-1 text-center">
                     <SelIsian value={r.ket} onChange={(v) => updateCell(r.id, 'ket', v)} width={40} />
                   </td>
                 </tr>
@@ -313,7 +280,6 @@ export default function LaporanTenagaPengajar() {
           </tbody>
         </table>
 
-        {/* Blok tanda tangan kepala sekolah */}
         <div className="flex justify-end mt-10">
           <div className="text-center text-xs w-64">
             <p>
@@ -329,11 +295,6 @@ export default function LaporanTenagaPengajar() {
         </div>
       </div>
 
-      {/* CSS cetak — A3 landscape (tabelnya lebar, banyak kolom). Blok
-          "position: static" override mengikuti pola LaporanBiodataGuru.jsx
-          supaya kalau daftar guru panjang (lebih dari 1 halaman), isinya
-          mengalir normal mengikuti page-break bawaan browser, bukan
-          terpotong atau menumpuk di satu titik fixed. */}
       <style>{`
         .sel-isian {
           border: none;
@@ -347,6 +308,8 @@ export default function LaporanTenagaPengajar() {
         .sel-isian:focus {
           border-bottom: 1px solid #2563eb;
         }
+        .only-print { display: none; }
+
         @media print {
           .no-print { display: none !important; }
           body { background: white; }
@@ -355,20 +318,8 @@ export default function LaporanTenagaPengajar() {
             margin: 0 !important;
             width: 100% !important;
           }
-          .sel-isian {
-            border-bottom: none;
-          }
+          .only-print { display: inline !important; }
 
-          /* CSS global (index.css) punya aturan:
-               body * { visibility: hidden; }
-               .print-only, .print-only * { visibility: visible; }
-             yang tadinya dibuat khusus untuk Kuitansi/Nota (1 lembar) dan
-             kemungkinan memberi .print-only posisi "fixed" secara default.
-             Di sini di-override jadi "static" supaya kalau daftar guru
-             panjang (lebih dari 1 halaman), isinya tetap mengalir normal
-             mengikuti page-break bawaan browser, bukan terpotong atau
-             menumpuk di satu titik fixed. Pola sama seperti Cetak8355.jsx /
-             LaporanBiodataGuru.jsx yang sudah terbukti berhasil. */
           .lembar-cetak.print-only {
             position: static !important;
             top: auto !important;
@@ -376,6 +327,15 @@ export default function LaporanTenagaPengajar() {
             right: auto !important;
             margin-left: auto !important;
             margin-right: auto !important;
+          }
+        }
+
+        /* Override aturan global "@media screen { .print-only { display: none } }"
+           (index.css) — halaman ini memang harus tampil di layar supaya bisa
+           diisi manual, sama seperti LaporanSemester.jsx. */
+        @media screen {
+          .lembar-cetak.print-only {
+            display: block !important;
           }
         }
         @page {
