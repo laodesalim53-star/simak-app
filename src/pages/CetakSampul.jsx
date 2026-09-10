@@ -15,6 +15,257 @@ const JENIS_LAPORAN_PRESET = [
   'Lainnya (isi bebas)',
 ]
 
+const TEMA_SAMPUL = [
+  { id: 'gelombang', label: 'Tema 1 — Gelombang Biru (Elegan Gelap)' },
+  { id: 'geometris', label: 'Tema 2 — Geometris Modern' },
+  { id: 'alam', label: 'Tema 3 — Alam & Pastel' },
+]
+
+// Membersihkan nilai wilayah dari kata yang sudah terwakili oleh label,
+// contoh: label "Kecamatan" + nilai "KECAMATAN ARU UTARA TIMUR" jadi dobel.
+function bersihkanWilayah(nilai, tipe) {
+  if (!nilai) return nilai
+  let teks = String(nilai).trim()
+  if (tipe === 'kecamatan') {
+    teks = teks.replace(/^kecamatan\s+/i, '')
+  } else if (tipe === 'kabupaten') {
+    teks = teks
+      .replace(/^pemerintah\s+(kabupaten|kota)\s+/i, '')
+      .replace(/^(kabupaten|kota)\s+/i, '')
+  }
+  return teks
+}
+
+function SampulGelombang({ logoUrl, judulTampil, subJudul, tahunAnggaran, barisIdentitas, dibuatOleh }) {
+  return (
+    <div
+      className="lembar-cetak print-only bg-white mx-auto my-6 flex flex-col relative overflow-hidden"
+      style={{ width: '210mm', height: '297mm', padding: '10mm' }}
+    >
+      <div
+        className="flex-1 flex flex-col relative overflow-hidden"
+        style={{ border: '2px solid #1e293b', borderRadius: '10px' }}
+      >
+        {/* Banner atas — hitam gradasi */}
+        <div
+          className="flex flex-col items-center text-center px-10 pt-8 pb-7"
+          style={{ background: 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)' }}
+        >
+          {logoUrl && (
+            <div
+              className="flex items-center justify-center bg-white rounded-full mb-3 shadow"
+              style={{ width: '90px', height: '90px' }}
+            >
+              <img src={logoUrl} alt="Logo" className="object-contain" style={{ width: '70px', height: '70px' }} />
+            </div>
+          )}
+
+          <h1
+            className="text-xl font-extrabold uppercase leading-snug max-w-[150mm] bg-clip-text text-transparent"
+            style={{ backgroundImage: 'linear-gradient(90deg, #60a5fa, #a78bfa)' }}
+          >
+            {judulTampil || 'Judul Laporan'}
+          </h1>
+          {subJudul && (
+            <h2 className="text-sm font-bold uppercase mt-2 tracking-wide" style={{ color: '#fb923c' }}>
+              {subJudul}
+            </h2>
+          )}
+          {tahunAnggaran && (
+            <p className="text-sm font-bold uppercase mt-1 tracking-wide" style={{ color: '#facc15' }}>
+              Tahun Anggaran {tahunAnggaran}
+            </p>
+          )}
+        </div>
+
+        {/* Identitas sekolah — rata kiri, label berwarna */}
+        <div className="mt-14 px-10 text-sm">
+          <table>
+            <tbody>
+              {barisIdentitas.map((baris) => (
+                <tr key={baris.label}>
+                  <td className="pr-2 py-1 align-top whitespace-nowrap font-semibold" style={{ color: '#dc2626' }}>
+                    {baris.label}
+                  </td>
+                  <td className="pr-2 py-1 align-top text-slate-700">:</td>
+                  <td className="py-1 align-top text-slate-800">{baris.nilai || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Dibuat Oleh — kanan bawah, di atas gelombang */}
+        <div className="flex-1 flex items-end justify-end px-10 pb-10 relative" style={{ zIndex: 2 }}>
+          {dibuatOleh && (
+            <p className="text-sm italic text-slate-800">Dibuat Oleh : {dibuatOleh}</p>
+          )}
+        </div>
+
+        {/* Gelombang biru dekoratif */}
+        <svg
+          viewBox="0 0 800 160"
+          preserveAspectRatio="none"
+          className="absolute bottom-0 left-0 w-full"
+          style={{ height: '90px', zIndex: 1 }}
+        >
+          <path d="M0,80 C150,140 350,10 800,90 L800,160 L0,160 Z" fill="#0369a1" opacity="0.55" />
+          <path d="M0,110 C200,60 500,150 800,70 L800,160 L0,160 Z" fill="#0284c7" opacity="0.75" />
+          <path d="M0,130 C250,90 550,160 800,110 L800,160 L0,160 Z" fill="#38bdf8" />
+        </svg>
+      </div>
+    </div>
+  )
+}
+
+function SampulGeometris({ logoUrl, judulTampil, subJudul, tahunAnggaran, barisIdentitas, dibuatOleh }) {
+  return (
+    <div
+      className="lembar-cetak print-only bg-white mx-auto my-6 flex flex-col relative overflow-hidden"
+      style={{ width: '210mm', height: '297mm', padding: '10mm' }}
+    >
+      <div
+        className="flex-1 flex flex-col relative overflow-hidden"
+        style={{ border: '2px solid #1e293b', borderRadius: '10px' }}
+      >
+        {/* Dekorasi diagonal pojok kiri atas */}
+        <div className="absolute top-0 left-0" style={{ width: '260px', height: '260px', overflow: 'hidden', zIndex: 0 }}>
+          <div style={{ position: 'absolute', width: '420px', height: '80px', background: '#0f172a', transform: 'rotate(-45deg)', top: '-10px', left: '-140px' }} />
+          <div style={{ position: 'absolute', width: '420px', height: '40px', background: '#60a5fa', transform: 'rotate(-45deg)', top: '55px', left: '-160px' }} />
+          <div style={{ position: 'absolute', width: '420px', height: '30px', background: '#f59e0b', transform: 'rotate(-45deg)', top: '95px', left: '-175px' }} />
+          <div style={{ position: 'absolute', width: '420px', height: '22px', background: '#facc15', transform: 'rotate(-45deg)', top: '128px', left: '-190px' }} />
+        </div>
+
+        <div className="flex flex-col items-center text-center px-10 pt-10 pb-4 relative" style={{ zIndex: 1 }}>
+          {logoUrl && (
+            <div
+              className="flex items-center justify-center bg-white rounded-full mb-3 shadow"
+              style={{ width: '90px', height: '90px', border: '2px solid #e2e8f0' }}
+            >
+              <img src={logoUrl} alt="Logo" className="object-contain" style={{ width: '70px', height: '70px' }} />
+            </div>
+          )}
+          <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+            Laporan Pertanggungjawaban (LPJ)
+          </p>
+          <h1 className="text-xl font-extrabold uppercase leading-snug max-w-[150mm] text-slate-900 mt-1">
+            {judulTampil || 'Judul Laporan'}
+          </h1>
+          {subJudul && (
+            <h2 className="text-sm font-bold uppercase mt-2 tracking-wide text-slate-700">{subJudul}</h2>
+          )}
+          {tahunAnggaran && (
+            <p className="text-sm font-bold uppercase mt-1 tracking-wide" style={{ color: '#f59e0b' }}>
+              Tahun Anggaran {tahunAnggaran}
+            </p>
+          )}
+        </div>
+
+        <div className="mt-10 px-10 text-sm relative" style={{ zIndex: 1 }}>
+          <table>
+            <tbody>
+              {barisIdentitas.map((baris) => (
+                <tr key={baris.label}>
+                  <td className="pr-2 py-1 align-top whitespace-nowrap font-semibold text-slate-900">
+                    {baris.label}
+                  </td>
+                  <td className="pr-2 py-1 align-top text-slate-700">:</td>
+                  <td className="py-1 align-top text-slate-800">{baris.nilai || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="flex-1 flex items-end justify-end px-10 pb-10 relative" style={{ zIndex: 1 }}>
+          {dibuatOleh && (
+            <p className="text-sm italic text-slate-800">Dibuat Oleh : {dibuatOleh}</p>
+          )}
+        </div>
+
+        {/* Dekorasi diagonal pojok kanan bawah */}
+        <div className="absolute bottom-0 right-0" style={{ width: '220px', height: '160px', overflow: 'hidden', zIndex: 0 }}>
+          <div style={{ position: 'absolute', width: '380px', height: '70px', background: '#facc15', transform: 'rotate(-45deg)', bottom: '-5px', right: '-150px' }} />
+          <div style={{ position: 'absolute', width: '380px', height: '90px', background: '#0f172a', transform: 'rotate(-45deg)', bottom: '40px', right: '-170px' }} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SampulAlam({ logoUrl, judulTampil, subJudul, tahunAnggaran, barisIdentitas, dibuatOleh }) {
+  return (
+    <div
+      className="lembar-cetak print-only mx-auto my-6 flex flex-col relative overflow-hidden"
+      style={{ width: '210mm', height: '297mm', padding: '10mm', background: 'linear-gradient(180deg, #f0fdf4 0%, #ffffff 60%)' }}
+    >
+      <div
+        className="flex-1 flex flex-col relative overflow-hidden"
+        style={{ border: '2px solid #86efac', borderRadius: '10px' }}
+      >
+        {/* Dedaunan dekoratif */}
+        <svg className="absolute top-0 left-0" width="180" height="180" viewBox="0 0 180 180" style={{ zIndex: 0, opacity: 0.55 }}>
+          <path d="M0,0 C60,10 90,60 60,110 C40,70 10,50 0,0 Z" fill="#86efac" />
+          <path d="M0,0 C40,30 50,80 20,130 C10,80 0,40 0,0 Z" fill="#4ade80" />
+        </svg>
+        <svg className="absolute bottom-0 right-0" width="200" height="200" viewBox="0 0 200 200" style={{ zIndex: 0, opacity: 0.55 }}>
+          <path d="M200,200 C140,190 110,140 140,90 C160,130 190,150 200,200 Z" fill="#86efac" />
+          <path d="M200,200 C160,170 150,120 180,70 C190,120 200,160 200,200 Z" fill="#4ade80" />
+        </svg>
+
+        <div className="flex flex-col items-center text-center px-10 pt-10 pb-4 relative" style={{ zIndex: 1 }}>
+          {logoUrl && (
+            <div
+              className="flex items-center justify-center bg-white rounded-full mb-3 shadow"
+              style={{ width: '90px', height: '90px', border: '2px solid #bbf7d0' }}
+            >
+              <img src={logoUrl} alt="Logo" className="object-contain" style={{ width: '70px', height: '70px' }} />
+            </div>
+          )}
+          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#166534' }}>
+            Laporan Pertanggungjawaban (LPJ)
+          </p>
+          <h1 className="text-xl font-extrabold uppercase leading-snug max-w-[150mm] mt-1" style={{ color: '#15803d' }}>
+            {judulTampil || 'Judul Laporan'}
+          </h1>
+          {subJudul && (
+            <h2 className="text-sm font-bold uppercase mt-2 tracking-wide text-slate-700">{subJudul}</h2>
+          )}
+          {tahunAnggaran && (
+            <p className="text-sm font-bold uppercase mt-1 tracking-wide" style={{ color: '#65a30d' }}>
+              Tahun Anggaran {tahunAnggaran}
+            </p>
+          )}
+        </div>
+
+        <div className="flex-1 flex items-start justify-center px-10 pt-6 relative" style={{ zIndex: 1 }}>
+          <div className="bg-white/80 rounded-2xl px-8 py-6 text-sm w-full max-w-[150mm]" style={{ border: '1px solid #bbf7d0' }}>
+            <table className="w-full">
+              <tbody>
+                {barisIdentitas.map((baris) => (
+                  <tr key={baris.label}>
+                    <td className="pr-2 py-1 align-top whitespace-nowrap font-semibold" style={{ color: '#166534' }}>
+                      {baris.label}
+                    </td>
+                    <td className="pr-2 py-1 align-top text-slate-700">:</td>
+                    <td className="py-1 align-top text-slate-800">{baris.nilai || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="px-10 pb-10 pt-6 text-right relative" style={{ zIndex: 1 }}>
+          {dibuatOleh && (
+            <p className="text-sm italic text-slate-800">Dibuat Oleh : {dibuatOleh}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function CetakSampul() {
   const navigate = useNavigate()
   const { sekolahId } = useAuth()
@@ -24,6 +275,7 @@ export default function CetakSampul() {
   const [loading, setLoading] = useState(true)
   const [errorMuat, setErrorMuat] = useState('')
 
+  const [tema, setTema] = useState('gelombang')
   const [jenisLaporan, setJenisLaporan] = useState(JENIS_LAPORAN_PRESET[3])
   const [judulBebas, setJudulBebas] = useState('')
   const [subJudul, setSubJudul] = useState('BANTUAN OPERASIONAL SEKOLAH (BOS)')
@@ -91,13 +343,15 @@ export default function CetakSampul() {
     { label: 'NPSN', nilai: profilSekolah?.npsn },
     { label: 'Alamat', nilai: profilSekolah?.alamat },
     { label: 'Desa/Kelurahan', nilai: desaKelurahan },
-    { label: 'Kecamatan', nilai: profilSekolah?.kecamatan },
-    { label: 'Kab/Kota', nilai: profilSekolah?.kabupaten },
+    { label: 'Kecamatan', nilai: bersihkanWilayah(profilSekolah?.kecamatan, 'kecamatan') },
+    { label: 'Kab/Kota', nilai: bersihkanWilayah(profilSekolah?.kabupaten, 'kabupaten') },
     { label: 'Provinsi', nilai: profilSekolah?.provinsi },
     { label: 'Kode Pos', nilai: profilSekolah?.kode_pos },
     { label: 'Nama Bank', nilai: namaBank },
     { label: 'E-mail Sekolah', nilai: emailSekolah },
   ]
+
+  const propsSampul = { logoUrl, judulTampil, subJudul, tahunAnggaran, barisIdentitas, dibuatOleh }
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -119,6 +373,19 @@ export default function CetakSampul() {
         </div>
 
         <div className="max-w-md mx-auto mt-3 grid grid-cols-1 gap-2">
+          <label className="text-xs text-slate-500">
+            Tema Sampul
+            <select
+              value={tema}
+              onChange={(e) => setTema(e.target.value)}
+              className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5 font-medium"
+            >
+              {TEMA_SAMPUL.map((t) => (
+                <option key={t.id} value={t.id}>{t.label}</option>
+              ))}
+            </select>
+          </label>
+
           <label className="text-xs text-slate-500">
             Jenis Laporan
             <select
@@ -222,88 +489,15 @@ export default function CetakSampul() {
 
         <div className="no-print mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 max-w-md mx-auto">
           Saat mencetak, pastikan opsi <strong>"Background graphics" / "Grafis latar belakang"</strong> dicentang
-          di kotak dialog Print, supaya banner hitam dan gelombang birunya ikut tercetak.
+          di kotak dialog Print, supaya warna dan dekorasi latar ikut tercetak. Pilih dulu <strong>Tema Sampul</strong>{' '}
+          di atas, baru tekan Cetak Sampul.
         </div>
       </div>
 
-      {/* Sampul — hanya tampil saat print */}
-      <div
-        className="lembar-cetak print-only bg-white mx-auto my-6 flex flex-col relative overflow-hidden"
-        style={{ width: '210mm', height: '297mm', padding: '10mm' }}
-      >
-        <div
-          className="flex-1 flex flex-col relative overflow-hidden"
-          style={{ border: '2px solid #1e293b', borderRadius: '10px' }}
-        >
-          {/* Banner atas — hitam gradasi */}
-          <div
-            className="flex flex-col items-center text-center px-10 pt-8 pb-7"
-            style={{ background: 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)' }}
-          >
-            {logoUrl && (
-              <div
-                className="flex items-center justify-center bg-white rounded-full mb-3 shadow"
-                style={{ width: '90px', height: '90px' }}
-              >
-                <img src={logoUrl} alt="Logo" className="object-contain" style={{ width: '70px', height: '70px' }} />
-              </div>
-            )}
-
-            <h1
-              className="text-xl font-extrabold uppercase leading-snug max-w-[150mm] bg-clip-text text-transparent"
-              style={{ backgroundImage: 'linear-gradient(90deg, #60a5fa, #a78bfa)' }}
-            >
-              {judulTampil || 'Judul Laporan'}
-            </h1>
-            {subJudul && (
-              <h2 className="text-sm font-bold uppercase mt-2 tracking-wide" style={{ color: '#fb923c' }}>
-                {subJudul}
-              </h2>
-            )}
-            {tahunAnggaran && (
-              <p className="text-sm font-bold uppercase mt-1 tracking-wide" style={{ color: '#facc15' }}>
-                Tahun Anggaran {tahunAnggaran}
-              </p>
-            )}
-          </div>
-
-          {/* Identitas sekolah — rata kiri, label berwarna */}
-          <div className="mt-14 px-10 text-sm">
-            <table>
-              <tbody>
-                {barisIdentitas.map((baris) => (
-                  <tr key={baris.label}>
-                    <td className="pr-2 py-1 align-top whitespace-nowrap font-semibold" style={{ color: '#dc2626' }}>
-                      {baris.label}
-                    </td>
-                    <td className="pr-2 py-1 align-top text-slate-700">:</td>
-                    <td className="py-1 align-top text-slate-800">{baris.nilai || '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Dibuat Oleh — kanan bawah, di atas gelombang */}
-          <div className="flex-1 flex items-end justify-end px-10 pb-10 relative" style={{ zIndex: 2 }}>
-            {dibuatOleh && (
-              <p className="text-sm italic text-slate-800">Dibuat Oleh : {dibuatOleh}</p>
-            )}
-          </div>
-
-          {/* Gelombang biru dekoratif */}
-          <svg
-            viewBox="0 0 800 160"
-            preserveAspectRatio="none"
-            className="absolute bottom-0 left-0 w-full"
-            style={{ height: '90px', zIndex: 1 }}
-          >
-            <path d="M0,80 C150,140 350,10 800,90 L800,160 L0,160 Z" fill="#0369a1" opacity="0.55" />
-            <path d="M0,110 C200,60 500,150 800,70 L800,160 L0,160 Z" fill="#0284c7" opacity="0.75" />
-            <path d="M0,130 C250,90 550,160 800,110 L800,160 L0,160 Z" fill="#38bdf8" />
-          </svg>
-        </div>
-      </div>
+      {/* Sampul — hanya tampil sesuai tema yang dipilih */}
+      {tema === 'gelombang' && <SampulGelombang {...propsSampul} />}
+      {tema === 'geometris' && <SampulGeometris {...propsSampul} />}
+      {tema === 'alam' && <SampulAlam {...propsSampul} />}
 
       <style>{`
         .only-print { display: none; }
