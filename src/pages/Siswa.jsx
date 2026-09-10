@@ -1089,6 +1089,7 @@ export default function Siswa() {
                   <option value="aktif">Aktif</option>
                   <option value="lulus">Lulus</option>
                   <option value="pindah">Pindah</option>
+                  <option value="nonaktif">Non-Aktif</option>
                 </select>
               </Field>
             </Seksi>
