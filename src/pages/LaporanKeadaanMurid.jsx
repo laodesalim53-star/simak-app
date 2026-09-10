@@ -545,13 +545,22 @@ export default function LaporanKeadaanMurid() {
         )}
       </div>
 
-      {/* PENTING: class "print-only" ditambahkan di sini. CSS global
-          (index.css) menyembunyikan SEMUA elemen saat print kecuali yang
-          berkelas print-only (body * { visibility: hidden } lalu
-          .print-only, .print-only * { visibility: visible }). Tanpa class
-          ini, div lembar cetak ikut tersembunyi dan hasil print jadi
-          kosong total — pola sama seperti LaporanNominatifGuru.jsx /
-          Cetak8355.jsx / LaporanBiodataGuru.jsx yang sudah terbukti berhasil. */}
+      {/* PENTING: class "print-only" tetap dipakai di sini (dibutuhkan supaya
+          elemen ini TETAP terlihat saat print — CSS global index.css
+          menyembunyikan SEMUA elemen saat print kecuali yang berkelas
+          print-only: body * { visibility: hidden } lalu .print-only,
+          .print-only * { visibility: visible }).
+          PERBAIKAN: index.css TERNYATA juga punya
+          `@media screen { .print-only { display: none } }` — aturan ini
+          didesain untuk PrintTemplate terpisah (mis. KuitansiPrintTemplate)
+          yang memang tidak pernah tampil di layar. Halaman ini beda: satu
+          komponen sekaligus jadi form isian (Masuk/Keluar Dalam Bulan Ini)
+          DAN tampilan cetak, jadi div ini HARUS tampil normal di layar.
+          Override selector 2-class (.lembar-cetak.print-only) di <style>
+          bawah dipakai supaya menang dari aturan global tanpa mengubah
+          index.css — pola sama seperti LaporanSemester.jsx. Sebelum
+          perbaikan ini, halaman ini blank total di layar dan baru terlihat
+          saat print preview dibuka. */}
       <div className="lembar-cetak print-only bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '297mm' }}>
         <KopSurat />
 
@@ -883,6 +892,20 @@ export default function LaporanKeadaanMurid() {
         .laporan-section.tab-nonaktif { display: none; }
         .only-print { display: none; }
 
+        /* PERBAIKAN: override aturan global "@media screen { .print-only
+           { display: none } }" di index.css. Aturan itu didesain untuk
+           PrintTemplate terpisah (KuitansiPrintTemplate dkk) yang memang
+           tidak pernah tampil di layar. Halaman ini beda kebutuhan — kertas
+           laporan di sini MEMANG harus tampil di layar supaya bisa diisi
+           manual (Masuk/Keluar Dalam Bulan Ini). Selector 2-class ini lebih
+           spesifik daripada ".print-only" saja, jadi menang tanpa perlu
+           ubah index.css. */
+        @media screen {
+          .lembar-cetak.print-only {
+            display: block !important;
+          }
+        }
+
         @media print {
           .no-print { display: none !important; }
           body { background: white; }
@@ -903,11 +926,11 @@ export default function LaporanKeadaanMurid() {
           /* CSS global (index.css) punya aturan:
                body * { visibility: hidden; }
                .print-only, .print-only * { visibility: visible; }
-             yang kemungkinan memberi .print-only posisi "fixed" secara
-             default. Di sini di-override jadi "static" supaya keempat
-             laporan (lebih dari 1 halaman A4 kalau digabung) tetap
-             mengalir normal mengikuti page-break bawaan browser, bukan
-             terpotong atau menumpuk di satu titik fixed. Pola sama seperti
+             dan memberi .print-only posisi "fixed" secara default. Di sini
+             di-override jadi "static" supaya keempat laporan (lebih dari 1
+             halaman A4 kalau digabung) tetap mengalir normal mengikuti
+             page-break bawaan browser, bukan terpotong atau menumpuk di
+             satu titik fixed. Pola sama seperti LaporanSemester.jsx /
              LaporanNominatifGuru.jsx / Cetak8355.jsx / LaporanBiodataGuru.jsx. */
           .lembar-cetak.print-only {
             position: static !important;
