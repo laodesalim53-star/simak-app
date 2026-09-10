@@ -24,6 +24,14 @@ import { supabase } from '../lib/supabaseClient'
 // tab tetap berfungsi seperti biasa untuk melihat/mengisi data per laporan
 // (termasuk isian Masuk/Keluar Dalam Bulan Ini); saat window.print()
 // dipanggil, CSS @media print menampilkan semua bagian sekaligus.
+//
+// UPDATE: disesuaikan dengan pola LaporanBiodataGuru.jsx — mode print
+// "print-only" (supaya konsisten dengan CSS global .print-only, dan supaya
+// keempat bagian yang panjang mengalir normal antar-halaman saat dicetak),
+// dan panel input manual Semester & Tahun Pelajaran yang otomatis mengisi
+// baris "Semester .../Tahun Pelajaran ..." di bawah judul TIAP-TIAP dari
+// keempat bagian laporan (bukan hanya satu, karena keempatnya tercetak
+// sekaligus).
 export default function LaporanKeadaanMurid() {
   const navigate = useNavigate()
   const { sekolahId: sekolahIdSaya } = useAuth()
@@ -42,6 +50,16 @@ export default function LaporanKeadaanMurid() {
   const [rombelPerTingkat, setRombelPerTingkat] = useState({})
   const [masuk, setMasuk] = useState({})
   const [keluar, setKeluar] = useState({})
+
+  // Input manual Semester & Tahun Pelajaran — ditampilkan di panel
+  // (no-print) di toolbar, lalu disisipkan ke teks di bawah judul TIAP
+  // bagian laporan (Keadaan Murid, Usia, Agama, Kewarganegaraan) karena
+  // keempatnya dicetak sekaligus dalam satu berkas. Jika tahun dikosongkan,
+  // teks tetap fallback ke titik-titik. Pola sama seperti
+  // LaporanBiodataGuru.jsx.
+  const [semester, setSemester] = useState('Ganjil')
+  const [tahunAwal, setTahunAwal] = useState('')
+  const [tahunAkhir, setTahunAkhir] = useState('')
 
   const URUTAN_ROMAWI = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII']
   const KATEGORI_KEWARGANEGARAAN = ['WNI asli', 'WNI Keturunan', 'WNA']
@@ -422,6 +440,15 @@ export default function LaporanKeadaanMurid() {
     </div>
   )
 
+  // Baris "Semester .../Tahun Pelajaran ..." — dipakai berulang di bawah
+  // judul tiap-tiap dari keempat bagian laporan, karena semuanya tercetak
+  // sekaligus dalam satu berkas (bukan hanya satu judul tunggal di luar).
+  const KeteranganSemester = () => (
+    <p className="text-center text-xs mb-4">
+      Semester {semester} Tahun Pelajaran {tahunAwal || '................'}/{tahunAkhir || '................'}
+    </p>
+  )
+
   // Tiap bagian laporan sekarang membawa judulnya sendiri (bukan satu judul
   // tunggal di luar), karena saat cetak keempatnya tampil berurutan seperti
   // pada dokumen referensi. className "laporan-section" + "tab-aktif"/
@@ -470,7 +497,47 @@ export default function LaporanKeadaanMurid() {
         </p>
       </div>
 
-      <div className="lembar-cetak bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '297mm' }}>
+      {/* Panel input Semester & Tahun Pelajaran — hilang saat print.
+          Nilainya dipakai untuk mengisi baris "Semester .../Tahun
+          Pelajaran ..." di bawah judul TIAP bagian laporan. Pola sama
+          seperti LaporanBiodataGuru.jsx. */}
+      <div className="no-print max-w-md mx-auto mt-4 bg-white border border-slate-200 rounded-lg p-3 flex flex-wrap items-center gap-3 text-sm">
+        <label className="font-medium text-slate-600">Semester</label>
+        <select
+          value={semester}
+          onChange={(e) => setSemester(e.target.value)}
+          className="border border-slate-300 rounded px-2 py-1"
+        >
+          <option value="Ganjil">Ganjil</option>
+          <option value="Genap">Genap</option>
+        </select>
+
+        <label className="font-medium text-slate-600">Tahun Pelajaran</label>
+        <input
+          type="text"
+          value={tahunAwal}
+          onChange={(e) => setTahunAwal(e.target.value)}
+          placeholder="2024"
+          className="border border-slate-300 rounded px-2 py-1 w-20"
+        />
+        <span>/</span>
+        <input
+          type="text"
+          value={tahunAkhir}
+          onChange={(e) => setTahunAkhir(e.target.value)}
+          placeholder="2025"
+          className="border border-slate-300 rounded px-2 py-1 w-20"
+        />
+      </div>
+
+      {/* PENTING: class "print-only" ditambahkan di sini. CSS global
+          (index.css) menyembunyikan SEMUA elemen saat print kecuali yang
+          berkelas print-only (body * { visibility: hidden } lalu
+          .print-only, .print-only * { visibility: visible }). Tanpa class
+          ini, div lembar cetak ikut tersembunyi dan hasil print jadi
+          kosong total. Pola sama seperti Cetak8355.jsx / LaporanBiodataGuru.jsx
+          yang sudah terbukti berhasil. */}
+      <div className="lembar-cetak print-only bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '297mm' }}>
         <KopSurat />
 
         {tingkatList.length === 0 ? (
@@ -481,7 +548,8 @@ export default function LaporanKeadaanMurid() {
           <>
             {/* ===== BAGIAN: KEADAAN MURID ===== */}
             <div className={kelasBagian('keadaan')}>
-              <h1 className="text-center font-bold text-base uppercase mb-6">{TAB_JUDUL.keadaan}</h1>
+              <h1 className="text-center font-bold text-base uppercase mb-1">{TAB_JUDUL.keadaan}</h1>
+              <KeteranganSemester />
 
               <div className="grid grid-cols-2 gap-x-8 text-xs mb-5 max-w-3xl mx-auto">
                 <div>
@@ -572,7 +640,8 @@ export default function LaporanKeadaanMurid() {
 
             {/* ===== BAGIAN: USIA ===== */}
             <div className={`${kelasBagian('usia')} page-break-before-print`}>
-              <h1 className="text-center font-bold text-base uppercase mb-6 mt-8">{TAB_JUDUL.usia}</h1>
+              <h1 className="text-center font-bold text-base uppercase mb-1 mt-8">{TAB_JUDUL.usia}</h1>
+              <KeteranganSemester />
               <table className="w-full text-[10px] border-collapse border border-black">
                 <thead>
                   <tr className="text-center">
@@ -637,7 +706,8 @@ export default function LaporanKeadaanMurid() {
 
             {/* ===== BAGIAN: AGAMA ===== */}
             <div className={`${kelasBagian('agama')} page-break-before-print`}>
-              <h1 className="text-center font-bold text-base uppercase mb-6 mt-8">{TAB_JUDUL.agama}</h1>
+              <h1 className="text-center font-bold text-base uppercase mb-1 mt-8">{TAB_JUDUL.agama}</h1>
+              <KeteranganSemester />
               <table className="w-full text-[10px] border-collapse border border-black">
                 <thead>
                   <tr className="text-center">
@@ -702,7 +772,8 @@ export default function LaporanKeadaanMurid() {
 
             {/* ===== BAGIAN: KEWARGANEGARAAN ===== */}
             <div className={`${kelasBagian('kewarganegaraan')} page-break-before-print`}>
-              <h1 className="text-center font-bold text-base uppercase mb-6 mt-8">{TAB_JUDUL.kewarganegaraan}</h1>
+              <h1 className="text-center font-bold text-base uppercase mb-1 mt-8">{TAB_JUDUL.kewarganegaraan}</h1>
+              <KeteranganSemester />
               <table className="w-full text-[10px] border-collapse border border-black">
                 <thead>
                   <tr className="text-center">
@@ -815,6 +886,25 @@ export default function LaporanKeadaanMurid() {
              bukan hanya tab yang sedang aktif di layar. */
           .laporan-section.tab-nonaktif { display: block !important; }
           .page-break-before-print { break-before: page; page-break-before: always; }
+
+          /* CSS global (index.css) punya aturan:
+               body * { visibility: hidden; }
+               .print-only, .print-only * { visibility: visible; }
+             yang tadinya dibuat khusus untuk Kuitansi/Nota (1 lembar) dan
+             kemungkinan memberi .print-only posisi "fixed" secara default.
+             Di sini di-override jadi "static" supaya keempat bagian laporan
+             yang panjang (lebih dari 1 halaman gabungan) tetap mengalir
+             normal mengikuti page-break di atas, bukan terpotong atau
+             menumpuk di satu titik fixed. Pola sama seperti Cetak8355.jsx /
+             LaporanBiodataGuru.jsx yang sudah terbukti berhasil. */
+          .lembar-cetak.print-only {
+            position: static !important;
+            top: auto !important;
+            left: auto !important;
+            right: auto !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
+          }
         }
         @page {
           size: A4 landscape;
