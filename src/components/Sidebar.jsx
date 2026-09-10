@@ -61,6 +61,7 @@ import {
   Table2,
   Printer,
   FileStack,
+  BookMarked,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
@@ -205,6 +206,11 @@ function getGroupsAdmin(
         // Cetak Sampul: ditaruh berdekatan dengan menu cetak lainnya
         // (Cetak 8355 & Cetak Kartu) supaya mudah ditemukan admin.
         { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
+        // Cabang CetakSampul.jsx dengan jenis laporan sudah terkunci — jadi
+        // admin tidak perlu memilih dari dropdown lagi. Ditaruh persis di
+        // bawah "Cetak Sampul" karena keduanya berasal dari halaman yang sama.
+        { to: '/cetak-sampul-semester', label: 'Sampul Laporan Semester', icon: BookMarked },
+        { to: '/cetak-sampul-8355', label: 'Sampul 8355 (Kelas 6)', icon: FileStack },
         // Manajemen Sekolah dan Persetujuan Toko hanya untuk superadmin.
         ...(isSuperAdmin
           ? [
