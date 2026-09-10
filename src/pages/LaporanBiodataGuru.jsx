@@ -188,14 +188,19 @@ export default function LaporanBiodataGuru() {
           kosong total — itu penyebab bug sebelumnya. Pola ini mengikuti
           Cetak8355.jsx yang sudah terbukti berhasil. */}
       <div className="lembar-cetak print-only bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '210mm', minHeight: '297mm' }}>
-        {/* Kop Surat */}
+        {/* Kop Surat — urutan resmi: Pemerintah Kabupaten / Dinas
+            Pendidikan / Nama Sekolah / Alamat, sesuai format surat
+            dinas yang berlaku. */}
         <div className="flex items-center gap-4 border-b-4 border-black pb-3 mb-4">
           {logoUrl && (
             <img src={logoUrl} alt="Logo" className="w-16 h-16 object-contain shrink-0" />
           )}
           <div className="text-center flex-1">
             <p className="text-sm font-medium uppercase">
-              {profilSekolah?.dinas_pendidikan || 'PEMERINTAH DAERAH'}
+              Pemerintah Kabupaten {profilSekolah?.kabupaten || '...........'}
+            </p>
+            <p className="text-sm font-medium uppercase">
+              {profilSekolah?.dinas_pendidikan || 'Dinas Pendidikan'}
             </p>
             <p className="text-lg font-bold uppercase">{profilSekolah?.nama_sekolah || 'Nama Sekolah'}</p>
             <p className="text-xs">
