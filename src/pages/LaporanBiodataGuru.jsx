@@ -21,6 +21,14 @@ export default function LaporanBiodataGuru() {
   const [daftarGuru, setDaftarGuru] = useState([])
   const [loading, setLoading] = useState(true)
 
+  // Input manual Semester & Tahun Pelajaran — ditampilkan di panel
+  // (no-print) di atas lembar cetak, lalu disisipkan ke teks judul
+  // lembar cetak. Jika tahun dikosongkan, teks tetap fallback ke
+  // titik-titik seperti format aslinya.
+  const [semester, setSemester] = useState('Ganjil')
+  const [tahunAwal, setTahunAwal] = useState('')
+  const [tahunAkhir, setTahunAkhir] = useState('')
+
   // Urutan prioritas status kepegawaian untuk pengurutan tabel: PNS paling
   // atas, lalu PPPK/Kontrak, lalu GTY/Honor, sisanya di akhir.
   function prioritasStatus(statusText) {
@@ -140,6 +148,38 @@ export default function LaporanBiodataGuru() {
         </button>
       </div>
 
+      {/* Panel input Semester & Tahun Pelajaran — hilang saat print.
+          Nilainya dipakai untuk mengisi teks "Semester .../Tahun
+          Pelajaran ..." di lembar cetak di bawah. */}
+      <div className="no-print max-w-md mx-auto mt-4 bg-white border border-slate-200 rounded-lg p-3 flex flex-wrap items-center gap-3 text-sm">
+        <label className="font-medium text-slate-600">Semester</label>
+        <select
+          value={semester}
+          onChange={(e) => setSemester(e.target.value)}
+          className="border border-slate-300 rounded px-2 py-1"
+        >
+          <option value="Ganjil">Ganjil</option>
+          <option value="Genap">Genap</option>
+        </select>
+
+        <label className="font-medium text-slate-600">Tahun Pelajaran</label>
+        <input
+          type="text"
+          value={tahunAwal}
+          onChange={(e) => setTahunAwal(e.target.value)}
+          placeholder="2024"
+          className="border border-slate-300 rounded px-2 py-1 w-20"
+        />
+        <span>/</span>
+        <input
+          type="text"
+          value={tahunAkhir}
+          onChange={(e) => setTahunAkhir(e.target.value)}
+          placeholder="2025"
+          className="border border-slate-300 rounded px-2 py-1 w-20"
+        />
+      </div>
+
       {/* PENTING: class "print-only" ditambahkan di sini. CSS global
           (index.css) menyembunyikan SEMUA elemen saat print kecuali yang
           berkelas print-only (body * { visibility: hidden } lalu
@@ -175,7 +215,9 @@ export default function LaporanBiodataGuru() {
         <h1 className="text-center font-bold text-base uppercase underline mb-1">
           Biodata Guru / Pegawai
         </h1>
-        <p className="text-center text-xs mb-4">Semester Ganjil/Genap Tahun Pelajaran ................./................</p>
+        <p className="text-center text-xs mb-4">
+          Semester {semester} Tahun Pelajaran {tahunAwal || '................'}/{tahunAkhir || '................'}
+        </p>
 
         <div className="text-xs mb-4 grid grid-cols-[120px_1fr] gap-y-0.5 max-w-xs">
           <span>Sekolah</span>
