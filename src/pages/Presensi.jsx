@@ -64,7 +64,7 @@ function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 
   )
 }
 
-function fotoGuruUrl(path) {
+function fotoUrl(path) {
   if (!path) return null
   return supabase.storage.from('foto-profil').getPublicUrl(path).data.publicUrl
 }
@@ -80,10 +80,11 @@ function jamLabel(iso) {
 }
 
 // ============================================================
-// Modul Kamera: ambil satu foto bukti kehadiran untuk satu guru.
+// Modul Kamera: ambil satu foto bukti kehadiran untuk satu orang
+// (guru ATAU pegawai kantor — cukup butuh {id, nama_lengkap}).
 // Tidak ada scan QR — murni ambil foto lalu simpan.
 // ============================================================
-function CameraFotoGuru({ guru, tanggal, onSaved, onClose }) {
+function CameraFotoOrang({ orang, tanggal, onSaved, onClose }) {
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
   const streamRef = useRef(null)
@@ -158,7 +159,7 @@ function CameraFotoGuru({ guru, tanggal, onSaved, onClose }) {
   async function gunakanFoto() {
     if (!capturedBlob) return
     setStatus('saving')
-    const path = `${guru.id}/${tanggal}.jpg`
+    const path = `${orang.id}/${tanggal}.jpg`
 
     const { error: uploadError } = await supabase.storage
       .from(BUCKET_BUKTI)
@@ -171,7 +172,7 @@ function CameraFotoGuru({ guru, tanggal, onSaved, onClose }) {
     }
 
     const jamAbsen = new Date().toISOString()
-    await onSaved({ guru, fotoPath: path, jamAbsen })
+    await onSaved({ orang, fotoPath: path, jamAbsen })
     onClose()
   }
 
@@ -190,7 +191,7 @@ function CameraFotoGuru({ guru, tanggal, onSaved, onClose }) {
             </div>
             <div className="min-w-0">
               <h2 className="font-display text-lg font-semibold leading-tight truncate">Foto Bukti Kehadiran</h2>
-              <p className="text-xs text-ink-700/50 truncate">{guru.nama_lengkap}</p>
+              <p className="text-xs text-ink-700/50 truncate">{orang.nama_lengkap}</p>
             </div>
           </div>
           <button type="button" onClick={onClose} className="text-ink-700/40 hover:text-ink-900 shrink-0">
@@ -268,19 +269,20 @@ function CameraFotoGuru({ guru, tanggal, onSaved, onClose }) {
   )
 }
 
+/* ================================================================
+   ==================  JALUR SEKOLAH (tidak berubah)  ==============
+   ================================================================ */
+
 // ============================================================
-// Panel Presensi Pribadi — ditampilkan untuk akun dengan role
-// 'guru' (bukan admin). Menampilkan:
+// Panel Presensi Pribadi (SEKOLAH) — role 'guru' (bukan admin).
 // 1) Presensi diri sendiri hari ini (status + foto bukti)
-// 2) Kalau guru adalah wali kelas, presensi siswa DI KELASNYA
-//    SAJA (tidak bisa lihat/edit kelas lain).
+// 2) Kalau guru adalah wali kelas, presensi siswa DI KELASNYA SAJA.
 // ============================================================
 function PresensiPribadi({ profil }) {
   const hariIni = new Date().toISOString().slice(0, 10)
   const tanggalLabel = new Date(hariIni).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
   const guruId = profil?.guru_id
 
-  // --- Presensi pribadi (guru itu sendiri) ---
   const [dataSaya, setDataSaya] = useState({ status: 'hadir', foto_bukti_path: null, jam_absen: null })
   const [loadingSaya, setLoadingSaya] = useState(true)
   const [savingSaya, setSavingSaya] = useState(false)
@@ -288,8 +290,7 @@ function PresensiPribadi({ profil }) {
   const [savedOfflineSaya, setSavedOfflineSaya] = useState(false)
   const [showCamera, setShowCamera] = useState(false)
 
-  // --- Kelas yang diampu (wali kelas) & presensi siswanya ---
-  const [kelasWali, setKelasWali] = useState(undefined) // undefined = belum dicek, null = bukan wali kelas
+  const [kelasWali, setKelasWali] = useState(undefined)
   const [siswaList, setSiswaList] = useState([])
   const [statusSiswaMap, setStatusSiswaMap] = useState({})
   const [loadingSiswa, setLoadingSiswa] = useState(false)
@@ -337,8 +338,6 @@ function PresensiPribadi({ profil }) {
     setLoadingSaya(false)
   }
 
-  // Cari kelas di mana guru ini menjadi wali_kelas_id — kalau tidak ada,
-  // guru tersebut bukan wali kelas dan bagian presensi siswa disembunyikan.
   async function loadKelasWali() {
     const { data } = await supabase
       .from('kelas')
@@ -446,14 +445,12 @@ function PresensiPribadi({ profil }) {
     setSavingSiswa(false)
   }
 
-  // Cetak daftar hadir siswa kelas yang diampu (wali kelas) — pakai print dialog browser.
   function handlePrintSiswa() {
     window.print()
   }
 
   return (
     <Layout title="Presensi" subtitle="Kehadiran Anda hari ini">
-      {/* Aturan cetak: sembunyikan seluruh halaman kecuali area #print-area-siswa saat mencetak */}
       <style>{`
         @media print {
           body * { visibility: hidden; }
@@ -476,8 +473,8 @@ function PresensiPribadi({ profil }) {
 
         <div className="relative flex items-center gap-4">
           <div className="w-11 h-11 rounded-full bg-white/10 ring-2 ring-white/20 flex items-center justify-center shrink-0 overflow-hidden">
-            {fotoGuruUrl(profil?.foto_profil_path) ? (
-              <img src={fotoGuruUrl(profil.foto_profil_path)} alt={profil?.nama_lengkap} className="w-full h-full object-cover" />
+            {fotoUrl(profil?.foto_profil_path) ? (
+              <img src={fotoUrl(profil.foto_profil_path)} alt={profil?.nama_lengkap} className="w-full h-full object-cover" />
             ) : (
               <ClipboardCheck size={20} className="text-white" />
             )}
@@ -508,7 +505,6 @@ function PresensiPribadi({ profil }) {
         </div>
       ) : (
         <>
-          {/* ===== Presensi Pribadi ===== */}
           <div className="mb-3">
             <h2 className="font-display text-base font-semibold text-ink-900">Presensi Saya</h2>
           </div>
@@ -569,7 +565,6 @@ function PresensiPribadi({ profil }) {
             </div>
           )}
 
-          {/* ===== Presensi Siswa — hanya untuk wali kelas, hanya kelasnya sendiri ===== */}
           {kelasWali && (
             <>
               <div className="mb-3">
@@ -631,7 +626,6 @@ function PresensiPribadi({ profil }) {
                 </div>
               )}
 
-              {/* Area khusus cetak — hanya muncul saat dialog print terbuka (lihat @media print di atas) */}
               <div id="print-area-siswa" className="hidden">
                 <h1 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '2px' }}>
                   Daftar Hadir Siswa
@@ -668,8 +662,8 @@ function PresensiPribadi({ profil }) {
       )}
 
       {showCamera && guruId && (
-        <CameraFotoGuru
-          guru={{ id: guruId, nama_lengkap: profil?.nama_lengkap }}
+        <CameraFotoOrang
+          orang={{ id: guruId, nama_lengkap: profil?.nama_lengkap }}
           tanggal={hariIni}
           onSaved={handleFotoTersimpan}
           onClose={() => setShowCamera(false)}
@@ -680,8 +674,8 @@ function PresensiPribadi({ profil }) {
 }
 
 // ============================================================
-// Halaman Presensi umum (admin): kelola presensi siswa per kelas
-// dan presensi guru untuk semua guru. Tidak berubah dari sebelumnya.
+// Halaman Presensi umum (SEKOLAH, admin): kelola presensi siswa
+// per kelas dan presensi guru untuk semua guru. Tidak berubah.
 // ============================================================
 function PresensiAdmin() {
   const { profil } = useAuth()
@@ -692,14 +686,14 @@ function PresensiAdmin() {
   const [siswaList, setSiswaList] = useState([])
   const [guruList, setGuruList] = useState([])
   const [statusMap, setStatusMap] = useState({})
-  const [buktiMap, setBuktiMap] = useState({}) // { [guru_id]: { foto_bukti_path, jam_absen } }
+  const [buktiMap, setBuktiMap] = useState({})
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [savedOffline, setSavedOffline] = useState(false)
   const [isOffline, setIsOffline] = useState(!navigator.onLine)
   const [queueCount, setQueueCount] = useState(0)
-  const [cameraForGuru, setCameraForGuru] = useState(null) // objek guru yang sedang difoto, atau null
+  const [cameraForGuru, setCameraForGuru] = useState(null)
 
   useEffect(() => {
     supabase.from('kelas').select('id, nama_kelas').order('nama_kelas').then(({ data }) => {
@@ -709,7 +703,6 @@ function PresensiAdmin() {
     supabase.from('guru').select('id, nama_lengkap, foto_profil_path').eq('status', 'aktif').order('nama_lengkap').then(({ data }) => setGuruList(data || []))
   }, [])
 
-  // Pantau status koneksi & sinkronkan antrian otomatis saat online kembali
   useEffect(() => {
     ambilAntrian().then((items) => setQueueCount(items.length))
 
@@ -776,15 +769,12 @@ function PresensiAdmin() {
     setLoading(false)
   }
 
-  // Dipanggil dari modul kamera setelah foto diambil untuk satu guru.
-  // Langsung disimpan ke database (tidak menunggu tombol "Simpan Presensi"),
-  // supaya foto & status tercatat seketika itu juga.
-  async function handleFotoTersimpan({ guru, fotoPath, jamAbsen }) {
-    setStatusMap((prev) => ({ ...prev, [guru.id]: 'hadir' }))
-    setBuktiMap((prev) => ({ ...prev, [guru.id]: { foto_bukti_path: fotoPath, jam_absen: jamAbsen } }))
+  async function handleFotoTersimpan({ orang, fotoPath, jamAbsen }) {
+    setStatusMap((prev) => ({ ...prev, [orang.id]: 'hadir' }))
+    setBuktiMap((prev) => ({ ...prev, [orang.id]: { foto_bukti_path: fotoPath, jam_absen: jamAbsen } }))
 
     const row = {
-      guru_id: guru.id,
+      guru_id: orang.id,
       tanggal,
       status: 'hadir',
       foto_bukti_path: fotoPath,
@@ -824,7 +814,6 @@ function PresensiAdmin() {
     const table = tab === 'siswa' ? 'presensi_siswa' : 'presensi_guru'
     const conflictCol = tab === 'siswa' ? 'siswa_id,tanggal' : 'guru_id,tanggal'
 
-    // Kalau memang sedang offline, langsung simpan ke antrian lokal
     if (!navigator.onLine) {
       await tambahAntrian({ table, conflictCol, rows })
       const sisa = await ambilAntrian()
@@ -838,8 +827,6 @@ function PresensiAdmin() {
     if (!error) {
       setSaved(true)
     } else {
-      // Kadang navigator.onLine bilang online tapi request tetap gagal (koneksi tidak stabil)
-      // — amankan datanya ke antrian lokal supaya tidak hilang
       await tambahAntrian({ table, conflictCol, rows })
       const sisa = await ambilAntrian()
       setQueueCount(sisa.length)
@@ -854,7 +841,6 @@ function PresensiAdmin() {
 
   return (
     <Layout title="Presensi" subtitle="Catat kehadiran siswa dan guru harian">
-      {/* Banner navy — sama seperti Dasbor, Profil Saya, Galeri, Dokumen & Data Siswa, dengan corak batik emas */}
       <div className="relative overflow-hidden rounded-xl p-6 mb-6 bg-gradient-to-br from-blue-900 to-blue-950">
         <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/5 pointer-events-none" />
         <div className="absolute -bottom-14 -left-6 w-32 h-32 rounded-full bg-white/5 pointer-events-none" />
@@ -874,7 +860,6 @@ function PresensiAdmin() {
         </div>
       </div>
 
-      {/* Indikator status koneksi & antrian */}
       {(isOffline || queueCount > 0) && (
         <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-brass-400/15 text-brass-600 text-sm w-fit">
           <WifiOff size={15} />
@@ -925,8 +910,8 @@ function PresensiAdmin() {
                   {tab === 'guru' ? (
                     <div className="flex items-center gap-2.5">
                       <div className="w-8 h-8 rounded-full bg-ink-900/10 ring-1 ring-ink-900/10 overflow-hidden flex items-center justify-center shrink-0">
-                        {fotoGuruUrl(item.foto_profil_path) ? (
-                          <img src={fotoGuruUrl(item.foto_profil_path)} alt={item.nama_lengkap} className="w-full h-full object-cover" />
+                        {fotoUrl(item.foto_profil_path) ? (
+                          <img src={fotoUrl(item.foto_profil_path)} alt={item.nama_lengkap} className="w-full h-full object-cover" />
                         ) : (
                           <span className="text-xs font-semibold text-ink-700/60">{item.nama_lengkap?.[0] || '?'}</span>
                         )}
@@ -993,8 +978,8 @@ function PresensiAdmin() {
       )}
 
       {cameraForGuru && (
-        <CameraFotoGuru
-          guru={cameraForGuru}
+        <CameraFotoOrang
+          orang={cameraForGuru}
           tanggal={tanggal}
           onSaved={handleFotoTersimpan}
           onClose={() => setCameraForGuru(null)}
@@ -1004,21 +989,494 @@ function PresensiAdmin() {
   )
 }
 
+/* ================================================================
+   ==================  JALUR KANTOR (baru)  =========================
+   Tidak ada siswa, tidak ada kelas, tidak ada wali kelas.
+   Sumber data: pegawai_kantor + presensi_pegawai.
+   ================================================================ */
+
 // ============================================================
-// Entry point: pilih tampilan berdasarkan peran yang login.
-// admin -> tampilan umum (semua siswa/guru, bisa pilih tanggal & kelas)
-// guru  -> tampilan pribadi (presensi diri sendiri + presensi siswa
-//          kelas yang diampu sebagai wali kelas, kalau ada)
+// Presensi Pribadi (KANTOR) — untuk akun pegawai biasa (bukan admin).
+// Hanya presensi diri sendiri. Tidak ada bagian "siswa" sama sekali.
+// ============================================================
+function PresensiPegawaiPribadi({ profil }) {
+  const hariIni = new Date().toISOString().slice(0, 10)
+  const tanggalLabel = new Date(hariIni).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+  const pegawaiId = profil?.pegawai_id
+
+  const [dataSaya, setDataSaya] = useState({ status: 'hadir', foto_bukti_path: null, jam_absen: null })
+  const [loadingSaya, setLoadingSaya] = useState(true)
+  const [savingSaya, setSavingSaya] = useState(false)
+  const [savedSaya, setSavedSaya] = useState(false)
+  const [savedOfflineSaya, setSavedOfflineSaya] = useState(false)
+  const [showCamera, setShowCamera] = useState(false)
+
+  const [isOffline, setIsOffline] = useState(!navigator.onLine)
+  const [queueCount, setQueueCount] = useState(0)
+
+  useEffect(() => {
+    if (pegawaiId) loadPresensiSaya()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pegawaiId])
+
+  useEffect(() => {
+    ambilAntrian().then((items) => setQueueCount(items.length))
+    function handleOnline() { setIsOffline(false) }
+    function handleOffline() { setIsOffline(true) }
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [])
+
+  async function loadPresensiSaya() {
+    setLoadingSaya(true)
+    const { data: existing } = await supabase
+      .from('presensi_pegawai')
+      .select('status, foto_bukti_path, jam_absen')
+      .eq('pegawai_id', pegawaiId)
+      .eq('tanggal', hariIni)
+      .maybeSingle()
+    setDataSaya(existing || { status: 'hadir', foto_bukti_path: null, jam_absen: null })
+    setLoadingSaya(false)
+  }
+
+  async function simpanBaris(row) {
+    if (!navigator.onLine) {
+      await tambahAntrian({ table: 'presensi_pegawai', conflictCol: 'pegawai_id,tanggal', rows: [row] })
+      const sisa = await ambilAntrian()
+      setQueueCount(sisa.length)
+      return { offline: true }
+    }
+    const { error } = await supabase.from('presensi_pegawai').upsert([row], { onConflict: 'pegawai_id,tanggal' })
+    if (error) {
+      await tambahAntrian({ table: 'presensi_pegawai', conflictCol: 'pegawai_id,tanggal', rows: [row] })
+      const sisa = await ambilAntrian()
+      setQueueCount(sisa.length)
+      return { offline: true }
+    }
+    return { offline: false }
+  }
+
+  async function handleFotoTersimpan({ fotoPath, jamAbsen }) {
+    setDataSaya((d) => ({ ...d, status: 'hadir', foto_bukti_path: fotoPath, jam_absen: jamAbsen }))
+    await simpanBaris({
+      pegawai_id: pegawaiId, tanggal: hariIni, status: 'hadir', foto_bukti_path: fotoPath, jam_absen: jamAbsen,
+    })
+  }
+
+  async function handleSimpanStatusSaya() {
+    setSavingSaya(true)
+    setSavedSaya(false)
+    setSavedOfflineSaya(false)
+    const hasil = await simpanBaris({
+      pegawai_id: pegawaiId,
+      tanggal: hariIni,
+      status: dataSaya.status,
+      foto_bukti_path: dataSaya.foto_bukti_path ?? null,
+      jam_absen: dataSaya.jam_absen ?? null,
+    })
+    setSavingSaya(false)
+    if (hasil.offline) setSavedOfflineSaya(true)
+    else setSavedSaya(true)
+  }
+
+  return (
+    <Layout title="Presensi Pegawai" subtitle="Kehadiran Anda hari ini">
+      <div className="relative overflow-hidden rounded-xl p-6 mb-6 bg-gradient-to-br from-blue-900 to-blue-950">
+        <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/5 pointer-events-none" />
+        <div className="absolute -bottom-14 -left-6 w-32 h-32 rounded-full bg-white/5 pointer-events-none" />
+        <BatikOverlay patternId="batikPresensiPegawaiSayaBanner" strokeColor="#d4af37" />
+
+        <div className="relative flex items-center gap-4">
+          <div className="w-11 h-11 rounded-full bg-white/10 ring-2 ring-white/20 flex items-center justify-center shrink-0 overflow-hidden">
+            {fotoUrl(profil?.foto_profil_path) ? (
+              <img src={fotoUrl(profil.foto_profil_path)} alt={profil?.nama_lengkap} className="w-full h-full object-cover" />
+            ) : (
+              <ClipboardCheck size={20} className="text-white" />
+            )}
+          </div>
+          <div>
+            <p className="font-display font-semibold text-lg text-white">{profil?.nama_lengkap || 'Presensi Saya'}</p>
+            <p className="text-sm text-blue-200/70 mt-0.5">{tanggalLabel}</p>
+          </div>
+        </div>
+      </div>
+
+      {(isOffline || queueCount > 0) && (
+        <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-brass-400/15 text-brass-600 text-sm w-fit">
+          <WifiOff size={15} />
+          {isOffline
+            ? 'Sedang offline — presensi akan tersimpan sementara di perangkat ini.'
+            : `Menyinkronkan ${queueCount} data presensi yang tertunda...`}
+          {!isOffline && queueCount > 0 && <span className="font-medium">({queueCount} tersisa)</span>}
+        </div>
+      )}
+
+      {!pegawaiId ? (
+        <div className="card p-6 text-center text-ink-700/60">
+          Akun Anda belum terhubung ke data pegawai. Hubungi admin untuk menautkan akun.
+        </div>
+      ) : loadingSaya ? (
+        <div className="card p-6 text-center text-ink-700/50">Memuat...</div>
+      ) : (
+        <div className="card relative overflow-hidden p-5">
+          <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-900 to-brass-400" />
+
+          <div className="mb-5">
+            <label className="block text-xs font-semibold text-ink-700/60 mb-2">Status Kehadiran</label>
+            <div className="flex gap-1.5 flex-wrap">
+              {STATUS_OPTS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setDataSaya((d) => ({ ...d, status: opt.value }))}
+                  className={`badge cursor-pointer border ${dataSaya.status === opt.value ? opt.color + ' border-transparent' : 'border-ink-900/10 text-ink-700/40'}`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mb-5">
+            <label className="block text-xs font-semibold text-ink-700/60 mb-2">Foto Bukti Kehadiran</label>
+            {dataSaya.foto_bukti_path ? (
+              <button type="button" onClick={() => setShowCamera(true)} className="flex items-center gap-3 group" title="Ambil ulang foto">
+                <img
+                  src={fotoBuktiUrl(dataSaya.foto_bukti_path)}
+                  alt="Bukti presensi"
+                  className="w-14 h-14 rounded-lg object-cover ring-1 ring-ink-900/10 group-hover:ring-blue-900/40"
+                />
+                <span className="text-xs text-ink-700/50">
+                  Diambil pukul {jamLabel(dataSaya.jam_absen) || '—'} · klik untuk ambil ulang
+                </span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowCamera(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-900/10 text-blue-900 text-sm font-medium hover:bg-blue-900/15"
+              >
+                <Camera size={15} /> Ambil Foto
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button onClick={handleSimpanStatusSaya} disabled={savingSaya} className="btn-primary">
+              {savingSaya ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              Simpan Presensi
+            </button>
+            {savedSaya && <span className="text-sm text-sage-500">Tersimpan.</span>}
+            {savedOfflineSaya && <span className="text-sm text-brass-600">Tersimpan lokal — akan dikirim otomatis saat online.</span>}
+          </div>
+        </div>
+      )}
+
+      {showCamera && pegawaiId && (
+        <CameraFotoOrang
+          orang={{ id: pegawaiId, nama_lengkap: profil?.nama_lengkap }}
+          tanggal={hariIni}
+          onSaved={handleFotoTersimpan}
+          onClose={() => setShowCamera(false)}
+        />
+      )}
+    </Layout>
+  )
+}
+
+// ============================================================
+// Presensi Admin (KANTOR): kelola presensi semua pegawai.
+// Tidak ada tab siswa sama sekali — cuma satu daftar pegawai.
+// ============================================================
+function PresensiPegawaiAdmin() {
+  const [tanggal, setTanggal] = useState(() => new Date().toISOString().slice(0, 10))
+  const [pegawaiList, setPegawaiList] = useState([])
+  const [statusMap, setStatusMap] = useState({})
+  const [buktiMap, setBuktiMap] = useState({})
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [savedOffline, setSavedOffline] = useState(false)
+  const [isOffline, setIsOffline] = useState(!navigator.onLine)
+  const [queueCount, setQueueCount] = useState(0)
+  const [cameraForPegawai, setCameraForPegawai] = useState(null)
+
+  useEffect(() => {
+    supabase
+      .from('pegawai_kantor')
+      .select('id, nama_lengkap, jabatan, foto_profil_path')
+      .eq('status', 'aktif')
+      .order('nama_lengkap')
+      .then(({ data }) => setPegawaiList(data || []))
+  }, [])
+
+  useEffect(() => {
+    ambilAntrian().then((items) => setQueueCount(items.length))
+
+    async function handleOnline() {
+      setIsOffline(false)
+      const jumlahTerkirim = await sinkronAntrian(supabase)
+      if (jumlahTerkirim > 0) {
+        const sisa = await ambilAntrian()
+        setQueueCount(sisa.length)
+      }
+    }
+    function handleOffline() {
+      setIsOffline(true)
+    }
+
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (pegawaiList.length) loadPresensiPegawai()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pegawaiList, tanggal])
+
+  async function loadPresensiPegawai() {
+    setLoading(true)
+    setSaved(false)
+    setSavedOffline(false)
+    const { data: existing } = await supabase
+      .from('presensi_pegawai')
+      .select('pegawai_id, status, foto_bukti_path, jam_absen')
+      .eq('tanggal', tanggal)
+
+    const map = {}
+    const bukti = {}
+    ;(existing || []).forEach((e) => {
+      map[e.pegawai_id] = e.status
+      if (e.foto_bukti_path || e.jam_absen) {
+        bukti[e.pegawai_id] = { foto_bukti_path: e.foto_bukti_path, jam_absen: e.jam_absen }
+      }
+    })
+    pegawaiList.forEach((p) => { if (!map[p.id]) map[p.id] = 'hadir' })
+    setStatusMap(map)
+    setBuktiMap(bukti)
+    setLoading(false)
+  }
+
+  async function handleFotoTersimpan({ orang, fotoPath, jamAbsen }) {
+    setStatusMap((prev) => ({ ...prev, [orang.id]: 'hadir' }))
+    setBuktiMap((prev) => ({ ...prev, [orang.id]: { foto_bukti_path: fotoPath, jam_absen: jamAbsen } }))
+
+    const row = {
+      pegawai_id: orang.id,
+      tanggal,
+      status: 'hadir',
+      foto_bukti_path: fotoPath,
+      jam_absen: jamAbsen,
+    }
+
+    if (!navigator.onLine) {
+      await tambahAntrian({ table: 'presensi_pegawai', conflictCol: 'pegawai_id,tanggal', rows: [row] })
+      const sisa = await ambilAntrian()
+      setQueueCount(sisa.length)
+      return
+    }
+
+    const { error } = await supabase.from('presensi_pegawai').upsert([row], { onConflict: 'pegawai_id,tanggal' })
+    if (error) {
+      await tambahAntrian({ table: 'presensi_pegawai', conflictCol: 'pegawai_id,tanggal', rows: [row] })
+      const sisa = await ambilAntrian()
+      setQueueCount(sisa.length)
+    }
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    setSaved(false)
+    setSavedOffline(false)
+
+    const rows = pegawaiList.map((p) => ({
+      pegawai_id: p.id,
+      tanggal,
+      status: statusMap[p.id] || 'hadir',
+      foto_bukti_path: buktiMap[p.id]?.foto_bukti_path ?? null,
+      jam_absen: buktiMap[p.id]?.jam_absen ?? null,
+    }))
+
+    if (!navigator.onLine) {
+      await tambahAntrian({ table: 'presensi_pegawai', conflictCol: 'pegawai_id,tanggal', rows })
+      const sisa = await ambilAntrian()
+      setQueueCount(sisa.length)
+      setSaving(false)
+      setSavedOffline(true)
+      return
+    }
+
+    const { error } = await supabase.from('presensi_pegawai').upsert(rows, { onConflict: 'pegawai_id,tanggal' })
+    if (!error) {
+      setSaved(true)
+    } else {
+      await tambahAntrian({ table: 'presensi_pegawai', conflictCol: 'pegawai_id,tanggal', rows })
+      const sisa = await ambilAntrian()
+      setQueueCount(sisa.length)
+      setSavedOffline(true)
+    }
+    setSaving(false)
+  }
+
+  const tanggalLabel = new Date(tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+
+  return (
+    <Layout title="Presensi Pegawai" subtitle="Catat kehadiran pegawai harian">
+      <div className="relative overflow-hidden rounded-xl p-6 mb-6 bg-gradient-to-br from-blue-900 to-blue-950">
+        <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/5 pointer-events-none" />
+        <div className="absolute -bottom-14 -left-6 w-32 h-32 rounded-full bg-white/5 pointer-events-none" />
+        <BatikOverlay patternId="batikPresensiPegawaiBanner" strokeColor="#d4af37" />
+
+        <div className="relative flex items-center gap-4">
+          <div className="w-11 h-11 rounded-full bg-white/10 ring-2 ring-white/20 flex items-center justify-center shrink-0">
+            <ClipboardCheck size={20} className="text-white" />
+          </div>
+          <div>
+            <p className="font-display font-semibold text-lg text-white">Presensi Pegawai</p>
+            <p className="text-sm text-blue-200/70 mt-0.5">{tanggalLabel}</p>
+          </div>
+        </div>
+      </div>
+
+      {(isOffline || queueCount > 0) && (
+        <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-brass-400/15 text-brass-600 text-sm w-fit">
+          <WifiOff size={15} />
+          {isOffline
+            ? 'Sedang offline — presensi akan tersimpan sementara di perangkat ini.'
+            : `Menyinkronkan ${queueCount} data presensi yang tertunda...`}
+          {!isOffline && queueCount > 0 && <span className="font-medium">({queueCount} tersisa)</span>}
+        </div>
+      )}
+
+      <div className="flex items-center gap-4 mb-5 flex-wrap">
+        <input type="date" className="input-field w-auto" value={tanggal} onChange={(e) => setTanggal(e.target.value)} />
+      </div>
+
+      <div className="card relative overflow-hidden overflow-x-auto">
+        <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-900 to-brass-400" />
+        <table className="table-shell">
+          <thead>
+            <tr>
+              <th>Nama Pegawai</th>
+              <th>Status Kehadiran</th>
+              <th>Foto Bukti</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading && <tr><td colSpan={3} className="text-center py-8 text-ink-700/50">Memuat...</td></tr>}
+            {!loading && pegawaiList.length === 0 && (
+              <tr><td colSpan={3} className="text-center py-8 text-ink-700/50">Belum ada data pegawai aktif.</td></tr>
+            )}
+            {pegawaiList.map((item) => (
+              <tr key={item.id}>
+                <td className="font-medium">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-ink-900/10 ring-1 ring-ink-900/10 overflow-hidden flex items-center justify-center shrink-0">
+                      {fotoUrl(item.foto_profil_path) ? (
+                        <img src={fotoUrl(item.foto_profil_path)} alt={item.nama_lengkap} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-xs font-semibold text-ink-700/60">{item.nama_lengkap?.[0] || '?'}</span>
+                      )}
+                    </div>
+                    <div>
+                      <div>{item.nama_lengkap}</div>
+                      {item.jabatan && <div className="text-xs text-ink-700/40">{item.jabatan}</div>}
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <div className="flex gap-1.5">
+                    {STATUS_OPTS.map((opt) => (
+                      <button key={opt.value} type="button"
+                        onClick={() => setStatusMap({ ...statusMap, [item.id]: opt.value })}
+                        className={`badge cursor-pointer border ${statusMap[item.id] === opt.value ? opt.color + ' border-transparent' : 'border-ink-900/10 text-ink-700/40'}`}>
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </td>
+                <td>
+                  {buktiMap[item.id]?.foto_bukti_path ? (
+                    <button
+                      type="button"
+                      onClick={() => setCameraForPegawai(item)}
+                      className="flex items-center gap-2 group"
+                      title="Ambil ulang foto"
+                    >
+                      <img
+                        src={fotoBuktiUrl(buktiMap[item.id].foto_bukti_path)}
+                        alt="Bukti presensi"
+                        className="w-9 h-9 rounded-lg object-cover ring-1 ring-ink-900/10 group-hover:ring-blue-900/40"
+                      />
+                      <span className="text-xs text-ink-700/50">{jamLabel(buktiMap[item.id].jam_absen) || '—'}</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setCameraForPegawai(item)}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-900/10 text-blue-900 text-xs font-medium hover:bg-blue-900/15"
+                    >
+                      <Camera size={13} /> Ambil Foto
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {pegawaiList.length > 0 && (
+        <div className="mt-4 flex items-center gap-3">
+          <button onClick={handleSave} disabled={saving} className="btn-primary">
+            {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+            Simpan Presensi
+          </button>
+          {saved && <span className="text-sm text-sage-500">Tersimpan.</span>}
+          {savedOffline && <span className="text-sm text-brass-600">Tersimpan lokal — akan dikirim otomatis saat online.</span>}
+        </div>
+      )}
+
+      {cameraForPegawai && (
+        <CameraFotoOrang
+          orang={cameraForPegawai}
+          tanggal={tanggal}
+          onSaved={handleFotoTersimpan}
+          onClose={() => setCameraForPegawai(null)}
+        />
+      )}
+    </Layout>
+  )
+}
+
+// ============================================================
+// Entry point: pilih tampilan berdasarkan jenis_organisasi & peran.
+// - kantor + admin  -> PresensiPegawaiAdmin  (semua pegawai)
+// - kantor + bukan  -> PresensiPegawaiPribadi (diri sendiri saja)
+// - sekolah + admin -> PresensiAdmin          (siswa & guru, seperti semula)
+// - sekolah + bukan -> PresensiPribadi        (diri sendiri + wali kelas, seperti semula)
 // ============================================================
 export default function Presensi() {
-  const { profil, isAdmin, loading } = useAuth()
+  const { profil, isAdmin, isKantor, loading } = useAuth()
 
   if (loading) {
     return (
-      <Layout title="Presensi" subtitle="Catat kehadiran siswa dan guru harian">
+      <Layout title="Presensi" subtitle="Catat kehadiran harian">
         <div className="card p-6 text-center text-ink-700/50">Memuat...</div>
       </Layout>
     )
+  }
+
+  if (isKantor) {
+    return isAdmin ? <PresensiPegawaiAdmin /> : <PresensiPegawaiPribadi profil={profil} />
   }
 
   return isAdmin ? <PresensiAdmin /> : <PresensiPribadi profil={profil} />
