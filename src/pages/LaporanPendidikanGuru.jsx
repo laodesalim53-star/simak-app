@@ -32,17 +32,10 @@ export default function LaporanPendidikanGuru() {
   const [daftarGuru, setDaftarGuru] = useState([])
   const [loading, setLoading] = useState(true)
 
-  // Input manual Semester & Tahun Pelajaran — ditampilkan di panel
-  // (no-print) di atas lembar cetak, lalu disisipkan ke teks judul
-  // lembar cetak. Jika tahun dikosongkan, teks tetap fallback ke
-  // titik-titik seperti format aslinya. Pola sama seperti
-  // LaporanBiodataGuru.jsx.
   const [semester, setSemester] = useState('Ganjil')
   const [tahunAwal, setTahunAwal] = useState('')
   const [tahunAkhir, setTahunAkhir] = useState('')
 
-  // Urutan prioritas status kepegawaian untuk pengurutan tabel: PNS paling
-  // atas, lalu PPPK/Kontrak, lalu GTY/Honor, sisanya di akhir.
   function prioritasStatus(statusText) {
     const t = (statusText || '').toLowerCase()
     if (t.includes('pns')) return 1
@@ -51,8 +44,6 @@ export default function LaporanPendidikanGuru() {
     return 4
   }
 
-  // Kepala Sekolah selalu ditempatkan paling atas, terlepas dari status
-  // kepegawaiannya — dideteksi dari kolom tugas_tambahan / jenis_ptk.
   function isKepalaSekolah(g) {
     const jabatan = `${g.tugas_tambahan || ''} ${g.jenis_ptk || ''}`.toLowerCase()
     return jabatan.includes('kepala sekolah')
@@ -112,15 +103,6 @@ export default function LaporanPendidikanGuru() {
     return new Date(tgl).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
   }
 
-  // Membuang awalan "PEMERINTAH KABUPATEN" / "KABUPATEN" pada nilai supaya
-  // tidak dobel dengan label "Kabupaten" yang sudah ada di depannya
-  // (mis. field profilSekolah.kabupaten berisi "PEMERINTAH KABUPATEN
-  // KEPULAUAN ARU", padahal labelnya sudah "Kabupaten"). Data mentah di
-  // profilSekolah TIDAK diubah — cuma cara menampilkannya di baris ini.
-  // Dipakai juga di kop surat (Pemerintah Kabupaten ...) supaya nama
-  // kabupatennya tidak dobel walau data mentahnya sudah mengandung
-  // prefix "Pemerintah Kabupaten"/"Kabupaten". Pola sama seperti
-  // LaporanKepangkatanGuru.jsx / LaporanNominatifGuru.jsx.
   function formatKabupaten(teks) {
     if (!teks) return '—'
     return (
@@ -141,7 +123,6 @@ export default function LaporanPendidikanGuru() {
 
   return (
     <div className="min-h-screen bg-slate-100">
-      {/* Toolbar — hilang saat dicetak */}
       <div className="no-print sticky top-0 z-10 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
         <button
           onClick={() => navigate(-1)}
@@ -157,10 +138,6 @@ export default function LaporanPendidikanGuru() {
         </button>
       </div>
 
-      {/* Panel input Semester & Tahun Pelajaran — hilang saat print.
-          Nilainya dipakai untuk mengisi teks "Semester .../Tahun
-          Pelajaran ..." di lembar cetak di bawah. Pola sama seperti
-          LaporanBiodataGuru.jsx. */}
       <div className="no-print max-w-md mx-auto mt-4 bg-white border border-slate-200 rounded-lg p-3 flex flex-wrap items-center gap-3 text-sm">
         <label className="font-medium text-slate-600">Semester</label>
         <select
@@ -190,18 +167,7 @@ export default function LaporanPendidikanGuru() {
         />
       </div>
 
-      {/* PENTING: class "print-only" ditambahkan di sini. CSS global
-          (index.css) menyembunyikan SEMUA elemen saat print kecuali yang
-          berkelas print-only (body * { visibility: hidden } lalu
-          .print-only, .print-only * { visibility: visible }). Tanpa class
-          ini, div lembar cetak ikut tersembunyi dan hasil print jadi
-          kosong total. Pola sama seperti Cetak8355.jsx / LaporanBiodataGuru.jsx
-          yang sudah terbukti berhasil. */}
       <div className="lembar-cetak print-only bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '297mm', minHeight: '210mm' }}>
-        {/* Kop Surat — urutan resmi: Pemerintah Kabupaten / Dinas
-            Pendidikan / Nama Sekolah / Alamat. Nama kabupaten dilewatkan
-            lewat formatKabupaten() supaya tidak dobel kalau data mentahnya
-            sudah mengandung prefix "Pemerintah Kabupaten"/"Kabupaten". */}
         <div className="flex items-center gap-4 border-b-4 border-black pb-3 mb-4">
           {logoUrl && (
             <img src={logoUrl} alt="Logo" className="w-16 h-16 object-contain shrink-0" />
@@ -210,4 +176,126 @@ export default function LaporanPendidikanGuru() {
             <p className="text-sm font-medium uppercase">
               Pemerintah Kabupaten {formatKabupaten(profilSekolah?.kabupaten)}
             </p>
-            <p className="text-sm font-medium
+            <p className="text-sm font-medium uppercase">
+              {profilSekolah?.dinas_pendidikan || 'Dinas Pendidikan'}
+            </p>
+            <p className="text-lg font-bold uppercase">{profilSekolah?.nama_sekolah || 'Nama Sekolah'}</p>
+            <p className="text-xs">
+              {[profilSekolah?.alamat, profilSekolah?.kecamatan, profilSekolah?.kabupaten, profilSekolah?.provinsi]
+                .filter(Boolean)
+                .join(', ')}
+              {profilSekolah?.kode_pos ? ` ${profilSekolah.kode_pos}` : ''}
+            </p>
+            {(profilSekolah?.telepon || profilSekolah?.email || profilSekolah?.website) && (
+              <p className="text-xs">
+                {[profilSekolah?.telepon, profilSekolah?.email, profilSekolah?.website].filter(Boolean).join(' | ')}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <h1 className="text-center font-bold text-base uppercase underline mb-1">
+          Data Pendidikan Guru / Pegawai
+        </h1>
+        <p className="text-center text-xs mb-4">
+          Semester {semester} Tahun Pelajaran {tahunAwal || '................'}/{tahunAkhir || '................'}
+        </p>
+
+        <div className="text-xs mb-4 grid grid-cols-[120px_1fr] gap-y-0.5 max-w-xs">
+          <span>Sekolah</span>
+          <span>: {profilSekolah?.nama_sekolah || '—'}</span>
+          <span>Kecamatan</span>
+          <span>: {profilSekolah?.kecamatan || '—'}</span>
+          <span>Kabupaten</span>
+          <span>: {formatKabupaten(profilSekolah?.kabupaten)}</span>
+        </div>
+
+        <table className="w-full text-[10px] border-collapse border border-black">
+          <thead>
+            <tr className="text-center">
+              <th rowSpan={2} className="border border-black px-1 py-1 w-6">No</th>
+              <th rowSpan={2} className="border border-black px-1 py-1">Nama Guru / Pegawai</th>
+              <th colSpan={5} className="border border-black px-1 py-1">Pendidikan / Ijazah Terakhir</th>
+              <th rowSpan={2} className="border border-black px-1 py-1">Penataran yang Pernah Diikuti</th>
+              <th rowSpan={2} className="border border-black px-1 py-1">Mulai Kerja Di Sini</th>
+            </tr>
+            <tr className="text-center">
+              <th className="border border-black px-1 py-1">Nama Lembaga Pendidikan</th>
+              <th className="border border-black px-1 py-1 w-16">Jenjang</th>
+              <th className="border border-black px-1 py-1">Fakultas</th>
+              <th className="border border-black px-1 py-1">Jurusan</th>
+              <th className="border border-black px-1 py-1 w-12">Tahun</th>
+            </tr>
+          </thead>
+          <tbody>
+            {daftarGuru.length === 0 ? (
+              <tr>
+                <td colSpan={9} className="border border-black text-center py-4 text-slate-400">
+                  Belum ada data guru untuk sekolah ini.
+                </td>
+              </tr>
+            ) : (
+              daftarGuru.map((g, i) => (
+                <tr key={g.id}>
+                  <td className="border border-black px-1 py-1 text-center">{i + 1}</td>
+                  <td className="border border-black px-1 py-1">{g.nama_lengkap || '—'}</td>
+                  <td className="border border-black px-1 py-1">{g.nama_lembaga_pendidikan || '—'}</td>
+                  <td className="border border-black px-1 py-1">{g.pendidikan_terakhir || '—'}</td>
+                  <td className="border border-black px-1 py-1">{g.fakultas || '—'}</td>
+                  <td className="border border-black px-1 py-1">{g.jurusan || '—'}</td>
+                  <td className="border border-black px-1 py-1 text-center">{g.tahun_lulus || '—'}</td>
+                  <td className="border border-black px-1 py-1">{g.penataran_diklat || '—'}</td>
+                  <td className="border border-black px-1 py-1">{formatTanggal(g.tmt_pengangkatan)}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+
+        <div className="flex justify-end mt-10">
+          <div className="text-center text-xs w-64">
+            <p>
+              {profilSekolah?.tempat_ttd || profilSekolah?.kecamatan || '............'},{' '}
+              {new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}
+            </p>
+            <p className="mt-1">Mengetahui,</p>
+            <p>Kepala Sekolah</p>
+            <div className="h-16" />
+            <p className="font-semibold underline">{profilSekolah?.kepala_sekolah || '............................'}</p>
+            <p>NIP. {profilSekolah?.nip_kepala_sekolah || '............................'}</p>
+          </div>
+        </div>
+      </div>
+
+      <style>{`
+        .lembar-cetak.print-only {
+          position: static !important;
+          top: auto !important;
+          left: auto !important;
+          right: auto !important;
+          margin-left: auto !important;
+          margin-right: auto !important;
+        }
+
+        @media screen {
+          .lembar-cetak.print-only {
+            display: block !important;
+          }
+        }
+        @media print {
+          .no-print { display: none !important; }
+          body { background: white; }
+          .lembar-cetak {
+            box-shadow: none !important;
+            margin: 0 !important;
+            width: 100% !important;
+          }
+        }
+        @page {
+          size: A4 landscape;
+          margin: 12mm;
+        }
+      `}</style>
+    </div>
+  )
+}
