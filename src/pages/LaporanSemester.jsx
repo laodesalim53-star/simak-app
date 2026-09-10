@@ -258,7 +258,15 @@ export default function LaporanSemester() {
         )}
       </div>
 
-      <div className="lembar-cetak print-only bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '210mm' }}>
+      {/* CATATAN: SENGAJA TIDAK memakai class "print-only" (beda dari
+          KuitansiPrintTemplate/NotaPrintTemplate). Aturan global di
+          index.css punya `@media screen { .print-only { display: none } }`
+          yang didesain untuk template cetak yang memang tidak pernah
+          tampil di layar. Halaman ini butuh tampil (untuk diisi manual)
+          DAN tercetak, jadi cukup andalkan `.no-print` untuk sembunyikan
+          toolbar saat print — tidak perlu isolasi body* karena halaman
+          ini berdiri sendiri, tanpa Sidebar/Layout aplikasi di sekitarnya. */}
+      <div className="lembar-cetak bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '210mm' }}>
         <KopSurat />
 
         <h1 className="text-center font-bold text-base uppercase mb-4">Laporan Semester</h1>
@@ -473,18 +481,6 @@ export default function LaporanSemester() {
           }
           .only-print { display: inline !important; }
           .page-break-before-print { break-before: page; page-break-before: always; }
-
-          /* Sama seperti LaporanKeadaanMurid.jsx: override posisi fixed dari
-             aturan global .print-only supaya laporan multi-halaman mengalir
-             normal, bukan menumpuk di satu titik. */
-          .lembar-cetak.print-only {
-            position: static !important;
-            top: auto !important;
-            left: auto !important;
-            right: auto !important;
-            margin-left: auto !important;
-            margin-right: auto !important;
-          }
         }
         @page {
           size: A4 portrait;
