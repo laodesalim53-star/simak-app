@@ -106,6 +106,23 @@ export default function LaporanTenagaPengajar() {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [key]: value } : r)))
   }
 
+  // Membuang awalan "PEMERINTAH KABUPATEN" / "KABUPATEN" pada nilai supaya
+  // tidak dobel dengan label "Pemerintah Kabupaten" yang sudah ada di kop
+  // surat (mis. field profilSekolah.kabupaten berisi "PEMERINTAH KABUPATEN
+  // KEPULAUAN ARU"). Data mentah di profilSekolah TIDAK diubah — cuma cara
+  // menampilkannya di baris kop surat. Pola sama seperti
+  // LaporanKepangkatanGuru.jsx / LaporanNominatifGuru.jsx /
+  // LaporanPendidikanGuru.jsx / LaporanTanggunganKeluarga.jsx.
+  function formatKabupaten(teks) {
+    if (!teks) return '—'
+    return (
+      teks
+        .replace(/^PEMERINTAH\s+KABUPATEN\s+/i, '')
+        .replace(/^KABUPATEN\s+/i, '')
+        .trim() || '—'
+    )
+  }
+
   // Sel isian kecil dipakai berulang untuk kolom-kolom manual di tabel.
   function SelIsian({ value, onChange, width = 34 }) {
     return (
@@ -188,12 +205,18 @@ export default function LaporanTenagaPengajar() {
           kosong total. Pola sama seperti Cetak8355.jsx / LaporanBiodataGuru.jsx
           yang sudah terbukti berhasil. */}
       <div className="lembar-cetak print-only bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '330mm', minHeight: '210mm' }}>
-        {/* Kop Surat */}
+        {/* Kop Surat — urutan resmi: Pemerintah Kabupaten / Dinas
+            Pendidikan / Nama Sekolah / Alamat. Nama kabupaten dilewatkan
+            lewat formatKabupaten() supaya tidak dobel kalau data mentahnya
+            sudah mengandung prefix "Pemerintah Kabupaten"/"Kabupaten". */}
         <div className="flex items-center gap-4 border-b-4 border-black pb-3 mb-4">
           {logoUrl && <img src={logoUrl} alt="Logo" className="w-16 h-16 object-contain shrink-0" />}
           <div className="text-center flex-1">
             <p className="text-sm font-medium uppercase">
-              {profilSekolah?.dinas_pendidikan || 'PEMERINTAH DAERAH'}
+              Pemerintah Kabupaten {formatKabupaten(profilSekolah?.kabupaten)}
+            </p>
+            <p className="text-sm font-medium uppercase">
+              {profilSekolah?.dinas_pendidikan || 'Dinas Pendidikan'}
             </p>
             <p className="text-lg font-bold uppercase">{profilSekolah?.nama_sekolah || 'Nama Sekolah'}</p>
             <p className="text-xs">
