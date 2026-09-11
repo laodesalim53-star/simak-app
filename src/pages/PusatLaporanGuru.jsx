@@ -9,6 +9,8 @@ import {
   School,
   ClipboardList,
   CalendarCheck,
+  ClipboardEdit,
+  Printer,
   Lock,
 } from 'lucide-react'
 import Layout from '../components/Layout'
@@ -92,6 +94,26 @@ const daftarLaporan = [
     deskripsi: 'Format kertas absensi bulanan (grid tanggal 1–31) lengkap dengan rekap Sakit/Izin/Tanpa Keterangan dan tanda tangan kepala sekolah.',
     icon: CalendarCheck,
     path: '/laporan-daftar-hadir-guru',
+    siap: true,
+  },
+  // Formulir 8355 (Daftar Calon Peserta Ujian, Kelas 6) — dipindahkan ke sini
+  // supaya satu pintu dengan laporan kepegawaian guru lainnya, tidak perlu
+  // menu tersendiri di Sidebar. Dua kartu: input data mentahnya (Data Ujian
+  // 8355) dan halaman cetak 3 lampirannya (Cetak 8355).
+  {
+    id: 'data-ujian-8355',
+    judul: 'Data Ujian 8355',
+    deskripsi: 'Input dan kelola data siswa Kelas 6 yang dipakai untuk formulir 8355 (data orang tua, kode peserta, dsb).',
+    icon: ClipboardEdit,
+    path: '/data-ujian-8355',
+    siap: true,
+  },
+  {
+    id: 'cetak-8355',
+    judul: 'Cetak 8355',
+    deskripsi: 'Cetak 3 lampiran Daftar Calon Peserta Ujian (8355) untuk siswa Kelas 6, siap unduh sebagai PDF.',
+    icon: Printer,
+    path: '/cetak-8355',
     siap: true,
   },
 ]
