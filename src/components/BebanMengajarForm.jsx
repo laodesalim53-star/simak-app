@@ -36,6 +36,16 @@ function tingkatToRomawi(tingkat) {
   return t.toUpperCase();
 }
 
+// Ubah nilai "tingkat" jadi angka 1-6 (dipakai untuk tahu kolom kelas_1..
+// kelas_6 mana yang harus diisi otomatis untuk guru kelas bersangkutan).
+function tingkatToAngka(tingkat) {
+  const t = String(tingkat || "").trim();
+  const n = Number(t);
+  if (Number.isInteger(n) && n >= 1 && n <= 6) return n;
+  const idx = ROMAWI.indexOf(t.toUpperCase());
+  return idx === -1 ? null : idx + 1;
+}
+
 export default function BebanMengajarForm({ sekolah }) {
   // Pakai isAdmin dari AuthContext (sudah mencakup admin/admin_utama/superadmin
   // dan role lain yang dianggap admin di seluruh app) — bukan query manual
@@ -58,6 +68,9 @@ export default function BebanMengajarForm({ sekolah }) {
   // guru_id -> "Wali Kelas III" (atau gabungan kalau satu guru jadi wali
   // lebih dari satu kelas), diambil dari tabel kelas.wali_kelas_id
   const [waliKelasMap, setWaliKelasMap] = useState({});
+  // guru_id -> [1,3,...] daftar angka kelas (1-6) tempat guru itu jadi wali,
+  // dipakai untuk otomatis isi 24 jam di kolom kelas_1..kelas_6 yang sesuai
+  const [waliKelasAngkaMap, setWaliKelasAngkaMap] = useState({});
 
   useEffect(() => {
     async function loadGuru() {
@@ -85,25 +98,30 @@ export default function BebanMengajarForm({ sekolah }) {
       });
 
       setRows(
-        sorted.map((g, idx) => ({
-          guru_id: g.id,
-          nip: g.nip,
-          nama_lengkap: g.nama_lengkap,
-          pangkat_golongan: g.pangkat_golongan || "",
-          status_kepegawaian: g.status_kepegawaian || "",
-          jabatan: g.mata_pelajaran || "",
-          kelas_1: 0,
-          kelas_2: 0,
-          kelas_3: 0,
-          kelas_4: 0,
-          kelas_5: 0,
-          kelas_6: 0,
-          mengajar_sekolah_lain: 0,
-          tugas_tambahan: "",
-          tugas_tambahan_jam: 0,
-          keterangan: "",
-          urutan: idx + 1,
-        }))
+        sorted.map((g, idx) => {
+          const isKepsek = (g.mata_pelajaran || "").toLowerCase().includes("kepala sekolah");
+          return {
+            guru_id: g.id,
+            nip: g.nip,
+            nama_lengkap: g.nama_lengkap,
+            pangkat_golongan: g.pangkat_golongan || "",
+            status_kepegawaian: g.status_kepegawaian || "",
+            jabatan: g.mata_pelajaran || "",
+            kelas_1: 0,
+            kelas_2: 0,
+            kelas_3: 0,
+            kelas_4: 0,
+            kelas_5: 0,
+            kelas_6: 0,
+            mengajar_sekolah_lain: 0,
+            tugas_tambahan: "",
+            // Kepala Sekolah otomatis diberi tugas tambahan 16 jam — tetap
+            // bisa diedit manual lewat kolom "Jam TT" seperti biasa.
+            tugas_tambahan_jam: isKepsek ? 16 : 0,
+            keterangan: "",
+            urutan: idx + 1,
+          };
+        })
       );
     }
     loadGuru();
@@ -131,34 +149,60 @@ export default function BebanMengajarForm({ sekolah }) {
       }
 
       const map = {};
+      const angkaMap = {};
       (data || []).forEach((k) => {
         if (!k.wali_kelas_id) return;
         const label = `Wali Kelas ${tingkatToRomawi(k.tingkat)}`;
         map[k.wali_kelas_id] = map[k.wali_kelas_id]
           ? `${map[k.wali_kelas_id]}, ${label}`
           : label;
+
+        const angka = tingkatToAngka(k.tingkat);
+        if (angka) {
+          angkaMap[k.wali_kelas_id] = angkaMap[k.wali_kelas_id]
+            ? [...angkaMap[k.wali_kelas_id], angka]
+            : [angka];
+        }
       });
       setWaliKelasMap(map);
+      setWaliKelasAngkaMap(angkaMap);
     }
     loadWaliKelas();
   }, [sekolah?.sekolah_id, tahunAjaran]);
 
-  // Isi otomatis kolom "Tugas Tambahan" untuk guru yang tercatat sebagai
-  // wali kelas — HANYA kalau kolomnya masih kosong, supaya tidak menimpa
+  // Isi otomatis kolom "Tugas Tambahan" (label wali kelas) DAN kolom
+  // kelas_1..kelas_6 (24 jam) untuk guru kelas yang tercatat sebagai wali
+  // kelas — HANYA kalau kolomnya masih kosong/0, supaya tidak menimpa
   // perubahan manual yang sudah dilakukan user. Tetap bisa diedit setelahnya.
   useEffect(() => {
-    if (Object.keys(waliKelasMap).length === 0) return;
+    if (Object.keys(waliKelasMap).length === 0 && Object.keys(waliKelasAngkaMap).length === 0) return;
     setRows((prev) => {
       let changed = false;
       const next = prev.map((r) => {
+        let row = r;
+
         const label = waliKelasMap[r.guru_id];
-        if (!label || r.tugas_tambahan) return r;
-        changed = true;
-        return { ...r, tugas_tambahan: label };
+        if (label && !row.tugas_tambahan) {
+          changed = true;
+          row = { ...row, tugas_tambahan: label };
+        }
+
+        const daftarKelas = waliKelasAngkaMap[r.guru_id];
+        if (daftarKelas) {
+          daftarKelas.forEach((n) => {
+            const field = `kelas_${n}`;
+            if (Number(row[field]) === 0) {
+              changed = true;
+              row = { ...row, [field]: 24 };
+            }
+          });
+        }
+
+        return row;
       });
       return changed ? next : prev;
     });
-  }, [waliKelasMap, rows.length]);
+  }, [waliKelasMap, waliKelasAngkaMap, rows.length]);
 
   function updateRow(guruId, field, value) {
     setRows((prev) =>
