@@ -8,6 +8,7 @@ import {
   BookOpen,
   School,
   ClipboardList,
+  CalendarCheck,
   Lock,
 } from 'lucide-react'
 import Layout from '../components/Layout'
@@ -83,6 +84,14 @@ const daftarLaporan = [
     deskripsi: 'Jam pelajaran per mata pelajaran per kelas, keadaan gedung/ruang sekolah, dan keadaan buku KTSP & K-13.',
     icon: ClipboardList,
     path: '/laporan-semester',
+    siap: true,
+  },
+  {
+    id: 'daftar-hadir-guru',
+    judul: 'Daftar Hadir Guru/Pegawai',
+    deskripsi: 'Format kertas absensi bulanan (grid tanggal 1–31) lengkap dengan rekap Sakit/Izin/Tanpa Keterangan dan tanda tangan kepala sekolah.',
+    icon: CalendarCheck,
+    path: '/laporan-daftar-hadir-guru',
     siap: true,
   },
 ]
