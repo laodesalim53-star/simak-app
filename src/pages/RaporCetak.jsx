@@ -367,7 +367,7 @@ export default function RaporCetak() {
 
       {/* ===================== HALAMAN 1: SAMPUL ===================== */}
       <div className="lembar-cetak print-only max-w-[800px] mx-auto bg-white shadow-lg p-10 text-sm text-ink-950 flex flex-col items-center min-h-[1000px]">
-        <div className="w-28 h-28 mt-10 mb-4 flex items-center justify-center">
+        <div className="w-28 h-28 mt-10 mb-4 mx-auto flex items-center justify-center">
           {logoUrl && <img src={logoUrl} alt="Logo sekolah" className="w-full h-full object-contain" />}
         </div>
         <h1 className="font-display text-2xl font-bold text-center uppercase leading-snug">
@@ -380,12 +380,12 @@ export default function RaporCetak() {
 
         <div className="mt-24 w-full max-w-md text-center">
           <p className="text-ink-700/60 mb-1">Nama Peserta Didik :</p>
-          <div className="border-2 border-ink-950 rounded px-4 py-2 font-bold text-lg uppercase">
+          <div className="border-2 border-ink-950 rounded px-4 py-2 font-bold text-lg uppercase text-center">
             {siswa.nama_lengkap}
           </div>
 
           <p className="text-ink-700/60 mt-6 mb-1">Nomor Induk Siswa</p>
-          <div className="border-2 border-ink-950 rounded px-4 py-2 font-medium">
+          <div className="border-2 border-ink-950 rounded px-4 py-2 font-medium text-center">
             {siswa.nis || '\u00A0'}
           </div>
         </div>
@@ -486,11 +486,11 @@ export default function RaporCetak() {
 
       {/* ===================== HALAMAN 3+: LEMBAR HASIL BELAJAR ===================== */}
       <div className="lembar-cetak print-only max-w-[800px] mx-auto bg-white shadow-lg p-10 text-sm text-ink-950 mt-8 print:mt-0">
-        <div className="flex items-center gap-4 mb-1.5">
-          <div className="w-20 h-20 shrink-0 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-2 mb-1.5">
+          <div className="w-20 h-20 shrink-0 mx-auto flex items-center justify-center">
             {logoUrl && <img src={logoUrl} alt="Logo sekolah" className="w-full h-full object-contain" />}
           </div>
-          <div className="text-center flex-1">
+          <div className="text-center">
             {sekolah?.kabupaten && (
               <p className="font-display font-bold uppercase text-sm tracking-wide">{sekolah.kabupaten}</p>
             )}
@@ -502,7 +502,6 @@ export default function RaporCetak() {
               <p className="font-display font-bold uppercase text-xs tracking-wide">{sekolah.kecamatan}</p>
             )}
           </div>
-          <div className="w-20 shrink-0" />
         </div>
         <div className="border-t-4 border-double border-ink-950 mb-1" />
         <div className="border-t border-ink-950 mb-4" />
