@@ -158,7 +158,7 @@ export default function RaporCetak() {
         .from('nilai')
         // + kompetensi & jenis, supaya nilai bisa dipecah per Pengetahuan/
         // Keterampilan dan dihitung dengan bobot Tugas/UTS/UAS yang sama
-        // seperti di tab Ringkasan Nilai halaman Rapor.
+        // seperti di tab Ringkasan Nilai halaman Rapor.jsx.
         .select('mata_pelajaran, kompetensi, jenis, nilai')
         .eq('siswa_id', siswaId)
         .eq('semester', semester)
@@ -312,13 +312,50 @@ export default function RaporCetak() {
 
   return (
     <div className="min-h-screen bg-ink-950/5 py-8 print:bg-white print:py-0 print:min-h-0">
+      {/*
+        FIX (halaman kosong saat cetak): sebelumnya div .lembar-cetak di
+        bawah ini TIDAK memakai class "print-only", padahal index.css
+        global memakai .print-only { position: fixed } sebagai mekanisme
+        utama yang menentukan konten apa yang benar-benar tampil saat mode
+        print (persis akar masalah yang sama dengan bug rekap ijazah
+        sebelumnya). Tanpa class print-only, ketiga halaman rapor ini
+        dianggap bukan konten cetak -> hasil cetak jadi kosong.
+        Sekarang ditambahkan class print-only ke tiap .lembar-cetak, plus
+        override CSS berikut mengikuti pola yang sudah teruji di
+        LaporanPendidikanGuru.jsx:
+        - override position ke static (menggantikan position:fixed bawaan
+          index.css) supaya 3 halaman rapor bisa tersusun normal & saling
+          page-break, bukan saling menumpuk/hilang;
+        - override @media screen supaya tetap tampil normal di layar
+          (preview), karena index.css bisa saja menyembunyikan .print-only
+          di layar secara default.
+      */}
       <style>{`
+        .lembar-cetak.print-only {
+          position: static !important;
+          top: auto !important;
+          left: auto !important;
+          right: auto !important;
+          margin-left: auto !important;
+          margin-right: auto !important;
+        }
+
+        @media screen {
+          .lembar-cetak.print-only {
+            display: block !important;
+          }
+        }
+
         @media print {
           .no-print { display: none !important; }
           .lembar-cetak { box-shadow: none !important; margin: 0 !important; }
           .lembar-cetak + .lembar-cetak { page-break-before: always; }
           body { background: white; }
-          @page { size: A4; margin: 14mm; }
+        }
+
+        @page {
+          size: A4;
+          margin: 14mm;
         }
       `}</style>
 
@@ -329,7 +366,7 @@ export default function RaporCetak() {
       </div>
 
       {/* ===================== HALAMAN 1: SAMPUL ===================== */}
-      <div className="lembar-cetak max-w-[800px] mx-auto bg-white shadow-lg p-10 text-sm text-ink-950 flex flex-col items-center min-h-[1000px]">
+      <div className="lembar-cetak print-only max-w-[800px] mx-auto bg-white shadow-lg p-10 text-sm text-ink-950 flex flex-col items-center min-h-[1000px]">
         <div className="w-28 h-28 mt-10 mb-4 flex items-center justify-center">
           {logoUrl && <img src={logoUrl} alt="Logo sekolah" className="w-full h-full object-contain" />}
         </div>
@@ -360,7 +397,7 @@ export default function RaporCetak() {
       </div>
 
       {/* ===================== HALAMAN 2: IDENTITAS ===================== */}
-      <div className="lembar-cetak max-w-[800px] mx-auto bg-white shadow-lg p-10 text-sm text-ink-950 mt-8 print:mt-0">
+      <div className="lembar-cetak print-only max-w-[800px] mx-auto bg-white shadow-lg p-10 text-sm text-ink-950 mt-8 print:mt-0">
         <h2 className="text-center font-display font-bold text-base uppercase mb-4">
           Identitas Sekolah
         </h2>
@@ -448,7 +485,7 @@ export default function RaporCetak() {
       </div>
 
       {/* ===================== HALAMAN 3+: LEMBAR HASIL BELAJAR ===================== */}
-      <div className="lembar-cetak max-w-[800px] mx-auto bg-white shadow-lg p-10 text-sm text-ink-950 mt-8 print:mt-0">
+      <div className="lembar-cetak print-only max-w-[800px] mx-auto bg-white shadow-lg p-10 text-sm text-ink-950 mt-8 print:mt-0">
         <div className="flex items-center gap-4 mb-1.5">
           <div className="w-20 h-20 shrink-0 flex items-center justify-center">
             {logoUrl && <img src={logoUrl} alt="Logo sekolah" className="w-full h-full object-contain" />}
