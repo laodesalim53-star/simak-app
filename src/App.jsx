@@ -53,6 +53,10 @@ import KeuanganKelas from './pages/KeuanganKelas'
 import Kuitansi from './pages/Kuitansi'
 import Nota from './pages/Nota'
 import KuitansiJasa from './pages/KuitansiJasa'
+// Hub Keuangan — halaman ringkasan/menu yang menautkan ke Keuangan, Kuitansi,
+// Kuitansi Jasa, dan Nota (lihat Hub.jsx). Dipakai sebagai titik masuk
+// administrasi keuangan sebelum masuk ke masing-masing modul.
+import HubKeuangan from './pages/Hub'
 import Backup from './pages/Backup'
 import ProfilSekolah from './pages/ProfilSekolah'
 import ManajemenSekolah from './pages/ManajemenSekolah'
@@ -300,6 +304,10 @@ export default function App() {
         <Route path="/agenda" element={<ProtectedRoute><Agenda /></ProtectedRoute>} />
         <Route path="/surat" element={<ProtectedRoute adminOnly><Surat /></ProtectedRoute>} />
         <Route path="/surat-keterangan" element={<ProtectedRoute adminOnly><SuratKeterangan /></ProtectedRoute>} />
+        {/* Hub Keuangan — menu ringkas yang menautkan ke Keuangan, Kuitansi,
+            Kuitansi Jasa, dan Nota (lihat Hub.jsx). adminOnly, sama seperti
+            keempat modul yang dituju, supaya tidak ada tautan mati bagi guru. */}
+        <Route path="/hub-keuangan" element={<ProtectedRoute adminOnly><HubKeuangan /></ProtectedRoute>} />
         <Route path="/keuangan" element={<ProtectedRoute adminOnly><Keuangan /></ProtectedRoute>} />
         {/* Keuangan Kelas: BUKAN adminOnly — ini kas kelas yang dipegang wali kelas (guru),
             admin tetap bisa membuka untuk memantau semua kelas. */}
