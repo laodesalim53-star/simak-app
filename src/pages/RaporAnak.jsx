@@ -10,6 +10,7 @@ import {
   Sparkles,
   Dumbbell,
   Info,
+  Printer,
 } from 'lucide-react'
 
 // ============================================================
@@ -23,6 +24,13 @@ import {
 // Logika hitung Nilai Akhir & agregasi nilai SENGAJA disamakan persis
 // dengan Rapor.jsx (punya Guru) supaya angka yang dilihat orang tua tidak
 // pernah berbeda dari yang dihitung/ditetapkan wali kelas.
+//
+// TOMBOL CETAK RAPOR: membuka /rapor/cetak (RaporCetak.jsx) di tab baru
+// dengan siswaId = anak yang sedang aktif dipilih. RaporCetak.jsx sendiri
+// sudah punya penjagaan tambahan (verifikasiAksesLaluMuat) yang mencocokkan
+// siswaId di URL itu ke getAnakSaya() kalau akun yang login adalah
+// orang_tua — jadi meskipun siswaId di address bar diubah manual, tetap
+// tidak akan menampilkan rapor anak orang lain.
 // ============================================================
 
 const BOBOT_JENIS_NILAI = { Tugas: 0.2, UTS: 0.3, UAS: 0.5 }
@@ -235,21 +243,39 @@ export default function RaporAnak() {
     return kompKey === 'keterampilan' ? info.rataRataKeterampilan : info.rataRataPengetahuan
   }
 
+  // URL cetak: pakai anakId (siswa.id) yang sedang aktif dipilih. Dibuka di
+  // tab baru supaya halaman Rapor Anak (dengan tab-tabnya) tetap terbuka.
+  const urlCetak = siswa
+    ? `/rapor/cetak?siswaId=${encodeURIComponent(anakId)}&semester=${encodeURIComponent(semester)}&tahunAjaran=${encodeURIComponent(tahunAjaran)}`
+    : null
+
   return (
     <Layout title="Rapor Anak" subtitle="Nilai, capaian, P5, ekstrakurikuler & catatan wali kelas — khusus anak Anda">
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#4a0e0e] to-[#7a1515] p-6 mb-6">
-        <div className="relative z-10 flex items-center gap-4">
-          <div className="w-11 h-11 rounded-full bg-white/15 flex items-center justify-center shrink-0">
-            <FileBadge size={20} className="text-paper" />
+        <div className="relative z-10 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-11 h-11 rounded-full bg-white/15 flex items-center justify-center shrink-0">
+              <FileBadge size={20} className="text-paper" />
+            </div>
+            <div>
+              <p className="font-display font-semibold text-lg text-paper">Rapor Anak</p>
+              <p className="text-sm text-paper/70 mt-0.5">
+                {siswa
+                  ? `${siswa.nama_lengkap} · ${siswa.kelas?.nama_kelas || '-'} · Semester ${semester} ${tahunAjaran}`
+                  : 'Memuat data anak...'}
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="font-display font-semibold text-lg text-paper">Rapor Anak</p>
-            <p className="text-sm text-paper/70 mt-0.5">
-              {siswa
-                ? `${siswa.nama_lengkap} · ${siswa.kelas?.nama_kelas || '-'} · Semester ${semester} ${tahunAjaran}`
-                : 'Memuat data anak...'}
-            </p>
-          </div>
+          {urlCetak && (
+            <a
+              href={urlCetak}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 inline-flex items-center gap-2 rounded-lg bg-white/15 hover:bg-white/25 text-paper text-sm font-medium px-4 py-2 transition-colors"
+            >
+              <Printer size={15} /> Cetak Rapor
+            </a>
+          )}
         </div>
         <FileBadge size={120} className="absolute -right-4 -bottom-6 text-white/5 rotate-12" />
       </div>
