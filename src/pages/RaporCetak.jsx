@@ -77,12 +77,18 @@ export default function RaporCetak() {
   // sama seperti pola yang sudah teruji di LaporanNominatifPegawai.jsx
   // dan halaman lain (Galeri, Sidebar). siswaRow?.sekolah_id tetap
   // dipakai sebagai fallback kalau suatu saat kolom itu sudah diisi.
-  const { sekolahId: sekolahIdSaya } = useAuth()
+  const {
+    sekolahId: sekolahIdSaya,
+    isOrangTua,
+    getAnakSaya,
+    loading: authLoading,
+  } = useAuth()
   const siswaId = searchParams.get('siswaId')
   const semester = searchParams.get('semester')
   const tahunAjaran = searchParams.get('tahunAjaran')
 
   const [loading, setLoading] = useState(true)
+  const [aksesDitolak, setAksesDitolak] = useState(false)
   const [siswa, setSiswa] = useState(null)
   const [nilai, setNilai] = useState([])
   const [presensi, setPresensi] = useState({ hadir: 0, izin: 0, sakit: 0, alpa: 0 })
@@ -99,9 +105,34 @@ export default function RaporCetak() {
       setLoading(false)
       return
     }
-    muatSemua()
+    // Tunggu profil auth (role dsb) selesai dimuat dulu, supaya
+    // pengecekan akses orang_tua di bawah tidak sempat kelewat/keliru
+    // (sekaligus mencegah data rapor kelihatan sekilas sebelum sempat
+    // diverifikasi).
+    if (authLoading) return
+    verifikasiAksesLaluMuat()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [siswaId, semester, tahunAjaran, sekolahIdSaya])
+  }, [siswaId, semester, tahunAjaran, sekolahIdSaya, authLoading, isOrangTua])
+
+  // Penjagaan akses: akun orang_tua hanya boleh melihat rapor anaknya
+  // sendiri (status "aktif" di tabel orang_tua_siswa lewat getAnakSaya()).
+  // Tanpa ini, siswaId di URL bisa diganti bebas dan orang tua bisa
+  // melihat rapor siswa lain — role lain (guru/admin) tidak terkena
+  // pengecekan ini, tetap seperti semula.
+  async function verifikasiAksesLaluMuat() {
+    if (isOrangTua) {
+      const { data } = await getAnakSaya()
+      const anakSah = (data || []).some(
+        (a) => a.status === 'aktif' && a.siswa?.id === siswaId
+      )
+      if (!anakSah) {
+        setAksesDitolak(true)
+        setLoading(false)
+        return
+      }
+    }
+    muatSemua()
+  }
 
   async function muatSemua() {
     setLoading(true)
@@ -298,7 +329,15 @@ export default function RaporCetak() {
     )
   }
 
-  if (loading) {
+  if (aksesDitolak) {
+    return (
+      <div className="p-10 text-center text-ink-700/60">
+        Anda tidak memiliki akses untuk melihat rapor siswa ini.
+      </div>
+    )
+  }
+
+  if (loading || authLoading) {
     return (
       <div className="p-10 flex items-center justify-center gap-2 text-ink-700/60">
         <Loader2 size={18} className="animate-spin" /> Memuat rapor...
