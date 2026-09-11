@@ -15,6 +15,7 @@ import {
   LayoutDashboard,
   FileCheck2,
   FileSignature,
+  ScrollText,
 } from 'lucide-react'
 import Layout from '../components/Layout'
 
@@ -135,6 +136,14 @@ const daftarLaporan = [
     deskripsi: 'Buat dan kelola surat keterangan untuk siswa maupun guru, lengkap dengan nomor surat.',
     icon: FileSignature,
     path: '/surat-keterangan',
+    siap: true,
+  },
+  {
+    id: 'ijazah',
+    judul: 'Ijazah',
+    deskripsi: 'Pengisian nilai kelulusan 9 mapel per siswa dan cetak rekap data ijazah kelulusan.',
+    icon: ScrollText,
+    path: '/ijazah',
     siap: true,
   },
 ]
