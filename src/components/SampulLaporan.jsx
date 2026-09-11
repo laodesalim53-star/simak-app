@@ -36,6 +36,12 @@ export const POLA_SAMPUL = [
   { id: 'kop-resmi', label: 'Kop Resmi (Kop 3 Baris + Logo Besar)' },
 ]
 
+// Pilihan label yang tampil di depan field tahun pada sampul. Bisa dipilih
+// bebas dari form — tidak lagi terkunci ke satu jenis laporan saja, supaya
+// laporan data siswa (Tahun Ajaran/Tahun Pelajaran) dan laporan keuangan
+// (Tahun Anggaran) bisa dipakai bergantian dari halaman yang sama.
+export const PILIHAN_LABEL_TAHUN = ['Tahun Anggaran', 'Tahun Ajaran', 'Tahun Pelajaran']
+
 // Dimensi halaman A4 sesuai orientasi yang dipilih user.
 function dimensiHalaman(orientasi) {
   return orientasi === 'landscape'
@@ -939,8 +945,9 @@ const SKALA_PRATINJAU = 0.62
  * - kunciJenisLaporan  : true = dropdown "Jenis Laporan" disembunyikan, jenis laporan tetap
  *                        (dipakai oleh halaman cabang seperti Sampul Semester / Sampul 8355)
  * - subJudulAwal       : isi awal field Sub Judul
- * - labelTahun         : label yang tampil di depan tahun pada sampul, default 'Tahun Anggaran'
- *                        (mis. 'Tahun Ajaran' untuk laporan semester/8355)
+ * - labelTahun         : label AWAL yang tampil di depan tahun pada sampul, default 'Tahun Anggaran'
+ *                        (mis. 'Tahun Ajaran' untuk laporan semester/8355). Pengguna tetap bisa
+ *                        mengganti pilihan ini sendiri lewat dropdown "Label Tahun" di form.
  * - tampilkanBank      : true/false — tampilkan baris Nama Bank & Nomor Rekening di identitas sekolah
  *                        (hanya berlaku untuk Pola Sampul Dekoratif)
  * - tampilkanKelas     : true/false — tampilkan field & baris "Kelas" (dipakai untuk sampul 8355 Kelas 6)
@@ -982,6 +989,9 @@ export default function SampulLaporan({
   const [kelas, setKelas] = useState(kelasAwal)
   const [jenisWilayah, setJenisWilayah] = useState('Kabupaten') // 'Kabupaten' | 'Kota' — khusus Kop Resmi
   const [namaDinas, setNamaDinas] = useState('DINAS PENDIDIKAN DAN KEBUDAYAAN') // khusus Kop Resmi
+  const [labelTahunPilihan, setLabelTahunPilihan] = useState(
+    PILIHAN_LABEL_TAHUN.includes(labelTahun) ? labelTahun : PILIHAN_LABEL_TAHUN[0]
+  )
 
   const judulTampil = jenisLaporan === 'Lainnya (isi bebas)' ? judulBebas : jenisLaporan
 
@@ -1067,12 +1077,12 @@ export default function SampulLaporan({
     judulUtama: judulKopResmi,
     kodeLaporan: kodeKopResmi,
     subJudulEkstra: subJudul,
-    labelTahun,
+    labelTahun: labelTahunPilihan,
     tahunAnggaran,
     orientasi,
   }
 
-  const propsSampul = { logoUrl, judulTampil, subJudul, labelTahun, tahunAnggaran, barisIdentitas, dibuatOleh, orientasi }
+  const propsSampul = { logoUrl, judulTampil, subJudul, labelTahun: labelTahunPilihan, tahunAnggaran, barisIdentitas, dibuatOleh, orientasi }
   const KomponenAktif = KOMPONEN_TEMA[tema] || SampulGelombang
   const dimensi = dimensiHalaman(orientasi)
 
@@ -1250,16 +1260,30 @@ export default function SampulLaporan({
               </label>
             )}
 
-            <label className="text-xs text-slate-500">
-              {labelTahun}
-              <input
-                type="text"
-                value={tahunAnggaran}
-                onChange={(e) => setTahunAnggaran(e.target.value)}
-                placeholder="mis. 2026 / 2027"
-                className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
-              />
-            </label>
+            <div className="grid grid-cols-[auto_1fr] gap-2 items-end">
+              <label className="text-xs text-slate-500">
+                Label
+                <select
+                  value={labelTahunPilihan}
+                  onChange={(e) => setLabelTahunPilihan(e.target.value)}
+                  className="mt-0.5 text-sm border border-slate-300 rounded px-2 py-1.5 font-medium"
+                >
+                  {PILIHAN_LABEL_TAHUN.map((opsi) => (
+                    <option key={opsi} value={opsi}>{opsi}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-xs text-slate-500">
+                Isi Tahun
+                <input
+                  type="text"
+                  value={tahunAnggaran}
+                  onChange={(e) => setTahunAnggaran(e.target.value)}
+                  placeholder="mis. 2026 / 2027"
+                  className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
+                />
+              </label>
+            </div>
 
             {polaSampul === 'dekoratif' && (
               <>
