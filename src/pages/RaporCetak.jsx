@@ -140,6 +140,13 @@ export default function RaporCetak() {
     const idSekolahDipakai =
       sekolahIdSaya || siswaRow?.sekolah_id || siswaRow?.kelas?.wali_kelas?.sekolah_id
 
+    // --- DEBUG SEMENTARA: hapus baris console.log ini setelah masalah
+    // sekolah tidak sinkron selesai didiagnosis ---
+    console.log('DEBUG sekolahIdSaya (dari useAuth):', sekolahIdSaya)
+    console.log('DEBUG siswaRow.sekolah_id:', siswaRow?.sekolah_id)
+    console.log('DEBUG guru.sekolah_id (wali_kelas):', siswaRow?.kelas?.wali_kelas?.sekolah_id)
+    console.log('DEBUG idSekolahDipakai (final dipakai):', idSekolahDipakai)
+
     let profilQuery = supabase.from('profil_sekolah').select('*')
     profilQuery = idSekolahDipakai
       ? profilQuery.eq('sekolah_id', idSekolahDipakai).maybeSingle()
@@ -198,6 +205,8 @@ export default function RaporCetak() {
       profilQuery,
     ])
 
+    // --- DEBUG SEMENTARA: hapus setelah masalah selesai didiagnosis ---
+    console.log('DEBUG sekolahRow hasil query:', sekolahRow)
     setSekolah(sekolahRow || null)
     if (sekolahRow?.logo_path) {
       const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(sekolahRow.logo_path)
