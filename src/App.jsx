@@ -284,6 +284,26 @@ export default function App() {
             komponen lewat isAdmin dari useAuth(). */}
         <Route path="/kalender-pendidikan" element={<ProtectedRoute><KalenderPendidikan /></ProtectedRoute>} />
 
+        {/* ------------------------------------------------------------
+            Arsip Akademik Siswa — halaman "pusat arsip" (pola sama
+            dengan PusatLaporanGuru.jsx) berisi 5 kartu: Ijazah, Surat
+            Keterangan Lulus, Nilai Asesmen, Rapor Siswa, Sertifikat &
+            Penghargaan. Semua kartu SENGAJA tanpa adminOnly.
+            Ijazah (/ijazah) dan Nilai Asesmen (/nilai-asesmen) sudah
+            punya route di atas dan dipakai apa adanya.
+            3 route di bawah ini adalah ALIAS path baru ke komponen yang
+            sudah ada (/skl, /rapor, /sertifikat) — supaya kartu di
+            ArsipAkademikSiswa.jsx bisa langsung pakai path yang
+            diusulkan tanpa menduplikasi komponen.
+            PERLU DICEK: apakah Rapor.jsx dan SertifikatPenghargaan.jsx
+            memang menampilkan data milik siswa yang login saja, atau
+            data semua siswa (versi admin/guru) — kalau versi admin,
+            alias ini perlu diganti ke komponen "versi siswa" terpisah.
+           ------------------------------------------------------------ */}
+        <Route path="/surat-keterangan-lulus" element={<ProtectedRoute><SuratKeteranganLulus /></ProtectedRoute>} />
+        <Route path="/rapor-siswa" element={<ProtectedRoute><Rapor /></ProtectedRoute>} />
+        <Route path="/sertifikat-penghargaan" element={<ProtectedRoute><SertifikatPenghargaan /></ProtectedRoute>} />
+
         {/* ============================================================
             5. HALAMAN ORANG TUA — read-only, anak diambil lewat tabel
                orang_tua_siswa (lihat getAnakSaya di AuthContext)
