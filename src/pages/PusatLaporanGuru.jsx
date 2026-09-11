@@ -125,7 +125,7 @@ const daftarLaporan = [
     judul: 'Surat Keterangan Lulus (SKL)',
     deskripsi: 'Nomor SKL otomatis per siswa Kelas 6, dicetak dari nilai ijazah yang sudah diisi.',
     icon: FileCheck2,
-    path: '/surat-keterangan-lulus',
+    path: '/skl',
     siap: true,
   },
 ]
