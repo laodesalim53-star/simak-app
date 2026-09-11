@@ -6,17 +6,23 @@ import { supabase } from '../lib/supabaseClient'
 
 // Halaman cetak "BIODATA PEGAWAI" — versi KANTOR dari LaporanBiodataGuru.jsx.
 // Bedanya:
-// - Sumber data dari tabel `pegawai_kantor` (bukan `guru`).
 // - Judul tidak menyebut "Guru" sama sekali ("Biodata Pegawai").
 // - Panel & label Semester / Tahun Pelajaran (konsep akademik) DIHAPUS
 //   total — tidak ada state semester/tahunAwal/tahunAkhir, tidak ada
 //   panel input, dan tidak ada baris keterangan semester di kop cetak.
 // - Label "Kepala Sekolah" pada blok tanda tangan diganti "Pimpinan".
 //
-// CATATAN ASUMSI: kolom alamat (alamat_jalan, rt, rw, nama_dusun,
-// desa_kelurahan, kecamatan, kode_pos) mengasumsikan tabel `pegawai_kantor`
-// sudah punya kolom yang sama seperti tabel `guru`. Lihat
-// migration_alamat_pegawai_kantor.sql yang menambahkannya kalau belum ada.
+// FIX (halaman kosong untuk tenant sekolah): sama seperti
+// LaporanNominatifPegawai.jsx — "Biodata Pegawai" harus menampilkan SEMUA
+// pegawai suatu instansi. Untuk tenant kantor (mis. KUA) pegawainya ada
+// di tabel `pegawai_kantor`. Untuk tenant sekolah, pegawainya (guru) ada
+// di tabel `guru`. Tidak ada kolom penanda "jenis instansi" di
+// profil_sekolah, jadi query KEDUA tabel berdasarkan sekolah_id yang
+// sama lalu digabung. Kolom alamat (alamat_jalan, rt, rw, nama_dusun,
+// desa_kelurahan, kecamatan, kode_pos) sudah dicek ADA juga di tabel
+// `guru` (skema sama persis dengan `pegawai_kantor`), jadi tidak perlu
+// migration tambahan. Kolom `jabatan` tidak ada di `guru`, dipetakan
+// dari `tugas_tambahan || jenis_ptk || 'Guru'`.
 export default function LaporanBiodataPegawai() {
   const navigate = useNavigate()
   const { sekolahId: sekolahIdSaya } = useAuth()
@@ -62,12 +68,18 @@ export default function LaporanBiodataPegawai() {
         return
       }
 
-      const [{ data: kantor }, { data: pegawai }] = await Promise.all([
+      const [{ data: kantor }, { data: pegawaiKantor }, { data: guru }] = await Promise.all([
         supabase.from('profil_sekolah').select('*').eq('sekolah_id', sekolahId).maybeSingle(),
         supabase
           .from('pegawai_kantor')
           .select(
             'id, nama_lengkap, jenis_kelamin, tempat_lahir, tanggal_lahir, agama, status_kepegawaian, jenis_ptk, tugas_tambahan, jabatan, alamat_jalan, rt, rw, nama_dusun, desa_kelurahan, kecamatan, kode_pos, status'
+          )
+          .eq('sekolah_id', sekolahId),
+        supabase
+          .from('guru')
+          .select(
+            'id, nama_lengkap, jenis_kelamin, tempat_lahir, tanggal_lahir, agama, status_kepegawaian, jenis_ptk, tugas_tambahan, alamat_jalan, rt, rw, nama_dusun, desa_kelurahan, kecamatan, kode_pos, status'
           )
           .eq('sekolah_id', sekolahId),
       ])
@@ -81,7 +93,15 @@ export default function LaporanBiodataPegawai() {
         setLogoUrl('')
       }
 
-      setDaftarPegawai(urutkanPegawai(pegawai || []))
+      // `guru` tidak punya kolom `jabatan` — dipetakan dari
+      // tugas_tambahan/jenis_ptk, fallback "Guru".
+      const guruSebagaiPegawai = (guru || []).map((g) => ({
+        ...g,
+        jabatan: g.tugas_tambahan || g.jenis_ptk || 'Guru',
+      }))
+
+      const gabungan = [...(pegawaiKantor || []), ...guruSebagaiPegawai]
+      setDaftarPegawai(urutkanPegawai(gabungan))
       setLoading(false)
     }
     muat()
