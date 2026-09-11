@@ -13,7 +13,19 @@ import { supabase } from '../lib/supabaseClient'
 // - Kolom NUPTK dihapus: NUPTK hanya relevan untuk guru, tidak dipakai
 //   oleh pegawai kantor.
 // Pola cetak lainnya (window.print() + CSS @media print) mengikuti
-// persis LaporanNominatifGuru.jsx.
+// persis LaporanNominatifGuru.jsx / LaporanPendidikanGuru.jsx.
+//
+// FIX (halaman print kosong): tabel di laporan ini punya 18 kolom,
+// jauh lebih banyak dari LaporanPendidikanGuru.jsx (9 kolom). Dengan
+// table-layout default (auto), teks panjang di kolom seperti
+// "Tempat, Tgl Lahir", "SK Pengangkatan", "Pangkat/Gol" memaksa lebar
+// total tabel melebihi 297mm (lebar A4 landscape), sehingga saat print
+// kontennya terdorong keluar area halaman pertama — tampak seolah
+// halaman cetak kosong padahal isinya overflow ke luar page. Diperbaiki
+// dengan `table-fixed` + lebar kolom dalam persen (total 100%) dan
+// `break-words` supaya teks panjang membungkus, bukan memperlebar
+// kolom. Dengan ini tabel dijamin selalu pas dalam satu halaman,
+// persis seperti perilaku tabel di LaporanPendidikanGuru.jsx.
 //
 // CATATAN ASUMSI: kop surat & data instansi diasumsikan tetap memakai
 // tabel `profil_sekolah` yang sama (relasi lewat sekolah_id), hanya
@@ -192,32 +204,37 @@ export default function LaporanNominatifPegawai() {
           <span>: {formatKabupaten(profilKantor?.kabupaten)}</span>
         </div>
 
-        <table className="w-full text-[10px] border-collapse border border-black">
+        {/* table-fixed + lebar kolom dalam % (total 100%) supaya tabel
+            18-kolom ini SELALU pas dalam satu halaman A4 landscape,
+            tidak overflow seperti sebelumnya (penyebab halaman print
+            tampak kosong). break-words di td mengizinkan teks panjang
+            membungkus alih-alih memperlebar kolom. */}
+        <table className="w-full table-fixed text-[9px] border-collapse border border-black">
           <thead>
             <tr className="text-center">
-              <th rowSpan={2} className="border border-black px-1 py-1 w-6">No</th>
-              <th rowSpan={2} className="border border-black px-1 py-1">Nama</th>
-              <th rowSpan={2} className="border border-black px-1 py-1">NIP</th>
-              <th colSpan={2} className="border border-black px-1 py-1">L/P</th>
-              <th rowSpan={2} className="border border-black px-1 py-1">Tempat, Tgl Lahir</th>
-              <th rowSpan={2} className="border border-black px-1 py-1">Pangkat/Gol</th>
-              <th colSpan={3} className="border border-black px-1 py-1">Status Kepegawaian</th>
-              <th rowSpan={2} className="border border-black px-1 py-1">SK Pengangkatan</th>
-              <th rowSpan={2} className="border border-black px-1 py-1">TMT</th>
-              <th colSpan={2} className="border border-black px-1 py-1">Masa Kerja</th>
-              <th rowSpan={2} className="border border-black px-1 py-1">Pendidikan Terakhir</th>
-              <th rowSpan={2} className="border border-black px-1 py-1">Jabatan</th>
-              <th rowSpan={2} className="border border-black px-1 py-1">Agama</th>
-              <th rowSpan={2} className="border border-black px-1 py-1">Ket</th>
+              <th rowSpan={2} className="border border-black px-1 py-1" style={{ width: '3%' }}>No</th>
+              <th rowSpan={2} className="border border-black px-1 py-1" style={{ width: '9%' }}>Nama</th>
+              <th rowSpan={2} className="border border-black px-1 py-1" style={{ width: '7%' }}>NIP</th>
+              <th colSpan={2} className="border border-black px-1 py-1" style={{ width: '5%' }}>L/P</th>
+              <th rowSpan={2} className="border border-black px-1 py-1" style={{ width: '9%' }}>Tempat, Tgl Lahir</th>
+              <th rowSpan={2} className="border border-black px-1 py-1" style={{ width: '6%' }}>Pangkat/Gol</th>
+              <th colSpan={3} className="border border-black px-1 py-1" style={{ width: '9%' }}>Status Kepegawaian</th>
+              <th rowSpan={2} className="border border-black px-1 py-1" style={{ width: '8%' }}>SK Pengangkatan</th>
+              <th rowSpan={2} className="border border-black px-1 py-1" style={{ width: '7%' }}>TMT</th>
+              <th colSpan={2} className="border border-black px-1 py-1" style={{ width: '6%' }}>Masa Kerja</th>
+              <th rowSpan={2} className="border border-black px-1 py-1" style={{ width: '8%' }}>Pendidikan Terakhir</th>
+              <th rowSpan={2} className="border border-black px-1 py-1" style={{ width: '8%' }}>Jabatan</th>
+              <th rowSpan={2} className="border border-black px-1 py-1" style={{ width: '5%' }}>Agama</th>
+              <th rowSpan={2} className="border border-black px-1 py-1" style={{ width: '5%' }}>Ket</th>
             </tr>
             <tr className="text-center">
-              <th className="border border-black px-1 py-1 w-5">L</th>
-              <th className="border border-black px-1 py-1 w-5">P</th>
-              <th className="border border-black px-1 py-1 w-6">PNS</th>
-              <th className="border border-black px-1 py-1 w-6">PPPK</th>
-              <th className="border border-black px-1 py-1 w-6">GTY</th>
-              <th className="border border-black px-1 py-1 w-8">Thn</th>
-              <th className="border border-black px-1 py-1 w-8">Bln</th>
+              <th className="border border-black px-1 py-1" style={{ width: '2.5%' }}>L</th>
+              <th className="border border-black px-1 py-1" style={{ width: '2.5%' }}>P</th>
+              <th className="border border-black px-1 py-1" style={{ width: '3%' }}>PNS</th>
+              <th className="border border-black px-1 py-1" style={{ width: '3%' }}>PPPK</th>
+              <th className="border border-black px-1 py-1" style={{ width: '3%' }}>GTY</th>
+              <th className="border border-black px-1 py-1" style={{ width: '3%' }}>Thn</th>
+              <th className="border border-black px-1 py-1" style={{ width: '3%' }}>Bln</th>
             </tr>
           </thead>
           <tbody>
@@ -234,24 +251,24 @@ export default function LaporanNominatifPegawai() {
                 return (
                   <tr key={p.id}>
                     <td className="border border-black px-1 py-1 text-center">{i + 1}</td>
-                    <td className="border border-black px-1 py-1">{p.nama_lengkap || '—'}</td>
-                    <td className="border border-black px-1 py-1">{p.nip || '—'}</td>
+                    <td className="border border-black px-1 py-1 break-words">{p.nama_lengkap || '—'}</td>
+                    <td className="border border-black px-1 py-1 break-words">{p.nip || '—'}</td>
                     <td className="border border-black px-1 py-1 text-center">{lp === 'l' || lp === 'laki-laki' ? 'v' : ''}</td>
                     <td className="border border-black px-1 py-1 text-center">{lp === 'p' || lp === 'perempuan' ? 'v' : ''}</td>
-                    <td className="border border-black px-1 py-1">
+                    <td className="border border-black px-1 py-1 break-words">
                       {p.tempat_lahir || '—'}, {formatTanggal(p.tanggal_lahir)}
                     </td>
-                    <td className="border border-black px-1 py-1">{p.pangkat_golongan || '—'}</td>
+                    <td className="border border-black px-1 py-1 break-words">{p.pangkat_golongan || '—'}</td>
                     <td className="border border-black px-1 py-1 text-center">{tandaiStatus(p.status_kepegawaian, 'pns')}</td>
                     <td className="border border-black px-1 py-1 text-center">{tandaiStatus(p.status_kepegawaian, 'pppk')}</td>
                     <td className="border border-black px-1 py-1 text-center">{tandaiStatus(p.status_kepegawaian, 'gty')}</td>
-                    <td className="border border-black px-1 py-1">{p.sk_pengangkatan || '—'}</td>
-                    <td className="border border-black px-1 py-1">{formatTanggal(p.tmt_pengangkatan)}</td>
+                    <td className="border border-black px-1 py-1 break-words">{p.sk_pengangkatan || '—'}</td>
+                    <td className="border border-black px-1 py-1 break-words">{formatTanggal(p.tmt_pengangkatan)}</td>
                     <td className="border border-black px-1 py-1 text-center">{masaKerja.tahun}</td>
                     <td className="border border-black px-1 py-1 text-center">{masaKerja.bulan}</td>
-                    <td className="border border-black px-1 py-1">{p.pendidikan_terakhir || '—'}</td>
-                    <td className="border border-black px-1 py-1">{p.jabatan || p.tugas_tambahan || p.jenis_ptk || '—'}</td>
-                    <td className="border border-black px-1 py-1">{p.agama || '—'}</td>
+                    <td className="border border-black px-1 py-1 break-words">{p.pendidikan_terakhir || '—'}</td>
+                    <td className="border border-black px-1 py-1 break-words">{p.jabatan || p.tugas_tambahan || p.jenis_ptk || '—'}</td>
+                    <td className="border border-black px-1 py-1 break-words">{p.agama || '—'}</td>
                     <td className="border border-black px-1 py-1"></td>
                   </tr>
                 )
