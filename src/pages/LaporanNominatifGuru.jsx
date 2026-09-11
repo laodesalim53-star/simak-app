@@ -6,7 +6,6 @@ import { supabase } from '../lib/supabaseClient'
 
 // Halaman cetak "DAFTAR NOMINATIF PEGAWAI" — versi KANTOR dari
 // LaporanNominatifGuru.jsx. Bedanya:
-// - Sumber data dari tabel `pegawai_kantor` (bukan `guru`).
 // - Judul tidak menyebut "Guru" sama sekali.
 // - Tidak ada input/label Semester & Tahun Pelajaran (konsep akademik,
 //   tidak relevan untuk kantor).
@@ -15,9 +14,24 @@ import { supabase } from '../lib/supabaseClient'
 // Pola cetak lainnya (window.print() + CSS @media print) mengikuti
 // persis LaporanNominatifGuru.jsx / LaporanPendidikanGuru.jsx.
 //
-// FIX (halaman print kosong): tabel di laporan ini punya 18 kolom,
-// jauh lebih banyak dari LaporanPendidikanGuru.jsx (9 kolom). Dengan
-// table-layout default (auto), teks panjang di kolom seperti
+// FIX (halaman kosong untuk tenant sekolah): "Nominatif Pegawai" harus
+// menampilkan SEMUA pegawai suatu instansi, bukan cuma satu jenis.
+// Untuk tenant kantor (mis. KUA) pegawainya ada di tabel
+// `pegawai_kantor`. Untuk tenant sekolah, pegawainya (guru) ada di
+// tabel `guru`, BUKAN `pegawai_kantor` — makanya sebelumnya laporan
+// ini selalu kosong untuk sekolah walau data guru-nya ada. Tidak ada
+// kolom penanda "jenis instansi" di profil_sekolah, jadi solusinya:
+// query KEDUA tabel berdasarkan sekolah_id yang sama lalu digabung.
+// Kalau instansinya sekolah, hasilnya otomatis cuma dari `guru`. Kalau
+// instansinya kantor, otomatis cuma dari `pegawai_kantor`. Kalau sekolah
+// itu juga punya staf TU/kantor tersendiri di `pegawai_kantor`, keduanya
+// tergabung dalam satu daftar. Kolom `jabatan` tidak ada di tabel `guru`,
+// jadi untuk baris asal guru dipakai `tugas_tambahan || jenis_ptk ||
+// 'Guru'` sebagai gantinya.
+//
+// FIX (halaman print kosong karena overflow): tabel di laporan ini punya
+// 18 kolom, jauh lebih banyak dari LaporanPendidikanGuru.jsx (9 kolom).
+// Dengan table-layout default (auto), teks panjang di kolom seperti
 // "Tempat, Tgl Lahir", "SK Pengangkatan", "Pangkat/Gol" memaksa lebar
 // total tabel melebihi 297mm (lebar A4 landscape), sehingga saat print
 // kontennya terdorong keluar area halaman pertama — tampak seolah
@@ -78,12 +92,18 @@ export default function LaporanNominatifPegawai() {
         return
       }
 
-      const [{ data: kantor }, { data: pegawai }] = await Promise.all([
+      const [{ data: kantor }, { data: pegawaiKantor }, { data: guru }] = await Promise.all([
         supabase.from('profil_sekolah').select('*').eq('sekolah_id', sekolahId).maybeSingle(),
         supabase
           .from('pegawai_kantor')
           .select(
             'id, nip, nama_lengkap, jenis_kelamin, tempat_lahir, tanggal_lahir, pangkat_golongan, status_kepegawaian, jenis_ptk, pendidikan_terakhir, tugas_tambahan, jabatan, agama, sk_pengangkatan, tmt_pengangkatan, status'
+          )
+          .eq('sekolah_id', sekolahId),
+        supabase
+          .from('guru')
+          .select(
+            'id, nip, nama_lengkap, jenis_kelamin, tempat_lahir, tanggal_lahir, pangkat_golongan, status_kepegawaian, jenis_ptk, pendidikan_terakhir, tugas_tambahan, agama, sk_pengangkatan, tmt_pengangkatan, status'
           )
           .eq('sekolah_id', sekolahId),
       ])
@@ -97,7 +117,16 @@ export default function LaporanNominatifPegawai() {
         setLogoUrl('')
       }
 
-      setDaftarPegawai(urutkanPegawai(pegawai || []))
+      // Baris dari `guru` tidak punya kolom `jabatan` (itu khas
+      // `pegawai_kantor`) — dipetakan dari tugas_tambahan/jenis_ptk,
+      // fallback "Guru", supaya tampil wajar di kolom Jabatan.
+      const guruSebagaiPegawai = (guru || []).map((g) => ({
+        ...g,
+        jabatan: g.tugas_tambahan || g.jenis_ptk || 'Guru',
+      }))
+
+      const gabungan = [...(pegawaiKantor || []), ...guruSebagaiPegawai]
+      setDaftarPegawai(urutkanPegawai(gabungan))
       setLoading(false)
     }
     muat()
