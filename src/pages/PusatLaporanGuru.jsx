@@ -13,6 +13,7 @@ import {
   Printer,
   Lock,
   LayoutDashboard,
+  FileCheck2,
 } from 'lucide-react'
 import Layout from '../components/Layout'
 
@@ -115,6 +116,16 @@ const daftarLaporan = [
     deskripsi: 'Cetak 3 lampiran Daftar Calon Peserta Ujian (8355) untuk siswa Kelas 6, siap unduh sebagai PDF.',
     icon: Printer,
     path: '/cetak-8355',
+    siap: true,
+  },
+  // Surat Keterangan Lulus (SKL) — dipindahkan ke sini juga, dengan alasan
+  // yang sama seperti 8355: satu pintu laporan, Sidebar tidak makin panjang.
+  {
+    id: 'surat-keterangan-lulus',
+    judul: 'Surat Keterangan Lulus (SKL)',
+    deskripsi: 'Nomor SKL otomatis per siswa Kelas 6, dicetak dari nilai ijazah yang sudah diisi.',
+    icon: FileCheck2,
+    path: '/surat-keterangan-lulus',
     siap: true,
   },
 ]
