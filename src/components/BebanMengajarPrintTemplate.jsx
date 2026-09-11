@@ -115,11 +115,11 @@ const BebanMengajarPrintTemplate = React.forwardRef(function BebanMengajarPrintT
             />
           )}
           <div style={{ flex: 1, textAlign: "center" }}>
-            {sekolah?.dinas_pendidikan && (
-              <p style={{ fontWeight: "bold", margin: 0 }}>{sekolah.dinas_pendidikan}</p>
-            )}
             {sekolah?.kabupaten && (
               <p style={{ fontWeight: "bold", margin: 0 }}>{sekolah.kabupaten}</p>
+            )}
+            {sekolah?.dinas_pendidikan && (
+              <p style={{ fontWeight: "bold", margin: 0 }}>{sekolah.dinas_pendidikan}</p>
             )}
             <p style={{ fontWeight: "bold", margin: 0, fontSize: "14pt" }}>
               {sekolah?.nama_sekolah || "NAMA SEKOLAH"}
