@@ -29,6 +29,13 @@ export const TEMA_SAMPUL = [
   { id: 'merah-ornamen', label: 'Tema 10 — Merah Ornamen Emas' },
 ]
 
+// Dua pola tata letak sampul yang tersedia. Pola tema warna (TEMA_SAMPUL) tetap
+// sama untuk keduanya — pola ini hanya menentukan SUSUNAN kontennya.
+export const POLA_SAMPUL = [
+  { id: 'dekoratif', label: 'Dekoratif (Logo Bulat + Tabel Identitas)' },
+  { id: 'kop-resmi', label: 'Kop Resmi (Kop 3 Baris + Logo Besar)' },
+]
+
 // Dimensi halaman A4 sesuai orientasi yang dipilih user.
 function dimensiHalaman(orientasi) {
   return orientasi === 'landscape'
@@ -49,6 +56,17 @@ function bersihkanWilayah(nilai, tipe) {
       .replace(/^(kabupaten|kota)\s+/i, '')
   }
   return teks
+}
+
+// Memisahkan judul laporan yang punya kode di dalam kurung di akhir, misal
+// "Daftar Calon Peserta Ujian (8355)" -> judul "Daftar Calon Peserta Ujian"
+// dan kode "8355". Dipakai oleh pola Kop Resmi supaya kode tampil di baris
+// tersendiri persis seperti pada kop dinas resmi.
+function pisahJudulKode(teks) {
+  if (!teks) return { judul: teks || '', kode: '' }
+  const cocok = String(teks).match(/^(.*?)\s*\(([^()]+)\)\s*$/)
+  if (cocok) return { judul: cocok[1].trim(), kode: cocok[2].trim() }
+  return { judul: String(teks).trim(), kode: '' }
 }
 
 // Hiasan sudut berbentuk sulur/flourish emas, dipakai ulang di beberapa tema
@@ -829,6 +847,87 @@ const KOMPONEN_TEMA = {
   'merah-ornamen': SampulMerahOrnamen,
 }
 
+// ---------------------------------------------------------------------------
+// POLA KOP RESMI — satu komponen yang dipakai bersama oleh ke-10 tema warna.
+// Susunannya meniru kop dinas resmi (3 baris kop rata tengah → judul laporan
+// → logo besar di tengah → "TAHUN PELAJARAN/ANGGARAN ..." di bawah), persis
+// pola pada dokumen contoh yang diunggah. Warna & bingkai tiap baris ikut
+// ciri khas temanya masing-masing supaya tetap terasa "bertema".
+// ---------------------------------------------------------------------------
+const GAYA_KOP_RESMI = {
+  gelombang: { background: '#ffffff', border: '2px solid #1e293b', kopColor: '#0f172a', judulColor: '#1e293b', aksenColor: '#38bdf8' },
+  geometris: { background: '#ffffff', border: '2px solid #1e293b', kopColor: '#0f172a', judulColor: '#0f172a', aksenColor: '#f59e0b' },
+  alam: { background: '#f7fdf9', border: '2px solid #86efac', kopColor: '#14532d', judulColor: '#15803d', aksenColor: '#4ade80' },
+  batik: { background: '#fffaf5', border: '2px solid #c2703d', kopColor: '#7c2d12', judulColor: '#9a3412', aksenColor: '#ea580c' },
+  emas: { background: '#0b1229', border: '1px solid #d4af37', kopColor: '#f1f5f9', judulColor: '#facc15', aksenColor: '#d4af37', gelap: true },
+  klasik: { background: '#ffffff', border: '3px double #7f1d1d', border2: '1px solid #d4af37', kopColor: '#7f1d1d', judulColor: '#7f1d1d', aksenColor: '#b8860b' },
+  'navy-zigzag': { background: '#ffffff', border: '2px solid #d4af37', kopColor: '#0f172a', judulColor: '#1e3a8a', aksenColor: '#d4af37' },
+  'daun-hijau': { background: '#fffdf7', border: '1.5px solid #d4af37', border2: '1px solid #86efac', kopColor: '#14532d', judulColor: '#166534', aksenColor: '#d4af37' },
+  'ombak-biru': { background: '#ffffff', border: '1.5px solid #2563eb', kopColor: '#1e3a8a', judulColor: '#1d4ed8', aksenColor: '#2563eb' },
+  'merah-ornamen': { background: '#fdfaf5', border: '3px double #7f1d1d', border2: '1px solid #d4af37', kopColor: '#7f1d1d', judulColor: '#7f1d1d', aksenColor: '#d4af37' },
+}
+
+function SampulKopResmi({ tema, logoUrl, kopBaris1, kopBaris2, kopBaris3, judulUtama, kodeLaporan, subJudulEkstra, labelTahun, tahunAnggaran, orientasi }) {
+  const gaya = GAYA_KOP_RESMI[tema] || GAYA_KOP_RESMI.gelombang
+  return (
+    <div
+      className="lembar-cetak print-only mx-auto my-6 flex flex-col relative overflow-hidden"
+      style={{ ...dimensiHalaman(orientasi), padding: '10mm', background: gaya.background }}
+    >
+      <div
+        className="flex-1 flex flex-col items-center relative overflow-hidden px-10 py-10"
+        style={{ border: gaya.border, borderRadius: '4px' }}
+      >
+        {gaya.border2 && (
+          <div style={{ position: 'absolute', inset: '6px', border: gaya.border2, borderRadius: '2px', zIndex: 0, pointerEvents: 'none' }} />
+        )}
+
+        {/* Kop 3 baris — Pemerintah Kab/Kota, Nama Dinas, Nama Sekolah */}
+        <div className="text-center relative" style={{ zIndex: 1 }}>
+          <p className="font-bold uppercase leading-snug" style={{ color: gaya.kopColor, fontSize: '15px' }}>{kopBaris1 || 'PEMERINTAH KABUPATEN ...'}</p>
+          <p className="font-bold uppercase leading-snug" style={{ color: gaya.kopColor, fontSize: '15px' }}>{kopBaris2 || 'DINAS PENDIDIKAN DAN KEBUDAYAAN'}</p>
+          <p className="font-bold uppercase leading-snug" style={{ color: gaya.kopColor, fontSize: '15px' }}>{kopBaris3 || 'NAMA SEKOLAH'}</p>
+        </div>
+
+        {/* Judul laporan + kode (mis. nomor 8355) */}
+        <div className="text-center mt-7 relative" style={{ zIndex: 1 }}>
+          <h1 className="text-xl font-extrabold uppercase leading-snug max-w-[150mm] mx-auto" style={{ color: gaya.judulColor }}>
+            {judulUtama || 'Judul Laporan'}
+          </h1>
+          {kodeLaporan && (
+            <p className="text-lg font-bold mt-1" style={{ color: gaya.judulColor }}>( {kodeLaporan} )</p>
+          )}
+          {subJudulEkstra && (
+            <p className="text-sm font-semibold uppercase mt-2 tracking-wide" style={{ color: gaya.kopColor }}>{subJudulEkstra}</p>
+          )}
+        </div>
+
+        {/* Logo besar di tengah halaman */}
+        <div className="flex-1 flex items-center justify-center relative w-full" style={{ zIndex: 1 }}>
+          {logoUrl ? (
+            <img src={logoUrl} alt="Logo" className="object-contain" style={{ width: '150px', height: '150px' }} />
+          ) : (
+            <div
+              className="flex items-center justify-center text-xs"
+              style={{ width: '150px', height: '150px', border: `2px dashed ${gaya.aksenColor}`, borderRadius: '8px', color: gaya.kopColor, opacity: 0.6 }}
+            >
+              Logo
+            </div>
+          )}
+        </div>
+
+        {/* Tahun pelajaran/anggaran di bagian bawah */}
+        <div className="text-center relative pb-2" style={{ zIndex: 1 }}>
+          <div className="mx-auto mb-2" style={{ width: '70px', height: '2px', background: gaya.aksenColor }} />
+          <p className="font-bold uppercase" style={{ color: gaya.kopColor, fontSize: '14px' }}>
+            {labelTahun} {tahunAnggaran || '.... / ....'}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Skala tampilan pratinjau di layar (bukan ukuran cetak — cetak tetap A4 penuh).
 const SKALA_PRATINJAU = 0.62
 
@@ -843,9 +942,11 @@ const SKALA_PRATINJAU = 0.62
  * - labelTahun         : label yang tampil di depan tahun pada sampul, default 'Tahun Anggaran'
  *                        (mis. 'Tahun Ajaran' untuk laporan semester/8355)
  * - tampilkanBank      : true/false — tampilkan baris Nama Bank & Nomor Rekening di identitas sekolah
+ *                        (hanya berlaku untuk Pola Sampul Dekoratif)
  * - tampilkanKelas     : true/false — tampilkan field & baris "Kelas" (dipakai untuk sampul 8355 Kelas 6)
  * - kelasAwal          : isi awal field Kelas (mis. 'VI')
  * - labelHalaman       : judul kecil di toolbar (opsional, untuk membedakan halaman di UI)
+ * - polaSampulAwal     : 'dekoratif' (default) atau 'kop-resmi' — pola sampul saat halaman dibuka
  */
 export default function SampulLaporan({
   jenisLaporanAwal = JENIS_LAPORAN_PRESET[4],
@@ -856,6 +957,7 @@ export default function SampulLaporan({
   tampilkanKelas = false,
   kelasAwal = '',
   labelHalaman = 'Cetak Sampul Laporan',
+  polaSampulAwal = 'dekoratif',
 }) {
   const navigate = useNavigate()
   const { sekolahId } = useAuth()
@@ -865,6 +967,7 @@ export default function SampulLaporan({
   const [loading, setLoading] = useState(true)
   const [errorMuat, setErrorMuat] = useState('')
 
+  const [polaSampul, setPolaSampul] = useState(polaSampulAwal)
   const [tema, setTema] = useState('gelombang')
   const [orientasi, setOrientasi] = useState('portrait') // 'portrait' | 'landscape'
   const [jenisLaporan, setJenisLaporan] = useState(jenisLaporanAwal)
@@ -877,6 +980,8 @@ export default function SampulLaporan({
   const [emailSekolah, setEmailSekolah] = useState('')
   const [dibuatOleh, setDibuatOleh] = useState('')
   const [kelas, setKelas] = useState(kelasAwal)
+  const [jenisWilayah, setJenisWilayah] = useState('Kabupaten') // 'Kabupaten' | 'Kota' — khusus Kop Resmi
+  const [namaDinas, setNamaDinas] = useState('DINAS PENDIDIKAN DAN KEBUDAYAAN') // khusus Kop Resmi
 
   const judulTampil = jenisLaporan === 'Lainnya (isi bebas)' ? judulBebas : jenisLaporan
 
@@ -930,13 +1035,15 @@ export default function SampulLaporan({
     )
   }
 
+  const kabupatenBersih = bersihkanWilayah(profilSekolah?.kabupaten, 'kabupaten')
+
   const barisIdentitas = [
     { label: 'Nama Sekolah', nilai: profilSekolah?.nama_sekolah },
     { label: 'NPSN', nilai: profilSekolah?.npsn },
     { label: 'Alamat', nilai: profilSekolah?.alamat },
     { label: 'Desa/Kelurahan', nilai: desaKelurahan },
     { label: 'Kecamatan', nilai: bersihkanWilayah(profilSekolah?.kecamatan, 'kecamatan') },
-    { label: 'Kab/Kota', nilai: bersihkanWilayah(profilSekolah?.kabupaten, 'kabupaten') },
+    { label: 'Kab/Kota', nilai: kabupatenBersih },
     { label: 'Provinsi', nilai: profilSekolah?.provinsi },
     { label: 'Kode Pos', nilai: profilSekolah?.kode_pos },
     ...(tampilkanKelas ? [{ label: 'Kelas', nilai: kelas }] : []),
@@ -948,6 +1055,22 @@ export default function SampulLaporan({
       : []),
     { label: 'E-mail Sekolah', nilai: emailSekolah },
   ]
+
+  // Data khusus pola Kop Resmi: kop 3 baris + judul/kode terpisah.
+  const { judul: judulKopResmi, kode: kodeKopResmi } = pisahJudulKode(judulTampil)
+  const propsKopResmi = {
+    tema,
+    logoUrl,
+    kopBaris1: `PEMERINTAH ${jenisWilayah.toUpperCase()}${kabupatenBersih ? ` ${kabupatenBersih.toUpperCase()}` : ''}`,
+    kopBaris2: namaDinas,
+    kopBaris3: profilSekolah?.nama_sekolah || '',
+    judulUtama: judulKopResmi,
+    kodeLaporan: kodeKopResmi,
+    subJudulEkstra: subJudul,
+    labelTahun,
+    tahunAnggaran,
+    orientasi,
+  }
 
   const propsSampul = { logoUrl, judulTampil, subJudul, labelTahun, tahunAnggaran, barisIdentitas, dibuatOleh, orientasi }
   const KomponenAktif = KOMPONEN_TEMA[tema] || SampulGelombang
@@ -1004,6 +1127,31 @@ export default function SampulLaporan({
               </div>
             </div>
 
+            <div className="text-xs text-slate-500">
+              Pola Sampul
+              <div className="mt-1 grid grid-cols-2 gap-2">
+                {POLA_SAMPUL.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setPolaSampul(p.id)}
+                    className={`text-sm rounded px-2 py-1.5 border font-medium transition-colors ${
+                      polaSampul === p.id
+                        ? 'bg-blue-50 border-blue-400 text-blue-700'
+                        : 'border-slate-300 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {p.id === 'dekoratif' ? 'Dekoratif' : 'Kop Resmi'}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-[11px] text-slate-400">
+                {polaSampul === 'dekoratif'
+                  ? 'Logo bulat kecil + tabel identitas sekolah lengkap.'
+                  : 'Kop dinas 3 baris + logo besar di tengah, seperti kop surat resmi.'}
+              </p>
+            </div>
+
             <label className="text-xs text-slate-500">
               Tema Sampul
               <select
@@ -1052,6 +1200,32 @@ export default function SampulLaporan({
               </label>
             )}
 
+            {polaSampul === 'kop-resmi' && (
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-xs text-slate-500">
+                  Jenis Wilayah
+                  <select
+                    value={jenisWilayah}
+                    onChange={(e) => setJenisWilayah(e.target.value)}
+                    className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
+                  >
+                    <option value="Kabupaten">Kabupaten</option>
+                    <option value="Kota">Kota</option>
+                  </select>
+                </label>
+                <label className="text-xs text-slate-500">
+                  Nama Dinas
+                  <input
+                    type="text"
+                    value={namaDinas}
+                    onChange={(e) => setNamaDinas(e.target.value)}
+                    placeholder="mis. DINAS PENDIDIKAN DAN KEBUDAYAAN"
+                    className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
+                  />
+                </label>
+              </div>
+            )}
+
             <label className="text-xs text-slate-500">
               Sub Judul <span className="text-slate-400">(opsional)</span>
               <input
@@ -1082,68 +1256,72 @@ export default function SampulLaporan({
                 type="text"
                 value={tahunAnggaran}
                 onChange={(e) => setTahunAnggaran(e.target.value)}
-                placeholder="mis. 2026"
+                placeholder="mis. 2026 / 2027"
                 className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
               />
             </label>
 
-            <label className="text-xs text-slate-500">
-              Desa/Kelurahan <span className="text-slate-400">(belum ada di profil sekolah)</span>
-              <input
-                type="text"
-                value={desaKelurahan}
-                onChange={(e) => setDesaKelurahan(e.target.value)}
-                placeholder="mis. Waria"
-                className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
-              />
-            </label>
+            {polaSampul === 'dekoratif' && (
+              <>
+                <label className="text-xs text-slate-500">
+                  Desa/Kelurahan <span className="text-slate-400">(belum ada di profil sekolah)</span>
+                  <input
+                    type="text"
+                    value={desaKelurahan}
+                    onChange={(e) => setDesaKelurahan(e.target.value)}
+                    placeholder="mis. Waria"
+                    className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
+                  />
+                </label>
 
-            {tampilkanBank && (
-              <div className="grid grid-cols-2 gap-2">
+                {tampilkanBank && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="text-xs text-slate-500">
+                      Nama Bank
+                      <input
+                        type="text"
+                        value={namaBank}
+                        onChange={(e) => setNamaBank(e.target.value)}
+                        placeholder="mis. Bank Pembangunan Daerah Maluku"
+                        className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
+                      />
+                    </label>
+                    <label className="text-xs text-slate-500">
+                      Nomor Rekening <span className="text-slate-400">(belum ada di profil sekolah)</span>
+                      <input
+                        type="text"
+                        value={nomorRekening}
+                        onChange={(e) => setNomorRekening(e.target.value)}
+                        placeholder="mis. 0123456789"
+                        className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
+                      />
+                    </label>
+                  </div>
+                )}
+
                 <label className="text-xs text-slate-500">
-                  Nama Bank
+                  E-mail Sekolah
                   <input
                     type="text"
-                    value={namaBank}
-                    onChange={(e) => setNamaBank(e.target.value)}
-                    placeholder="mis. Bank Pembangunan Daerah Maluku"
+                    value={emailSekolah}
+                    onChange={(e) => setEmailSekolah(e.target.value)}
+                    placeholder="opsional"
                     className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
                   />
                 </label>
+
                 <label className="text-xs text-slate-500">
-                  Nomor Rekening <span className="text-slate-400">(belum ada di profil sekolah)</span>
+                  Dibuat Oleh
                   <input
                     type="text"
-                    value={nomorRekening}
-                    onChange={(e) => setNomorRekening(e.target.value)}
-                    placeholder="mis. 0123456789"
+                    value={dibuatOleh}
+                    onChange={(e) => setDibuatOleh(e.target.value)}
+                    placeholder="mis. LD.SALIM, S.Pd"
                     className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
                   />
                 </label>
-              </div>
+              </>
             )}
-
-            <label className="text-xs text-slate-500">
-              E-mail Sekolah
-              <input
-                type="text"
-                value={emailSekolah}
-                onChange={(e) => setEmailSekolah(e.target.value)}
-                placeholder="opsional"
-                className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
-              />
-            </label>
-
-            <label className="text-xs text-slate-500">
-              Dibuat Oleh
-              <input
-                type="text"
-                value={dibuatOleh}
-                onChange={(e) => setDibuatOleh(e.target.value)}
-                placeholder="mis. LD.SALIM, S.Pd"
-                className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
-              />
-            </label>
           </div>
 
           {errorMuat && (
@@ -1155,8 +1333,8 @@ export default function SampulLaporan({
 
           <div className="mt-3 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
             Saat mencetak, pastikan opsi <strong>"Background graphics" / "Grafis latar belakang"</strong> dicentang
-            di kotak dialog Print, supaya warna dan dekorasi latar ikut tercetak. Pilih dulu <strong>Orientasi</strong>{' '}
-            dan <strong>Tema Sampul</strong> di atas, baru tekan Cetak Sampul.
+            di kotak dialog Print, supaya warna dan dekorasi latar ikut tercetak. Pilih dulu <strong>Orientasi</strong>,{' '}
+            <strong>Pola Sampul</strong>, dan <strong>Tema Sampul</strong> di atas, baru tekan Cetak Sampul.
           </div>
         </div>
       </div>
@@ -1180,7 +1358,11 @@ export default function SampulLaporan({
               transformOrigin: 'top left',
             }}
           >
-            <KomponenAktif {...propsSampul} />
+            {polaSampul === 'kop-resmi' ? (
+              <SampulKopResmi {...propsKopResmi} />
+            ) : (
+              <KomponenAktif {...propsSampul} />
+            )}
           </div>
         </div>
       </div>
