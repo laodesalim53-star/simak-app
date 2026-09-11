@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import { Printer, Loader2 } from 'lucide-react'
 
@@ -68,6 +69,15 @@ function nilaiAkhirTertimbang(perJenis) {
 
 export default function RaporCetak() {
   const [searchParams] = useSearchParams()
+  // FIX (kop/data sekolah tidak sinkron): sebelumnya sekolah_id diambil
+  // dari siswaRow.sekolah_id, tapi kolom itu ternyata kosong/null di
+  // tabel siswa — makanya profil_sekolah selalu gagal ditemukan padahal
+  // data siswa & wali kelas (yang tidak butuh sekolah_id) tetap sinkron.
+  // Sekarang sekolahId diambil dari useAuth() (akun yang sedang login),
+  // sama seperti pola yang sudah teruji di LaporanNominatifPegawai.jsx
+  // dan halaman lain (Galeri, Sidebar). siswaRow?.sekolah_id tetap
+  // dipakai sebagai fallback kalau suatu saat kolom itu sudah diisi.
+  const { sekolahId: sekolahIdSaya } = useAuth()
   const siswaId = searchParams.get('siswaId')
   const semester = searchParams.get('semester')
   const tahunAjaran = searchParams.get('tahunAjaran')
@@ -91,15 +101,15 @@ export default function RaporCetak() {
     }
     muatSemua()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [siswaId, semester, tahunAjaran])
+  }, [siswaId, semester, tahunAjaran, sekolahIdSaya])
 
   async function muatSemua() {
     setLoading(true)
 
     // Ambil siswa dulu (RLS sudah membatasi ke sekolah sendiri lewat
-    // siswa.sekolah_id) — sekolah_id-nya dipakai untuk memfilter
-    // profil_sekolah di bawah, supaya kop rapor selalu ikut sekolah
-    // pemilik siswa ini, bukan baris profil_sekolah yang salah.
+    // siswa.sekolah_id kalau ada) — data siswa & wali kelas di sini
+    // TIDAK bergantung pada sekolah_id sama sekali, jadi selalu sinkron
+    // apa pun kondisinya.
     const { data: siswaRow } = await supabase
       .from('siswa')
       .select('*, kelas(nama_kelas, wali_kelas:guru!wali_kelas_id(nama_lengkap, nip))')
@@ -118,10 +128,14 @@ export default function RaporCetak() {
       queryPresensi = queryPresensi.gte('tanggal', periode.mulai).lte('tanggal', periode.selesai)
     }
 
+    // Sumber utama: sekolahId dari akun yang login (useAuth). Fallback ke
+    // siswaRow?.sekolah_id kalau suatu saat kolom itu mulai diisi juga.
+    const idSekolahDipakai = sekolahIdSaya || siswaRow?.sekolah_id
+
     let profilQuery = supabase.from('profil_sekolah').select('*')
-    profilQuery = siswaRow?.sekolah_id
-      ? profilQuery.eq('sekolah_id', siswaRow.sekolah_id).maybeSingle()
-      : profilQuery.limit(0) // siswa tidak ditemukan / tidak punya sekolah_id -> jangan tampilkan profil siapa pun
+    profilQuery = idSekolahDipakai
+      ? profilQuery.eq('sekolah_id', idSekolahDipakai).maybeSingle()
+      : profilQuery.limit(0) // tidak ada sekolah_id sama sekali -> jangan tampilkan profil siapa pun
 
     const [
       { data: nilaiRows },
@@ -180,6 +194,8 @@ export default function RaporCetak() {
     if (sekolahRow?.logo_path) {
       const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(sekolahRow.logo_path)
       setLogoUrl(pub.publicUrl)
+    } else {
+      setLogoUrl('')
     }
 
     setNilai(nilaiRows || [])
