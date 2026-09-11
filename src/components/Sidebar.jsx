@@ -58,8 +58,6 @@ import {
   Building2,
   Inbox,
   Sparkles,
-  Table2,
-  Printer,
   FileStack,
   Briefcase,
 } from 'lucide-react'
@@ -190,21 +188,15 @@ function getGroupsAdmin(
         { to: '/surat-keterangan', label: 'Surat Keterangan', icon: FileSignature },
         { to: '/ppdb-admin', label: 'PPDB Siswa Baru', icon: UserPlus },
         { to: '/laporan', label: 'Laporan Bulanan', icon: FileText },
+        // Laporan Kepegawaian Guru: satu pintu untuk semua laporan guru,
+        // TERMASUK Data Ujian 8355 & Cetak 8355 (dua item menu terpisah
+        // untuk itu sudah dihapus dari sini — sekarang jadi kartu di dalam
+        // halaman ini, lihat PusatLaporanGuru.jsx).
         { to: '/laporan-guru', label: 'Laporan Kepegawaian Guru', icon: GraduationCap },
         { to: '/hari-libur', label: 'Hari Libur', icon: CalendarOff },
         { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
         { to: '/backup', label: 'Backup Data', icon: DatabaseBackup },
-        // PERBAIKAN: Data Ujian 8355 & Cetak 8355 sebelumnya dikunci ke
-        // `isSuperAdmin || isKepalaSekolah` saja, jadi admin sekolah biasa
-        // (dan admin_utama yang bukan kepsek) tidak pernah melihat menu ini.
-        // Grup "Administrasi" ini sendiri hanya dirender saat isAdmin true
-        // (lihat cabang render di komponen Sidebar di bawah), jadi tidak
-        // perlu gate tambahan di sini — semua role admin-tier (admin,
-        // admin_utama, superadmin, kepala sekolah) sekarang dapat akses.
-        { to: '/data-ujian-8355', label: 'Data Ujian 8355', icon: Table2 },
-        { to: '/cetak-8355', label: 'Cetak 8355 (Kelas 6)', icon: Printer },
-        // Cetak Sampul: ditaruh berdekatan dengan menu cetak lainnya
-        // (Cetak 8355 & Cetak Kartu) supaya mudah ditemukan admin.
+        // Cetak Sampul: ditaruh berdekatan dengan menu cetak lainnya.
         // Satu halaman ini sudah punya sidebar menu sendiri di dalamnya
         // untuk memilih semua jenis laporan (termasuk Semester & 8355),
         // jadi tidak perlu lagi item menu terpisah untuk tiap jenis.
