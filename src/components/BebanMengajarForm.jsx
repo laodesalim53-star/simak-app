@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { useAuth } from "../lib/AuthContext";
 import BebanMengajarPrintTemplate from "./BebanMengajarPrintTemplate";
 import {
   exportBebanMengajarToPDF,
@@ -25,8 +26,11 @@ function bebanKeseluruhan(row) {
 }
 
 export default function BebanMengajarForm({ sekolah }) {
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [checkingRole, setCheckingRole] = useState(true);
+  // Pakai isAdmin dari AuthContext (sudah mencakup admin/admin_utama/superadmin
+  // dan role lain yang dianggap admin di seluruh app) — bukan query manual
+  // yang sebelumnya cuma cocok untuk role === "admin" persis, sehingga
+  // superadmin ikut ditolak akses.
+  const { isAdmin } = useAuth();
 
   const [nomorSk, setNomorSk] = useState("");
   const [tanggalSk, setTanggalSk] = useState(new Date().toISOString().slice(0, 10));
@@ -39,24 +43,6 @@ export default function BebanMengajarForm({ sekolah }) {
   const [saving, setSaving] = useState(false);
   const [skTersimpan, setSkTersimpan] = useState(null);
   const printRef = useRef(null);
-
-  useEffect(() => {
-    async function checkRole() {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData?.user) {
-        setCheckingRole(false);
-        return;
-      }
-      const { data } = await supabase
-        .from("profil")
-        .select("role")
-        .eq("id", userData.user.id)
-        .maybeSingle();
-      setIsAdmin(data?.role === "admin");
-      setCheckingRole(false);
-    }
-    checkRole();
-  }, []);
 
   useEffect(() => {
     async function loadGuru() {
@@ -238,8 +224,6 @@ export default function BebanMengajarForm({ sekolah }) {
 
     setSkTersimpan({ ...sk, rows });
   }
-
-  if (checkingRole) return null;
 
   if (!isAdmin) {
     return (
