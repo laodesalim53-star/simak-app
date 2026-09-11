@@ -129,7 +129,6 @@ const daftarLaporan = [
     path: '/skl',
     siap: true,
   },
-]
   {
     id: 'surat-keterangan',
     judul: 'Surat Keterangan',
