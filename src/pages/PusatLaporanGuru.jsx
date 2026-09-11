@@ -14,6 +14,7 @@ import {
   Lock,
   LayoutDashboard,
   FileCheck2,
+  FileSignature,
 } from 'lucide-react'
 import Layout from '../components/Layout'
 
@@ -126,6 +127,15 @@ const daftarLaporan = [
     deskripsi: 'Nomor SKL otomatis per siswa Kelas 6, dicetak dari nilai ijazah yang sudah diisi.',
     icon: FileCheck2,
     path: '/skl',
+    siap: true,
+  },
+]
+  {
+    id: 'surat-keterangan',
+    judul: 'Surat Keterangan',
+    deskripsi: 'Buat dan kelola surat keterangan untuk siswa maupun guru, lengkap dengan nomor surat.',
+    icon: FileSignature,
+    path: '/surat-keterangan',
     siap: true,
   },
 ]
