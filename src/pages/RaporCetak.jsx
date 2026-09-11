@@ -378,7 +378,7 @@ export default function RaporCetak() {
           ( S D )
         </h1>
 
-        <div className="mt-24 w-full max-w-md text-center">
+        <div className="mt-24 w-full max-w-md text-center mx-auto">
           <p className="text-ink-700/60 mb-1">Nama Peserta Didik :</p>
           <div className="border-2 border-ink-950 rounded px-4 py-2 font-bold text-lg uppercase text-center">
             {siswa.nama_lengkap}
