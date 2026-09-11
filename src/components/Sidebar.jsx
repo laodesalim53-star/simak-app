@@ -184,7 +184,6 @@ function getGroupsAdmin(
         { to: '/pengajuan-kebutuhan-kelas', label: 'Kebutuhan Kelas', icon: PackagePlus },
         { to: '/agenda', label: 'Agenda Sekolah', icon: CalendarDays },
         { to: '/surat', label: 'Surat Masuk/Keluar', icon: Mail },
-        { to: '/surat-keterangan', label: 'Surat Keterangan', icon: FileSignature },
         { to: '/ppdb-admin', label: 'PPDB Siswa Baru', icon: UserPlus },
         { to: '/laporan', label: 'Laporan Bulanan', icon: FileText },
         // Laporan Kepegawaian Guru: satu pintu untuk semua laporan guru,
@@ -266,7 +265,6 @@ function getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelum
       links: [
         { to: '/agenda', label: 'Agenda Kantor', icon: CalendarDays },
         { to: '/surat', label: 'Surat Masuk/Keluar', icon: Mail },
-        { to: '/surat-keterangan', label: 'Surat Keterangan', icon: FileSignature },
         { to: '/backup', label: 'Backup Data', icon: DatabaseBackup },
         // "Persetujuan Akun" dan "Profil Kantor" hanya untuk admin utama.
         ...(isAdminUtama
