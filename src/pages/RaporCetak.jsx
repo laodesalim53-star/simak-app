@@ -112,7 +112,11 @@ export default function RaporCetak() {
     // apa pun kondisinya.
     const { data: siswaRow } = await supabase
       .from('siswa')
-      .select('*, kelas(nama_kelas, wali_kelas:guru!wali_kelas_id(nama_lengkap, nip))')
+      // + sekolah_id di kolom guru (wali_kelas) — sumber fallback ketiga
+      // untuk sekolah_id: kolom ini SUDAH terbukti terisi & dipakai di
+      // LaporanNominatifPegawai.jsx, tidak seperti profil.sekolah_id yang
+      // ternyata kosong untuk akun guru.
+      .select('*, kelas(nama_kelas, wali_kelas:guru!wali_kelas_id(nama_lengkap, nip, sekolah_id))')
       .eq('id', siswaId)
       .single()
 
@@ -128,9 +132,13 @@ export default function RaporCetak() {
       queryPresensi = queryPresensi.gte('tanggal', periode.mulai).lte('tanggal', periode.selesai)
     }
 
-    // Sumber utama: sekolahId dari akun yang login (useAuth). Fallback ke
-    // siswaRow?.sekolah_id kalau suatu saat kolom itu mulai diisi juga.
-    const idSekolahDipakai = sekolahIdSaya || siswaRow?.sekolah_id
+    // Rantai fallback sekolah_id, dari yang paling diutamakan:
+    // 1) sekolahId dari akun yang login (useAuth) — kosong untuk akun guru
+    // 2) siswaRow.sekolah_id — kosong juga (dikonfirmasi user)
+    // 3) siswaRow.kelas.wali_kelas.sekolah_id — kolom guru.sekolah_id,
+    //    sudah terbukti selalu terisi (dipakai di LaporanNominatifPegawai.jsx)
+    const idSekolahDipakai =
+      sekolahIdSaya || siswaRow?.sekolah_id || siswaRow?.kelas?.wali_kelas?.sekolah_id
 
     let profilQuery = supabase.from('profil_sekolah').select('*')
     profilQuery = idSekolahDipakai
@@ -303,7 +311,7 @@ export default function RaporCetak() {
   }
 
   return (
-    <div className="min-h-screen bg-ink-950/5 py-8 print:bg-white print:py-0">
+    <div className="min-h-screen bg-ink-950/5 py-8 print:bg-white print:py-0 print:min-h-0">
       <style>{`
         @media print {
           .no-print { display: none !important; }
