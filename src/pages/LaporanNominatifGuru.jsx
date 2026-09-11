@@ -10,8 +10,6 @@ import { supabase } from '../lib/supabaseClient'
 // - Judul tidak menyebut "Guru" sama sekali.
 // - Tidak ada input/label Semester & Tahun Pelajaran (konsep akademik,
 //   tidak relevan untuk kantor).
-// - Kolom NUPTK dihapus: NUPTK hanya relevan untuk guru, tidak dipakai
-//   oleh pegawai kantor.
 // Pola cetak lainnya (window.print() + CSS @media print) mengikuti
 // persis LaporanNominatifGuru.jsx.
 //
@@ -71,7 +69,7 @@ export default function LaporanNominatifPegawai() {
         supabase
           .from('pegawai_kantor')
           .select(
-            'id, nip, nama_lengkap, jenis_kelamin, tempat_lahir, tanggal_lahir, pangkat_golongan, status_kepegawaian, jenis_ptk, pendidikan_terakhir, tugas_tambahan, jabatan, agama, sk_pengangkatan, tmt_pengangkatan, status'
+            'id, nip, nama_lengkap, jenis_kelamin, tempat_lahir, tanggal_lahir, pangkat_golongan, status_kepegawaian, jenis_ptk, pendidikan_terakhir, tugas_tambahan, jabatan, agama, nuptk, sk_pengangkatan, tmt_pengangkatan, status'
           )
           .eq('sekolah_id', sekolahId),
       ])
@@ -198,6 +196,7 @@ export default function LaporanNominatifPegawai() {
               <th rowSpan={2} className="border border-black px-1 py-1 w-6">No</th>
               <th rowSpan={2} className="border border-black px-1 py-1">Nama</th>
               <th rowSpan={2} className="border border-black px-1 py-1">NIP</th>
+              <th rowSpan={2} className="border border-black px-1 py-1">NUPTK</th>
               <th colSpan={2} className="border border-black px-1 py-1">L/P</th>
               <th rowSpan={2} className="border border-black px-1 py-1">Tempat, Tgl Lahir</th>
               <th rowSpan={2} className="border border-black px-1 py-1">Pangkat/Gol</th>
@@ -223,7 +222,7 @@ export default function LaporanNominatifPegawai() {
           <tbody>
             {daftarPegawai.length === 0 ? (
               <tr>
-                <td colSpan={18} className="border border-black text-center py-4 text-slate-400">
+                <td colSpan={17} className="border border-black text-center py-4 text-slate-400">
                   Belum ada data pegawai untuk instansi ini.
                 </td>
               </tr>
@@ -236,6 +235,7 @@ export default function LaporanNominatifPegawai() {
                     <td className="border border-black px-1 py-1 text-center">{i + 1}</td>
                     <td className="border border-black px-1 py-1">{p.nama_lengkap || '—'}</td>
                     <td className="border border-black px-1 py-1">{p.nip || '—'}</td>
+                    <td className="border border-black px-1 py-1">{p.nuptk || '—'}</td>
                     <td className="border border-black px-1 py-1 text-center">{lp === 'l' || lp === 'laki-laki' ? 'v' : ''}</td>
                     <td className="border border-black px-1 py-1 text-center">{lp === 'p' || lp === 'perempuan' ? 'v' : ''}</td>
                     <td className="border border-black px-1 py-1">
