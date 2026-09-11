@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import {
   X,
   LayoutDashboard,
+  LayoutGrid,
   Users,
   UserX,
   GraduationCap,
@@ -148,6 +149,9 @@ function getGroupsAdmin(
     {
       label: 'Keuangan & Aset',
       links: [
+        // BARU: pintu masuk ringkasan ke empat modul keuangan di bawahnya
+        // (Keuangan, Kuitansi, Kuitansi Jasa, Nota Belanja) — lihat Hub.jsx.
+        { to: '/hub-keuangan', label: 'Hub Keuangan', icon: LayoutGrid },
         { to: '/keuangan', label: 'Keuangan', icon: Wallet },
         { to: '/keuangan-kelas', label: 'Keuangan Kelas', icon: PiggyBank },
         { to: '/kuitansi', label: 'Kuitansi', icon: Receipt },
