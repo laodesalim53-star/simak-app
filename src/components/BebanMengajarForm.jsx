@@ -117,7 +117,7 @@ export default function BebanMengajarForm({ sekolah }) {
             tugas_tambahan: "",
             // Kepala Sekolah otomatis diberi tugas tambahan 16 jam — tetap
             // bisa diedit manual lewat kolom "Jam TT" seperti biasa.
-            tugas_tambahan_jam: isKepsek ? 16 : 0,
+            tugas_tambahan_jam: isKepsek ? 24 : 0,
             keterangan: "",
             urutan: idx + 1,
           };
