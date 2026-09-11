@@ -33,6 +33,9 @@ import LaporanTenagaPengajar from './pages/LaporanTenagaPengajar'
 import LaporanKeadaanMurid from './pages/LaporanKeadaanMurid'
 import LaporanSemester from './pages/LaporanSemester'
 import PusatLaporanGuru from './pages/PusatLaporanGuru'
+// Laporan Daftar Hadir Guru/Pegawai — halaman berdiri sendiri, dipisah dari
+// selector "Jenis Laporan" di LaporanBulanan.jsx (logika & template sama).
+import LaporanDaftarHadirGuru from './pages/LaporanDaftarHadirGuru'
 import Kelas from './pages/Kelas'
 import Jadwal from './pages/Jadwal'
 import Presensi from './pages/Presensi'
@@ -243,6 +246,9 @@ export default function App() {
             pelajaran per kelas, keadaan gedung/ruang, keadaan buku KTSP & K-13). */}
         <Route path="/laporan-semester" element={<ProtectedRoute adminOnly><LaporanSemester /></ProtectedRoute>} />
         <Route path="/laporan" element={<ProtectedRoute adminOnly><LaporanBulanan /></ProtectedRoute>} />
+        {/* Laporan Daftar Hadir Guru/Pegawai — halaman berdiri sendiri (dilepas
+            dari selector "Jenis Laporan" di LaporanBulanan.jsx, logika sama). */}
+        <Route path="/laporan-daftar-hadir-guru" element={<ProtectedRoute adminOnly><LaporanDaftarHadirGuru /></ProtectedRoute>} />
         <Route path="/laporan-guru" element={<ProtectedRoute adminOnly><PusatLaporanGuru /></ProtectedRoute>} />
         {/* Cetak Sampul Laporan — satu halaman dengan sidebar menu berisi
             semua jenis laporan (Bulanan, Semester, 8355, LPJ BOS, dst). */}
