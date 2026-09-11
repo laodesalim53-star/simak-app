@@ -64,6 +64,12 @@ async function fetchImageBuffer(url) {
 }
 
 // ================= PDF (rasterisasi tiap halaman via html2canvas, lalu print) =================
+// Halaman 1 (naskah SK) di-print sebagai A4 potrait, halaman 2 (lampiran
+// tabel beban mengajar) sebagai A4 landscape — sesuai ukuran asli tiap
+// halaman di BebanMengajarPrintTemplate (210mm vs 297mm lebar). Sebelumnya
+// kedua gambar ditaruh dengan width:100% tanpa ukuran/orientasi kertas yang
+// tegas, sehingga gambar landscape "diperas" ke halaman potrait dan konten
+// (mis. tanda tangan) meluber ke halaman berikutnya.
 export async function exportBebanMengajarToPDF(printRef, filenameBase) {
   const node = printRef?.current;
   if (!node) return;
@@ -77,21 +83,47 @@ export async function exportBebanMengajarToPDF(printRef, filenameBase) {
   win.document.write(
     `<html><head><title>${filenameBase || "sk-beban-mengajar"}</title>
       <style>
-        @page { margin: 0; }
-        body { margin: 0; }
-        img { display: block; width: 100%; page-break-after: always; }
-        img:last-child { page-break-after: auto; }
+        @page potrait-a4 { size: A4 portrait; margin: 0; }
+        @page landscape-a4 { size: A4 landscape; margin: 0; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { margin: 0; }
+        .page {
+          page-break-after: always;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
+        }
+        .page:last-child { page-break-after: auto; }
+        .page.potrait { page: potrait-a4; width: 210mm; height: 297mm; }
+        .page.landscape { page: landscape-a4; width: 297mm; height: 210mm; }
+        .page img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          display: block;
+        }
       </style>
     </head><body></body></html>`
   );
   win.document.close();
 
-  for (const page of pages) {
+  for (let i = 0; i < pages.length; i++) {
+    const page = pages[i];
     // eslint-disable-next-line no-await-in-loop
     const canvas = await html2canvas(page, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
+
+    // Halaman ke-0 = naskah SK (potrait), halaman berikutnya = lampiran
+    // tabel (landscape) — sesuai struktur BebanMengajarPrintTemplate.
+    const isLandscape = i > 0;
+
+    const wrapper = win.document.createElement("div");
+    wrapper.className = `page ${isLandscape ? "landscape" : "potrait"}`;
+
     const img = win.document.createElement("img");
     img.src = canvas.toDataURL("image/png");
-    win.document.body.appendChild(img);
+    wrapper.appendChild(img);
+    win.document.body.appendChild(wrapper);
   }
 
   win.focus();
@@ -145,7 +177,12 @@ export async function exportBebanMengajarToDocx(sk, sekolah) {
           }),
         ]
       : []),
-    new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "DINAS PENDIDIKAN DAN KEBUDAYAAN", bold: true })] }),
+    ...(sekolah?.kabupaten
+      ? [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: sekolah.kabupaten, bold: true })] })]
+      : []),
+    ...(sekolah?.dinas_pendidikan
+      ? [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: sekolah.dinas_pendidikan, bold: true })] })]
+      : []),
     new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: namaSekolah.toUpperCase(), bold: true, size: 28 })] }),
     new Paragraph({ text: "" }),
     new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `KEPUTUSAN KEPALA ${namaSekolah.toUpperCase()}`, bold: true, underline: {} })] }),
@@ -337,7 +374,10 @@ export async function exportBebanMengajarToDocx(sk, sekolah) {
 
   const doc = new Document({
     sections: [
-      { properties: {}, children: naskahParagraphs },
+      {
+        properties: { page: { size: { orientation: "portrait" } } },
+        children: naskahParagraphs,
+      },
       {
         properties: { page: { size: { orientation: "landscape" } } },
         children: [...lampiranParagraphs, lampiranTable],
