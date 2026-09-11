@@ -25,6 +25,17 @@ function bebanKeseluruhan(row) {
   return jumlahJamMengajar(row) + Number(row.tugas_tambahan_jam || 0);
 }
 
+// Ubah nilai "tingkat" dari tabel kelas (bisa berupa "1".."6" atau sudah
+// berupa angka romawi "I".."VI") menjadi label angka romawi yang konsisten
+// dengan format "Wali Kelas VI" yang sudah dipakai di form ini.
+const ROMAWI = ["I", "II", "III", "IV", "V", "VI"];
+function tingkatToRomawi(tingkat) {
+  const t = String(tingkat || "").trim();
+  const n = Number(t);
+  if (Number.isInteger(n) && n >= 1 && n <= 6) return ROMAWI[n - 1];
+  return t.toUpperCase();
+}
+
 export default function BebanMengajarForm({ sekolah }) {
   // Pakai isAdmin dari AuthContext (sudah mencakup admin/admin_utama/superadmin
   // dan role lain yang dianggap admin di seluruh app) — bukan query manual
@@ -43,6 +54,10 @@ export default function BebanMengajarForm({ sekolah }) {
   const [saving, setSaving] = useState(false);
   const [skTersimpan, setSkTersimpan] = useState(null);
   const printRef = useRef(null);
+
+  // guru_id -> "Wali Kelas III" (atau gabungan kalau satu guru jadi wali
+  // lebih dari satu kelas), diambil dari tabel kelas.wali_kelas_id
+  const [waliKelasMap, setWaliKelasMap] = useState({});
 
   useEffect(() => {
     async function loadGuru() {
@@ -93,6 +108,57 @@ export default function BebanMengajarForm({ sekolah }) {
     }
     loadGuru();
   }, []);
+
+  // Muat data wali kelas (tabel kelas.wali_kelas_id) untuk sekolah & Tahun
+  // Pelajaran yang sedang diisi di form. Dijalankan ulang tiap kali Tahun
+  // Pelajaran diketik/diubah, karena wali kelas bisa beda tiap tahun ajaran.
+  useEffect(() => {
+    async function loadWaliKelas() {
+      if (!sekolah?.sekolah_id || !tahunAjaran.trim()) {
+        setWaliKelasMap({});
+        return;
+      }
+      const { data, error } = await supabase
+        .from("kelas")
+        .select("wali_kelas_id, tingkat")
+        .eq("sekolah_id", sekolah.sekolah_id)
+        .eq("tahun_ajaran", tahunAjaran.trim())
+        .not("wali_kelas_id", "is", null);
+
+      if (error) {
+        console.error("Gagal memuat data wali kelas:", error);
+        return;
+      }
+
+      const map = {};
+      (data || []).forEach((k) => {
+        if (!k.wali_kelas_id) return;
+        const label = `Wali Kelas ${tingkatToRomawi(k.tingkat)}`;
+        map[k.wali_kelas_id] = map[k.wali_kelas_id]
+          ? `${map[k.wali_kelas_id]}, ${label}`
+          : label;
+      });
+      setWaliKelasMap(map);
+    }
+    loadWaliKelas();
+  }, [sekolah?.sekolah_id, tahunAjaran]);
+
+  // Isi otomatis kolom "Tugas Tambahan" untuk guru yang tercatat sebagai
+  // wali kelas — HANYA kalau kolomnya masih kosong, supaya tidak menimpa
+  // perubahan manual yang sudah dilakukan user. Tetap bisa diedit setelahnya.
+  useEffect(() => {
+    if (Object.keys(waliKelasMap).length === 0) return;
+    setRows((prev) => {
+      let changed = false;
+      const next = prev.map((r) => {
+        const label = waliKelasMap[r.guru_id];
+        if (!label || r.tugas_tambahan) return r;
+        changed = true;
+        return { ...r, tugas_tambahan: label };
+      });
+      return changed ? next : prev;
+    });
+  }, [waliKelasMap, rows.length]);
 
   function updateRow(guruId, field, value) {
     setRows((prev) =>
