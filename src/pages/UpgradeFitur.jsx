@@ -2,18 +2,15 @@ import { useState } from "react";
 import { Check, Sparkles } from "lucide-react";
 import { useAuth } from "../lib/AuthContext"; // sesuaikan path jika beda
 import Layout from "../components/Layout"; // dibungkus Layout, sama seperti ProfilSaya.jsx
-
 const FITUR_FREE = [
   "Data Siswa & Data Guru",
   "Nilai & Presensi",
   "Rapor per siswa",
   "Bank Soal & Ujian Online",dll
 ];
-
 const FITUR_PREMIUM = [
   "Generate Surat & SK otomatis, tanpa input manual berulang",
 ];
-
 export default function UpgradeFitur() {
   const { isPremium } = useAuth();
   const paketSaatIni = isPremium ? "premium" : "free";
