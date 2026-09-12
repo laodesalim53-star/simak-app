@@ -183,7 +183,6 @@ function getGroupsAdmin(
         { to: '/pengajuan-kebutuhan-kelas', label: 'Kebutuhan Kelas', icon: PackagePlus },
         { to: '/agenda', label: 'Agenda Sekolah', icon: CalendarDays },
         { to: '/surat', label: 'Surat Masuk/Keluar', icon: Mail },
-        { to: '/cetak-sampul', label: 'Cetak Sampul Laporan', icon: FileText },
         { to: '/ppdb-admin', label: 'PPDB Siswa Baru', icon: UserPlus },
         // Laporan Kepegawaian Guru: satu pintu untuk semua laporan guru,
         // TERMASUK Data Ujian 8355 & Cetak 8355 (dua item menu terpisah
