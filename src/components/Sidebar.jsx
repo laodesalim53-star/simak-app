@@ -60,7 +60,6 @@ import {
   Briefcase,
   MessageCircle,
   Building2,
-  LayoutGrid,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
