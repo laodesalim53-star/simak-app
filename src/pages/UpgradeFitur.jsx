@@ -10,15 +10,7 @@ const FITUR_FREE = [
   "Bank Soal & Ujian Online",
 ];
 
-const FITUR_PREMIUM = [
-  "Generate Surat & SK otomatis, tanpa input manual berulang",
-  "AI RPP cerdas: draf RPP + lampiran tersusun otomatis",
-  "Kuitansi & Nota otomatis, termasuk cetak massal",
-  "Kartu Pelajar & Perpustakaan otomatis, tanpa desain manual",
-  "Portofolio Siswa & Galeri Kegiatan tersimpan rapi",
-  "Kuis Interaktif untuk kelas 1-3, belajar jadi lebih seru",
-  "Cetak rapor massal satu kelas sekaligus, hemat waktu admin",
-];
+const FITUR_PREMIUM = [];
 
 export default function UpgradeFitur() {
   const { isPremium } = useAuth();
