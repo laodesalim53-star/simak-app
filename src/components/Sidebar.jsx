@@ -131,7 +131,9 @@ function getGroupsAdmin(
         { to: '/siswa', label: 'Data Siswa', icon: Users },
         { to: '/guru', label: 'Data Guru', icon: GraduationCap },
         { to: '/nilai-asesmen', label: 'Nilai Asesmen', icon: FileSpreadsheet },
-        { to: '/rapor', label: 'Rapor Siswa', icon: FileBadge },
+        // PERBAIKAN: baris "Rapor Siswa" (/rapor) dihapus dari sini — sudah
+        // bisa diakses lewat kartu "Rapor" di halaman Administrasi Kelas
+        // (menu di atas), jadi baris ini dulu bikin dobel untuk admin.
         { to: '/portofolio-siswa', label: 'Portofolio Siswa', icon: FolderHeart },
         { to: '/sertifikat', label: 'Sertifikat & Penghargaan', icon: Award },
         { to: '/buat-ujian', label: 'Buat Ujian', icon: FilePlus },
@@ -282,7 +284,9 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   // (sudah ada satu di atas, sebelum "Rapat Video") — duplikat dihapus.
   { to: '/siswa', label: 'Data Siswa', icon: Users },
   { to: '/nilai-asesmen', label: 'Nilai Asesmen', icon: FileSpreadsheet },
-  { to: '/rapor', label: 'Rapor Siswa', icon: FileBadge },
+  // PERBAIKAN: baris "Rapor Siswa" (/rapor) dihapus dari sini — sudah bisa
+  // diakses lewat kartu "Rapor" di halaman Administrasi Kelas (menu di
+  // atas), jadi baris ini dulu bikin dobel untuk guru.
   { to: '/portofolio-siswa', label: 'Portofolio Siswa', icon: FolderHeart },
   { to: '/sertifikat', label: 'Sertifikat & Penghargaan', icon: Award },
   { to: '/pengajuan-surat-aktif', label: 'Pengajuan Surat Aktif', icon: FileCheck2 },
