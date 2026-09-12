@@ -16,6 +16,7 @@ import {
   FileCheck2,
   FileSignature,
   ScrollText,
+  FileBarChart,
 } from 'lucide-react'
 import Layout from '../components/Layout'
 
@@ -98,6 +99,17 @@ const daftarLaporan = [
     deskripsi: 'Format kertas absensi bulanan (grid tanggal 1–31) lengkap dengan rekap Sakit/Izin/Tanpa Keterangan dan tanda tangan kepala sekolah.',
     icon: CalendarCheck,
     path: '/laporan-daftar-hadir-guru',
+    siap: true,
+  },
+  // Laporan Bulanan — rekap presensi siswa/guru, surat masuk-keluar, dan
+  // agenda kegiatan per bulan. Dipindahkan ke sini dengan alasan yang sama
+  // seperti laporan lain: satu pintu, Sidebar tidak makin panjang.
+  {
+    id: 'laporan-bulanan',
+    judul: 'Laporan Bulanan',
+    deskripsi: 'Rekap bulanan: presensi siswa, presensi guru (termasuk format Daftar Hadir), surat masuk/keluar, dan agenda kegiatan.',
+    icon: FileBarChart,
+    path: '/laporan-bulanan',
     siap: true,
   },
   // Formulir 8355 (Daftar Calon Peserta Ujian, Kelas 6) — dipindahkan ke sini
