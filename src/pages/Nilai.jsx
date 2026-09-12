@@ -1,20 +1,17 @@
+// src/pages/Nilai.jsx
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
 import { Loader2, Save, BookOpenCheck, Trash2, ListChecks, Download, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { MAPEL_IJAZAH } from '../components/IjazahPrintTemplate'
+import { kanonikkanOpsiMapel, TOKEN_IPAS_GABUNGAN } from '../utils/mapelIjazahAlias'
 import './Nilai.css'
 
 const JENIS_OPTS = ['Tugas', 'UH', 'UTS', 'UAS']
-// Opsi khusus untuk dropdown "Jenis" saat impor dari Ujian Online — dulu
-// selalu fixed ke UTS (karena Ujian Online biasanya dipakai untuk ujian
-// tengah semester), sekarang bisa dipilih supaya juga bisa dipakai untuk
-// impor nilai UAS atau Tugas dari sana.
 const IMPOR_UJIAN_JENIS_OPTS = ['UTS', 'UAS', 'Tugas']
 const KOMPETENSI_OPTS = ['Pengetahuan', 'Keterampilan']
 
-// Predikat dihitung otomatis dari nilai angka — sesuai legenda rapor:
-// A: Sangat Baik (>=90), B: Baik (>=75), C: Cukup (>=60), D: Kurang (<60)
 function predikatDariNilai(nilai) {
   if (nilai === '' || nilai === undefined || nilai === null) return null
   const n = Number(nilai)
@@ -25,7 +22,6 @@ function predikatDariNilai(nilai) {
   return 'D'
 }
 
-// Warna badge predikat, senada dengan gaya badge yang sudah dipakai di halaman lain.
 const WARNA_PREDIKAT = {
   A: 'bg-sage-500/15 text-sage-500',
   B: 'bg-blue-500/15 text-blue-600',
@@ -33,31 +29,22 @@ const WARNA_PREDIKAT = {
   D: 'bg-red-500/15 text-red-600',
 }
 
-// Pecah kolom guru.mata_pelajaran (bisa berisi satu mapel atau beberapa
-// mapel digabung koma/slash, umum untuk wali kelas SD yang mengajar semua
-// mapel) menjadi daftar opsi dropdown yang rapi dan tanpa duplikat.
 function pecahMapel(raw) {
   if (!raw) return []
   return [...new Set(
-    raw
-      .split(/[,/]+/)
-      .map((m) => m.trim())
-      .filter(Boolean)
+    raw.split(/[,/]+/).map((m) => m.trim()).filter(Boolean)
   )]
 }
 
-// Tahun ajaran Indonesia berjalan dari Juli s/d Juni. Fungsi ini menghasilkan
-// tahun ajaran "berjalan" (mis. "2026/2027") beserta satu tahun sebelum & sesudahnya.
 function tahunAjaranOptions() {
   const now = new Date()
-  const tahunMulai = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1 // Juli = index 6
+  const tahunMulai = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1
   return [-1, 0, 1].map((offset) => {
     const awal = tahunMulai + offset
     return `${awal}/${awal + 1}`
   })
 }
 
-// Motif sirkuit dekoratif senada dengan Loader, Login & Kelas.
 function CircuitBackdrop({ patternId }) {
   return (
     <svg className="absolute inset-0 w-full h-full opacity-40 pointer-events-none" aria-hidden="true">
@@ -84,52 +71,40 @@ function CircuitBackdrop({ patternId }) {
 
 export default function Nilai() {
   const { profil, isAdmin } = useAuth()
-  const [activeSubTab, setActiveSubTab] = useState('input') // 'input' | 'kelola' | 'impor'
+  const [activeSubTab, setActiveSubTab] = useState('input')
   const [kelasList, setKelasList] = useState([])
   const [kelasId, setKelasId] = useState('')
   const [siswaList, setSiswaList] = useState([])
-  const [mapelOpts, setMapelOpts] = useState([])
-  const [mataPelajaran, setMataPelajaran] = useState('')
+  const [mapelOpts, setMapelOpts] = useState([]) // [{value, label}]
+  const [mapelTidakDikenal, setMapelTidakDikenal] = useState([])
+  const [mataPelajaran, setMataPelajaran] = useState('') // value = key resmi ATAU TOKEN_IPAS_GABUNGAN
   const [jenis, setJenis] = useState('UH')
   const [kompetensi, setKompetensi] = useState('Pengetahuan')
   const [semester, setSemester] = useState('Ganjil')
   const TA_OPTS = tahunAjaranOptions()
-  const [tahunAjaran, setTahunAjaran] = useState(TA_OPTS[1]) // tahun ajaran berjalan
+  const [tahunAjaran, setTahunAjaran] = useState(TA_OPTS[1])
   const [nilaiMap, setNilaiMap] = useState({})
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
-  // --- state untuk tab "Kelola Nilai" (lihat & hapus) ---
   const [kelolaData, setKelolaData] = useState([])
   const [kelolaLoading, setKelolaLoading] = useState(false)
   const [kelolaFilterMapel, setKelolaFilterMapel] = useState('')
 
-  // --- state untuk tab "Impor Otomatis" (baca nilai dari Ujian Online & Kuis Seru) ---
-  const [importSumber, setImportSumber] = useState('ujian') // 'ujian' | 'kuis'
-  const [daftarImpor, setDaftarImpor] = useState([]) // daftar ujian/kuis yang bisa dipilih
+  const [importSumber, setImportSumber] = useState('ujian')
+  const [daftarImpor, setDaftarImpor] = useState([])
   const [importSelectedId, setImportSelectedId] = useState('')
   const [importKompetensi, setImportKompetensi] = useState('Pengetahuan')
-  const [importJenisKuis, setImportJenisKuis] = useState('Tugas') // jenis untuk Kuis Seru
-  // Jenis untuk Ujian Online — dulu selalu fixed "UTS" (lihat komentar di
-  // IMPOR_UJIAN_JENIS_OPTS di atas), sekarang jadi dropdown yang bisa dipilih.
+  const [importJenisKuis, setImportJenisKuis] = useState('Tugas')
   const [importJenisUjian, setImportJenisUjian] = useState('UTS')
-  // Mata pelajaran untuk impor dari Ujian Online — diisi otomatis kalau
-  // judul/mata_pelajaran ujian berhasil terbaca dari tabel "ujian", tapi
-  // tetap bisa diedit manual. Ini sengaja dipisah dari data ujian supaya
-  // proses impor TETAP bisa jalan walau tabel "ujian" gagal terbaca (mis.
-  // karena RLS) — karena sumber utama nilai sekarang murni dari hasil_ujian.
   const [mapelImporUjian, setMapelImporUjian] = useState('')
   const [importPreview, setImportPreview] = useState([])
   const [importLoading, setImportLoading] = useState(false)
   const [importSaving, setImportSaving] = useState(false)
 
-  // Admin: semua kelas. Guru: cuma kelas yang dia jadi wali kelasnya.
-  // (Keamanannya tetap ditegakkan oleh RLS tabel kelas — filter ini
-  // murni supaya dropdown langsung tepat tanpa nunggu RLS "diam-diam"
-  // mengosongkan hasil untuk kelas yang bukan miliknya.)
   useEffect(() => {
-    if (profil === undefined) return // tunggu profil selesai dimuat
+    if (profil === undefined) return
     let query = supabase.from('kelas').select('id, nama_kelas').order('nama_kelas')
     if (!isAdmin) {
       query = query.eq('wali_kelas_id', profil?.guru_id || null)
@@ -140,19 +115,25 @@ export default function Nilai() {
     })
   }, [isAdmin, profil])
 
-  // Ambil daftar mapel dari kolom guru.mata_pelajaran milik guru yang login.
-  // Dipecah jadi beberapa opsi kalau berisi lebih dari satu mapel (dipisah koma/slash).
+  // Ambil mapel dari profil guru, lalu KANONIK-KAN ke 9 nama resmi ijazah
+  // (+ opsi IPAS gabungan) sebelum jadi opsi dropdown. Nama yang tidak
+  // dikenali TIDAK ditampilkan sebagai opsi -- guru harus memperbaiki
+  // profilnya (halaman Data Guru) dulu, supaya nilai tidak salah tersimpan
+  // dengan nama mapel yang tidak konsisten dengan ijazah.
   useEffect(() => {
     if (profil === undefined) return
     if (!profil?.guru_id) {
       setMapelOpts([])
+      setMapelTidakDikenal([])
       return
     }
     supabase.from('guru').select('mata_pelajaran').eq('id', profil.guru_id).single()
       .then(({ data }) => {
-        const opts = pecahMapel(data?.mata_pelajaran)
-        setMapelOpts(opts)
-        setMataPelajaran((prev) => (opts.includes(prev) ? prev : opts[0] || ''))
+        const raw = pecahMapel(data?.mata_pelajaran)
+        const { opsi, tidakDikenal } = kanonikkanOpsiMapel(raw)
+        setMapelOpts(opsi)
+        setMapelTidakDikenal(tidakDikenal)
+        setMataPelajaran((prev) => (opsi.some((o) => o.value === prev) ? prev : opsi[0]?.value || ''))
       })
   }, [profil])
 
@@ -161,9 +142,6 @@ export default function Nilai() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kelasId])
 
-  // Muat ulang nilai yang sudah ada begitu mapel/kelas/siswa siap (dulu ini
-  // dipicu lewat onBlur input teks; sekarang mapel berupa dropdown jadi
-  // dipicu langsung lewat effect saat nilainya berubah).
   useEffect(() => {
     if (activeSubTab === 'input' && mataPelajaran && siswaList.length > 0) {
       loadExisting()
@@ -171,8 +149,6 @@ export default function Nilai() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSubTab, mataPelajaran, siswaList, jenis, kompetensi, semester, tahunAjaran])
 
-  // Muat ulang daftar nilai untuk tab "Kelola Nilai" setiap kali tab itu
-  // aktif, atau filter (kelas/semester/tahun ajaran) berubah.
   useEffect(() => {
     if (activeSubTab === 'kelola' && siswaList.length > 0 && tahunAjaran) {
       loadKelolaData()
@@ -190,11 +166,27 @@ export default function Nilai() {
     setLoading(false)
   }
 
+  // Label(s) resmi yang dipakai di tabel `nilai` untuk mataPelajaran yang
+  // sedang dipilih -- 1 label biasa, atau 2 label (IPA & IPS) kalau yang
+  // dipilih adalah opsi IPAS gabungan.
+  function labelResmiUntukPilihan(valuePilihan) {
+    if (valuePilihan === TOKEN_IPAS_GABUNGAN) {
+      return [
+        MAPEL_IJAZAH.find((m) => m.key === 'ipa').label,
+        MAPEL_IJAZAH.find((m) => m.key === 'ips').label,
+      ]
+    }
+    const m = MAPEL_IJAZAH.find((mp) => mp.key === valuePilihan)
+    return m ? [m.label] : []
+  }
+
   async function loadExisting() {
-    const mapel = mataPelajaran
-    if (!mapel || !kelasId) return
+    const labelUtama = labelResmiUntukPilihan(mataPelajaran)[0]
+    if (!labelUtama || !kelasId) return
+    // Untuk IPAS gabungan, cukup tampilkan nilai IPA sebagai acuan layar
+    // (keduanya selalu disimpan sama persis lewat handleSave di bawah).
     const { data } = await supabase.from('nilai').select('siswa_id, nilai')
-      .eq('mata_pelajaran', mapel).eq('jenis', jenis).eq('kompetensi', kompetensi)
+      .eq('mata_pelajaran', labelUtama).eq('jenis', jenis).eq('kompetensi', kompetensi)
       .eq('semester', semester).eq('tahun_ajaran', tahunAjaran)
       .in('siswa_id', siswaList.map((s) => s.id))
     const map = {}
@@ -204,22 +196,30 @@ export default function Nilai() {
   }
 
   async function handleSave() {
-    const mapel = mataPelajaran
-    if (!mapel) return alert('Pilih mata pelajaran terlebih dahulu.')
+    const labelList = labelResmiUntukPilihan(mataPelajaran)
+    if (labelList.length === 0) return alert('Pilih mata pelajaran terlebih dahulu.')
     setSaving(true)
-    const rows = siswaList
+
+    // Kalau IPAS gabungan: bikin baris untuk KEDUA label (IPA & IPS)
+    // dengan nilai yang sama persis per siswa.
+    const rows = []
+    siswaList
       .filter((s) => nilaiMap[s.id] !== undefined && nilaiMap[s.id] !== '')
-      .map((s) => ({
-        siswa_id: s.id,
-        mata_pelajaran: mapel,
-        jenis,
-        kompetensi,
-        semester,
-        tahun_ajaran: tahunAjaran,
-        nilai: Number(nilaiMap[s.id]),
-        predikat: predikatDariNilai(nilaiMap[s.id]),
-        diisi_oleh: profil?.guru_id || null,
-      }))
+      .forEach((s) => {
+        labelList.forEach((label) => {
+          rows.push({
+            siswa_id: s.id,
+            mata_pelajaran: label,
+            jenis,
+            kompetensi,
+            semester,
+            tahun_ajaran: tahunAjaran,
+            nilai: Number(nilaiMap[s.id]),
+            predikat: predikatDariNilai(nilaiMap[s.id]),
+            diisi_oleh: profil?.guru_id || null,
+          })
+        })
+      })
 
     if (rows.length === 0) {
       setSaving(false)
@@ -239,13 +239,6 @@ export default function Nilai() {
     }
 
     if (!data || data.length !== rows.length) {
-      // Tidak ada error dari Supabase, tapi jumlah baris yang benar-benar
-      // tersimpan tidak sesuai jumlah yang dikirim — biasanya berarti
-      // kebijakan RLS tabel "nilai" diam-diam menolak sebagian INSERT/UPDATE
-      // (mis. guru bukan pemilik siswa tersebut menurut RLS). Tanpa
-      // pengecekan ini, guru akan melihat "Tersimpan" padahal sebagian atau
-      // seluruh nilai tidak benar-benar masuk ke database, dan nilai itu
-      // tidak akan pernah muncul di halaman Rapor.
       alert(
         `Hanya ${data?.length || 0} dari ${rows.length} nilai yang benar-benar tersimpan ke database — kemungkinan kebijakan RLS pada tabel "nilai" belum mengizinkan INSERT/UPDATE untuk sebagian baris ini. Nilai yang gagal tersimpan tidak akan muncul di Rapor.`
       )
@@ -256,8 +249,6 @@ export default function Nilai() {
 
     if (activeSubTab === 'kelola') loadKelolaData()
   }
-
-  // --- fungsi untuk tab "Kelola Nilai" ---
 
   async function loadKelolaData() {
     setKelolaLoading(true)
@@ -290,8 +281,6 @@ export default function Nilai() {
       return
     }
     if (!data || data.length === 0) {
-      // Tidak ada error tapi tidak ada baris terhapus — biasanya berarti
-      // kebijakan RLS tabel nilai belum mengizinkan DELETE untuk user ini.
       alert('Nilai tidak terhapus — kemungkinan kebijakan RLS pada tabel nilai belum mengizinkan DELETE.')
       return
     }
@@ -300,12 +289,6 @@ export default function Nilai() {
 
   const kelasAktif = kelasList.find((k) => k.id === kelasId)
 
-  // --- fungsi untuk tab "Impor Otomatis" ---
-
-  // Muat ulang daftar ujian/kuis begitu kelas, sumber (Ujian Online/Kuis
-  // Seru), atau daftar siswa aktif kelas ini berganti. "siswaList.length"
-  // sengaja ditambahkan sebagai dependency karena loadDaftarUjian sekarang
-  // butuh siswaList untuk mencocokkan NIS (lihat komentar di dalamnya).
   useEffect(() => {
     if (activeSubTab !== 'impor' || !kelasId) return
     setImportSelectedId('')
@@ -316,66 +299,39 @@ export default function Nilai() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSubTab, importSumber, kelasId, kelasAktif?.nama_kelas, siswaList.length])
 
-  // Sumber daftar ujian yang bisa diimpor SEKARANG diambil langsung dari
-  // tabel hasil_ujian (dicocokkan lewat NIS siswa aktif di kelas ini) —
-  // BUKAN lagi dari tabel "ujian" yang difilter kelas_id + guru_id.
-  //
-  // Alasan: guru_id di tabel "ujian" sempat tersimpan tidak konsisten
-  // (auth.uid() vs guru.id), dan kebijakan RLS tabel "ujian" mungkin
-  // membatasi guru hanya melihat baris miliknya sendiri berdasarkan salah
-  // satu dari dua nilai itu — sehingga ujian yang baru dibuat guru bisa
-  // "hilang" dari daftar impor walau hasil siswanya sudah masuk sempurna
-  // ke hasil_ujian (halaman Hasil Ujian yang terpisah terbukti tetap bisa
-  // menampilkannya). Dengan sumber dari hasil_ujian, daftar impor jadi
-  // otomatis sinkron dengan apa pun yang tampil di halaman Hasil Ujian.
-  //
-  // Info judul & mata_pelajaran TETAP butuh baca ke tabel "ujian" (karena
-  // hasil_ujian tidak menyimpannya sendiri), tapi ini sekadar pelengkap
-  // tampilan: kalau gagal terbaca, judul di-fallback ke label generik dan
-  // mata pelajaran dikosongkan supaya guru mengisinya manual lewat kotak
-  // "Mata Pelajaran" — impor tetap bisa jalan tanpa ini.
   async function loadDaftarUjian() {
     setImportLoading(true)
-
     if (siswaList.length === 0) {
       setDaftarImpor([])
       setImportLoading(false)
       return
     }
-
     const nisAktif = siswaList.map((s) => (s.nis || '').trim()).filter(Boolean)
     if (nisAktif.length === 0) {
       setDaftarImpor([])
       setImportLoading(false)
       return
     }
-
     const { data: hasilData, error: errHasil } = await supabase
       .from('hasil_ujian')
       .select('ujian_id')
       .in('nis_siswa', nisAktif)
-
     if (errHasil) {
       alert('Gagal memuat daftar hasil ujian: ' + errHasil.message)
       setDaftarImpor([])
       setImportLoading(false)
       return
     }
-
     const idUjianUnik = [...new Set((hasilData || []).map((h) => h.ujian_id).filter(Boolean))]
     if (idUjianUnik.length === 0) {
       setDaftarImpor([])
       setImportLoading(false)
       return
     }
-
-    // Baca info tambahan (judul, mata pelajaran, waktu dibuat) — kalau
-    // gagal/kosong (mis. terhalang RLS), tetap lanjut dengan data seadanya.
     const { data: ujianData } = await supabase
       .from('ujian')
       .select('id, judul, mata_pelajaran, created_at')
       .in('id', idUjianUnik)
-
     const daftar = idUjianUnik
       .map((id) => {
         const info = (ujianData || []).find((u) => u.id === id)
@@ -387,16 +343,10 @@ export default function Nilai() {
         }
       })
       .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
-
     setDaftarImpor(daftar)
     setImportLoading(false)
   }
 
-  // Kuis Seru cuma menyimpan nama kelas sebagai teks (bukan kelas_id), dan
-  // bisa ada beberapa kelas dengan nama sama (mis. beberapa kelas "1").
-  // Supaya tidak salah sasaran, kita cocokkan berdasarkan nama kelas
-  // SEKALIGUS guru pembuat kuisnya (asumsi: guru cuma bikin kuis untuk
-  // kelas yang dia ajar/wali-i sendiri).
   async function loadDaftarKuis() {
     if (!kelasAktif) { setDaftarImpor([]); return }
     setImportLoading(true)
@@ -415,7 +365,6 @@ export default function Nilai() {
     if (!id) return
     setImportLoading(true)
     if (importSumber === 'ujian') {
-      // Isi awal kotak Mata Pelajaran dari data ujian kalau berhasil terbaca
       const rec = daftarImpor.find((r) => r.id === id)
       setMapelImporUjian(rec?.mata_pelajaran || '')
       await muatPreviewUjian(id)
@@ -434,7 +383,7 @@ export default function Nilai() {
         namaAsal: h.nama_siswa,
         skor: h.skor,
         siswaId: siswa?.id || '',
-        status: siswa ? 'cocok' : 'tidak_cocok', // tidak_cocok: NIS tidak ditemukan di kelas aktif ini
+        status: siswa ? 'cocok' : 'tidak_cocok',
         termasuk: !!siswa,
       }
     })
@@ -452,7 +401,6 @@ export default function Nilai() {
         namaAsal: h.nama_siswa,
         skor,
         siswaId: cocok.length === 1 ? cocok[0].id : '',
-        // ambigu: ada >1 siswa dengan nama sama persis di kelas ini — perlu dipilih manual
         status: cocok.length === 1 ? 'cocok' : cocok.length === 0 ? 'tidak_cocok' : 'ambigu',
         termasuk: cocok.length === 1 && skor !== null,
       }
@@ -468,17 +416,16 @@ export default function Nilai() {
     setImportPreview((prev) => prev.map((r, i) => (i === idx ? { ...r, siswaId, termasuk: !!siswaId } : r)))
   }
 
+  // CATATAN: mata pelajaran untuk impor dari Ujian Online/Kuis Seru masih
+  // berupa TEKS BEBAS (mapelImporUjian / rec.mata_pelajaran) -- sumber
+  // typo yang sama seperti dulu di dropdown Input Nilai, TAPI belum
+  // dikanonik-kan di sini karena di luar cakupan permintaan saat ini. Kalau
+  // ke depannya nilai dari Ujian Online/Kuis Seru juga perlu ditarik ke
+  // Ijazah, bagian ini perlu diperbaiki dengan pola yang sama.
   async function handleImport() {
     const rec = daftarImpor.find((r) => r.id === importSelectedId)
     if (!rec) return
-    // Jenis nilai yang dipakai untuk impor ini — sekarang dua-duanya
-    // (Ujian Online maupun Kuis Seru) dipilih lewat dropdown, tidak ada
-    // lagi yang di-fixed ke satu jenis tertentu.
     const jenisAkhir = importSumber === 'ujian' ? importJenisUjian : importJenisKuis
-    // Mata pelajaran: untuk Ujian Online dipakai dari kotak yang bisa
-    // diedit manual (mapelImporUjian), bukan langsung dari rec.mata_pelajaran
-    // — supaya impor tetap bisa jalan walau info ujian gagal terbaca dari
-    // tabel "ujian". Untuk Kuis Seru tetap dari data kuisnya seperti semula.
     const mapelAkhir = importSumber === 'ujian' ? mapelImporUjian.trim() : rec.mata_pelajaran
     if (!mapelAkhir) {
       return alert('Isi dulu Mata Pelajaran untuk ujian ini sebelum diimpor.')
@@ -506,9 +453,6 @@ export default function Nilai() {
     if (error) {
       alert('Gagal mengimpor nilai: ' + error.message)
     } else if (!data || data.length !== baris.length) {
-      // Sama seperti handleSave: tidak ada error tapi jumlah baris yang
-      // benar-benar tersimpan tidak sesuai — kemungkinan besar RLS tabel
-      // "nilai" menolak sebagian INSERT/UPDATE secara diam-diam.
       alert(
         `Hanya ${data?.length || 0} dari ${baris.length} nilai yang benar-benar tersimpan — kemungkinan kebijakan RLS pada tabel "nilai" belum mengizinkan INSERT/UPDATE untuk sebagian baris. Nilai yang gagal tersimpan tidak akan muncul di Rapor.`
       )
@@ -528,7 +472,6 @@ export default function Nilai() {
 
   return (
     <Layout title="Nilai Siswa" subtitle="Input nilai per kelas dan mata pelajaran">
-      {/* Banner — tema sirkuit neon, senada dengan Login & Kelas */}
       <div className="relative overflow-hidden rounded-2xl nilai-banner p-6 mb-6">
         <CircuitBackdrop patternId="pola-nilai" />
         <div className="relative z-10 flex items-center gap-4">
@@ -544,7 +487,14 @@ export default function Nilai() {
         </div>
       </div>
 
-      {/* Tab: Input Nilai vs Kelola Nilai (lihat & hapus) */}
+      {mapelTidakDikenal.length > 0 && (
+        <div className="mb-4 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+          Mapel berikut di profil Anda tidak dikenali sistem dan disembunyikan dari dropdown:{' '}
+          <b>{mapelTidakDikenal.join(', ')}</b>. Mohon perbaiki penulisannya di halaman Data Guru supaya nilainya
+          nanti bisa dipakai untuk Ijazah.
+        </div>
+      )}
+
       <div className="flex items-center gap-2 mb-5">
         <button
           onClick={() => setActiveSubTab('input')}
@@ -588,8 +538,8 @@ export default function Nilai() {
               onChange={(e) => setMataPelajaran(e.target.value)}
               disabled={mapelOpts.length === 0}
             >
-              {mapelOpts.length === 0 && <option value="">Belum ada mapel di profil guru</option>}
-              {mapelOpts.map((m) => <option key={m} value={m}>{m}</option>)}
+              {mapelOpts.length === 0 && <option value="">Belum ada mapel dikenali di profil guru</option>}
+              {mapelOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
         )}
