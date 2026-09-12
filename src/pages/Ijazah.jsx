@@ -24,8 +24,17 @@ function tahunPelajaranDefault() {
 
 export default function Ijazah() {
   const [tahunPelajaran, setTahunPelajaran] = useState(tahunPelajaranDefault());
-  const [kelasList, setKelasList] = useState([]);
-  const [kelasId, setKelasId] = useState(null);
+
+  // PERUBAHAN: halaman Ijazah sekarang KHUSUS Kelas 6 saja (siswa lulus),
+  // jadi tidak ada lagi dropdown pemilihan kelas. kelasId diisi otomatis
+  // dari kelas yang tingkatnya "VI" dan tidak bisa diubah dari UI.
+  // Kalau sekolah punya lebih dari 1 rombel Kelas 6, semuanya tetap
+  // digabung (kelasId di sini berupa array id, bukan 1 id saja) supaya
+  // tidak ada siswa Kelas 6 yang "hilang" hanya karena beda rombel.
+  const [kelasIdKelas6, setKelasIdKelas6] = useState([]);
+  const [namaKelas6, setNamaKelas6] = useState("");
+  const [kelasSiapDimuat, setKelasSiapDimuat] = useState(false);
+
   const [siswaList, setSiswaList] = useState([]);
   const [nilaiMap, setNilaiMap] = useState({}); // siswa_id -> {pend_agama: .., ...}
   const [sekolah, setSekolah] = useState(null);
@@ -37,26 +46,29 @@ export default function Ijazah() {
   // Orientasi kertas untuk cetak rekap: "portrait" (tegak) atau "landscape" (mendatar)
   const [orientasiCetak, setOrientasiCetak] = useState("landscape");
 
-  // Ambil daftar kelas sekali di awal, lalu default-kan ke kelas yang mengandung "6"
+  // Ambil kelas Kelas 6 sekali di awal (tidak ada lagi pilihan kelas lain)
   useEffect(() => {
-    loadKelas();
+    cariKelas6();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    if (kelasId !== null) {
+    if (kelasSiapDimuat) {
       loadAll();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tahunPelajaran, kelasId]);
+  }, [tahunPelajaran, kelasSiapDimuat, kelasIdKelas6]);
 
-  async function loadKelas() {
+  async function cariKelas6() {
     const { data: kelas } = await supabase.from("kelas").select("*").order("nama_kelas");
-    setKelasList(kelas || []);
     // Tingkat disimpan sebagai angka Romawi (VII, VI, dst), jadi cocokkan persis "VI"
     // (bukan .includes, karena "VI" juga jadi substring dari "VII" dan "VIII")
-    const kelas6 = (kelas || []).find((k) => String(k.tingkat).trim().toUpperCase() === "VI");
-    setKelasId(kelas6 ? kelas6.id : kelas?.[0]?.id ?? "");
+    const semuaKelas6 = (kelas || []).filter(
+      (k) => String(k.tingkat).trim().toUpperCase() === "VI"
+    );
+    setKelasIdKelas6(semuaKelas6.map((k) => k.id));
+    setNamaKelas6(semuaKelas6.map((k) => k.nama_kelas).join(", "));
+    setKelasSiapDimuat(true);
   }
 
   // Ambil sekolah_id user yang sedang login lewat tabel profil.
@@ -87,7 +99,14 @@ export default function Ijazah() {
       .select("*, kelas(tingkat)")
       .eq("status", "aktif")
       .order("nama_lengkap");
-    if (kelasId) siswaQuery = siswaQuery.eq("kelas_id", kelasId);
+
+    if (kelasIdKelas6.length > 0) {
+      siswaQuery = siswaQuery.in("kelas_id", kelasIdKelas6);
+    } else {
+      // Belum ada kelas bertingkat "VI" ditemukan -> jangan tampilkan siswa
+      // kelas lain sama sekali (halaman ini khusus Kelas 6).
+      siswaQuery = siswaQuery.eq("kelas_id", "__tidak_ada_kelas_6__");
+    }
 
     let profilQuery = supabase.from("profil_sekolah").select("*");
     profilQuery = sekolahIdAktif
@@ -106,7 +125,7 @@ export default function Ijazah() {
     });
     setNilaiMap(map);
     setSekolah(profil || null);
-    // Pilih siswa pertama di kelas terpilih (reset kalau siswa lama tidak ada di kelas ini)
+    // Pilih siswa pertama di Kelas 6 (reset kalau siswa lama tidak ada lagi di daftar)
     if (siswa?.length && !siswa.some((s) => s.id === selectedId)) {
       setSelectedId(siswa[0].id);
     } else if (!siswa?.length) {
@@ -171,9 +190,9 @@ export default function Ijazah() {
   return (
     <Layout
       title="Ijazah"
-      subtitle="Pengisian nilai kelulusan (9 mapel) dan cetak rekap data ijazah kelulusan"
+      subtitle="Pengisian nilai kelulusan (9 mapel) dan cetak rekap data ijazah kelulusan — khusus Kelas 6"
       actions={
-        <div className="flex gap-2">
+        <div className="no-print flex gap-2">
           <ImporNilaiAsesmenModal
             siswaList={siswaList}
             tahunPelajaranDefault={tahunPelajaran}
@@ -187,16 +206,41 @@ export default function Ijazah() {
       }
     >
       {/*
-        Atur ukuran kertas saat dialog print dipanggil (window.print()).
-        Ukuran ditulis presisi (bukan cuma kata kunci "landscape"/"portrait")
-        supaya PERSIS sama dengan lebar konten di RekapIjazahPrintTemplate.jsx
-        (330mm F4 landscape, atau 210x297mm A4 potrait) — kalau meleset,
-        kolom paling kanan (SBK/PJOK/Mulok/JUMLAH) bisa kepotong saat cetak.
-        Kalau lebar konten di RekapIjazahPrintTemplate.jsx diubah, ukuran di
-        sini wajib disesuaikan juga.
+        Sistem print halaman ini mengikuti pola global aplikasi (class
+        "no-print" & "print-only", lihat index.css): semua elemen
+        disembunyikan saat print KECUALI yang berkelas "print-only".
+        Karena area rekap di sini juga harus tampil normal di layar
+        (bukan template tersembunyi), aturan "display: none" bawaan untuk
+        .print-only di-override khusus untuk kelas ".rekap-ijazah.print-only"
+        — sama seperti pola ".lembar-cetak.print-only" di
+        LaporanKeadaanMurid.jsx.
+
+        position/overflow/max-height juga di-override saat print supaya
+        kontainer scroll (dipakai untuk preview di layar) tidak lagi
+        membatasi tinggi konten saat dicetak — inilah penyebab tampilan
+        tumpang-tindih/terpotong pada percobaan cetak sebelumnya.
       */}
       <style>{`
+        @media screen {
+          .rekap-ijazah.print-only {
+            display: block !important;
+          }
+        }
+
         @media print {
+          .no-print { display: none !important; }
+
+          .rekap-ijazah.print-only {
+            position: static !important;
+            top: auto !important;
+            left: auto !important;
+            right: auto !important;
+            max-height: none !important;
+            overflow: visible !important;
+            border: none !important;
+            border-radius: 0 !important;
+          }
+
           @page {
             size: ${orientasiCetak === "landscape" ? "330mm 210mm" : "210mm 297mm"};
             margin: 0;
@@ -204,7 +248,7 @@ export default function Ijazah() {
         }
       `}</style>
 
-      <div className="card p-4 mb-6 flex flex-wrap items-end gap-4">
+      <div className="no-print card p-4 mb-6 flex flex-wrap items-end gap-4">
         <div>
           <label className="block text-xs font-semibold text-ink-700/60 mb-1">Tahun Pelajaran</label>
           <input
@@ -216,27 +260,24 @@ export default function Ijazah() {
         </div>
         <div>
           <label className="block text-xs font-semibold text-ink-700/60 mb-1">Kelas</label>
-          <select
-            className="input-field w-48"
-            value={kelasId || ""}
-            onChange={(e) => setKelasId(e.target.value)}
-          >
-            {kelasList.map((k) => (
-              <option key={k.id} value={k.id}>
-                {k.nama_kelas} (Tingkat {k.tingkat})
-              </option>
-            ))}
-          </select>
+          {/* Tidak ada lagi dropdown pilih kelas — halaman ini khusus Kelas 6 */}
+          <div className="input-field w-48 bg-ink-900/5 text-ink-700/70 flex items-center">
+            {namaKelas6 || "Kelas 6 (VI)"}
+          </div>
         </div>
       </div>
 
       {loading ? (
         <p>Memuat...</p>
+      ) : !kelasIdKelas6.length ? (
+        <div className="card p-6 text-center text-ink-700/60">
+          Belum ada kelas dengan tingkat "VI" (Kelas 6) di data sekolah ini.
+        </div>
       ) : siswaList.length === 0 ? (
-        <div className="card p-6 text-center text-ink-700/60">Belum ada siswa aktif di kelas ini.</div>
+        <div className="card p-6 text-center text-ink-700/60">Belum ada siswa aktif di Kelas 6.</div>
       ) : (
         <>
-          <div className="card overflow-x-auto mb-6">
+          <div className="no-print card overflow-x-auto mb-6">
             <table className="table-shell">
               <thead>
                 <tr>
@@ -303,57 +344,58 @@ export default function Ijazah() {
             />
           )}
 
-          <div className="card p-4">
-            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-ink-700/60 mb-1">Pratinjau Rekap</label>
-                <p className="text-sm text-ink-700/60">
-                  {siswaList.length} siswa · Tahun Pelajaran {tahunPelajaran}
-                </p>
-              </div>
+          <div className="no-print card p-4 mb-4 flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-ink-700/60 mb-1">Pratinjau Rekap</label>
+              <p className="text-sm text-ink-700/60">
+                {siswaList.length} siswa · Kelas 6 · Tahun Pelajaran {tahunPelajaran}
+              </p>
+            </div>
 
-              <div className="flex items-center gap-2">
-                <div className="flex items-center rounded-lg border border-ink-900/15 overflow-hidden">
-                  <button
-                    type="button"
-                    className={`!px-2.5 !py-1.5 text-xs flex items-center gap-1 transition-colors ${
-                      orientasiCetak === "portrait"
-                        ? "bg-brass-400/20 font-semibold"
-                        : "bg-transparent hover:bg-ink-900/5"
-                    }`}
-                    onClick={() => setOrientasiCetak("portrait")}
-                    title="Cetak posisi Potrait (tegak)"
-                  >
-                    <RectangleVertical size={14} /> Potrait
-                  </button>
-                  <button
-                    type="button"
-                    className={`!px-2.5 !py-1.5 text-xs flex items-center gap-1 border-l border-ink-900/15 transition-colors ${
-                      orientasiCetak === "landscape"
-                        ? "bg-brass-400/20 font-semibold"
-                        : "bg-transparent hover:bg-ink-900/5"
-                    }`}
-                    onClick={() => setOrientasiCetak("landscape")}
-                    title="Cetak posisi Landscape (mendatar)"
-                  >
-                    <RectangleHorizontal size={14} /> Landscape
-                  </button>
-                </div>
-
-                <button className="btn-primary" onClick={() => window.print()}>
-                  <Printer size={16} /> Cetak Rekap Ijazah
+            <div className="flex items-center gap-2">
+              <div className="flex items-center rounded-lg border border-ink-900/15 overflow-hidden">
+                <button
+                  type="button"
+                  className={`!px-2.5 !py-1.5 text-xs flex items-center gap-1 transition-colors ${
+                    orientasiCetak === "portrait"
+                      ? "bg-brass-400/20 font-semibold"
+                      : "bg-transparent hover:bg-ink-900/5"
+                  }`}
+                  onClick={() => setOrientasiCetak("portrait")}
+                  title="Cetak posisi Potrait (tegak)"
+                >
+                  <RectangleVertical size={14} /> Potrait
+                </button>
+                <button
+                  type="button"
+                  className={`!px-2.5 !py-1.5 text-xs flex items-center gap-1 border-l border-ink-900/15 transition-colors ${
+                    orientasiCetak === "landscape"
+                      ? "bg-brass-400/20 font-semibold"
+                      : "bg-transparent hover:bg-ink-900/5"
+                  }`}
+                  onClick={() => setOrientasiCetak("landscape")}
+                  title="Cetak posisi Landscape (mendatar)"
+                >
+                  <RectangleHorizontal size={14} /> Landscape
                 </button>
               </div>
-            </div>
 
-            <div className="border border-ink-900/10 rounded-lg overflow-auto" style={{ maxHeight: "70vh" }}>
-              <RekapIjazahPrintTemplate
-                siswaList={siswaUntukRekap}
-                sekolah={sekolahUntukCetak}
-                tahunPelajaran={tahunPelajaran}
-                orientasi={orientasiCetak}
-              />
+              <button className="btn-primary" onClick={() => window.print()}>
+                <Printer size={16} /> Cetak Rekap Ijazah
+              </button>
             </div>
+          </div>
+
+          <div
+            className="rekap-ijazah print-only border border-ink-900/10 rounded-lg overflow-auto"
+            style={{ maxHeight: "70vh" }}
+          >
+            <RekapIjazahPrintTemplate
+              siswaList={siswaUntukRekap}
+              sekolah={sekolahUntukCetak}
+              tahunPelajaran={tahunPelajaran}
+              orientasi={orientasiCetak}
+            />
           </div>
         </>
       )}
