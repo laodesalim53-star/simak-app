@@ -174,7 +174,7 @@ function getGroupsAdmin(
           : []),
       ],
     },
-    {
+       {
       label: 'Administrasi',
       links: [
         { to: '/pengajuan-surat-aktif', label: 'Pengajuan Surat Aktif', icon: FileCheck2 },
@@ -182,30 +182,20 @@ function getGroupsAdmin(
         { to: '/pengajuan-kebutuhan-kelas', label: 'Kebutuhan Kelas', icon: PackagePlus },
         { to: '/agenda', label: 'Agenda Sekolah', icon: CalendarDays },
         { to: '/surat', label: 'Surat Masuk/Keluar', icon: Mail },
+        { to: '/surat-keterangan', label: 'Surat Keterangan', icon: FileSignature },
         { to: '/ppdb-admin', label: 'PPDB Siswa Baru', icon: UserPlus },
         // Laporan Kepegawaian Guru: satu pintu untuk semua laporan guru,
-        // TERMASUK Data Ujian 8355 & Cetak 8355 (dua item menu terpisah
-        // untuk itu sudah dihapus dari sini — sekarang jadi kartu di dalam
-        // halaman ini, lihat PusatLaporanGuru.jsx).
+        // TERMASUK Laporan Bulanan, Cetak Sampul, Data Ujian 8355 & Cetak
+        // 8355 (menu-menu terpisah untuk itu semua sudah dihapus dari sini
+        // — sekarang jadi kartu di dalam halaman ini, lihat PusatLaporanGuru.jsx).
         { to: '/laporan-guru', label: 'Laporan Kepegawaian Guru', icon: GraduationCap },
         { to: '/hari-libur', label: 'Hari Libur', icon: CalendarOff },
         { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
         { to: '/backup', label: 'Backup Data', icon: DatabaseBackup },
-        // Cetak Sampul: ditaruh berdekatan dengan menu cetak lainnya.
-        // Satu halaman ini sudah punya sidebar menu sendiri di dalamnya
-        // untuk memilih semua jenis laporan (termasuk Semester & 8355),
-        // jadi tidak perlu lagi item menu terpisah untuk tiap jenis.
-        { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
-        // Manajemen Sekolah dan Persetujuan Toko hanya untuk superadmin.
+        // Manajemen Sekolah hanya untuk superadmin.
         ...(isSuperAdmin
           ? [
               { to: '/manajemen-sekolah', label: 'Manajemen Sekolah', icon: Building2 },
-              {
-                to: '/persetujuan-toko',
-                label: 'Persetujuan Toko',
-                icon: ShieldCheck,
-                badge: jumlahPengajuanTokoMenunggu,
-              },
             ]
           : []),
         // "Persetujuan Akun" dan "Profil Sekolah" hanya untuk admin utama / superadmin
@@ -218,9 +208,6 @@ function getGroupsAdmin(
         { to: '/kartu', label: 'Cetak Kartu', icon: IdCard },
       ],
     },
-  ]
-}
-
 // Menu ADMIN untuk tenant "kantor" (isKantor) — versi ringkas dari
 // getGroupsAdmin() di atas, hanya fitur umum yang diminta: data pegawai,
 // presensi, surat-menyurat, dan dokumen. Semua item akademik (siswa, kelas,
