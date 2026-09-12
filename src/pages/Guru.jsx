@@ -246,7 +246,7 @@ export default function Guru() {
   }
 
   const filtered = data.filter((g) =>
-    `${g.nama_lengkap} ${g.nip} ${g.nuptk} ${g.mata_pelajaran}`.toLowerCase().includes(search.toLowerCase())
+    `${g.nama_lengkap} ${g.nip} ${g.nuptk} ${g.jenis_ptk}`.toLowerCase().includes(search.toLowerCase())
   )
 
   return (
@@ -273,7 +273,7 @@ export default function Guru() {
           </div>
           <div className="relative max-w-sm w-full">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-700/40" />
-            <input className="input-field pl-9" placeholder="Cari nama, NIP, NUPTK, atau mapel..."
+            <input className="input-field pl-9" placeholder="Cari nama, NIP, NUPTK, atau jenis PTK..."
               value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
         </div>
@@ -319,7 +319,7 @@ export default function Guru() {
               <th>Nama Lengkap</th>
               <th>NIP</th>
               <th>NUPTK</th>
-              <th>Mata Pelajaran</th>
+              <th>Jenis PTK</th>
               <th>No. HP</th>
               <th>Email</th>
               <th>Status</th>
@@ -344,7 +344,7 @@ export default function Guru() {
                 </td>
                 <td className="font-mono text-xs">{g.nip}</td>
                 <td className="font-mono text-xs">{g.nuptk}</td>
-                <td>{g.mata_pelajaran}</td>
+                <td>{g.jenis_ptk}</td>
                 <td>
                   <span className="inline-flex items-center gap-1.5">
                     {g.no_hp}
