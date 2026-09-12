@@ -345,7 +345,7 @@ function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 
 export default function PusatLaporanGuru() {
   return (
     <Layout
-      title="Laporan Kepegawaian Guru"
+      title="Pusat Laporan Kepegawaian"
       subtitle="Pilih jenis laporan yang ingin dicetak. Setiap laporan diambil otomatis dari data Guru dan Profil Sekolah."
     >
       <style>{`
@@ -370,9 +370,7 @@ export default function PusatLaporanGuru() {
             <LayoutDashboard size={22} className="hidden sm:block" />
           </div>
           <div className="relative min-w-0">
-            <p className="font-display font-semibold text-base sm:text-lg text-white leading-snug">
-              Pusat Laporan Kepegawaian Guru
-            </p>
+            <p className="font-display font-semibold text-lg text-white">Pusat Laporan Kepegawaian</p>
             <p className="text-xs sm:text-sm text-blue-200/80">Semua laporan siap cetak ada di bawah ini.</p>
           </div>
         </div>
