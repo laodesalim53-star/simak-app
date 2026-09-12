@@ -18,7 +18,6 @@ import MenungguPersetujuan from './pages/MenungguPersetujuan'
 import PersetujuanAkun from './pages/PersetujuanAkun'
 import Dashboard from './pages/Dashboard'
 import Siswa from './pages/Siswa'
-import SiswaNonaktif from './pages/SiswaNonaktif'
 import HasilUjian from './pages/HasilUjian'
 import Guru from './pages/Guru'
 // Data Pegawai (tenant kantor) — komponen & tabel TERPISAH dari Guru/`guru`.
