@@ -18,7 +18,6 @@ import {
   FileBadge,
   ScrollText,
   Stamp,
-  FileText,
   FileSignature,
   Wallet,
   Banknote,
