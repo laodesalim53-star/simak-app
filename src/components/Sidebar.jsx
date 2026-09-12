@@ -133,7 +133,6 @@ function getGroupsAdmin(
         { to: '/nilai', label: 'Nilai Siswa', icon: BookOpenCheck },
         { to: '/nilai-asesmen', label: 'Nilai Asesmen', icon: FileSpreadsheet },
         { to: '/rapor', label: 'Rapor Siswa', icon: FileBadge },
-        { to: '/ijazah', label: 'Ijazah', icon: ScrollText },
         { to: '/portofolio-siswa', label: 'Portofolio Siswa', icon: FolderHeart },
         { to: '/rpp', label: 'RPP', icon: NotebookPen },
         { to: '/arsip-rpp', label: 'Arsip RPP', icon: Archive },
