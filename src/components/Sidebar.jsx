@@ -58,6 +58,9 @@ import {
   Sparkles,
   FileStack,
   Briefcase,
+  MessageCircle,
+  Building2,
+  LayoutGrid,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
@@ -123,15 +126,9 @@ function getGroupsAdmin(
       links: [
         { to: '/siswa', label: 'Data Siswa', icon: Users },
         { to: '/guru', label: 'Data Guru', icon: GraduationCap },
-        { to: '/kelas', label: 'Kelas', icon: DoorOpen },
-        { to: '/jadwal', label: 'Jadwal Pelajaran', icon: CalendarClock },
-        { to: '/presensi', label: 'Presensi', icon: ClipboardCheck },
-        { to: '/nilai', label: 'Nilai Siswa', icon: BookOpenCheck },
         { to: '/nilai-asesmen', label: 'Nilai Asesmen', icon: FileSpreadsheet },
         { to: '/rapor', label: 'Rapor Siswa', icon: FileBadge },
         { to: '/portofolio-siswa', label: 'Portofolio Siswa', icon: FolderHeart },
-        { to: '/rpp', label: 'RPP', icon: NotebookPen },
-        { to: '/arsip-rpp', label: 'Arsip RPP', icon: Archive },
         { to: '/sertifikat', label: 'Sertifikat & Penghargaan', icon: Award },
         { to: '/buat-ujian', label: 'Buat Ujian', icon: FilePlus },
         { to: '/hasil-ujian', label: 'Hasil Ujian', icon: ClipboardList },
@@ -143,7 +140,6 @@ function getGroupsAdmin(
       label: 'Keuangan & Aset',
       links: [
         { to: '/keuangan', label: 'Keuangan', icon: Wallet },
-        { to: '/keuangan-kelas', label: 'Keuangan Kelas', icon: PiggyBank },
         { to: '/kuitansi', label: 'Kuitansi', icon: Receipt },
         { to: '/kuitansi-jasa', label: 'Kuitansi Jasa', icon: Receipt },
         { to: '/nota', label: 'Nota Belanja', icon: ShoppingCart },
@@ -176,8 +172,6 @@ function getGroupsAdmin(
       links: [
         { to: '/pengajuan-surat-aktif', label: 'Pengajuan Surat Aktif', icon: FileCheck2 },
         { to: '/perbaikan-data-siswa', label: 'Perbaikan Data Siswa', icon: UserCog },
-        { to: '/pengajuan-kebutuhan-kelas', label: 'Kebutuhan Kelas', icon: PackagePlus },
-        { to: '/agenda', label: 'Agenda Sekolah', icon: CalendarDays },
         { to: '/surat', label: 'Surat Masuk/Keluar', icon: Mail },
         { to: '/surat-keterangan', label: 'Surat Keterangan', icon: FileSignature },
         { to: '/ppdb-admin', label: 'PPDB Siswa Baru', icon: UserPlus },
@@ -278,19 +272,14 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   { to: '/galeri', label: 'Galeri Kegiatan', icon: Images },
   { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
   { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
-  { to: '/keuangan-kelas', label: 'Keuangan Kelas', icon: PiggyBank },
+  { to: '/administrasi-kelas', label: 'Administrasi Kelas', icon: LayoutGrid },
   { to: '/siswa', label: 'Data Siswa', icon: Users },
-  { to: '/presensi', label: 'Presensi', icon: ClipboardCheck },
-  { to: '/nilai', label: 'Nilai Siswa', icon: BookOpenCheck },
   { to: '/nilai-asesmen', label: 'Nilai Asesmen', icon: FileSpreadsheet },
   { to: '/rapor', label: 'Rapor Siswa', icon: FileBadge },
   { to: '/portofolio-siswa', label: 'Portofolio Siswa', icon: FolderHeart },
-  { to: '/rpp', label: 'RPP', icon: NotebookPen },
-  { to: '/arsip-rpp', label: 'Arsip RPP', icon: Archive },
   { to: '/sertifikat', label: 'Sertifikat & Penghargaan', icon: Award },
   { to: '/pengajuan-surat-aktif', label: 'Pengajuan Surat Aktif', icon: FileCheck2 },
   { to: '/perbaikan-data-siswa', label: 'Perbaikan Data Siswa', icon: UserCog },
-  { to: '/pengajuan-kebutuhan-kelas', label: 'Kebutuhan Kelas', icon: PackagePlus },
   // Hanya tautan pintasan ke form publik, sama seperti menu orang tua —
   // approval pendaftar PPDB tetap khusus admin lewat /ppdb-admin.
   // PERBAIKAN: /ppdb/:sekolahId, bukan "/ppdb" polos (lihat catatan di
@@ -301,9 +290,6 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   { to: '/bank-soal', label: 'Bank Soal', icon: Database },
   { to: '/buat-kuis-seru', label: 'Kuis Seru (Kls 1-3)', icon: Gamepad2 },
   { to: '/perpustakaan', label: 'Perpustakaan', icon: Library },
-  { to: '/jadwal', label: 'Jadwal Pelajaran', icon: CalendarClock },
-  { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
-  { to: '/agenda', label: 'Agenda Sekolah', icon: CalendarDays },
   { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
   ]
 }
@@ -318,6 +304,7 @@ function getLinksKantorPegawai(jumlahPesanBelumDibaca = 0) {
     { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
     { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
     { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
+    { to: '/administrasi-kelas', label: 'Administrasi Kelas', icon: LayoutGrid },
     { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
     { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
     { to: '/presensi', label: 'Presensi', icon: ClipboardCheck },
