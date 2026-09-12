@@ -58,8 +58,7 @@ import {
   Sparkles,
   FileStack,
   Briefcase,
-  MessageCircle,
-  Building2,
+  LayoutGrid,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
@@ -221,6 +220,7 @@ function getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelum
         { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
         { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
         { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
+        { to: '/administrasi-kelas', label: 'Administrasi Kelas', icon: LayoutGrid },
         { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
         { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
         { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
@@ -267,6 +267,7 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   { to: '/toko', label: 'Toko', icon: Store },
   { to: '/riwayat-pesanan', label: 'Riwayat Pesanan', icon: Receipt },
   { to: '/pesanan-masuk', label: 'Pesanan Masuk (Toko)', icon: Inbox },
+  { to: '/administrasi-kelas', label: 'Administrasi Kelas', icon: LayoutGrid },
   { to: '/rapat', label: 'Rapat Video', icon: Video },
   { to: '/galeri', label: 'Galeri Kegiatan', icon: Images },
   { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
