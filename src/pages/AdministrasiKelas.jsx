@@ -12,6 +12,7 @@ import {
   PiggyBank,
   PackagePlus,
   FileBadge,
+  GraduationCap,
   ChevronRight,
 } from 'lucide-react'
 
@@ -83,6 +84,12 @@ const SEMUA_KARTU = [
     icon: PiggyBank,
     desc: 'Kelola kas dan iuran kelas.',
   },
+  {
+  to: '/portofolio-siswa',
+  label: 'Portofolio Siswa',
+  icon: GraduationCap,
+  desc: 'Lihat ringkasan biodata, kehadiran, nilai & prestasi tiap siswa.',
+},
   {
     to: '/pengajuan-kebutuhan-kelas',
     label: 'Kebutuhan Kelas',
