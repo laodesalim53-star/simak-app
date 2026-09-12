@@ -301,6 +301,7 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   { to: '/bank-soal', label: 'Bank Soal', icon: Database },
   { to: '/buat-kuis-seru', label: 'Kuis Seru (Kls 1-3)', icon: Gamepad2 },
   { to: '/perpustakaan', label: 'Perpustakaan', icon: Library },
+  { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
   { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
   ]
 }
