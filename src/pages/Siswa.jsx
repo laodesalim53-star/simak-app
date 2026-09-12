@@ -7,7 +7,7 @@ import BulkImportModal from '../components/BulkImportModal'
 import DapodikImportModal from '../components/DapodikImportModal'
 import TeleponLink from '../components/TeleponLink'
 import { matchKelasByName } from '../lib/kelasMatch'
-import { Plus, UploadCloud, Pencil, Trash2, Search, X, Loader2, Download, FileSpreadsheet, Printer, ChevronDown, Camera, IdCard } from 'lucide-react'
+import { Plus, UploadCloud, Pencil, Trash2, Search, X, Loader2, Download, FileSpreadsheet, Printer, ChevronDown, Camera, IdCard, RotateCcw } from 'lucide-react'
 
 const AGAMA_OPTIONS = ['Islam', 'Kristen', 'Katolik', 'Hindu', 'Buddha', 'Khonghucu', 'Lainnya']
 // Opsi ini HARUS sama persis dengan KATEGORI_KEWARGANEGARAAN di
@@ -192,6 +192,9 @@ export default function Siswa() {
   const [kelasList, setKelasList] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  // TAMBAHAN: tab status — menggabungkan halaman "Data Siswa" dan "Siswa Nonaktif"
+  // jadi satu halaman. 'semua' menampilkan semua siswa apa pun statusnya.
+  const [statusTab, setStatusTab] = useState('semua') // 'semua' | 'aktif' | 'nonaktif'
   const [showForm, setShowForm] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [showImportDapodik, setShowImportDapodik] = useState(false)
@@ -204,6 +207,7 @@ export default function Siswa() {
   const [profilLihat, setProfilLihat] = useState(null) // siswa yang sedang dilihat detail profilnya
   const [selectedIds, setSelectedIds] = useState([]) // TAMBAHAN: untuk fitur Hapus Massal
   const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [aktivasiId, setAktivasiId] = useState(null) // TAMBAHAN: id siswa yang sedang diproses "Aktifkan Kembali"
 
   async function loadData() {
     if (!sekolahId) {
@@ -400,6 +404,24 @@ export default function Siswa() {
     else alert('Gagal menghapus: ' + error.message)
   }
 
+  // TAMBAHAN: mengaktifkan kembali siswa berstatus nonaktif — dipindahkan dari
+  // halaman terpisah Siswa Nonaktif ke sini supaya jadi satu halaman.
+  async function handleAktifkanKembali(siswaId) {
+    if (!confirm('Aktifkan kembali siswa ini? Statusnya akan diubah menjadi "Aktif".')) return
+    setAktivasiId(siswaId)
+    const { error } = await supabase
+      .from('siswa')
+      .update({ status: 'aktif' })
+      .eq('id', siswaId)
+      .eq('sekolah_id', sekolahId)
+    setAktivasiId(null)
+    if (!error) {
+      loadData()
+    } else {
+      alert('Gagal mengaktifkan kembali: ' + error.message)
+    }
+  }
+
   // TAMBAHAN: Hapus Massal — menghapus semua siswa yang dicentang sekaligus
   function toggleSelectOne(id) {
     setSelectedIds((prev) =>
@@ -499,9 +521,17 @@ export default function Siswa() {
     return { count: rows.length }
   }
 
-  const filtered = data.filter((s) =>
-    `${s.nama_lengkap} ${s.nis} ${s.nisn} ${s.nik} ${s.nomor_ujian}`.toLowerCase().includes(search.toLowerCase())
-  )
+  // TAMBAHAN: filter berdasarkan pencarian DAN tab status (Semua/Aktif/Nonaktif)
+  const filtered = data.filter((s) => {
+    const cocokPencarian = `${s.nama_lengkap} ${s.nis} ${s.nisn} ${s.nik} ${s.nomor_ujian}`
+      .toLowerCase()
+      .includes(search.toLowerCase())
+    const cocokStatus = statusTab === 'semua' ? true : s.status === statusTab
+    return cocokPencarian && cocokStatus
+  })
+
+  const jumlahAktif = data.filter((s) => s.status === 'aktif').length
+  const jumlahNonaktif = data.filter((s) => s.status === 'nonaktif').length
 
   // --- Export: Excel (.xlsx) siap-edit & siap-impor-ulang ---
   // Kolomnya dibuat SAMA PERSIS dengan format Impor Massal, jadi guru/admin bisa:
@@ -718,7 +748,7 @@ export default function Siswa() {
   return (
     <Layout
       title="Data Siswa"
-      subtitle={`${data.length} siswa terdaftar`}
+      subtitle={`${data.length} siswa terdaftar · ${jumlahAktif} aktif, ${jumlahNonaktif} nonaktif`}
       actions={
         <>
           {isAdmin && selectedIds.length > 0 && (
@@ -789,6 +819,19 @@ export default function Siswa() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+      </div>
+
+      {/* TAMBAHAN: Tab status — menggantikan halaman terpisah "Siswa Nonaktif" */}
+      <div className="flex items-center gap-1.5 mb-4">
+        <TabStatus active={statusTab === 'semua'} onClick={() => setStatusTab('semua')}>
+          Semua ({data.length})
+        </TabStatus>
+        <TabStatus active={statusTab === 'aktif'} onClick={() => setStatusTab('aktif')}>
+          Aktif ({jumlahAktif})
+        </TabStatus>
+        <TabStatus active={statusTab === 'nonaktif'} onClick={() => setStatusTab('nonaktif')}>
+          Nonaktif ({jumlahNonaktif})
+        </TabStatus>
       </div>
 
       <div className="card relative overflow-hidden overflow-x-auto">
@@ -883,6 +926,21 @@ export default function Siswa() {
                 <td>
                   {isAdmin && (
                     <div className="flex items-center gap-1 justify-end">
+                      {/* TAMBAHAN: tombol Aktifkan Kembali, hanya muncul untuk siswa berstatus nonaktif */}
+                      {s.status === 'nonaktif' && (
+                        <button
+                          onClick={() => handleAktifkanKembali(s.id)}
+                          disabled={aktivasiId === s.id}
+                          title="Aktifkan Kembali"
+                          className="p-2 hover:bg-sage-50 rounded-lg text-sage-600"
+                        >
+                          {aktivasiId === s.id ? (
+                            <Loader2 size={15} className="animate-spin" />
+                          ) : (
+                            <RotateCcw size={15} />
+                          )}
+                        </button>
+                      )}
                       <button onClick={() => openEdit(s)} className="p-2 hover:bg-ink-900/5 rounded-lg text-ink-700/60">
                         <Pencil size={15} />
                       </button>
@@ -1408,6 +1466,23 @@ export default function Siswa() {
         onImport={importSiswaRows}
       />
     </Layout>
+  )
+}
+
+// TAMBAHAN: tombol tab untuk filter status (Semua / Aktif / Nonaktif)
+function TabStatus({ active, onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+        active
+          ? 'bg-blue-900 text-white'
+          : 'bg-ink-900/[0.05] text-ink-700/70 hover:bg-ink-900/[0.08]'
+      }`}
+    >
+      {children}
+    </button>
   )
 }
 
