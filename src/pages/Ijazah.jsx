@@ -86,7 +86,7 @@ export default function Ijazah() {
   const [saving, setSaving] = useState(false);
   const [detailSiswa, setDetailSiswa] = useState(null);
 
-  // "landscape" (mendatar, F4 330x210mm) atau "portrait" (tegak, A4 210x297mm)
+  // "landscape" (mendatar, A4 297x210mm) atau "portrait" (tegak, A4 210x297mm)
   const [orientasiCetak, setOrientasiCetak] = useState("landscape");
 
   const { mapelKelompokA, mapelKelompokB } = useMemo(() => pisahKelompokMapel(), []);
@@ -224,7 +224,7 @@ export default function Ijazah() {
     );
   }
 
-  const lebarKertas = orientasiCetak === "landscape" ? "330mm" : "210mm";
+  const lebarKertas = orientasiCetak === "landscape" ? "297mm" : "210mm";
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -502,7 +502,7 @@ export default function Ijazah() {
            LaporanKeadaanMurid.jsx) supaya ukuran kertas benar-benar
            dipakai, bukan jatuh balik ke default A4 browser. */
         @page {
-          size: ${orientasiCetak === "landscape" ? "330mm 210mm" : "210mm 297mm"};
+          size: ${orientasiCetak === "landscape" ? "297mm 210mm" : "210mm 297mm"};
           margin: 8mm;
         }
       `}</style>
