@@ -24,6 +24,14 @@ import DetailNilaiSiswaModal from "../components/DetailNilaiSiswaModal";
 //
 // Khusus Kelas 6: tidak ada lagi dropdown pilih kelas — kelasnya dicari
 // otomatis (tingkat === "VI") dan digabung kalau ada lebih dari 1 rombel.
+//
+// CATATAN PENTING soal tanda tangan pindah halaman:
+// Blok "kop ringkas" (nama sekolah dkk) + blok tanda tangan sekarang
+// dibungkus jadi SATU kelompok (.blok-ttd-group) dengan
+// break-inside/page-break-inside: avoid. Kalau kelompok ini tidak muat di
+// sisa halaman tabel, browser akan memindahkan SELURUH kelompok (kop +
+// tanda tangan) ke halaman baru sekaligus — jadi tanda tangan tidak pernah
+// "nyangkut" sendirian tanpa kop surat di halaman barunya.
 
 // Tahun pelajaran default: kalau sekarang Juli-Des, "thn/thn+1"; kalau Jan-Jun, "thn-1/thn".
 function tahunPelajaranDefault() {
@@ -226,6 +234,19 @@ export default function Ijazah() {
 
   const lebarKertas = orientasiCetak === "landscape" ? "297mm" : "210mm";
 
+  // Kop ringkas dipakai dua kali: sekali di atas tabel (kop utama), sekali
+  // lagi tepat di atas blok tanda tangan (supaya kalau blok tanda tangan
+  // terpaksa pindah ke halaman baru karena tidak muat, halaman baru itu
+  // tetap punya kop surat sendiri, bukan tanda tangan yang nyangkut sendirian).
+  const kopRingkas = (
+    <div className="text-xs mb-4 leading-relaxed">
+      <p className="flex"><span className="w-28 shrink-0">Nama Sekolah</span><span className="w-3">:</span><span className="font-semibold">{sekolahUntukCetak?.nama_sekolah || "-"}</span></p>
+      <p className="flex"><span className="w-28 shrink-0">NPSN</span><span className="w-3">:</span><span>{sekolahUntukCetak?.npsn || "-"}</span></p>
+      <p className="flex"><span className="w-28 shrink-0">Kabupaten</span><span className="w-3">:</span><span>{sekolahUntukCetak?.kabupaten || "-"}</span></p>
+      <p className="flex"><span className="w-28 shrink-0">Provinsi</span><span className="w-3">:</span><span>{sekolahUntukCetak?.provinsi || "-"}</span></p>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-slate-100">
       {/* Toolbar — hilang saat dicetak, sama seperti LaporanKeadaanMurid.jsx */}
@@ -307,6 +328,11 @@ export default function Ijazah() {
             Belum ada kelas dengan tingkat "VI" (Kelas 6) di data sekolah ini.
           </p>
         )}
+
+        <p className="text-xs text-slate-400 mt-2">
+          Catatan: setelah menekan "Cetak Rekap Ijazah", pastikan pilihan <strong>Layout</strong> di
+          dialog cetak browser ikut berubah ke <strong>{orientasiCetak === "landscape" ? "Landscape" : "Portrait"}</strong> (biasanya otomatis, tapi periksa dulu sebelum menekan Save/Print).
+        </p>
       </div>
 
       {detailSiswa && (
@@ -331,12 +357,7 @@ export default function Ijazah() {
           Data : Pengisian Ijazah Kelulusan Tahun Pelajaran {tahunPelajaran}
         </div>
 
-        <div className="text-xs mb-4 leading-relaxed">
-          <p className="flex"><span className="w-28 shrink-0">Nama Sekolah</span><span className="w-3">:</span><span className="font-semibold">{sekolahUntukCetak?.nama_sekolah || "-"}</span></p>
-          <p className="flex"><span className="w-28 shrink-0">NPSN</span><span className="w-3">:</span><span>{sekolahUntukCetak?.npsn || "-"}</span></p>
-          <p className="flex"><span className="w-28 shrink-0">Kabupaten</span><span className="w-3">:</span><span>{sekolahUntukCetak?.kabupaten || "-"}</span></p>
-          <p className="flex"><span className="w-28 shrink-0">Provinsi</span><span className="w-3">:</span><span>{sekolahUntukCetak?.provinsi || "-"}</span></p>
-        </div>
+        {kopRingkas}
 
         {siswaList.length === 0 ? (
           <p className="text-center text-sm text-slate-400 py-8">Belum ada siswa aktif di Kelas 6.</p>
@@ -408,23 +429,33 @@ export default function Ijazah() {
           </table>
         )}
 
-        <div className="blok-ttd flex justify-between mt-10 text-xs">
-          <div className="text-center w-64">
-            <p>Mengetahui,</p>
-            <p>Pengawas Sekolah</p>
-            <div className="h-16" />
-            <p className="font-semibold underline">{sekolahUntukCetak?.pengawas || "............................"}</p>
-            <p>NIP. {sekolahUntukCetak?.nip_pengawas || "............................"}</p>
+        {/* Kelompok kop-ulang + tanda tangan: dibungkus jadi satu supaya
+            kalau harus pindah halaman karena tidak muat, keduanya pindah
+            bersamaan (halaman baru tetap ada kop suratnya). */}
+        <div className="blok-ttd-group mt-10">
+          <div className="only-print-if-new-page text-center font-bold text-[11px] uppercase mb-3">
+            Data : Pengisian Ijazah Kelulusan Tahun Pelajaran {tahunPelajaran} (Lanjutan)
           </div>
-          <div className="text-center w-64">
-            <p>
-              {sekolahUntukCetak?.tempat_ttd || sekolahUntukCetak?.kecamatan || "............"},{" "}
-              {new Date().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" })}
-            </p>
-            <p className="mt-1">Kepala Sekolah</p>
-            <div className="h-16" />
-            <p className="font-semibold underline">{sekolahUntukCetak?.kepala_sekolah || "............................"}</p>
-            <p>NIP. {sekolahUntukCetak?.nip_kepala_sekolah || "............................"}</p>
+          <div className="only-print-if-new-page">{kopRingkas}</div>
+
+          <div className="blok-ttd flex justify-between text-xs">
+            <div className="text-center w-64">
+              <p>Mengetahui,</p>
+              <p>Pengawas Sekolah</p>
+              <div className="h-16" />
+              <p className="font-semibold underline">{sekolahUntukCetak?.pengawas || "............................"}</p>
+              <p>NIP. {sekolahUntukCetak?.nip_pengawas || "............................"}</p>
+            </div>
+            <div className="text-center w-64">
+              <p>
+                {sekolahUntukCetak?.tempat_ttd || sekolahUntukCetak?.kecamatan || "............"},{" "}
+                {new Date().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" })}
+              </p>
+              <p className="mt-1">Kepala Sekolah</p>
+              <div className="h-16" />
+              <p className="font-semibold underline">{sekolahUntukCetak?.kepala_sekolah || "............................"}</p>
+              <p>NIP. {sekolahUntukCetak?.nip_kepala_sekolah || "............................"}</p>
+            </div>
           </div>
         </div>
       </div>
@@ -450,19 +481,23 @@ export default function Ijazah() {
         }
 
         /* Di layar: tampilkan input (bisa diisi), sembunyikan angka
-           read-only versi cetak. */
+           read-only versi cetak. Kop-ulang di atas tanda tangan juga
+           disembunyikan di layar (hanya relevan saat dicetak & pindah
+           halaman) supaya tidak terlihat seperti duplikat aneh saat
+           mengisi nilai di layar. */
         .only-print { display: none; }
+        .only-print-if-new-page { display: none; }
 
         /* Rapikan halaman kalau tabel siswa lebih panjang dari 1 halaman:
            - header tabel ikut berulang di setiap halaman
            - satu baris siswa tidak pernah terpotong jadi 2 halaman
-           - blok tanda tangan selalu utuh dalam 1 halaman (kalau tidak
-             muat di sisa halaman tabel, pindah semua ke halaman berikutnya
-             sekaligus, bukan terbelah) */
+           - kelompok kop-ulang + tanda tangan selalu utuh dalam 1 halaman
+             (kalau tidak muat di sisa halaman tabel, pindah semua ke
+             halaman berikutnya sekaligus, bukan terbelah) */
         @media print {
           thead { display: table-header-group; }
           tbody tr { break-inside: avoid; page-break-inside: avoid; }
-          .blok-ttd { break-inside: avoid; page-break-inside: avoid; }
+          .blok-ttd-group { break-inside: avoid; page-break-inside: avoid; }
         }
 
         /* Override aturan global ".print-only { display: none }" di layar
@@ -484,6 +519,12 @@ export default function Ijazah() {
           }
           .sel-nilai { display: none !important; }
           .only-print { display: inline !important; }
+          /* Kop-ulang di atas tanda tangan HANYA muncul saat dicetak.
+             Kalau kelompok kop+ttd tetap di halaman yang sama dengan
+             tabel, kop-ulang ini akan tampak sebagai judul pemisah kecil
+             sebelum tanda tangan — kalau justru pindah ke halaman baru,
+             ia jadi kop surat halaman itu. */
+          .only-print-if-new-page { display: block !important; }
 
           /* Override aturan global (posisi fixed default utk .print-only)
              supaya lembar ini mengalir normal & bisa pindah halaman kalau
@@ -500,9 +541,12 @@ export default function Ijazah() {
 
         /* @page WAJIB di luar @media print (lihat catatan di
            LaporanKeadaanMurid.jsx) supaya ukuran kertas benar-benar
-           dipakai, bukan jatuh balik ke default A4 browser. */
+           dipakai, bukan jatuh balik ke default A4 browser.
+           Dipakai kata kunci "A4 landscape"/"A4 portrait" (bukan angka mm
+           manual) supaya dialog cetak browser otomatis mencentang radio
+           Layout yang sesuai (Landscape/Portrait). */
         @page {
-          size: ${orientasiCetak === "landscape" ? "297mm 210mm" : "210mm 297mm"};
+          size: ${orientasiCetak === "landscape" ? "A4 landscape" : "A4 portrait"};
           margin: 8mm;
         }
       `}</style>
