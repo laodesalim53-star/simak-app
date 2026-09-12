@@ -8,10 +8,14 @@ import { MAPEL_IJAZAH, jumlahNilai } from "../components/IjazahPrintTemplate";
 // ============================================================================
 // SuratKeteranganLulusKelas6.jsx — VERSI BARU (mandiri, tanpa SklPrintTemplate)
 // ----------------------------------------------------------------------------
-// Kotak nilai + bingkai ornamen biru + kop surat + tabel biodata di bawah ini
-// SENGAJA disalin langsung dari src/components/SklPrintTemplate.jsx (bukan
-// diimpor), supaya file itu boleh dihapus sepenuhnya setelah halaman ini
-// dipakai. Satu-satunya yang masih diimpor dari luar adalah MAPEL_IJAZAH &
+// Kotak nilai + kop surat + tabel biodata di bawah ini SENGAJA disalin
+// langsung dari src/components/SklPrintTemplate.jsx (bukan diimpor), supaya
+// file itu boleh dihapus sepenuhnya setelah halaman ini dipakai. Bingkai
+// ornamen biru (border-image) yang dulu ada di SklPrintTemplate.jsx SUDAH
+// DILEPAS atas permintaan — surat sekarang polos tanpa bingkai, dan lebar
+// halaman disesuaikan pas dengan area cetak kertas A4 (210mm dikurangi
+// margin @page 10mm kiri-kanan = 190mm). Satu-satunya yang masih diimpor
+// dari luar adalah MAPEL_IJAZAH &
 // jumlahNilai dari IjazahPrintTemplate.jsx — itu tetap dipakai sebagai satu
 // sumber kebenaran daftar mata pelajaran, supaya kalau daftar mapel berubah
 // suatu saat, Ijazah & SKL tetap konsisten tanpa perlu diedit dua tempat.
@@ -34,18 +38,6 @@ import { MAPEL_IJAZAH, jumlahNilai } from "../components/IjazahPrintTemplate";
 // semua siswa ditampilkan sekaligus dengan page-break-before-print di
 // antaranya (satu siswa satu halaman).
 // ============================================================================
-
-// Motif bingkai biru — disalin apa adanya dari SklPrintTemplate.jsx lama.
-const FRAME_TILE = encodeURIComponent(
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-    <rect width="64" height="64" fill="#2748a0"/>
-    <rect x="2" y="2" width="60" height="60" fill="none" stroke="#8fa6e0" stroke-width="1"/>
-    <path d="M32 10 L44 32 L32 54 L20 32 Z" fill="none" stroke="#c9d6f5" stroke-width="2"/>
-    <circle cx="32" cy="32" r="6" fill="#c9d6f5"/>
-    <circle cx="32" cy="32" r="2.4" fill="#2748a0"/>
-  </svg>`
-);
-const FRAME_URL = `url("data:image/svg+xml,${FRAME_TILE}")`;
 
 const th = { border: "1px solid #2748a0", padding: "3px 6px", background: "#eef1fb", fontWeight: "bold", letterSpacing: "0.2px" };
 const td = { border: "1px solid #2748a0", padding: "2.5px 6px", textAlign: "center", verticalAlign: "middle" };
@@ -454,9 +446,10 @@ export default function SuratKeteranganLulusKelas6() {
       {/* AREA CETAK — persis pola LaporanKeadaanMurid.jsx: 1 area cetak  */}
       {/* menampung SEMUA siswa, di layar hanya siswa terpilih yang      */}
       {/* tampil (tab-aktif), sisanya disembunyikan (tab-nonaktif)       */}
-      {/* sampai window.print() dipanggil. Isi tiap siswa (bingkai biru, */}
-      {/* kop surat, biodata, kotak nilai, tanda tangan) disalin dari    */}
-      {/* SklPrintTemplate.jsx lama.                                     */}
+      {/* sampai window.print() dipanggil. Isi tiap siswa (kop surat,    */}
+      {/* biodata, kotak nilai, tanda tangan) disalin dari                */}
+      {/* SklPrintTemplate.jsx lama — bingkai birunya sudah dilepas dan   */}
+      {/* lebar disesuaikan pas dengan kertas A4.                         */}
       {/* ------------------------------------------------------------- */}
       <div className="lembar-cetak print-only" style={{ width: "210mm", margin: "0 auto", background: "#fff" }}>
         {siswaList.length === 0 ? (
@@ -471,9 +464,13 @@ export default function SuratKeteranganLulusKelas6() {
                 key={s.id}
                 className={`${kelasBagianSiswa(s.id)} ${idx > 0 ? "page-break-before-print" : ""}`}
                 style={{
+                  // Lebar mengikuti kertas A4 (210mm) dikurangi margin
+                  // @page (10mm kiri + 10mm kanan) = 190mm area cetak,
+                  // tanpa bingkai/border apa pun di sekelilingnya.
                   width: "190mm",
+                  minHeight: "277mm",
                   margin: "0 auto",
-                  padding: "10mm 0",
+                  padding: 0,
                   fontFamily: "'Times New Roman', serif",
                   fontSize: "12pt",
                   lineHeight: 1.35,
@@ -483,15 +480,8 @@ export default function SuratKeteranganLulusKelas6() {
               >
                 <div
                   style={{
-                    border: "4mm solid transparent",
-                    borderImageSource: FRAME_URL,
-                    borderImageSlice: 22,
-                    borderImageWidth: "4mm",
-                    borderImageRepeat: "round",
-                    padding: "5mm 9mm",
+                    padding: 0,
                     boxSizing: "border-box",
-                    pageBreakInside: "avoid",
-                    breakInside: "avoid",
                   }}
                 >
                   {/* KOP SURAT */}
