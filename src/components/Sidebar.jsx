@@ -208,6 +208,8 @@ function getGroupsAdmin(
         { to: '/kartu', label: 'Cetak Kartu', icon: IdCard },
       ],
     },
+      ]
+}
 // Menu ADMIN untuk tenant "kantor" (isKantor) — versi ringkas dari
 // getGroupsAdmin() di atas, hanya fitur umum yang diminta: data pegawai,
 // presensi, surat-menyurat, dan dokumen. Semua item akademik (siswa, kelas,
