@@ -11,6 +11,7 @@ import {
   CalendarDays,
   PiggyBank,
   PackagePlus,
+  FileBadge,
   ChevronRight,
 } from 'lucide-react'
 
@@ -47,6 +48,16 @@ const SEMUA_KARTU = [
     label: 'Nilai Siswa',
     icon: BookOpenCheck,
     desc: 'Input dan lihat nilai siswa per kelas.',
+  },
+  // PERBAIKAN: kartu "Rapor" ditambahkan supaya guru bisa masuk ke halaman
+  // Rapor Siswa (kelola nilai akhir, deskripsi capaian, P5, ekstrakurikuler
+  // & catatan wali kelas — lihat Rapor.jsx) langsung dari hub Administrasi
+  // Kelas, bukan cuma lewat menu Sidebar terpisah.
+  {
+    to: '/rapor',
+    label: 'Rapor',
+    icon: FileBadge,
+    desc: 'Kelola nilai akhir, deskripsi capaian, P5 & catatan wali kelas.',
   },
   {
     to: '/rpp',
