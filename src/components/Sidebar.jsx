@@ -287,7 +287,6 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   // PERBAIKAN: baris "Rapor Siswa" (/rapor) dihapus dari sini — sudah bisa
   // diakses lewat kartu "Rapor" di halaman Administrasi Kelas (menu di
   // atas), jadi baris ini dulu bikin dobel untuk guru.
-  { to: '/portofolio-siswa', label: 'Portofolio Siswa', icon: FolderHeart },
   { to: '/sertifikat', label: 'Sertifikat & Penghargaan', icon: Award },
   { to: '/pengajuan-surat-aktif', label: 'Pengajuan Surat Aktif', icon: FileCheck2 },
   { to: '/perbaikan-data-siswa', label: 'Perbaikan Data Siswa', icon: UserCog },
