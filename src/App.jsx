@@ -265,6 +265,7 @@ export default function App() {
         <Route path="/nilai" element={<ProtectedRoute><Nilai /></ProtectedRoute>} />
         <Route path="/nilai-asesmen" element={<ProtectedRoute><NilaiAsesmen /></ProtectedRoute>} />
         <Route path="/rapor" element={<ProtectedRoute><Rapor /></ProtectedRoute>} />
+        <Route path="/portofolio-siswa" element={<ProtectedRoute adminOnly><PortofolioSiswa /></ProtectedRoute>} />
         <Route path="/rapor/cetak" element={<ProtectedRoute><RaporCetak /></ProtectedRoute>} />
         <Route path="/ijazah" element={<ProtectedRoute><Ijazah /></ProtectedRoute>} />
         <Route path="/skl" element={<ProtectedRoute><SuratKeteranganLulus /></ProtectedRoute>} />
