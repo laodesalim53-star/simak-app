@@ -198,12 +198,11 @@ export default function RaporCetak() {
       supabase
         .from('capaian_mapel')
         // + jenis, untuk mencocokkan deskripsi ke kolom Pengetahuan/
-        // Keterampilan. Kolom nilai_akhir/predikat sengaja TIDAK diambil
-        // lagi — nilai & predikat yang tercetak SELALU dihitung otomatis
-        // dari tabel `nilai` (lihat barisMapel di bawah), satu sumber yang
-        // sama dengan tab Ringkasan Nilai di Rapor.jsx, supaya tidak ada
-        // dua tempat yang bisa beda angka.
-        .select('mata_pelajaran, jenis, deskripsi_capaian')
+        // Keterampilan + nilai_akhir & predikat — kalau sudah difinalisasi
+        // manual oleh wali kelas lewat tab Rekap Nilai, nilai itu yang
+        // dipakai untuk cetak; kalau masih null, dipakai hitungan otomatis
+        // dari nilai mentah seperti sebelumnya (lihat barisMapel di bawah).
+        .select('mata_pelajaran, jenis, deskripsi_capaian, nilai_akhir, predikat')
         .eq('siswa_id', siswaId)
         .eq('semester', semester)
         .eq('tahun_ajaran', tahunAjaran),
@@ -284,24 +283,40 @@ export default function RaporCetak() {
     const capaianPengetahuan = capaianList.find((c) => c.mata_pelajaran === mapel && c.jenis === 'Pengetahuan')
     const capaianKeterampilan = capaianList.find((c) => c.mata_pelajaran === mapel && c.jenis === 'Keterampilan')
 
-    // Nilai & predikat SELALU dihitung otomatis dari tabel `nilai` — satu
-    // sumber yang sama dengan tab Ringkasan Nilai di Rapor.jsx. Tidak ada
-    // lagi jalur override manual, jadi guru cukup input nilai di satu
-    // tempat (halaman Nilai Siswa) dan angka ini otomatis ikut berubah.
-    const nilaiPengetahuan = nilaiAkhirTertimbang(rr.Pengetahuan)
-    const nilaiKeterampilan = nilaiAkhirTertimbang(rr.Keterampilan)
+    const nilaiPengetahuanOtomatis = nilaiAkhirTertimbang(rr.Pengetahuan)
+    const nilaiKeterampilanOtomatis = nilaiAkhirTertimbang(rr.Keterampilan)
+
+    // Nilai final: kalau sudah difinalisasi manual oleh wali kelas lewat
+    // tab Rekap Nilai (capaian_mapel.nilai_akhir terisi), pakai nilai itu
+    // — kalau tidak (masih null), pakai hitungan otomatis dari nilai
+    // mentah seperti sebelumnya. Pola coalesce(nilai_akhir, otomatis) ini
+    // harus konsisten dengan tab Rekap Nilai di Rapor.jsx.
+    const pengetahuanManual = capaianPengetahuan?.nilai_akhir !== null && capaianPengetahuan?.nilai_akhir !== undefined
+    const keterampilanManual = capaianKeterampilan?.nilai_akhir !== null && capaianKeterampilan?.nilai_akhir !== undefined
+
+    const nilaiPengetahuan = pengetahuanManual ? capaianPengetahuan.nilai_akhir : nilaiPengetahuanOtomatis
+    const nilaiKeterampilan = keterampilanManual ? capaianKeterampilan.nilai_akhir : nilaiKeterampilanOtomatis
+
+    const predikatPengetahuan = pengetahuanManual
+      ? capaianPengetahuan.predikat
+      : predikatDariNilai(nilaiPengetahuanOtomatis)
+    const predikatKeterampilan = keterampilanManual
+      ? capaianKeterampilan.predikat
+      : predikatDariNilai(nilaiKeterampilanOtomatis)
 
     return {
       mapel,
       pengetahuan: {
         nilai: nilaiPengetahuan,
-        predikat: predikatDariNilai(nilaiPengetahuan),
+        predikat: predikatPengetahuan,
         deskripsi: capaianPengetahuan?.deskripsi_capaian || '',
+        manual: pengetahuanManual,
       },
       keterampilan: {
         nilai: nilaiKeterampilan,
-        predikat: predikatDariNilai(nilaiKeterampilan),
+        predikat: predikatKeterampilan,
         deskripsi: capaianKeterampilan?.deskripsi_capaian || '',
+        manual: keterampilanManual,
       },
     }
   })
@@ -336,6 +351,24 @@ export default function RaporCetak() {
 
   return (
     <div className="min-h-screen bg-ink-950/5 py-8 print:bg-white print:py-0 print:min-h-0">
+      {/*
+        FIX (halaman kosong saat cetak): sebelumnya div .lembar-cetak di
+        bawah ini TIDAK memakai class "print-only", padahal index.css
+        global memakai .print-only { position: fixed } sebagai mekanisme
+        utama yang menentukan konten apa yang benar-benar tampil saat mode
+        print (persis akar masalah yang sama dengan bug rekap ijazah
+        sebelumnya). Tanpa class print-only, ketiga halaman rapor ini
+        dianggap bukan konten cetak -> hasil cetak jadi kosong.
+        Sekarang ditambahkan class print-only ke tiap .lembar-cetak, plus
+        override CSS berikut mengikuti pola yang sudah teruji di
+        LaporanPendidikanGuru.jsx:
+        - override position ke static (menggantikan position:fixed bawaan
+          index.css) supaya 3 halaman rapor bisa tersusun normal & saling
+          page-break, bukan saling menumpuk/hilang;
+        - override @media screen supaya tetap tampil normal di layar
+          (preview), karena index.css bisa saja menyembunyikan .print-only
+          di layar secara default.
+      */}
       <style>{`
         .lembar-cetak.print-only {
           position: static !important;
@@ -558,11 +591,15 @@ export default function RaporCetak() {
               <tr key={b.mapel} className="border-b border-ink-950/10 align-top">
                 <td className="py-1.5 pr-2">{i + 1}</td>
                 <td className="py-1.5 pr-2 font-medium">{b.mapel}</td>
-                <td className="py-1.5 pr-2 text-center">{b.pengetahuan.nilai ?? '-'}</td>
+                <td className="py-1.5 pr-2 text-center">
+                  {b.pengetahuan.nilai ?? '-'}
+                  {b.pengetahuan.manual && <sup>*</sup>}
+                </td>
                 <td className="py-1.5 pr-2 text-center">{b.pengetahuan.predikat || '-'}</td>
                 <td className="py-1.5 pr-2">{b.pengetahuan.deskripsi || '-'}</td>
                 <td className="py-1.5 pr-2 text-center border-l-2 border-ink-950/30">
                   {b.keterampilan.nilai ?? '-'}
+                  {b.keterampilan.manual && <sup>*</sup>}
                 </td>
                 <td className="py-1.5 pr-2 text-center">{b.keterampilan.predikat || '-'}</td>
                 <td className="py-1.5">{b.keterampilan.deskripsi || '-'}</td>
@@ -576,7 +613,7 @@ export default function RaporCetak() {
           </tbody>
         </table>
         <p className="text-xs text-ink-700/40 -mt-4 mb-6">
-          Nilai Akhir = Tugas 20% + UTS 30% + UAS 50% (UH tidak ikut dihitung). Kalau salah satu komponen belum diisi, bobot sisanya otomatis dinormalisasi.
+          Nilai Akhir = Tugas 20% + UTS 30% + UAS 50% (UH tidak ikut dihitung). Kalau salah satu komponen belum diisi, bobot sisanya otomatis dinormalisasi. Tanda <sup>*</sup> menunjukkan nilai yang sudah difinalisasi manual oleh wali kelas.
         </p>
 
         <h2 className="font-display font-semibold mb-2">B. Profil Pelajar Pancasila (P5)</h2>
