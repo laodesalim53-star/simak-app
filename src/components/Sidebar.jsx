@@ -87,10 +87,9 @@ function getGroupsAdmin(
         // Upgrade Fitur: status paket (free/premium) melekat ke akun masing-
         // masing, jadi menu ini tampil untuk semua role, bukan cuma admin.
         { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
-        { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
-        // Chat dua arah dengan Superadmin ("Admin Pusat") — khusus admin-tier,
-        // guru tidak pernah melihat menu ini karena guru pakai getLinksGuru().
-        { to: '/pesan-pusat', label: 'Admin Pusat', icon: Building2, badge: jumlahPesanPusatBelumDibaca },
+        // Tab "Admin Pusat" sekarang jadi bagian dari halaman /pesan (lihat
+        // Pesan.jsx) — badge menggabungkan unread pesan biasa + admin pusat.
+        { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca + jumlahPesanPusatBelumDibaca },
         // PERBAIKAN: "Live Chat" (percakapan dengan pengunjung publik di
         // Beranda) sebelumnya tampil untuk SEMUA admin-tier (admin,
         // admin_utama, superadmin, kepala_sekolah), padahal tabel
