@@ -389,7 +389,7 @@ export default function Ijazah() {
           </table>
         )}
 
-        <div className="flex justify-between mt-10 text-xs">
+        <div className="blok-ttd flex justify-between mt-10 text-xs">
           <div className="text-center w-64">
             <p>Mengetahui,</p>
             <p>Pengawas Sekolah</p>
@@ -433,6 +433,18 @@ export default function Ijazah() {
         /* Di layar: tampilkan input (bisa diisi), sembunyikan angka
            read-only versi cetak. */
         .only-print { display: none; }
+
+        /* Rapikan halaman kalau tabel siswa lebih panjang dari 1 halaman:
+           - header tabel ikut berulang di setiap halaman
+           - satu baris siswa tidak pernah terpotong jadi 2 halaman
+           - blok tanda tangan selalu utuh dalam 1 halaman (kalau tidak
+             muat di sisa halaman tabel, pindah semua ke halaman berikutnya
+             sekaligus, bukan terbelah) */
+        @media print {
+          thead { display: table-header-group; }
+          tbody tr { break-inside: avoid; page-break-inside: avoid; }
+          .blok-ttd { break-inside: avoid; page-break-inside: avoid; }
+        }
 
         /* Override aturan global ".print-only { display: none }" di layar
            — lembar ini MEMANG harus tampil di layar untuk diisi, sama
