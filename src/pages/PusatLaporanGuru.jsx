@@ -158,8 +158,15 @@ const daftarLaporan = [
     path: '/ijazah',
     siap: true,
   },
+  {
+    id: 'laporan-bulanan',
+    judul: 'Laporan Bulanan',
+    deskripsi: 'Rekap bulanan: presensi siswa, presensi guru (termasuk format Daftar Hadir), surat masuk/keluar, dan agenda kegiatan.',
+    icon: FileBarChart,
+    path: '/laporan',   
+    siap: true,
+  },
 ]
-
 // Sama seperti BatikOverlay di Dashboard.jsx — dipakai di banner atas
 // supaya identitas visual (motif batik + gradasi biru tua) konsisten
 // di seluruh halaman.
