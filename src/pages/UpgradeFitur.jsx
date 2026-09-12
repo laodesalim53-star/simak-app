@@ -11,13 +11,13 @@ const FITUR_FREE = [
 ];
 
 const FITUR_PREMIUM = [
-  "Generate Surat Keterangan & SK Beban Mengajar otomatis",
-  "AI RPP (draf RPP + lampiran otomatis)",
+  "Generate Surat & SK otomatis, tanpa input manual berulang",
+  "AI RPP cerdas: draf RPP + lampiran tersusun otomatis",
   "Kuitansi & Nota otomatis, termasuk cetak massal",
-  "Kartu Pelajar/Perpustakaan otomatis",
-  "Portofolio Siswa & Galeri Kegiatan",
-  "Kuis Seru (game interaktif kelas 1-3)",
-  "Cetak rapor massal satu kelas sekaligus",
+  "Kartu Pelajar & Perpustakaan otomatis, tanpa desain manual",
+  "Portofolio Siswa & Galeri Kegiatan tersimpan rapi",
+  "Kuis Interaktif untuk kelas 1-3, belajar jadi lebih seru",
+  "Cetak rapor massal satu kelas sekaligus, hemat waktu admin",
 ];
 
 export default function UpgradeFitur() {
