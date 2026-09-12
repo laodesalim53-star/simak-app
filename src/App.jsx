@@ -5,7 +5,6 @@ import Galeri from './pages/Galeri'
 import GaleriOrangTua from './pages/GaleriOrangTua'
 import Dokumen from './pages/Dokumen'
 import Pesan from './pages/Pesan'
-import PesanPusat from './pages/PesanPusat'
 import AdminLiveChat from './pages/AdminLiveChat'
 import ScanDokumen from './pages/ScanDokumen'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
@@ -319,7 +318,6 @@ export default function App() {
         <Route path="/galeri" element={<ProtectedRoute><Galeri /></ProtectedRoute>} />
         <Route path="/dokumen" element={<ProtectedRoute><Dokumen /></ProtectedRoute>} />
         <Route path="/pesan" element={<ProtectedRoute><Pesan /></ProtectedRoute>} />
-        <Route path="/pesan-pusat" element={<ProtectedRoute adminOnly><PesanPusat /></ProtectedRoute>} />
         {/* Live Chat: percakapan real-time dengan pengunjung publik di Beranda.
             Dibatasi superAdminOnly karena tabel live_chat_pesan adalah satu
             kotak masuk GLOBAL (tanpa kolom sekolah_id) dan RLS di Supabase
