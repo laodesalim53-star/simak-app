@@ -44,6 +44,25 @@ function pisahKelompokMapel() {
   return { mapelKelompokA: a, mapelKelompokB: b };
 }
 
+// Label singkat untuk header tabel cetak — ditulis tetap (bukan diambil
+// otomatis dari MAPEL_IJAZAH[i].label) supaya tidak rancu seperti
+// sebelumnya (beberapa label panjang sama-sama diawali kata yang sama,
+// mis. "Pendidikan Agama" & "Pendidikan Kewarganegaraan" -> dua-duanya
+// kepotong jadi "Pendidikan"). Urutan HARUS sama dengan urutan asli
+// MAPEL_IJAZAH (6 mapel Kelompok A lalu 3 mapel Kelompok B): Pend.Agama,
+// PKn, Bhs.Indo, Matematika, IPA, IPS | SBK, PJOK, Mulok.
+const LABEL_SINGKAT_MAPEL = [
+  "Pend.Agama",
+  "PKn",
+  "Bhs.Indo",
+  "Matematika",
+  "IPA",
+  "IPS",
+  "SBK",
+  "PJOK",
+  "Mulok",
+];
+
 function formatTanggal(tgl) {
   if (!tgl) return "-";
   const d = new Date(tgl);
@@ -333,15 +352,15 @@ export default function Ijazah() {
                 <th colSpan={mapelKelompokA.length} className="border border-black px-1 py-1">Kelompok A</th>
                 <th colSpan={mapelKelompokB.length} className="border border-black px-1 py-1">Kelompok B</th>
                 <th rowSpan={2} className="border border-black px-1 py-1 w-12">Jumlah</th>
-                <th rowSpan={2} className="no-print border border-black px-1 py-1 w-8">Rata²</th>
+                <th rowSpan={2} className="border border-black px-1 py-1 w-12">Rata-Rata</th>
                 <th rowSpan={2} className="no-print border border-black px-1 py-1 w-24">Aksi</th>
               </tr>
               <tr className="text-center">
-                {mapelKelompokA.map((m) => (
-                  <th key={m.key} className="border border-black px-1 py-1 w-10">{m.label.split(" ")[0]}</th>
+                {mapelKelompokA.map((m, i) => (
+                  <th key={m.key} className="border border-black px-1 py-1 w-10">{LABEL_SINGKAT_MAPEL[i]}</th>
                 ))}
-                {mapelKelompokB.map((m) => (
-                  <th key={m.key} className="border border-black px-1 py-1 w-10">{m.label.split(" ")[0]}</th>
+                {mapelKelompokB.map((m, i) => (
+                  <th key={m.key} className="border border-black px-1 py-1 w-10">{LABEL_SINGKAT_MAPEL[mapelKelompokA.length + i]}</th>
                 ))}
               </tr>
             </thead>
@@ -372,7 +391,7 @@ export default function Ijazah() {
                       </td>
                     ))}
                     <td className="border border-black px-1 py-1 text-center font-semibold">{jumlahNilai(v).toFixed(2)}</td>
-                    <td className="no-print border border-black px-1 py-1 text-center">{rataRataNilai(v).toFixed(2)}</td>
+                    <td className="border border-black px-1 py-1 text-center font-semibold">{rataRataNilai(v).toFixed(2)}</td>
                     <td className="no-print border border-black px-1 py-1 text-center">
                       <button
                         className="text-[10px] px-2 py-1 rounded border border-slate-300 hover:bg-slate-50 inline-flex items-center gap-1"
