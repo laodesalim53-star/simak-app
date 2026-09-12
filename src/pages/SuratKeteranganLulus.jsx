@@ -1,14 +1,28 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, FilePlus2, Loader2, Printer } from "lucide-react";
+import { useAuth } from "../lib/AuthContext";
 import { supabase } from "../lib/supabaseClient";
 import Layout from "../components/Layout";
 import SklPrintTemplate from "../components/SklPrintTemplate";
-import { Printer, Loader2, FilePlus2 } from "lucide-react";
 
-// HALAMAN INI adalah salinan SuratKeteranganLulus.jsx dengan SATU perbedaan
-// utama: tidak ada lagi dropdown pilih kelas. Kelasnya dicari otomatis
-// (tingkat === "VI") dan digabung kalau ada lebih dari 1 rombel — persis
-// pola cariKelas6() di Ijazah.jsx. Jadi halaman ini KHUSUS Kelas 6, tidak
-// bisa dipakai untuk kelas lain (sesuai permintaan).
+// HALAMAN INI adalah salinan SuratKeteranganLulus.jsx dengan dua perbedaan
+// utama:
+//   1) Kelas tidak lagi dipilih lewat dropdown — dicari otomatis (tingkat
+//      === "VI") dan digabung kalau ada lebih dari 1 rombel, persis pola
+//      cariKelas6() di Ijazah.jsx. Halaman ini KHUSUS Kelas 6.
+//   2) Sistem pengambilan sekolah_id & penanganan error MENGIKUTI pola di
+//      LaporanKeadaanMurid.jsx:
+//        - sekolah_id diambil langsung dari useAuth() (bukan query manual
+//          ke tabel "profil" tiap kali halaman dibuka).
+//        - query kelas & siswa difilter eksplisit dengan .eq('sekolah_id', ...)
+//          supaya tidak pernah menarik data sekolah lain.
+//        - error dari Supabase DITANGKAP dan ditampilkan sebagai banner
+//          (errorMuat), bukan diam-diam diabaikan seperti sebelumnya —
+//          supaya kalau ada query gagal, langsung ketahuan alih-alih
+//          diam-diam menampilkan data kosong/0.
+//
+// Bingkai (border + rounded + card pembungkus) di sekitar pratinjau SKL
+// sudah dihapus sesuai permintaan — SklPrintTemplate sekarang tampil polos.
 
 function tahunPelajaranDefault() {
   const now = new Date();
@@ -18,6 +32,8 @@ function tahunPelajaranDefault() {
 }
 
 export default function SuratKeteranganLulusKelas6() {
+  const { sekolahId: sekolahIdSaya } = useAuth();
+
   const [tahunPelajaran, setTahunPelajaran] = useState(tahunPelajaranDefault());
 
   const [kelasIdKelas6, setKelasIdKelas6] = useState([]);
@@ -32,6 +48,9 @@ export default function SuratKeteranganLulusKelas6() {
   const [selectedId, setSelectedId] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [nomorPrefix, setNomorPrefix] = useState("421.2/");
+  // PERBAIKAN (mengikuti LaporanKeadaanMurid.jsx): error query Supabase
+  // ditangkap & ditampilkan, bukan ditelan diam-diam.
+  const [errorMuat, setErrorMuat] = useState("");
   const previewRef = useRef(null);
 
   // Pilih siswa dari tabel lalu gulir otomatis ke kartu pratinjau di bawah,
@@ -42,13 +61,14 @@ export default function SuratKeteranganLulusKelas6() {
     previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  // Cari kelas bertingkat "VI" sekali di awal (sama seperti cariKelas6 di
-  // Ijazah.jsx). Kalau ada lebih dari satu rombel Kelas 6, semuanya
-  // digabung jadi satu daftar siswa.
+  // Cari kelas bertingkat "VI" milik sekolah aktif sekali di awal (sama
+  // seperti cariKelas6 di Ijazah.jsx, tapi sekarang difilter sekolah_id
+  // seperti pola di LaporanKeadaanMurid.jsx). Kalau ada lebih dari satu
+  // rombel Kelas 6, semuanya digabung jadi satu daftar siswa.
   useEffect(() => {
     cariKelas6();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [sekolahIdSaya]);
 
   useEffect(() => {
     if (kelasSiapDimuat) {
@@ -58,7 +78,22 @@ export default function SuratKeteranganLulusKelas6() {
   }, [tahunPelajaran, kelasSiapDimuat, kelasIdKelas6]);
 
   async function cariKelas6() {
-    const { data: kelas } = await supabase.from("kelas").select("*").order("nama_kelas");
+    if (!sekolahIdSaya) {
+      setKelasSiapDimuat(true);
+      return;
+    }
+
+    const { data: kelas, error: kelasError } = await supabase
+      .from("kelas")
+      .select("*")
+      .eq("sekolah_id", sekolahIdSaya)
+      .order("nama_kelas");
+
+    if (kelasError) {
+      console.error("Gagal memuat data kelas:", kelasError);
+      setErrorMuat(`Gagal memuat data kelas dari database. Detail: ${kelasError.message}`);
+    }
+
     // Tingkat disimpan sebagai angka Romawi (VII, VI, dst), jadi cocokkan persis "VI"
     // (bukan .includes, karena "VI" juga jadi substring dari "VII" dan "VIII")
     const semuaKelas6 = (kelas || []).filter(
@@ -69,31 +104,21 @@ export default function SuratKeteranganLulusKelas6() {
     setKelasSiapDimuat(true);
   }
 
-  // Ambil sekolah_id user yang sedang login lewat tabel profil.
-  // PENTING: kalau aplikasi kamu sudah punya context/hook auth (mis. useAuth())
-  // yang menyimpan sekolah_id user aktif, ganti fungsi ini untuk memakai itu
-  // saja alih-alih query ulang ke tabel profil di sini.
-  async function getSekolahIdAktif() {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return null;
-    const { data: profilUser } = await supabase
-      .from("profil")
-      .select("sekolah_id")
-      .eq("id", user.id)
-      .maybeSingle();
-    return profilUser?.sekolah_id ?? null;
-  }
-
   async function loadAll() {
     setLoading(true);
+    setErrorMuat("");
 
-    const sekolahIdAktif = await getSekolahIdAktif();
+    if (!sekolahIdSaya) {
+      setSiswaList([]);
+      setSekolah(null);
+      setLoading(false);
+      return;
+    }
 
     let siswaQuery = supabase
       .from("siswa")
       .select("*, kelas(tingkat)")
+      .eq("sekolah_id", sekolahIdSaya)
       .eq("status", "aktif")
       .order("nama_lengkap");
 
@@ -105,17 +130,41 @@ export default function SuratKeteranganLulusKelas6() {
       siswaQuery = siswaQuery.eq("kelas_id", "__tidak_ada_kelas_6__");
     }
 
-    let profilQuery = supabase.from("profil_sekolah").select("*");
-    profilQuery = sekolahIdAktif
-      ? profilQuery.eq("sekolah_id", sekolahIdAktif).maybeSingle()
-      : profilQuery.limit(0); // tidak ada sekolah_id -> jangan tampilkan profil siapa pun
-
-    const [{ data: siswa }, { data: nilai }, { data: sklRows }, { data: profil }] = await Promise.all([
+    const [
+      { data: siswa, error: siswaError },
+      { data: nilai, error: nilaiError },
+      { data: sklRows, error: sklError },
+      { data: profil, error: profilError },
+    ] = await Promise.all([
       siswaQuery,
       supabase.from("nilai_ijazah").select("*").eq("tahun_pelajaran", tahunPelajaran),
       supabase.from("skl").select("*").eq("tahun_pelajaran", tahunPelajaran),
-      profilQuery,
+      supabase.from("profil_sekolah").select("*").eq("sekolah_id", sekolahIdSaya).maybeSingle(),
     ]);
+
+    // PERBAIKAN: errornya sekarang dicatat DAN ditampilkan, bukan diam-diam
+    // ditelan (pola sama seperti LaporanKeadaanMurid.jsx).
+    if (siswaError) console.error("Gagal memuat data siswa:", siswaError);
+    if (nilaiError) console.error("Gagal memuat data nilai ijazah:", nilaiError);
+    if (sklError) console.error("Gagal memuat data SKL:", sklError);
+    if (profilError) console.error("Gagal memuat profil sekolah:", profilError);
+
+    const pesanError = [
+      siswaError ? "data siswa" : null,
+      nilaiError ? "data nilai ijazah" : null,
+      sklError ? "data SKL" : null,
+      profilError ? "profil sekolah" : null,
+    ].filter(Boolean);
+    if (pesanError.length > 0) {
+      const detailAsli =
+        siswaError?.message || nilaiError?.message || sklError?.message || profilError?.message || "";
+      setErrorMuat(
+        `Gagal memuat ${pesanError.join(", ")} dari database, sehingga halaman ini bisa kosong/tidak lengkap. ` +
+          `Coba muat ulang halaman; kalau masih gagal, periksa console browser (F12).` +
+          (detailAsli ? ` Detail: ${detailAsli}` : "")
+      );
+    }
+
     setSiswaList(siswa || []);
     const nMap = {};
     (nilai || []).forEach((n) => (nMap[n.siswa_id] = n));
@@ -230,7 +279,14 @@ export default function SuratKeteranganLulusKelas6() {
         </div>
       </div>
 
-      {!kelasIdKelas6.length && kelasSiapDimuat && (
+      {errorMuat && (
+        <div className="mb-6 flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700">
+          <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+          <span>{errorMuat}</span>
+        </div>
+      )}
+
+      {!errorMuat && !kelasIdKelas6.length && kelasSiapDimuat && (
         <div className="card p-4 mb-6 text-sm text-amber-600">
           Belum ada kelas dengan tingkat "VI" (Kelas 6) di data sekolah ini.
         </div>
@@ -313,15 +369,16 @@ export default function SuratKeteranganLulusKelas6() {
               </p>
             )}
 
-            <div className="border border-ink-900/10 rounded-lg overflow-auto" style={{ maxHeight: "70vh" }}>
-              <SklPrintTemplate
-                siswa={siswaTerpilih}
-                nilai={nilaiMap[selectedId] || {}}
-                sekolah={sekolahUntukCetak}
-                skl={sklMap[selectedId]}
-                tahunPelajaran={tahunPelajaran}
-              />
-            </div>
+            {/* Bingkai (border + rounded + overflow-auto + maxHeight) di
+                sekitar pratinjau sudah dihapus sesuai permintaan —
+                SklPrintTemplate tampil polos tanpa card pembungkus. */}
+            <SklPrintTemplate
+              siswa={siswaTerpilih}
+              nilai={nilaiMap[selectedId] || {}}
+              sekolah={sekolahUntukCetak}
+              skl={sklMap[selectedId]}
+              tahunPelajaran={tahunPelajaran}
+            />
           </div>
         </>
       )}
