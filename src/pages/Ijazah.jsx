@@ -240,11 +240,16 @@ export default function Ijazah() {
             border: none !important;
             border-radius: 0 !important;
           }
+        }
 
-          @page {
-            size: ${orientasiCetak === "landscape" ? "330mm 210mm" : "210mm 297mm"};
-            margin: 0;
-          }
+        /* PENTING: @page HARUS ditulis di luar (bukan disarangkan di dalam)
+           blok @media print — kalau disarangkan, sebagian browser diam-diam
+           mengabaikannya dan jatuh balik ke ukuran default (A4 potrait),
+           sehingga banyak ruang kosong muncul di bawah konten saat dicetak.
+           Pola ini disamakan dengan @page di LaporanKeadaanMurid.jsx. */
+        @page {
+          size: ${orientasiCetak === "landscape" ? "330mm 210mm" : "210mm 297mm"};
+          margin: 0;
         }
       `}</style>
 
