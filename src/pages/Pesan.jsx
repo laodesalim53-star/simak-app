@@ -56,9 +56,6 @@ const TARGET_LABEL = {
   guru: 'Semua Guru',
 }
 
-// Sesuaikan dengan nilai role di tabel profil/guru pada database Anda.
-const ADMIN_TIER_ROLES = ['admin', 'kepala_sekolah', 'admin_utama']
-
 function getExt(fileName = '') {
   return (fileName.split('.').pop() || '').toLowerCase()
 }
@@ -141,11 +138,12 @@ function LampiranPesan({ bucket, path, nama, tipe, publicBucket }) {
 }
 
 export default function Pesan() {
-  const { session, profil, sekolahId, isSuperAdmin } = useAuth()
+  const { session, profil, sekolahId, isSuperAdmin, isAdmin } = useAuth()
   const myId = session?.user?.id
 
-  const isAdminTier = ADMIN_TIER_ROLES.includes(profil?.role)
-  const canAksesPusat = isSuperAdmin || isAdminTier
+  // isAdmin dari AuthContext sudah mencakup admin, kepala_sekolah, admin_utama
+  // (persis sama seperti yang dipakai Sidebar.jsx untuk menentukan menu admin).
+  const canAksesPusat = isSuperAdmin || isAdmin
 
   const [tab, setTab] = useState('rekan') // 'rekan' | 'pusat'
   const tabRef = useRef(tab)
