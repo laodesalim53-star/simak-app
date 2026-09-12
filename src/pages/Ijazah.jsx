@@ -1,18 +1,29 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { ArrowLeft, Loader2, Printer, Save, FileEdit, RectangleVertical, RectangleHorizontal } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
-import Layout from "../components/Layout";
 import { MAPEL_IJAZAH, jumlahNilai, rataRataNilai } from "../components/IjazahPrintTemplate";
-import RekapIjazahPrintTemplate from "../components/RekapIjazahPrintTemplate";
 import ImporNilaiAsesmenModal from "../components/ImporNilaiAsesmenModal";
 import DetailNilaiSiswaModal from "../components/DetailNilaiSiswaModal";
-import {
-  Loader2,
-  Save,
-  Printer,
-  FileEdit,
-  RectangleVertical,
-  RectangleHorizontal,
-} from "lucide-react";
+
+// HALAMAN INI DITULIS ULANG dari versi sebelumnya yang memakai komponen
+// terpisah RekapIjazahPrintTemplate.jsx untuk versi cetak. Karena CSS di
+// dalam komponen itu tidak diketahui isinya dan kemungkinan bentrok dengan
+// aturan print global aplikasi, sekarang HANYA ADA SATU TABEL yang dipakai
+// baik untuk mengisi nilai di layar maupun untuk dicetak — polanya disalin
+// persis dari LaporanKeadaanMurid.jsx (yang sudah terbukti normal):
+//   - input angka: class "no-print" (hilang saat dicetak)
+//   - angka versi cetak (read-only): class "only-print" (hanya tampil saat
+//     dicetak)
+//   - seluruh lembar (kop surat + tabel + tanda tangan) dibungkus class
+//     "lembar-cetak print-only", mengikuti konvensi print-only/no-print
+//     global aplikasi (lihat index.css), dengan override yang sama seperti
+//     di LaporanKeadaanMurid.jsx supaya lembar ini tetap tampil normal di
+//     layar (bukan template tersembunyi) dan tidak "position: fixed" saat
+//     dicetak.
+//
+// Khusus Kelas 6: tidak ada lagi dropdown pilih kelas — kelasnya dicari
+// otomatis (tingkat === "VI") dan digabung kalau ada lebih dari 1 rombel.
 
 // Tahun pelajaran default: kalau sekarang Juli-Des, "thn/thn+1"; kalau Jan-Jun, "thn-1/thn".
 function tahunPelajaranDefault() {
@@ -22,15 +33,29 @@ function tahunPelajaranDefault() {
   return m >= 7 ? `${y}/${y + 1}` : `${y - 1}/${y}`;
 }
 
+// Asumsi pembagian 9 mapel di MAPEL_IJAZAH: 6 mapel pertama = Kelompok A,
+// 3 mapel terakhir = Kelompok B (urutan sesuai tampilan lama: Pend Agama,
+// PKn, Bhs Indo, Matematika, IPA, IPS | SBK, PJOK, Mulok). Kalau urutan
+// aslinya di IjazahPrintTemplate.jsx berbeda, cukup ubah angka 6 di bawah
+// (mapelKelompokA / mapelKelompokB).
+function pisahKelompokMapel() {
+  const a = MAPEL_IJAZAH.slice(0, 6);
+  const b = MAPEL_IJAZAH.slice(6);
+  return { mapelKelompokA: a, mapelKelompokB: b };
+}
+
+function formatTanggal(tgl) {
+  if (!tgl) return "-";
+  const d = new Date(tgl);
+  if (Number.isNaN(d.getTime())) return "-";
+  return d.toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
+}
+
 export default function Ijazah() {
+  const navigate = useNavigate();
+
   const [tahunPelajaran, setTahunPelajaran] = useState(tahunPelajaranDefault());
 
-  // PERUBAHAN: halaman Ijazah sekarang KHUSUS Kelas 6 saja (siswa lulus),
-  // jadi tidak ada lagi dropdown pemilihan kelas. kelasId diisi otomatis
-  // dari kelas yang tingkatnya "VI" dan tidak bisa diubah dari UI.
-  // Kalau sekolah punya lebih dari 1 rombel Kelas 6, semuanya tetap
-  // digabung (kelasId di sini berupa array id, bukan 1 id saja) supaya
-  // tidak ada siswa Kelas 6 yang "hilang" hanya karena beda rombel.
   const [kelasIdKelas6, setKelasIdKelas6] = useState([]);
   const [namaKelas6, setNamaKelas6] = useState("");
   const [kelasSiapDimuat, setKelasSiapDimuat] = useState(false);
@@ -40,13 +65,13 @@ export default function Ijazah() {
   const [sekolah, setSekolah] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [selectedId, setSelectedId] = useState(null);
-  const [detailSiswa, setDetailSiswa] = useState(null); // siswa yang lagi dibuka di modal Detail & Cetak
+  const [detailSiswa, setDetailSiswa] = useState(null);
 
-  // Orientasi kertas untuk cetak rekap: "portrait" (tegak) atau "landscape" (mendatar)
+  // "landscape" (mendatar, F4 330x210mm) atau "portrait" (tegak, A4 210x297mm)
   const [orientasiCetak, setOrientasiCetak] = useState("landscape");
 
-  // Ambil kelas Kelas 6 sekali di awal (tidak ada lagi pilihan kelas lain)
+  const { mapelKelompokA, mapelKelompokB } = useMemo(() => pisahKelompokMapel(), []);
+
   useEffect(() => {
     cariKelas6();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -71,11 +96,9 @@ export default function Ijazah() {
     setKelasSiapDimuat(true);
   }
 
-  // Ambil sekolah_id user yang sedang login lewat tabel profil.
   // PENTING: kalau aplikasi kamu sudah punya context/hook auth (mis. useAuth())
   // yang menyimpan sekolah_id user aktif, ganti fungsi ini untuk memakai itu
-  // saja alih-alih query ulang ke tabel profil di sini — sama seperti catatan
-  // di SuratKeteranganLulus.jsx.
+  // saja alih-alih query ulang ke tabel profil di sini.
   async function getSekolahIdAktif() {
     const {
       data: { user },
@@ -111,7 +134,7 @@ export default function Ijazah() {
     let profilQuery = supabase.from("profil_sekolah").select("*");
     profilQuery = sekolahIdAktif
       ? profilQuery.eq("sekolah_id", sekolahIdAktif).maybeSingle()
-      : profilQuery.limit(0); // tidak ada sekolah_id -> jangan tampilkan profil siapa pun
+      : profilQuery.limit(0);
 
     const [{ data: siswa }, { data: nilai }, { data: profil }] = await Promise.all([
       siswaQuery,
@@ -125,12 +148,6 @@ export default function Ijazah() {
     });
     setNilaiMap(map);
     setSekolah(profil || null);
-    // Pilih siswa pertama di Kelas 6 (reset kalau siswa lama tidak ada lagi di daftar)
-    if (siswa?.length && !siswa.some((s) => s.id === selectedId)) {
-      setSelectedId(siswa[0].id);
-    } else if (!siswa?.length) {
-      setSelectedId(null);
-    }
     setLoading(false);
   }
 
@@ -162,13 +179,6 @@ export default function Ijazah() {
     loadAll();
   }
 
-  // Gabungkan siswa + nilainya jadi satu objek per siswa untuk dikonsumsi
-  // RekapIjazahPrintTemplate (butuh siswa.nilai, bukan lookup terpisah).
-  const siswaUntukRekap = useMemo(
-    () => siswaList.map((s) => ({ ...s, nilai: nilaiMap[s.id] || {} })),
-    [siswaList, nilaiMap]
-  );
-
   const sekolahUntukCetak = sekolah
     ? {
         nama_sekolah: sekolah.nama_sekolah,
@@ -187,223 +197,284 @@ export default function Ijazah() {
       }
     : null;
 
-  return (
-    <Layout
-      title="Ijazah"
-      subtitle="Pengisian nilai kelulusan (9 mapel) dan cetak rekap data ijazah kelulusan — khusus Kelas 6"
-      actions={
-        <div className="no-print flex gap-2">
-          <ImporNilaiAsesmenModal
-            siswaList={siswaList}
-            tahunPelajaranDefault={tahunPelajaran}
-            onSelesai={loadAll}
-          />
-          <button className="btn-primary" onClick={simpanSemua} disabled={saving || loading}>
-            {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-            Simpan Nilai
-          </button>
-        </div>
-      }
-    >
-      {/*
-        Sistem print halaman ini mengikuti pola global aplikasi (class
-        "no-print" & "print-only", lihat index.css): semua elemen
-        disembunyikan saat print KECUALI yang berkelas "print-only".
-        Karena area rekap di sini juga harus tampil normal di layar
-        (bukan template tersembunyi), aturan "display: none" bawaan untuk
-        .print-only di-override khusus untuk kelas ".rekap-ijazah.print-only"
-        — sama seperti pola ".lembar-cetak.print-only" di
-        LaporanKeadaanMurid.jsx.
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="animate-spin text-slate-400" size={28} />
+      </div>
+    );
+  }
 
-        position/overflow/max-height juga di-override saat print supaya
-        kontainer scroll (dipakai untuk preview di layar) tidak lagi
-        membatasi tinggi konten saat dicetak — inilah penyebab tampilan
-        tumpang-tindih/terpotong pada percobaan cetak sebelumnya.
-      */}
+  const lebarKertas = orientasiCetak === "landscape" ? "330mm" : "210mm";
+
+  return (
+    <div className="min-h-screen bg-slate-100">
+      {/* Toolbar — hilang saat dicetak, sama seperti LaporanKeadaanMurid.jsx */}
+      <div className="no-print sticky top-0 z-10 bg-white border-b border-slate-200 px-4 py-3">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-800"
+          >
+            <ArrowLeft size={16} /> Kembali
+          </button>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">Tahun Pelajaran</label>
+              <input
+                className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm w-32"
+                value={tahunPelajaran}
+                onChange={(e) => setTahunPelajaran(e.target.value)}
+                placeholder="2025/2026"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">Kelas</label>
+              <div className="border border-slate-200 bg-slate-50 rounded-lg px-2.5 py-1.5 text-sm text-slate-600">
+                {namaKelas6 || "Kelas 6 (VI)"}
+              </div>
+            </div>
+
+            <ImporNilaiAsesmenModal
+              siswaList={siswaList}
+              tahunPelajaranDefault={tahunPelajaran}
+              onSelesai={loadAll}
+            />
+
+            <button
+              className="flex items-center gap-1.5 bg-emerald-600 text-white text-sm font-medium px-3.5 py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-60"
+              onClick={simpanSemua}
+              disabled={saving}
+            >
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              Simpan Nilai
+            </button>
+
+            <div className="flex items-center rounded-lg border border-slate-300 overflow-hidden">
+              <button
+                type="button"
+                className={`px-2.5 py-2 text-xs flex items-center gap-1 ${
+                  orientasiCetak === "portrait" ? "bg-blue-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+                onClick={() => setOrientasiCetak("portrait")}
+                title="Cetak posisi Potrait (tegak)"
+              >
+                <RectangleVertical size={14} /> Potrait
+              </button>
+              <button
+                type="button"
+                className={`px-2.5 py-2 text-xs flex items-center gap-1 border-l border-slate-300 ${
+                  orientasiCetak === "landscape" ? "bg-blue-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+                onClick={() => setOrientasiCetak("landscape")}
+                title="Cetak posisi Landscape (mendatar)"
+              >
+                <RectangleHorizontal size={14} /> Landscape
+              </button>
+            </div>
+
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 bg-blue-600 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-blue-700"
+            >
+              <Printer size={16} /> Cetak Rekap Ijazah
+            </button>
+          </div>
+        </div>
+
+        {!kelasIdKelas6.length && (
+          <p className="text-xs text-amber-600 mt-2">
+            Belum ada kelas dengan tingkat "VI" (Kelas 6) di data sekolah ini.
+          </p>
+        )}
+      </div>
+
+      {detailSiswa && (
+        <DetailNilaiSiswaModal
+          siswa={detailSiswa}
+          sekolah={sekolahUntukCetak}
+          tahunPelajaran={tahunPelajaran}
+          onClose={() => setDetailSiswa(null)}
+          onSaved={loadAll}
+        />
+      )}
+
+      {/* Lembar ini SATU-SATUNYA area yang tampil saat print (class
+          "print-only"), sekaligus tampil normal di layar untuk mengisi
+          nilai — sama seperti .lembar-cetak.print-only di
+          LaporanKeadaanMurid.jsx. */}
+      <div
+        className="lembar-cetak print-only bg-white mx-auto my-6 p-8 shadow-sm"
+        style={{ width: lebarKertas }}
+      >
+        <div className="text-center font-bold text-sm uppercase mb-4">
+          Data : Pengisian Ijazah Kelulusan Tahun Pelajaran {tahunPelajaran}
+        </div>
+
+        <div className="text-xs mb-4 leading-relaxed">
+          <p className="flex"><span className="w-28 shrink-0">Nama Sekolah</span><span className="w-3">:</span><span className="font-semibold">{sekolahUntukCetak?.nama_sekolah || "-"}</span></p>
+          <p className="flex"><span className="w-28 shrink-0">NPSN</span><span className="w-3">:</span><span>{sekolahUntukCetak?.npsn || "-"}</span></p>
+          <p className="flex"><span className="w-28 shrink-0">Kabupaten</span><span className="w-3">:</span><span>{sekolahUntukCetak?.kabupaten || "-"}</span></p>
+          <p className="flex"><span className="w-28 shrink-0">Provinsi</span><span className="w-3">:</span><span>{sekolahUntukCetak?.provinsi || "-"}</span></p>
+        </div>
+
+        {siswaList.length === 0 ? (
+          <p className="text-center text-sm text-slate-400 py-8">Belum ada siswa aktif di Kelas 6.</p>
+        ) : (
+          <table className="w-full text-[10px] border-collapse border border-black">
+            <thead>
+              <tr className="text-center">
+                <th rowSpan={2} className="border border-black px-1 py-1 w-6">No</th>
+                <th rowSpan={2} className="border border-black px-1 py-1">Nama Siswa</th>
+                <th rowSpan={2} className="border border-black px-1 py-1">Tempat, Tanggal Lahir</th>
+                <th rowSpan={2} className="border border-black px-1 py-1">No Induk Siswa</th>
+                <th rowSpan={2} className="border border-black px-1 py-1">NISN</th>
+                <th colSpan={mapelKelompokA.length} className="border border-black px-1 py-1">Kelompok A</th>
+                <th colSpan={mapelKelompokB.length} className="border border-black px-1 py-1">Kelompok B</th>
+                <th rowSpan={2} className="border border-black px-1 py-1 w-12">Jumlah</th>
+                <th rowSpan={2} className="no-print border border-black px-1 py-1 w-8">Rata²</th>
+                <th rowSpan={2} className="no-print border border-black px-1 py-1 w-24">Aksi</th>
+              </tr>
+              <tr className="text-center">
+                {mapelKelompokA.map((m) => (
+                  <th key={m.key} className="border border-black px-1 py-1 w-10">{m.label.split(" ")[0]}</th>
+                ))}
+                {mapelKelompokB.map((m) => (
+                  <th key={m.key} className="border border-black px-1 py-1 w-10">{m.label.split(" ")[0]}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {siswaList.map((s, idx) => {
+                const v = nilaiMap[s.id] || {};
+                return (
+                  <tr key={s.id}>
+                    <td className="border border-black px-1 py-1 text-center">{idx + 1}</td>
+                    <td className="border border-black px-1 py-1 font-semibold whitespace-nowrap">{s.nama_lengkap}</td>
+                    <td className="border border-black px-1 py-1 whitespace-nowrap">
+                      {[s.tempat_lahir, formatTanggal(s.tanggal_lahir)].filter(Boolean).join(", ")}
+                    </td>
+                    <td className="border border-black px-1 py-1 text-center font-mono">{s.nis || "-"}</td>
+                    <td className="border border-black px-1 py-1 text-center font-mono">{s.nisn || "-"}</td>
+                    {[...mapelKelompokA, ...mapelKelompokB].map((m) => (
+                      <td key={m.key} className="border border-black px-1 py-1 text-center">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="100"
+                          className="sel-nilai no-print"
+                          value={v[m.key] ?? ""}
+                          onChange={(e) => ubahNilai(s.id, m.key, e.target.value)}
+                        />
+                        <span className="only-print">{v[m.key] ?? "-"}</span>
+                      </td>
+                    ))}
+                    <td className="border border-black px-1 py-1 text-center font-semibold">{jumlahNilai(v).toFixed(2)}</td>
+                    <td className="no-print border border-black px-1 py-1 text-center">{rataRataNilai(v).toFixed(2)}</td>
+                    <td className="no-print border border-black px-1 py-1 text-center">
+                      <button
+                        className="text-[10px] px-2 py-1 rounded border border-slate-300 hover:bg-slate-50 inline-flex items-center gap-1"
+                        onClick={() => setDetailSiswa(s)}
+                        title="Isi nilai per semester & cetak Daftar Nilai Kolektif"
+                      >
+                        <FileEdit size={12} /> Detail
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+
+        <div className="flex justify-between mt-10 text-xs">
+          <div className="text-center w-64">
+            <p>Mengetahui,</p>
+            <p>Pengawas Sekolah</p>
+            <div className="h-16" />
+            <p className="font-semibold underline">{sekolahUntukCetak?.pengawas || "............................"}</p>
+            <p>NIP. {sekolahUntukCetak?.nip_pengawas || "............................"}</p>
+          </div>
+          <div className="text-center w-64">
+            <p>
+              {sekolahUntukCetak?.tempat_ttd || sekolahUntukCetak?.kecamatan || "............"},{" "}
+              {new Date().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" })}
+            </p>
+            <p className="mt-1">Kepala Sekolah</p>
+            <div className="h-16" />
+            <p className="font-semibold underline">{sekolahUntukCetak?.kepala_sekolah || "............................"}</p>
+            <p>NIP. {sekolahUntukCetak?.nip_kepala_sekolah || "............................"}</p>
+          </div>
+        </div>
+      </div>
+
       <style>{`
+        .sel-nilai {
+          width: 34px;
+          border: none;
+          border-bottom: 1px dotted #94a3b8;
+          text-align: center;
+          font-size: 10px;
+          background: transparent;
+          outline: none;
+          -moz-appearance: textfield;
+        }
+        .sel-nilai::-webkit-outer-spin-button,
+        .sel-nilai::-webkit-inner-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+        .sel-nilai:focus {
+          border-bottom: 1px solid #2563eb;
+        }
+
+        /* Di layar: tampilkan input (bisa diisi), sembunyikan angka
+           read-only versi cetak. */
+        .only-print { display: none; }
+
+        /* Override aturan global ".print-only { display: none }" di layar
+           — lembar ini MEMANG harus tampil di layar untuk diisi, sama
+           seperti pola di LaporanKeadaanMurid.jsx. */
         @media screen {
-          .rekap-ijazah.print-only {
+          .lembar-cetak.print-only {
             display: block !important;
           }
         }
 
         @media print {
           .no-print { display: none !important; }
+          body { background: white; }
+          .lembar-cetak {
+            box-shadow: none !important;
+            margin: 0 !important;
+            width: 100% !important;
+          }
+          .sel-nilai { display: none !important; }
+          .only-print { display: inline !important; }
 
-          .rekap-ijazah.print-only {
+          /* Override aturan global (posisi fixed default utk .print-only)
+             supaya lembar ini mengalir normal & bisa pindah halaman kalau
+             siswanya banyak, bukan menumpuk di satu titik fixed. */
+          .lembar-cetak.print-only {
             position: static !important;
             top: auto !important;
             left: auto !important;
             right: auto !important;
-            max-height: none !important;
-            overflow: visible !important;
-            border: none !important;
-            border-radius: 0 !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
           }
         }
 
-        /* PENTING: @page HARUS ditulis di luar (bukan disarangkan di dalam)
-           blok @media print — kalau disarangkan, sebagian browser diam-diam
-           mengabaikannya dan jatuh balik ke ukuran default (A4 potrait),
-           sehingga banyak ruang kosong muncul di bawah konten saat dicetak.
-           Pola ini disamakan dengan @page di LaporanKeadaanMurid.jsx. */
+        /* @page WAJIB di luar @media print (lihat catatan di
+           LaporanKeadaanMurid.jsx) supaya ukuran kertas benar-benar
+           dipakai, bukan jatuh balik ke default A4 browser. */
         @page {
           size: ${orientasiCetak === "landscape" ? "330mm 210mm" : "210mm 297mm"};
-          margin: 0;
+          margin: 8mm;
         }
       `}</style>
-
-      <div className="no-print card p-4 mb-6 flex flex-wrap items-end gap-4">
-        <div>
-          <label className="block text-xs font-semibold text-ink-700/60 mb-1">Tahun Pelajaran</label>
-          <input
-            className="input-field w-40"
-            value={tahunPelajaran}
-            onChange={(e) => setTahunPelajaran(e.target.value)}
-            placeholder="2025/2026"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-semibold text-ink-700/60 mb-1">Kelas</label>
-          {/* Tidak ada lagi dropdown pilih kelas — halaman ini khusus Kelas 6 */}
-          <div className="input-field w-48 bg-ink-900/5 text-ink-700/70 flex items-center">
-            {namaKelas6 || "Kelas 6 (VI)"}
-          </div>
-        </div>
-      </div>
-
-      {loading ? (
-        <p>Memuat...</p>
-      ) : !kelasIdKelas6.length ? (
-        <div className="card p-6 text-center text-ink-700/60">
-          Belum ada kelas dengan tingkat "VI" (Kelas 6) di data sekolah ini.
-        </div>
-      ) : siswaList.length === 0 ? (
-        <div className="card p-6 text-center text-ink-700/60">Belum ada siswa aktif di Kelas 6.</div>
-      ) : (
-        <>
-          <div className="no-print card overflow-x-auto mb-6">
-            <table className="table-shell">
-              <thead>
-                <tr>
-                  <th>Nama Siswa</th>
-                  {MAPEL_IJAZAH.map((m) => (
-                    <th key={m.key} className="text-right">
-                      {m.label.split(" ")[0]}
-                    </th>
-                  ))}
-                  <th className="text-right">Jumlah</th>
-                  <th className="text-right">Rata²</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {siswaList.map((s) => {
-                  const v = nilaiMap[s.id] || {};
-                  return (
-                    <tr key={s.id} className={selectedId === s.id ? "bg-brass-400/10" : ""}>
-                      <td>
-                        <button className="font-semibold text-left hover:underline" onClick={() => setSelectedId(s.id)}>
-                          {s.nama_lengkap}
-                        </button>
-                        <div className="text-xs text-ink-700/50 font-mono">{s.nisn}</div>
-                      </td>
-                      {MAPEL_IJAZAH.map((m) => (
-                        <td key={m.key} className="text-right">
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            max="100"
-                            className="w-16 text-right rounded border border-ink-900/15 px-1.5 py-1 text-sm"
-                            value={v[m.key] ?? ""}
-                            onChange={(e) => ubahNilai(s.id, m.key, e.target.value)}
-                          />
-                        </td>
-                      ))}
-                      <td className="text-right font-semibold">{jumlahNilai(v).toFixed(2)}</td>
-                      <td className="text-right font-semibold">{rataRataNilai(v).toFixed(2)}</td>
-                      <td className="text-right">
-                        <button
-                          className="btn-secondary !px-2.5 !py-1.5 text-xs whitespace-nowrap"
-                          onClick={() => setDetailSiswa(s)}
-                          title="Isi nilai per semester & cetak Daftar Nilai Kolektif"
-                        >
-                          <FileEdit size={14} /> Detail &amp; Cetak
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {detailSiswa && (
-            <DetailNilaiSiswaModal
-              siswa={detailSiswa}
-              sekolah={sekolahUntukCetak}
-              tahunPelajaran={tahunPelajaran}
-              onClose={() => setDetailSiswa(null)}
-              onSaved={loadAll}
-            />
-          )}
-
-          <div className="no-print card p-4 mb-4 flex items-center justify-between flex-wrap gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-ink-700/60 mb-1">Pratinjau Rekap</label>
-              <p className="text-sm text-ink-700/60">
-                {siswaList.length} siswa · Kelas 6 · Tahun Pelajaran {tahunPelajaran}
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <div className="flex items-center rounded-lg border border-ink-900/15 overflow-hidden">
-                <button
-                  type="button"
-                  className={`!px-2.5 !py-1.5 text-xs flex items-center gap-1 transition-colors ${
-                    orientasiCetak === "portrait"
-                      ? "bg-brass-400/20 font-semibold"
-                      : "bg-transparent hover:bg-ink-900/5"
-                  }`}
-                  onClick={() => setOrientasiCetak("portrait")}
-                  title="Cetak posisi Potrait (tegak)"
-                >
-                  <RectangleVertical size={14} /> Potrait
-                </button>
-                <button
-                  type="button"
-                  className={`!px-2.5 !py-1.5 text-xs flex items-center gap-1 border-l border-ink-900/15 transition-colors ${
-                    orientasiCetak === "landscape"
-                      ? "bg-brass-400/20 font-semibold"
-                      : "bg-transparent hover:bg-ink-900/5"
-                  }`}
-                  onClick={() => setOrientasiCetak("landscape")}
-                  title="Cetak posisi Landscape (mendatar)"
-                >
-                  <RectangleHorizontal size={14} /> Landscape
-                </button>
-              </div>
-
-              <button className="btn-primary" onClick={() => window.print()}>
-                <Printer size={16} /> Cetak Rekap Ijazah
-              </button>
-            </div>
-          </div>
-
-          <div
-            className="rekap-ijazah print-only border border-ink-900/10 rounded-lg overflow-auto"
-            style={{ maxHeight: "70vh" }}
-          >
-            <RekapIjazahPrintTemplate
-              siswaList={siswaUntukRekap}
-              sekolah={sekolahUntukCetak}
-              tahunPelajaran={tahunPelajaran}
-              orientasi={orientasiCetak}
-            />
-          </div>
-        </>
-      )}
-    </Layout>
+    </div>
   );
 }
