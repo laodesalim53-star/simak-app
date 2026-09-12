@@ -4,6 +4,12 @@ import Layout from "../components/Layout";
 import SklPrintTemplate from "../components/SklPrintTemplate";
 import { Printer, Loader2, FilePlus2 } from "lucide-react";
 
+// HALAMAN INI adalah salinan SuratKeteranganLulus.jsx dengan SATU perbedaan
+// utama: tidak ada lagi dropdown pilih kelas. Kelasnya dicari otomatis
+// (tingkat === "VI") dan digabung kalau ada lebih dari 1 rombel — persis
+// pola cariKelas6() di Ijazah.jsx. Jadi halaman ini KHUSUS Kelas 6, tidak
+// bisa dipakai untuk kelas lain (sesuai permintaan).
+
 function tahunPelajaranDefault() {
   const now = new Date();
   const y = now.getFullYear();
@@ -11,10 +17,13 @@ function tahunPelajaranDefault() {
   return m >= 7 ? `${y}/${y + 1}` : `${y - 1}/${y}`;
 }
 
-export default function SuratKeteranganLulus() {
+export default function SuratKeteranganLulusKelas6() {
   const [tahunPelajaran, setTahunPelajaran] = useState(tahunPelajaranDefault());
-  const [kelasList, setKelasList] = useState([]);
-  const [kelasId, setKelasId] = useState(null);
+
+  const [kelasIdKelas6, setKelasIdKelas6] = useState([]);
+  const [namaKelas6, setNamaKelas6] = useState("");
+  const [kelasSiapDimuat, setKelasSiapDimuat] = useState(false);
+
   const [siswaList, setSiswaList] = useState([]);
   const [nilaiMap, setNilaiMap] = useState({});
   const [sklMap, setSklMap] = useState({});
@@ -33,26 +42,31 @@ export default function SuratKeteranganLulus() {
     previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  // Ambil daftar kelas sekali di awal, lalu default-kan ke kelas yang mengandung "6"
+  // Cari kelas bertingkat "VI" sekali di awal (sama seperti cariKelas6 di
+  // Ijazah.jsx). Kalau ada lebih dari satu rombel Kelas 6, semuanya
+  // digabung jadi satu daftar siswa.
   useEffect(() => {
-    loadKelas();
+    cariKelas6();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    if (kelasId !== null) {
+    if (kelasSiapDimuat) {
       loadAll();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tahunPelajaran, kelasId]);
+  }, [tahunPelajaran, kelasSiapDimuat, kelasIdKelas6]);
 
-  async function loadKelas() {
+  async function cariKelas6() {
     const { data: kelas } = await supabase.from("kelas").select("*").order("nama_kelas");
-    setKelasList(kelas || []);
     // Tingkat disimpan sebagai angka Romawi (VII, VI, dst), jadi cocokkan persis "VI"
     // (bukan .includes, karena "VI" juga jadi substring dari "VII" dan "VIII")
-    const kelas6 = (kelas || []).find((k) => String(k.tingkat).trim().toUpperCase() === "VI");
-    setKelasId(kelas6 ? kelas6.id : kelas?.[0]?.id ?? "");
+    const semuaKelas6 = (kelas || []).filter(
+      (k) => String(k.tingkat).trim().toUpperCase() === "VI"
+    );
+    setKelasIdKelas6(semuaKelas6.map((k) => k.id));
+    setNamaKelas6(semuaKelas6.map((k) => k.nama_kelas).join(", "));
+    setKelasSiapDimuat(true);
   }
 
   // Ambil sekolah_id user yang sedang login lewat tabel profil.
@@ -82,7 +96,14 @@ export default function SuratKeteranganLulus() {
       .select("*, kelas(tingkat)")
       .eq("status", "aktif")
       .order("nama_lengkap");
-    if (kelasId) siswaQuery = siswaQuery.eq("kelas_id", kelasId);
+
+    if (kelasIdKelas6.length > 0) {
+      siswaQuery = siswaQuery.in("kelas_id", kelasIdKelas6);
+    } else {
+      // Belum ada kelas bertingkat "VI" ditemukan -> jangan tampilkan siswa
+      // kelas lain sama sekali (halaman ini khusus Kelas 6).
+      siswaQuery = siswaQuery.eq("kelas_id", "__tidak_ada_kelas_6__");
+    }
 
     let profilQuery = supabase.from("profil_sekolah").select("*");
     profilQuery = sekolahIdAktif
@@ -121,7 +142,7 @@ export default function SuratKeteranganLulus() {
 
     setSekolah(profil ? { ...profil, logo_url: logoUrl, ttd_url: ttdUrl } : null);
 
-    // Pilih siswa pertama di kelas terpilih (reset kalau siswa lama tidak ada di kelas ini)
+    // Pilih siswa pertama (reset kalau siswa lama tidak ada di daftar ini)
     if (siswa?.length && !siswa.some((s) => s.id === selectedId)) {
       setSelectedId(siswa[0].id);
     } else if (!siswa?.length) {
@@ -178,7 +199,7 @@ export default function SuratKeteranganLulus() {
 
   return (
     <Layout
-      title="Surat Keterangan Lulus"
+      title="Surat Keterangan Lulus — Kelas 6"
       subtitle="Nomor SKL otomatis per siswa, dicetak dari nilai ijazah yang sudah diisi"
       actions={
         <button className="btn-primary" onClick={generateNomorUntukSemua} disabled={generating || loading}>
@@ -199,17 +220,9 @@ export default function SuratKeteranganLulus() {
         </div>
         <div>
           <label className="block text-xs font-semibold text-ink-700/60 mb-1">Kelas</label>
-          <select
-            className="input-field w-48"
-            value={kelasId || ""}
-            onChange={(e) => setKelasId(e.target.value)}
-          >
-            {kelasList.map((k) => (
-              <option key={k.id} value={k.id}>
-                {k.nama_kelas} (Tingkat {k.tingkat})
-              </option>
-            ))}
-          </select>
+          <div className="input-field w-48 bg-ink-900/5 text-ink-700/70 flex items-center">
+            {namaKelas6 || "Kelas 6 (VI)"}
+          </div>
         </div>
         <div>
           <label className="block text-xs font-semibold text-ink-700/60 mb-1">Awalan Nomor Surat</label>
@@ -217,10 +230,16 @@ export default function SuratKeteranganLulus() {
         </div>
       </div>
 
+      {!kelasIdKelas6.length && kelasSiapDimuat && (
+        <div className="card p-4 mb-6 text-sm text-amber-600">
+          Belum ada kelas dengan tingkat "VI" (Kelas 6) di data sekolah ini.
+        </div>
+      )}
+
       {loading ? (
         <p>Memuat...</p>
       ) : siswaList.length === 0 ? (
-        <div className="card p-6 text-center text-ink-700/60">Belum ada siswa aktif di kelas ini.</div>
+        <div className="card p-6 text-center text-ink-700/60">Belum ada siswa aktif di Kelas 6.</div>
       ) : (
         <>
           <div className="card overflow-x-auto mb-6">
