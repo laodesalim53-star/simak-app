@@ -17,6 +17,7 @@ import {
   FileSignature,
   ScrollText,
   FileBarChart,
+  FileStack,
 } from 'lucide-react'
 import Layout from '../components/Layout'
 
@@ -164,6 +165,14 @@ const daftarLaporan = [
     deskripsi: 'Rekap bulanan: presensi siswa, presensi guru (termasuk format Daftar Hadir), surat masuk/keluar, dan agenda kegiatan.',
     icon: FileBarChart,
     path: '/laporan',   
+    siap: true,
+  },
+  {
+    id: 'cetak-sampul',
+    judul: 'Cetak Sampul Laporan',
+    deskripsi: 'Cetak halaman sampul untuk berbagai jenis laporan sekolah — kop otomatis dari Profil Sekolah, tinggal pilih jenisnya.',
+    icon: FileStack,
+    path: '/cetak-sampul',
     siap: true,
   },
 ]
