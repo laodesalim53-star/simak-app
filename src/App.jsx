@@ -64,7 +64,6 @@ import BuatUjian from './pages/BuatUjian'
 import UjianOnline from './pages/UjianOnline'
 import ProfilSaya from './pages/ProfilSaya'
 import SertifikatPenghargaan from './pages/SertifikatPenghargaan'
-import PortofolioSiswa from './pages/PortofolioSiswa'
 import PengajuanSuratAktif from './pages/PengajuanSuratAktif'
 import PengajuanEditSiswa from './pages/PengajuanEditSiswa'
 import PengajuanKebutuhanKelas from './pages/PengajuanKebutuhanKelas'
@@ -343,7 +342,6 @@ export default function App() {
         <Route path="/pengajuan-kebutuhan-kelas" element={<ProtectedRoute><PengajuanKebutuhanKelas /></ProtectedRoute>} />
         <Route path="/profil-saya" element={<ProtectedRoute><ProfilSaya /></ProtectedRoute>} />
         <Route path="/sertifikat" element={<ProtectedRoute><SertifikatPenghargaan /></ProtectedRoute>} />
-        <Route path="/portofolio-siswa" element={<ProtectedRoute><PortofolioSiswa /></ProtectedRoute>} />
         {/* Halaman terbuka untuk SEMUA role yang sudah login (admin, guru,
             orang tua) — status paket (free/premium) melekat ke masing-masing
             akun individu, bukan ke sekolah. */}
