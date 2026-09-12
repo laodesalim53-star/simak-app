@@ -2,15 +2,24 @@ import { useState } from "react";
 import { Check, Sparkles } from "lucide-react";
 import { useAuth } from "../lib/AuthContext"; // sesuaikan path jika beda
 import Layout from "../components/Layout"; // dibungkus Layout, sama seperti ProfilSaya.jsx
+
 const FITUR_FREE = [
   "Data Siswa & Data Guru",
   "Nilai & Presensi",
   "Rapor per siswa",
-  "Bank Soal & Ujian Online",dll
+  "Bank Soal & Ujian Online",
 ];
+
 const FITUR_PREMIUM = [
   "Generate Surat & SK otomatis, tanpa input manual berulang",
+  "AI RPP cerdas: draf RPP + lampiran tersusun otomatis",
+  "Kuitansi & Nota otomatis, termasuk cetak massal",
+  "Kartu Pelajar & Perpustakaan otomatis, tanpa desain manual",
+  "Portofolio Siswa & Galeri Kegiatan tersimpan rapi",
+  "Kuis Interaktif untuk kelas 1-3, belajar jadi lebih seru",
+  "Cetak rapor massal satu kelas sekaligus, hemat waktu admin",
 ];
+
 export default function UpgradeFitur() {
   const { isPremium } = useAuth();
   const paketSaatIni = isPremium ? "premium" : "free";
