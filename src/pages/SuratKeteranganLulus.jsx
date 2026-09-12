@@ -499,7 +499,15 @@ export default function SuratKeteranganLulusKelas6() {
                       <img
                         src={sekolah.logo_url}
                         alt="Logo"
-                        style={{ width: 64, height: 64, objectFit: "contain", flexShrink: 0 }}
+                        style={{
+                          position: "static",
+                          display: "inline-block",
+                          float: "none",
+                          width: 64,
+                          height: 64,
+                          objectFit: "contain",
+                          flexShrink: 0,
+                        }}
                       />
                     )}
                     <div style={{ flex: 1, textAlign: "center" }}>
@@ -620,13 +628,38 @@ export default function SuratKeteranganLulusKelas6() {
                     ijazah yang bersangkutan.
                   </p>
 
-                  <div style={{ textAlign: "right", marginTop: 10, pageBreakInside: "avoid", breakInside: "avoid" }}>
+                  <div
+                    style={{
+                      textAlign: "right",
+                      marginTop: 10,
+                      pageBreakInside: "avoid",
+                      breakInside: "avoid",
+                      position: "relative",
+                    }}
+                  >
                     <p style={{ margin: 0 }}>
                       {sekolah?.tempat_ttd || sekolah?.kecamatan || ""}, {tanggalTerbit}
                     </p>
                     <p style={{ margin: 0 }}>Kepala Sekolah</p>
                     {sekolah?.ttd_url ? (
-                      <img src={sekolah.ttd_url} alt="TTD" style={{ height: 50, margin: "4px 0" }} />
+                      <img
+                        src={sekolah.ttd_url}
+                        alt="TTD"
+                        style={{
+                          // Dikunci eksplisit supaya tidak kebawa aturan CSS
+                          // global manapun (mis. img yang tidak sengaja
+                          // ikut ke-override position:absolute/fixed oleh
+                          // index.css) — gambar ini harus selalu mengalir
+                          // normal tepat di bawah teks "Kepala Sekolah".
+                          position: "static",
+                          display: "inline-block",
+                          float: "none",
+                          height: 50,
+                          width: "auto",
+                          maxWidth: "100%",
+                          margin: "4px 0",
+                        }}
+                      />
                     ) : (
                       <div style={{ height: 50 }} />
                     )}
