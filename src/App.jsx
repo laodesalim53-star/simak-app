@@ -245,7 +245,7 @@ export default function App() {
         {/* Laporan Semester — dari format LAPORAN_BULANAN_-_Copy.docx (jam
             pelajaran per kelas, keadaan gedung/ruang, keadaan buku KTSP & K-13). */}
         <Route path="/laporan-semester" element={<ProtectedRoute adminOnly><LaporanSemester /></ProtectedRoute>} />
-        <Route path="/laporan" element={<ProtectedRoute adminOnly><LaporanBulanan /></ProtectedRoute>} />
+        <Route path="/laporan" element={<ProtectedRoute><LaporanBulanan /></ProtectedRoute>} />
         {/* Laporan Daftar Hadir Guru/Pegawai — halaman berdiri sendiri (dilepas
             dari selector "Jenis Laporan" di LaporanBulanan.jsx, logika sama). */}
         <Route path="/laporan-daftar-hadir-guru" element={<ProtectedRoute adminOnly><LaporanDaftarHadirGuru /></ProtectedRoute>} />
