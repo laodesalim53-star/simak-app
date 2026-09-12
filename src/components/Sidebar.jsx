@@ -112,6 +112,12 @@ function getGroupsAdmin(
         ...(!isSuperAdmin
           ? [{ to: '/ajukan-toko', label: 'Ajukan Toko', icon: Store }]
           : []),
+        // PERBAIKAN: menu "Administrasi Kelas" sebelumnya tidak ada di sini
+        // sama sekali — hanya ada di menu Guru, menu Admin Kantor, dan menu
+        // Pegawai Kantor. Akibatnya admin sekolah (admin/admin_utama/
+        // superadmin/kepala_sekolah) tidak bisa mengakses halaman ini dari
+        // sidebar. Ditambahkan di sini, sejajar posisinya dengan menu Guru.
+        { to: '/administrasi-kelas', label: 'Administrasi Kelas', icon: LayoutGrid },
         { to: '/rapat', label: 'Rapat Video', icon: Video },
         { to: '/galeri', label: 'Galeri Kegiatan', icon: Images },
         { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
@@ -272,7 +278,8 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   { to: '/galeri', label: 'Galeri Kegiatan', icon: Images },
   { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
   { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
-  { to: '/administrasi-kelas', label: 'Administrasi Kelas', icon: LayoutGrid },
+  // PERBAIKAN: baris "Administrasi Kelas" sebelumnya terduplikasi di sini
+  // (sudah ada satu di atas, sebelum "Rapat Video") — duplikat dihapus.
   { to: '/siswa', label: 'Data Siswa', icon: Users },
   { to: '/nilai-asesmen', label: 'Nilai Asesmen', icon: FileSpreadsheet },
   { to: '/rapor', label: 'Rapor Siswa', icon: FileBadge },
