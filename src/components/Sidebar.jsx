@@ -188,7 +188,7 @@ function getGroupsAdmin(
         // TERMASUK Laporan Bulanan, Cetak Sampul, Data Ujian 8355 & Cetak
         // 8355 (menu-menu terpisah untuk itu semua sudah dihapus dari sini
         // — sekarang jadi kartu di dalam halaman ini, lihat PusatLaporanGuru.jsx).
-        { to: '/laporan-guru', label: 'Laporan Kepegawaian Guru', icon: GraduationCap },
+        { to: '/laporan-guru', label: 'Pusat Laporan Kepegawaian', icon: GraduationCap },
         { to: '/hari-libur', label: 'Hari Libur', icon: CalendarOff },
         { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
         { to: '/backup', label: 'Backup Data', icon: DatabaseBackup },
@@ -243,7 +243,7 @@ function getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelum
         // `pegawai_kantor` — TERPISAH dari Data Guru (/guru, tabel `guru`).
         { to: '/data-pegawai-kantor', label: 'Data Pegawai', icon: Briefcase },
         { to: '/presensi', label: 'Presensi Pegawai', icon: ClipboardCheck },
-        { to: '/laporan-guru', label: 'Laporan Kepegawaian', icon: GraduationCap },
+        { to: '/laporan-guru', label: 'Pusat Laporan Kepegawaian', icon: GraduationCap },
       ],
     },
     {
