@@ -47,6 +47,7 @@ import Surat from './pages/Surat'
 import SuratKeterangan from './pages/SuratKeterangan'
 import Rapor from './pages/Rapor'
 import RaporCetak from './pages/RaporCetak'
+import CetakSampulHub from './pages/CetakSampulHub'
 import LaporanBulanan from './pages/LaporanBulanan'
 import Keuangan from './pages/Keuangan'
 import KeuanganKelas from './pages/KeuanganKelas'
@@ -271,6 +272,7 @@ export default function App() {
         <Route path="/rapor/cetak" element={<ProtectedRoute><RaporCetak /></ProtectedRoute>} />
         <Route path="/ijazah" element={<ProtectedRoute><Ijazah /></ProtectedRoute>} />
         <Route path="/skl" element={<ProtectedRoute><SuratKeteranganLulus /></ProtectedRoute>} />
+        <Route path="/cetak-sampul" element={<ProtectedRoute ><CetakSampulHub /></ProtectedRoute>} />
         <Route path="/rpp" element={<ProtectedRoute><RPP /></ProtectedRoute>} />
         <Route path="/arsip-rpp" element={<ProtectedRoute><ArsipRPP /></ProtectedRoute>} />
         <Route path="/bank-soal" element={<ProtectedRoute><BankSoal /></ProtectedRoute>} />
