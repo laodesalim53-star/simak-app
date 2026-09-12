@@ -3,55 +3,76 @@ import { useNavigate } from "react-router-dom";
 import { AlertTriangle, ArrowLeft, Loader2, Printer } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { supabase } from "../lib/supabaseClient";
+import { MAPEL_IJAZAH, jumlahNilai } from "../components/IjazahPrintTemplate";
 
 // ============================================================================
-// SuratKeteranganLulusKelas6.jsx — VERSI BARU
+// SuratKeteranganLulusKelas6.jsx — VERSI BARU (mandiri, tanpa SklPrintTemplate)
 // ----------------------------------------------------------------------------
-// Dua hal yang diminta diubah dari versi lama (yang memakai komponen terpisah
-// <SklPrintTemplate />):
+// Kotak nilai + bingkai ornamen biru + kop surat + tabel biodata di bawah ini
+// SENGAJA disalin langsung dari src/components/SklPrintTemplate.jsx (bukan
+// diimpor), supaya file itu boleh dihapus sepenuhnya setelah halaman ini
+// dipakai. Satu-satunya yang masih diimpor dari luar adalah MAPEL_IJAZAH &
+// jumlahNilai dari IjazahPrintTemplate.jsx — itu tetap dipakai sebagai satu
+// sumber kebenaran daftar mata pelajaran, supaya kalau daftar mapel berubah
+// suatu saat, Ijazah & SKL tetap konsisten tanpa perlu diedit dua tempat.
 //
-//   1) INPUT MANUAL LANGSUNG DI HALAMAN
-//      Dulu, Nomor SKL & Tanggal Terbit hanya bisa diisi lewat tombol
-//      "Buat Nomor Untuk Semua" (auto-generate, tidak bisa diedit manual per
-//      siswa). Sekarang setiap baris siswa punya 3 input yang bisa diketik
-//      langsung di tabel: Nomor SKL, Tanggal Terbit, dan Nilai Rata-rata —
-//      persis pola input manual "Masuk/Keluar Dalam Bulan Ini" di
-//      LaporanKeadaanMurid.jsx (angka diketik langsung, tersimpan ke Supabase
-//      saat kolom kehilangan fokus/onBlur).
+// Sistem penarikan data: sama seperti sebelumnya (kelas VI dicari otomatis
+// lewat tingkat === "VI", sekolah_id dari useAuth(), semua query difilter
+// .eq('sekolah_id', ...), error Supabase ditangkap & ditampilkan) — DITAMBAH
+// query baru ke tabel `nilai_ijazah` (sumber kotak nilai), mengikuti pola
+// yang sudah dipakai versi SKL yang lama.
 //
-//      PENTING — MIGRASI SUPABASE YANG DIPERLUKAN sebelum kolom Nilai
-//      Rata-rata berfungsi (kalau kolomnya belum ada):
-//        ALTER TABLE skl ADD COLUMN IF NOT EXISTS nilai_rata_rata numeric;
+// Input manual langsung di halaman: Nomor SKL & Tanggal Terbit tetap bisa
+// diketik langsung di tabel (tersimpan onBlur). Nilai per mata pelajaran
+// TIDAK diedit di halaman ini — diasumsikan sudah diisi dari halaman input
+// Nilai Ijazah yang sudah ada di aplikasi (tabel `nilai_ijazah`); halaman ini
+// hanya menampilkannya di kotak nilai, sama seperti dulu.
 //
-//   2) SISTEM CETAK MENGIKUTI LaporanKeadaanMurid.jsx PERSIS
-//      Dulu, isi surat dirender oleh komponen terpisah <SklPrintTemplate />
-//      dan hanya siswa yang sedang dipilih yang tercetak.
-//      Sekarang isi surat dirender LANGSUNG di file ini (tanpa komponen
-//      terpisah), dengan pola yang sama persis seperti
-//      LaporanKeadaanMurid.jsx:
-//        - Satu div `.lembar-cetak.print-only` menampung SEMUA siswa
-//          sekaligus (setiap siswa = 1 "section").
-//        - Di LAYAR, hanya siswa yang sedang dipilih (tab aktif) yang
-//          tampil — section siswa lain disembunyikan lewat class
-//          `laporan-section tab-nonaktif` (sama seperti tab
-//          Keadaan/Usia/Agama/Kewarganegaraan di LaporanKeadaanMurid.jsx).
-//        - Saat tombol "Cetak Semua SKL" ditekan (window.print()), CSS
-//          @media print membalik aturan itu: SEMUA section ditampilkan
-//          sekaligus, masing-masing dipisah halaman baru lewat
-//          `page-break-before-print`, sama persis seperti keempat laporan
-//          (Keadaan Murid → Usia → Agama → Kewarganegaraan) di
-//          LaporanKeadaanMurid.jsx.
-//        - Class & aturan CSS (.no-print, .only-print, .print-only,
-//          override `@media screen { .lembar-cetak.print-only { display:
-//          block !important } }`, dan override posisi `position: static`
-//          saat print) disalin apa adanya dari LaporanKeadaanMurid.jsx,
-//          supaya perilakunya konsisten dengan halaman itu.
-//
-// Sistem penarikan data (kelas VI dicari otomatis lewat tingkat === "VI",
-// sekolah_id diambil dari useAuth(), semua query difilter .eq('sekolah_id',
-// ...), error Supabase ditangkap & ditampilkan sebagai banner) TETAP memakai
-// pola yang sama seperti file lama.
+// Sistem cetak: tetap mengikuti pola persis LaporanKeadaanMurid.jsx — semua
+// siswa ditampung dalam SATU area cetak, di layar hanya siswa terpilih yang
+// tampil (laporan-section tab-aktif/tab-nonaktif), saat window.print()
+// semua siswa ditampilkan sekaligus dengan page-break-before-print di
+// antaranya (satu siswa satu halaman).
 // ============================================================================
+
+// Motif bingkai biru — disalin apa adanya dari SklPrintTemplate.jsx lama.
+const FRAME_TILE = encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+    <rect width="64" height="64" fill="#2748a0"/>
+    <rect x="2" y="2" width="60" height="60" fill="none" stroke="#8fa6e0" stroke-width="1"/>
+    <path d="M32 10 L44 32 L32 54 L20 32 Z" fill="none" stroke="#c9d6f5" stroke-width="2"/>
+    <circle cx="32" cy="32" r="6" fill="#c9d6f5"/>
+    <circle cx="32" cy="32" r="2.4" fill="#2748a0"/>
+  </svg>`
+);
+const FRAME_URL = `url("data:image/svg+xml,${FRAME_TILE}")`;
+
+const th = { border: "1px solid #2748a0", padding: "3px 6px", background: "#eef1fb", fontWeight: "bold", letterSpacing: "0.2px" };
+const td = { border: "1px solid #2748a0", padding: "2.5px 6px", textAlign: "center", verticalAlign: "middle" };
+const tdGroup = { border: "1px solid #2748a0", padding: "2.5px 6px", fontWeight: "bold", background: "#f5f7fc" };
+
+function fmtNilai(n) {
+  return n === undefined || n === null || n === "" || isNaN(n) ? "-" : Number(n).toFixed(2);
+}
+
+function formatTanggal(iso) {
+  if (!iso) return "-";
+  try {
+    return new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+  } catch {
+    return iso;
+  }
+}
+
+function Baris({ label, nilai }) {
+  return (
+    <tr>
+      <td style={{ padding: "1px 8px 1px 0", width: 190 }}>{label}</td>
+      <td style={{ padding: "1px 6px", width: 10 }}>:</td>
+      <td style={{ padding: "1px 0" }}>{nilai || "-"}</td>
+    </tr>
+  );
+}
 
 function tahunPelajaranDefault() {
   const now = new Date();
@@ -71,6 +92,7 @@ export default function SuratKeteranganLulusKelas6() {
   const [kelasSiapDimuat, setKelasSiapDimuat] = useState(false);
 
   const [siswaList, setSiswaList] = useState([]);
+  const [nilaiMap, setNilaiMap] = useState({});
   const [sklMap, setSklMap] = useState({});
   const [sekolah, setSekolah] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -87,7 +109,7 @@ export default function SuratKeteranganLulusKelas6() {
   }
 
   // ---------------------------------------------------------------------
-  // PENARIKAN DATA (sama seperti file lama)
+  // PENARIKAN DATA
   // ---------------------------------------------------------------------
   useEffect(() => {
     cariKelas6();
@@ -157,25 +179,30 @@ export default function SuratKeteranganLulusKelas6() {
 
     const [
       { data: siswa, error: siswaError },
+      { data: nilai, error: nilaiError },
       { data: sklRows, error: sklError },
       { data: profil, error: profilError },
     ] = await Promise.all([
       siswaQuery,
+      supabase.from("nilai_ijazah").select("*").eq("tahun_pelajaran", tahunPelajaran),
       supabase.from("skl").select("*").eq("tahun_pelajaran", tahunPelajaran),
       supabase.from("profil_sekolah").select("*").eq("sekolah_id", sekolahIdSaya).maybeSingle(),
     ]);
 
     if (siswaError) console.error("Gagal memuat data siswa:", siswaError);
+    if (nilaiError) console.error("Gagal memuat data nilai ijazah:", nilaiError);
     if (sklError) console.error("Gagal memuat data SKL:", sklError);
     if (profilError) console.error("Gagal memuat profil sekolah:", profilError);
 
     const pesanError = [
       siswaError ? "data siswa" : null,
+      nilaiError ? "data nilai ijazah" : null,
       sklError ? "data SKL" : null,
       profilError ? "profil sekolah" : null,
     ].filter(Boolean);
     if (pesanError.length > 0) {
-      const detailAsli = siswaError?.message || sklError?.message || profilError?.message || "";
+      const detailAsli =
+        siswaError?.message || nilaiError?.message || sklError?.message || profilError?.message || "";
       setErrorMuat(
         `Gagal memuat ${pesanError.join(", ")} dari database, sehingga halaman ini bisa kosong/tidak lengkap. ` +
           `Coba muat ulang halaman; kalau masih gagal, periksa console browser (F12).` +
@@ -184,6 +211,9 @@ export default function SuratKeteranganLulusKelas6() {
     }
 
     setSiswaList(siswa || []);
+    const nMap = {};
+    (nilai || []).forEach((n) => (nMap[n.siswa_id] = n));
+    setNilaiMap(nMap);
     const sMap = {};
     (sklRows || []).forEach((r) => (sMap[r.siswa_id] = r));
     setSklMap(sMap);
@@ -211,11 +241,9 @@ export default function SuratKeteranganLulusKelas6() {
   }
 
   // ---------------------------------------------------------------------
-  // INPUT MANUAL LANGSUNG DI HALAMAN
-  // Setiap baris siswa bisa diedit langsung: Nomor SKL, Tanggal Terbit,
-  // Nilai Rata-rata. Disimpan (upsert) ke tabel `skl` saat kolom
-  // kehilangan fokus (onBlur), state lokal (sklMap) diperbarui langsung
-  // supaya tampilan tidak "lompat" menunggu round-trip ke server.
+  // INPUT MANUAL LANGSUNG DI HALAMAN — Nomor SKL & Tanggal Terbit.
+  // (Nilai per mata pelajaran ditampilkan apa adanya dari nilai_ijazah,
+  // diisi lewat halaman Nilai Ijazah yang sudah ada di aplikasi.)
   // ---------------------------------------------------------------------
   function ubahFieldSkl(siswaId, field, value) {
     setSklMap((prev) => ({
@@ -236,7 +264,6 @@ export default function SuratKeteranganLulusKelas6() {
       tahun_pelajaran: tahunPelajaran,
       nomor_skl: baris.nomor_skl || "",
       tanggal_terbit: baris.tanggal_terbit || new Date().toISOString().slice(0, 10),
-      nilai_rata_rata: baris.nilai_rata_rata === "" ? null : Number(baris.nilai_rata_rata),
     };
     const { error } = await supabase.from("skl").upsert(payload, { onConflict: "siswa_id,tahun_pelajaran" });
     if (error) {
@@ -245,8 +272,6 @@ export default function SuratKeteranganLulusKelas6() {
     setMenyimpanId(null);
   }
 
-  // Buat nomor untuk siswa yang belum punya nomor sama sekali (opsional,
-  // pelengkap input manual — bukan satu-satunya cara mengisi lagi).
   async function generateNomorUntukKosong() {
     const tahun = new Date().getFullYear();
     const sudahAda = Object.keys(sklMap).length;
@@ -269,6 +294,9 @@ export default function SuratKeteranganLulusKelas6() {
 
   const siswaTerpilih = useMemo(() => siswaList.find((s) => s.id === selectedId), [siswaList, selectedId]);
 
+  const groupA = MAPEL_IJAZAH.filter((m) => m.grup === "A");
+  const groupB = MAPEL_IJAZAH.filter((m) => m.grup === "B");
+
   // Section siswa: aktif (tampil di layar) vs nonaktif (disembunyikan di
   // layar, dimunculkan lagi saat print) — pola sama persis dengan
   // `kelasBagian()` di LaporanKeadaanMurid.jsx.
@@ -283,43 +311,6 @@ export default function SuratKeteranganLulusKelas6() {
       </div>
     );
   }
-
-  const KopSurat = () => (
-    <div className="flex items-center gap-4 border-b-4 border-black pb-3 mb-4">
-      {sekolah?.logo_url && (
-        <img src={sekolah.logo_url} alt="Logo" className="w-16 h-16 object-contain shrink-0" />
-      )}
-      <div className="text-center flex-1">
-        <p className="text-sm font-medium uppercase">{sekolah?.dinas_pendidikan || "PEMERINTAH DAERAH"}</p>
-        <p className="text-lg font-bold uppercase">{sekolah?.nama_sekolah || "Nama Sekolah"}</p>
-        <p className="text-xs">
-          {[sekolah?.alamat, sekolah?.kecamatan, sekolah?.kabupaten, sekolah?.provinsi].filter(Boolean).join(", ")}
-        </p>
-        <p className="text-xs">NPSN: {sekolah?.npsn || "-"}</p>
-      </div>
-    </div>
-  );
-
-  const TandaTangan = ({ tanggalTerbit }) => (
-    <div className="flex justify-end mt-10">
-      <div className="text-center text-xs w-64">
-        <p>
-          {sekolah?.tempat_ttd || sekolah?.kecamatan || "............"},{" "}
-          {tanggalTerbit
-            ? new Date(tanggalTerbit).toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" })
-            : "............"}
-        </p>
-        <p className="mt-1">Kepala Sekolah</p>
-        <div className="h-16">
-          {sekolah?.ttd_url && (
-            <img src={sekolah.ttd_url} alt="TTD" className="h-16 object-contain mx-auto" onError={(e) => (e.currentTarget.style.display = "none")} />
-          )}
-        </div>
-        <p className="font-semibold underline">{sekolah?.kepala_sekolah || "............................"}</p>
-        <p>NIP. {sekolah?.nip_kepala_sekolah || "............................"}</p>
-      </div>
-    </div>
-  );
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -401,13 +392,14 @@ export default function SuratKeteranganLulusKelas6() {
                 <th className="px-3 py-2">NISN</th>
                 <th className="px-3 py-2 w-48">Nomor SKL</th>
                 <th className="px-3 py-2 w-40">Tanggal Terbit</th>
-                <th className="px-3 py-2 w-32">Nilai Rata-rata</th>
+                <th className="px-3 py-2 w-28">Nilai Ijazah</th>
                 <th className="px-3 py-2"></th>
               </tr>
             </thead>
             <tbody>
               {siswaList.map((s) => {
                 const baris = sklMap[s.id] || {};
+                const adaNilai = !!nilaiMap[s.id];
                 return (
                   <tr key={s.id} className={`border-t border-slate-100 ${selectedId === s.id ? "bg-blue-50/50" : ""}`}>
                     <td className="px-3 py-2 font-medium">{s.nama_lengkap}</td>
@@ -430,15 +422,12 @@ export default function SuratKeteranganLulusKelas6() {
                         onBlur={() => simpanSkl(s.id)}
                       />
                     </td>
-                    <td className="px-3 py-2">
-                      <input
-                        type="number"
-                        step="0.01"
-                        className="border border-slate-300 rounded px-2 py-1 text-xs w-full"
-                        value={baris.nilai_rata_rata ?? ""}
-                        onChange={(e) => ubahFieldSkl(s.id, "nilai_rata_rata", e.target.value)}
-                        onBlur={() => simpanSkl(s.id)}
-                      />
+                    <td className="px-3 py-2 text-xs">
+                      {adaNilai ? (
+                        <span className="text-emerald-600 font-medium">Sudah diisi</span>
+                      ) : (
+                        <span className="text-amber-600 font-medium">Belum diisi</span>
+                      )}
                     </td>
                     <td className="px-3 py-2 text-right">
                       {menyimpanId === s.id && <Loader2 size={14} className="animate-spin inline mr-2 text-slate-400" />}
@@ -454,79 +443,209 @@ export default function SuratKeteranganLulusKelas6() {
               })}
             </tbody>
           </table>
+          <p className="no-print text-xs text-slate-400 px-3 py-2">
+            Nilai per mata pelajaran diisi lewat halaman Nilai Ijazah yang sudah ada — halaman ini hanya menampilkannya
+            di kotak nilai saat dicetak.
+          </p>
         </div>
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* AREA CETAK — persis pola LaporanKeadaanMurid.jsx:               */}
-      {/* 1 div .lembar-cetak.print-only menampung SEMUA siswa, di layar  */}
-      {/* hanya siswa terpilih yang tampil (tab-aktif), sisanya           */}
-      {/* disembunyikan (tab-nonaktif) sampai window.print() dipanggil.   */}
+      {/* AREA CETAK — persis pola LaporanKeadaanMurid.jsx: 1 area cetak  */}
+      {/* menampung SEMUA siswa, di layar hanya siswa terpilih yang      */}
+      {/* tampil (tab-aktif), sisanya disembunyikan (tab-nonaktif)       */}
+      {/* sampai window.print() dipanggil. Isi tiap siswa (bingkai biru, */}
+      {/* kop surat, biodata, kotak nilai, tanda tangan) disalin dari    */}
+      {/* SklPrintTemplate.jsx lama.                                     */}
       {/* ------------------------------------------------------------- */}
-      <div
-        className="lembar-cetak print-only bg-white mx-auto my-6 p-10 shadow-sm"
-        style={{ width: "210mm" }}
-        ref={previewRef}
-      >
+      <div className="lembar-cetak print-only" style={{ width: "210mm", margin: "0 auto", background: "#fff" }}>
         {siswaList.length === 0 ? (
           <p className="text-center text-sm text-slate-400 py-8">Belum ada siswa Kelas 6 untuk dicetak.</p>
         ) : (
           siswaList.map((s, idx) => {
             const skl = sklMap[s.id] || {};
+            const nilai = nilaiMap[s.id] || {};
+            const tanggalTerbit = skl.tanggal_terbit ? formatTanggal(skl.tanggal_terbit) : "";
             return (
-              <div key={s.id} className={`${kelasBagianSiswa(s.id)} ${idx > 0 ? "page-break-before-print" : ""}`}>
-                <KopSurat />
-                <h1 className="text-center font-bold text-base uppercase underline mb-1">SURAT KETERANGAN LULUS</h1>
-                <p className="text-center text-xs mb-6">Nomor: {skl.nomor_skl || "............................"}</p>
+              <div
+                key={s.id}
+                className={`${kelasBagianSiswa(s.id)} ${idx > 0 ? "page-break-before-print" : ""}`}
+                style={{
+                  width: "190mm",
+                  margin: "0 auto",
+                  padding: "10mm 0",
+                  fontFamily: "'Times New Roman', serif",
+                  fontSize: "12pt",
+                  lineHeight: 1.35,
+                  color: "#000",
+                  boxSizing: "border-box",
+                }}
+              >
+                <div
+                  style={{
+                    border: "4mm solid transparent",
+                    borderImageSource: FRAME_URL,
+                    borderImageSlice: 22,
+                    borderImageWidth: "4mm",
+                    borderImageRepeat: "round",
+                    padding: "5mm 9mm",
+                    boxSizing: "border-box",
+                    pageBreakInside: "avoid",
+                    breakInside: "avoid",
+                  }}
+                >
+                  {/* KOP SURAT */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 14,
+                      borderBottom: "3px double #2748a0",
+                      paddingBottom: 5,
+                      marginBottom: 10,
+                    }}
+                  >
+                    {sekolah?.logo_url && (
+                      <img
+                        src={sekolah.logo_url}
+                        alt="Logo"
+                        style={{ width: 64, height: 64, objectFit: "contain", flexShrink: 0 }}
+                      />
+                    )}
+                    <div style={{ flex: 1, textAlign: "center" }}>
+                      {sekolah?.kabupaten && (
+                        <p style={{ fontWeight: "bold", margin: 0, fontSize: "12pt", letterSpacing: "0.3px" }}>
+                          {sekolah.kabupaten}
+                        </p>
+                      )}
+                      {sekolah?.dinas_pendidikan && (
+                        <p style={{ fontWeight: "bold", margin: 0, fontSize: "12pt", letterSpacing: "0.3px" }}>
+                          {sekolah.dinas_pendidikan}
+                        </p>
+                      )}
+                      <p style={{ fontWeight: "bold", margin: "2px 0 0 0", fontSize: "15pt", letterSpacing: "0.5px" }}>
+                        {sekolah?.nama_sekolah || "NAMA SEKOLAH"}
+                      </p>
+                      {sekolah?.kecamatan && (
+                        <p style={{ fontWeight: "bold", margin: "1px 0 0 0", fontSize: "10pt" }}>{sekolah.kecamatan}</p>
+                      )}
+                      {sekolah?.alamat && (
+                        <p style={{ fontStyle: "italic", fontSize: "10pt", margin: "2px 0 0 0" }}>{sekolah.alamat}</p>
+                      )}
+                    </div>
+                    {sekolah?.logo_url && <div style={{ width: 64, flexShrink: 0 }} />}
+                  </div>
 
-                <p className="text-sm mb-4">
-                  Yang bertanda tangan di bawah ini, Kepala {sekolah?.nama_sekolah || "Sekolah"}, menerangkan bahwa:
-                </p>
+                  <p
+                    style={{
+                      textAlign: "center",
+                      fontWeight: "bold",
+                      textDecoration: "underline",
+                      margin: "0 0 2px 0",
+                      letterSpacing: "0.5px",
+                    }}
+                  >
+                    SURAT KETERANGAN LULUS
+                  </p>
+                  <p style={{ textAlign: "center", margin: "0 0 12px 0" }}>Nomor: {skl.nomor_skl || "-"}</p>
 
-                <table className="text-sm mb-4 ml-4">
-                  <tbody>
-                    <tr>
-                      <td className="pr-4 py-0.5 align-top w-48">Nama Lengkap</td>
-                      <td className="pr-2 py-0.5 align-top">:</td>
-                      <td className="py-0.5 font-semibold">{s.nama_lengkap}</td>
-                    </tr>
-                    <tr>
-                      <td className="pr-4 py-0.5 align-top">NISN / NIS</td>
-                      <td className="pr-2 py-0.5 align-top">:</td>
-                      <td className="py-0.5">{s.nisn} / {s.nis}</td>
-                    </tr>
-                    <tr>
-                      <td className="pr-4 py-0.5 align-top">Tempat, Tanggal Lahir</td>
-                      <td className="pr-2 py-0.5 align-top">:</td>
-                      <td className="py-0.5">
-                        {s.tempat_lahir || "-"},{" "}
-                        {s.tanggal_lahir
-                          ? new Date(s.tanggal_lahir).toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" })
-                          : "-"}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="pr-4 py-0.5 align-top">Nama Orang Tua/Wali</td>
-                      <td className="pr-2 py-0.5 align-top">:</td>
-                      <td className="py-0.5">{s.nama_orang_tua || s.nama_wali || "-"}</td>
-                    </tr>
-                  </tbody>
-                </table>
+                  <p style={{ textAlign: "justify", margin: "0 0 8px 0" }}>
+                    Yang bertanda tangan di bawah ini Kepala {sekolah?.nama_sekolah}
+                    {sekolah?.kecamatan ? `, ${sekolah.kecamatan}` : ""}
+                    {sekolah?.kabupaten ? `, ${sekolah.kabupaten}` : ""}
+                    {sekolah?.provinsi ? `, Provinsi ${sekolah.provinsi}` : ""}, menerangkan bahwa:
+                  </p>
 
-                <p className="text-sm mb-4 text-justify">
-                  Berdasarkan hasil rapat dewan guru, dinyatakan <strong>LULUS</strong> dari{" "}
-                  {sekolah?.nama_sekolah || "sekolah ini"} pada tahun pelajaran {tahunPelajaran}
-                  {skl.nilai_rata_rata !== undefined && skl.nilai_rata_rata !== null && skl.nilai_rata_rata !== "" ? (
-                    <>, dengan nilai rata-rata <strong>{skl.nilai_rata_rata}</strong></>
-                  ) : null}
-                  .
-                </p>
+                  <table style={{ borderCollapse: "collapse", margin: "0 0 8px 0" }}>
+                    <tbody>
+                      <Baris label="Nama" nilai={s.nama_lengkap} />
+                      <Baris
+                        label="Tempat, Tanggal Lahir"
+                        nilai={`${s.tempat_lahir || ""}, ${formatTanggal(s.tanggal_lahir)}`}
+                      />
+                      <Baris label="NIS" nilai={s.nis} />
+                      <Baris label="NISN" nilai={s.nisn} />
+                      <Baris label="Nomor Ujian" nilai={s.nomor_ujian} />
+                    </tbody>
+                  </table>
 
-                <p className="text-sm mb-2 text-justify">
-                  Surat Keterangan Lulus ini dibuat untuk dipergunakan sebagaimana mestinya.
-                </p>
+                  <p style={{ textAlign: "justify", margin: "0 0 8px 0" }}>
+                    Bahwa siswa/siswi tersebut di atas benar-benar murid Kelas VI {sekolah?.nama_sekolah} dan telah
+                    mengikuti Asesmen Sekolah Tahun Pelajaran {tahunPelajaran} dan dinyatakan <strong>BERHASIL</strong>{" "}
+                    dengan nilai sebagai berikut:
+                  </p>
 
-                <TandaTangan tanggalTerbit={skl.tanggal_terbit} />
+                  <table
+                    style={{
+                      width: "100%",
+                      borderCollapse: "collapse",
+                      fontSize: "11pt",
+                      margin: "0 0 10px 0",
+                      pageBreakInside: "avoid",
+                    }}
+                  >
+                    <thead>
+                      <tr>
+                        <th style={th}>No</th>
+                        <th style={{ ...th, textAlign: "left" }}>Mata Pelajaran</th>
+                        <th style={th}>Nilai</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td style={tdGroup} colSpan={3}>
+                          I. Ujian Sekolah
+                        </td>
+                      </tr>
+                      {groupA.map((m, i) => (
+                        <tr key={m.key}>
+                          <td style={td}>{i + 1}</td>
+                          <td style={{ ...td, textAlign: "left" }}>{m.label}</td>
+                          <td style={td}>{fmtNilai(nilai?.[m.key])}</td>
+                        </tr>
+                      ))}
+                      <tr>
+                        <td style={tdGroup} colSpan={3}>
+                          II. Nilai Praktik
+                        </td>
+                      </tr>
+                      {groupB.map((m, i) => (
+                        <tr key={m.key}>
+                          <td style={td}>{groupA.length + i + 1}</td>
+                          <td style={{ ...td, textAlign: "left" }}>{m.label}</td>
+                          <td style={td}>{fmtNilai(nilai?.[m.key])}</td>
+                        </tr>
+                      ))}
+                      <tr>
+                        <td style={tdGroup} colSpan={2}>
+                          Jumlah
+                        </td>
+                        <td style={tdGroup}>{fmtNilai(jumlahNilai(nilai))}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  <p style={{ textAlign: "justify", margin: 0 }}>
+                    Demikian Surat Keterangan Lulus ini dibuat untuk digunakan seperlunya, sambil menantikan tibanya
+                    ijazah yang bersangkutan.
+                  </p>
+
+                  <div style={{ textAlign: "right", marginTop: 10, pageBreakInside: "avoid", breakInside: "avoid" }}>
+                    <p style={{ margin: 0 }}>
+                      {sekolah?.tempat_ttd || sekolah?.kecamatan || ""}, {tanggalTerbit}
+                    </p>
+                    <p style={{ margin: 0 }}>Kepala Sekolah</p>
+                    {sekolah?.ttd_url ? (
+                      <img src={sekolah.ttd_url} alt="TTD" style={{ height: 50, margin: "4px 0" }} />
+                    ) : (
+                      <div style={{ height: 50 }} />
+                    )}
+                    <p style={{ margin: 0, fontWeight: "bold", textDecoration: "underline" }}>
+                      {sekolah?.kepala_sekolah}
+                    </p>
+                    <p style={{ margin: 0 }}>NIP. {sekolah?.nip_kepala_sekolah}</p>
+                  </div>
+                </div>
               </div>
             );
           })
@@ -545,17 +664,11 @@ export default function SuratKeteranganLulusKelas6() {
       {/* CSS — disalin pola & strukturnya dari LaporanKeadaanMurid.jsx  */}
       {/* ------------------------------------------------------------- */}
       <style>{`
-        /* Di layar: hanya section siswa terpilih yang tampil; siswa lain
-           disembunyikan sampai saatnya dicetak. */
         .laporan-section.tab-nonaktif { display: none; }
 
         /* Override aturan global "@media screen { .print-only { display:
-           none } }" di index.css (aturan itu didesain untuk PrintTemplate
-           terpisah yang memang tidak pernah tampil di layar). Halaman ini
-           MEMANG harus tampil di layar sebagai pratinjau. Selector 2-class
-           ini lebih spesifik daripada ".print-only" saja, jadi menang tanpa
-           perlu mengubah index.css — pola sama seperti
-           LaporanKeadaanMurid.jsx. */
+           none } }" di index.css — halaman ini MEMANG harus tampil di
+           layar sebagai pratinjau. Pola sama seperti LaporanKeadaanMurid.jsx. */
         @media screen {
           .lembar-cetak.print-only {
             display: block !important;
@@ -563,6 +676,8 @@ export default function SuratKeteranganLulusKelas6() {
         }
 
         @media print {
+          @page { size: A4; margin: 10mm; }
+          html, body { margin: 0 !important; padding: 0 !important; }
           .no-print { display: none !important; }
           body { background: white; }
           .lembar-cetak {
@@ -571,20 +686,14 @@ export default function SuratKeteranganLulusKelas6() {
             width: 100% !important;
           }
 
-          /* Saat dicetak: SEMUA siswa ditampilkan berurutan (bukan cuma
-             siswa yang sedang dipilih di layar), masing-masing dipisah
-             halaman baru. */
+          /* Saat dicetak: SEMUA siswa ditampilkan berurutan, masing-masing
+             dipisah halaman baru. */
           .laporan-section.tab-nonaktif { display: block !important; }
           .page-break-before-print { break-before: page; page-break-before: always; }
 
-          /* CSS global (index.css) punya aturan:
-               body * { visibility: hidden; }
-               .print-only, .print-only * { visibility: visible; }
-             dan memberi .print-only posisi "fixed" secara default.
-             Di-override jadi "static" di sini supaya banyak halaman SKL
-             (lebih dari 1 siswa) tetap mengalir normal mengikuti
-             page-break bawaan browser, bukan terpotong/menumpuk di satu
-             titik fixed — pola sama seperti LaporanKeadaanMurid.jsx. */
+          /* Override posisi "fixed" bawaan .print-only di index.css supaya
+             banyak halaman SKL mengalir normal mengikuti page-break
+             bawaan browser — pola sama seperti LaporanKeadaanMurid.jsx. */
           .lembar-cetak.print-only {
             position: static !important;
             top: auto !important;
@@ -593,10 +702,6 @@ export default function SuratKeteranganLulusKelas6() {
             margin-left: auto !important;
             margin-right: auto !important;
           }
-        }
-        @page {
-          size: A4 portrait;
-          margin: 15mm;
         }
       `}</style>
     </div>
