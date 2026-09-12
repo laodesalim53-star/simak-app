@@ -220,7 +220,6 @@ export default function App() {
             2. DATA SISWA & GURU
            ============================================================ */}
         <Route path="/siswa" element={<ProtectedRoute><Siswa /></ProtectedRoute>} />
-        <Route path="/siswa-nonaktif" element={<ProtectedRoute adminOnly><SiswaNonaktif /></ProtectedRoute>} />
         <Route path="/hasil-ujian" element={<ProtectedRoute><HasilUjian /></ProtectedRoute>} />
         <Route path="/guru" element={<ProtectedRoute adminOnly><Guru /></ProtectedRoute>} />
         {/* Data Pegawai (tenant kantor) — route BARU & TERPISAH dari /guru,
