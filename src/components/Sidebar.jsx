@@ -123,7 +123,6 @@ function getGroupsAdmin(
       label: 'Akademik',
       links: [
         { to: '/siswa', label: 'Data Siswa', icon: Users },
-        { to: '/siswa-nonaktif', label: 'Siswa Nonaktif', icon: UserX },
         { to: '/guru', label: 'Data Guru', icon: GraduationCap },
         { to: '/kelas', label: 'Kelas', icon: DoorOpen },
         { to: '/jadwal', label: 'Jadwal Pelajaran', icon: CalendarClock },
