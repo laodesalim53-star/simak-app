@@ -756,6 +756,34 @@ function ProfilOrangTuaCard({ profil, userId }) {
   )
 }
 
+// PERBAIKAN "profil lengkap guru": bagian form guru di bawah (di dalam
+// ProfilSaya) sebelumnya hanya menampilkan/bisa mengedit 8 field (nama,
+// mapel, NUPTK, pangkat/golongan, no HP, email, tanggal lahir, pendidikan
+// terakhir) — padahal tabel `guru` menyimpan seluruh field Formulir
+// Dapodik yang sama seperti di form admin Guru.jsx (Data Pribadi, Riwayat
+// Pendidikan & Pelatihan, Kepegawaian, Alamat & Lokasi, Kontak, Lainnya).
+// Sekarang guru yang login bisa melihat DAN mengedit datanya sendiri
+// secara lengkap, dikelompokkan dengan struktur seksi yang sama seperti
+// form admin, supaya konsisten. SeksiForm/Field di bawah ini adalah
+// helper lokal untuk file ini (terpisah dari yang ada di Guru.jsx).
+function SeksiForm({ judul, children }) {
+  return (
+    <div className="mt-5 first:mt-0">
+      <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 mb-2">{judul}</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{children}</div>
+    </div>
+  )
+}
+
+function Field({ label, children, full }) {
+  return (
+    <div className={full ? 'sm:col-span-2' : ''}>
+      <label className="text-xs text-ink-700/60 mb-1 block">{label}</label>
+      {children}
+    </div>
+  )
+}
+
 export default function ProfilSaya() {
   const { profil, session, isAdmin, isOrangTua } = useAuth()
   const [data, setData] = useState(null)
@@ -788,7 +816,27 @@ export default function ProfilSaya() {
         .select('*')
         .eq('id', profil.guru_id)
         .maybeSingle()
-      setData(row)
+
+      // PERBAIKAN: field tanggal dari Supabase perlu dipotong ke "yyyy-mm-dd"
+      // supaya cocok dengan <input type="date">, dan jumlah anak tanggungan
+      // (angka) diubah ke string kosong/berisi — pola yang sama seperti
+      // openEdit() di Guru.jsx, supaya form ini tidak "kosong padahal ada
+      // datanya" untuk field-field tersebut.
+      setData(
+        row
+          ? {
+              ...row,
+              tanggal_lahir: row.tanggal_lahir ? String(row.tanggal_lahir).slice(0, 10) : '',
+              tanggal_cpns: row.tanggal_cpns ? String(row.tanggal_cpns).slice(0, 10) : '',
+              tmt_pengangkatan: row.tmt_pengangkatan ? String(row.tmt_pengangkatan).slice(0, 10) : '',
+              tmt_pns: row.tmt_pns ? String(row.tmt_pns).slice(0, 10) : '',
+              jumlah_anak_tanggungan:
+                row.jumlah_anak_tanggungan === null || row.jumlah_anak_tanggungan === undefined
+                  ? ''
+                  : String(row.jumlah_anak_tanggungan),
+            }
+          : null
+      )
       setLoading(false)
     }
     load()
@@ -926,23 +974,83 @@ export default function ProfilSaya() {
     setUploadingFoto(false)
   }
 
+  // PERBAIKAN: payload sebelumnya hanya berisi 9 field. Sekarang mengirim
+  // seluruh field Formulir Dapodik yang ada di tabel `guru` (sama seperti
+  // handleSubmit di Guru.jsx), dengan konversi tipe yang sama (angka
+  // kosong -> null, tanggal kosong -> null) supaya tidak menabrak tipe
+  // kolom di database.
   async function handleSave(e) {
     e.preventDefault()
     setSaving(true)
-    const { error } = await supabase
-      .from('guru')
-      .update({
-        nama_lengkap: data.nama_lengkap,
-        mata_pelajaran: data.mata_pelajaran,
-        no_hp: data.no_hp,
-        email: data.email,
-        alamat: data.alamat,
-        tanggal_lahir: data.tanggal_lahir || null,
-        pendidikan_terakhir: data.pendidikan_terakhir,
-        nuptk: data.nuptk,
-        pangkat_golongan: data.pangkat_golongan,
-      })
-      .eq('id', profil.guru_id)
+    const payload = {
+      // Data Pribadi
+      nama_lengkap: data.nama_lengkap,
+      nip: data.nip,
+      nuptk: data.nuptk,
+      nik: data.nik,
+      no_kk: data.no_kk,
+      jenis_kelamin: data.jenis_kelamin,
+      tempat_lahir: data.tempat_lahir,
+      tanggal_lahir: data.tanggal_lahir || null,
+      agama: data.agama,
+      kewarganegaraan: data.kewarganegaraan,
+      status_perkawinan: data.status_perkawinan,
+      nama_ibu_kandung: data.nama_ibu_kandung,
+      nama_pasangan: data.nama_pasangan,
+      nip_pasangan: data.nip_pasangan,
+      pekerjaan_pasangan: data.pekerjaan_pasangan,
+      jumlah_anak_tanggungan:
+        data.jumlah_anak_tanggungan === '' ? null : Number(data.jumlah_anak_tanggungan),
+      pendidikan_terakhir: data.pendidikan_terakhir,
+      // Riwayat Pendidikan & Pelatihan
+      nama_lembaga_pendidikan: data.nama_lembaga_pendidikan,
+      fakultas: data.fakultas,
+      jurusan: data.jurusan,
+      tahun_lulus: data.tahun_lulus === '' || data.tahun_lulus === null ? null : Number(data.tahun_lulus),
+      penataran_diklat: data.penataran_diklat,
+      // Kepegawaian
+      status_kepegawaian: data.status_kepegawaian,
+      jenis_ptk: data.jenis_ptk,
+      mata_pelajaran: data.mata_pelajaran,
+      tugas_tambahan: data.tugas_tambahan,
+      pangkat_golongan: data.pangkat_golongan,
+      sumber_gaji: data.sumber_gaji,
+      sk_cpns: data.sk_cpns,
+      tanggal_cpns: data.tanggal_cpns || null,
+      sk_pengangkatan: data.sk_pengangkatan,
+      tmt_pengangkatan: data.tmt_pengangkatan || null,
+      lembaga_pengangkatan: data.lembaga_pengangkatan,
+      tmt_pns: data.tmt_pns || null,
+      sudah_lisensi_kepsek: data.sudah_lisensi_kepsek,
+      pernah_diklat_pengawas: data.pernah_diklat_pengawas,
+      karpeg: data.karpeg,
+      karis_karsu: data.karis_karsu,
+      nuks: data.nuks,
+      // Alamat & Lokasi
+      alamat_jalan: data.alamat_jalan,
+      rt: data.rt,
+      rw: data.rw,
+      nama_dusun: data.nama_dusun,
+      desa_kelurahan: data.desa_kelurahan,
+      kecamatan: data.kecamatan,
+      kode_pos: data.kode_pos,
+      lintang: data.lintang === '' || data.lintang === null || data.lintang === undefined ? null : Number(data.lintang),
+      bujur: data.bujur === '' || data.bujur === null || data.bujur === undefined ? null : Number(data.bujur),
+      // Kontak
+      telepon: data.telepon,
+      no_hp: data.no_hp,
+      email: data.email,
+      // Lainnya
+      keahlian_braille: data.keahlian_braille,
+      keahlian_bahasa_isyarat: data.keahlian_bahasa_isyarat,
+      npwp: data.npwp,
+      nama_wajib_pajak: data.nama_wajib_pajak,
+      bank: data.bank,
+      no_rekening: data.no_rekening,
+      rekening_atas_nama: data.rekening_atas_nama,
+    }
+
+    const { error } = await supabase.from('guru').update(payload).eq('id', profil.guru_id)
 
     if (error) {
       alert('Gagal menyimpan: ' + error.message)
@@ -1107,92 +1215,409 @@ export default function ProfilSaya() {
           </div>
         </div>
 
-        <div className="card relative overflow-hidden p-6 space-y-4">
+        <div className="card relative overflow-hidden p-6">
           <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-900 to-brass-400" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs text-ink-700/60 mb-1 block">Nama Lengkap</label>
+
+          <SeksiForm judul="Data Pribadi">
+            <Field label="Nama Lengkap" full>
               <input
                 className="input w-full"
                 value={data.nama_lengkap || ''}
                 onChange={(e) => setData({ ...data, nama_lengkap: e.target.value })}
                 required
               />
-            </div>
-            <div>
-              <label className="text-xs text-ink-700/60 mb-1 block">Mata Pelajaran yang Diampu</label>
-              <input
-                className="input w-full"
-                value={data.mata_pelajaran || ''}
-                onChange={(e) => setData({ ...data, mata_pelajaran: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="text-xs text-ink-700/60 mb-1 block">NUPTK</label>
+            </Field>
+            <Field label="NIP">
+              <input className="input w-full" value={data.nip || ''} onChange={(e) => setData({ ...data, nip: e.target.value })} />
+            </Field>
+            <Field label="NUPTK">
               <input
                 className="input w-full"
                 placeholder="mis. 1234567890123456"
                 value={data.nuptk || ''}
                 onChange={(e) => setData({ ...data, nuptk: e.target.value })}
               />
-            </div>
-            <div>
-              <label className="text-xs text-ink-700/60 mb-1 block">Pangkat / Golongan</label>
+            </Field>
+            <Field label="NIK">
+              <input className="input w-full" value={data.nik || ''} onChange={(e) => setData({ ...data, nik: e.target.value })} />
+            </Field>
+            <Field label="No. KK">
+              <input className="input w-full" value={data.no_kk || ''} onChange={(e) => setData({ ...data, no_kk: e.target.value })} />
+            </Field>
+            <Field label="Jenis Kelamin">
+              <select
+                className="input w-full"
+                value={data.jenis_kelamin || 'L'}
+                onChange={(e) => setData({ ...data, jenis_kelamin: e.target.value })}
+              >
+                <option value="L">Laki-laki</option>
+                <option value="P">Perempuan</option>
+              </select>
+            </Field>
+            <Field label="Agama">
+              <input className="input w-full" value={data.agama || ''} onChange={(e) => setData({ ...data, agama: e.target.value })} />
+            </Field>
+            <Field label="Tempat Lahir">
               <input
                 className="input w-full"
-                placeholder="mis. Penata Muda / III-a"
-                value={data.pangkat_golongan || ''}
-                onChange={(e) => setData({ ...data, pangkat_golongan: e.target.value })}
+                value={data.tempat_lahir || ''}
+                onChange={(e) => setData({ ...data, tempat_lahir: e.target.value })}
               />
-            </div>
-            <div>
-              <label className="text-xs text-ink-700/60 mb-1 block">Nomor HP</label>
-              <input
-                className="input w-full"
-                value={data.no_hp || ''}
-                onChange={(e) => setData({ ...data, no_hp: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="text-xs text-ink-700/60 mb-1 block">Email</label>
-              <input
-                className="input w-full"
-                type="email"
-                value={data.email || ''}
-                onChange={(e) => setData({ ...data, email: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="text-xs text-ink-700/60 mb-1 block">Tanggal Lahir</label>
+            </Field>
+            <Field label="Tanggal Lahir">
               <input
                 className="input w-full"
                 type="date"
                 value={data.tanggal_lahir || ''}
                 onChange={(e) => setData({ ...data, tanggal_lahir: e.target.value })}
               />
-            </div>
-            <div>
-              <label className="text-xs text-ink-700/60 mb-1 block">Pendidikan Terakhir</label>
+            </Field>
+            <Field label="Kewarganegaraan">
+              <input
+                className="input w-full"
+                value={data.kewarganegaraan || ''}
+                onChange={(e) => setData({ ...data, kewarganegaraan: e.target.value })}
+              />
+            </Field>
+            <Field label="Pendidikan Terakhir">
               <input
                 className="input w-full"
                 placeholder="mis. S1 Pendidikan Guru SD"
                 value={data.pendidikan_terakhir || ''}
                 onChange={(e) => setData({ ...data, pendidikan_terakhir: e.target.value })}
               />
-            </div>
+            </Field>
+            <Field label="Status Perkawinan">
+              <select
+                className="input w-full"
+                value={data.status_perkawinan || ''}
+                onChange={(e) => setData({ ...data, status_perkawinan: e.target.value })}
+              >
+                <option value="">-</option>
+                <option value="Belum Kawin">Belum Kawin</option>
+                <option value="Kawin">Kawin</option>
+                <option value="Cerai Hidup">Cerai Hidup</option>
+                <option value="Cerai Mati">Cerai Mati</option>
+              </select>
+            </Field>
+            <Field label="Nama Ibu Kandung">
+              <input
+                className="input w-full"
+                value={data.nama_ibu_kandung || ''}
+                onChange={(e) => setData({ ...data, nama_ibu_kandung: e.target.value })}
+              />
+            </Field>
+            <Field label="Nama Suami/Istri">
+              <input
+                className="input w-full"
+                value={data.nama_pasangan || ''}
+                onChange={(e) => setData({ ...data, nama_pasangan: e.target.value })}
+              />
+            </Field>
+            <Field label="NIP Suami/Istri">
+              <input
+                className="input w-full"
+                value={data.nip_pasangan || ''}
+                onChange={(e) => setData({ ...data, nip_pasangan: e.target.value })}
+              />
+            </Field>
+            <Field label="Pekerjaan Suami/Istri">
+              <input
+                className="input w-full"
+                value={data.pekerjaan_pasangan || ''}
+                onChange={(e) => setData({ ...data, pekerjaan_pasangan: e.target.value })}
+              />
+            </Field>
+            <Field label="Jumlah Anak Tanggungan">
+              <input
+                type="number"
+                min="0"
+                className="input w-full"
+                value={data.jumlah_anak_tanggungan || ''}
+                onChange={(e) => setData({ ...data, jumlah_anak_tanggungan: e.target.value })}
+              />
+            </Field>
+          </SeksiForm>
 
-            <div className="sm:col-span-2">
-              <label className="text-xs text-ink-700/60 mb-1 block">Alamat</label>
+          <SeksiForm judul="Riwayat Pendidikan & Pelatihan">
+            <Field label="Nama Lembaga Pendidikan" full>
+              <input
+                className="input w-full"
+                value={data.nama_lembaga_pendidikan || ''}
+                onChange={(e) => setData({ ...data, nama_lembaga_pendidikan: e.target.value })}
+              />
+            </Field>
+            <Field label="Fakultas">
+              <input className="input w-full" value={data.fakultas || ''} onChange={(e) => setData({ ...data, fakultas: e.target.value })} />
+            </Field>
+            <Field label="Jurusan">
+              <input className="input w-full" value={data.jurusan || ''} onChange={(e) => setData({ ...data, jurusan: e.target.value })} />
+            </Field>
+            <Field label="Tahun Lulus">
+              <input
+                type="number"
+                className="input w-full"
+                value={data.tahun_lulus || ''}
+                onChange={(e) => setData({ ...data, tahun_lulus: e.target.value })}
+              />
+            </Field>
+            <Field label="Penataran/Diklat yang Pernah Diikuti" full>
               <textarea
                 className="input w-full"
                 rows={2}
-                value={data.alamat || ''}
-                onChange={(e) => setData({ ...data, alamat: e.target.value })}
+                value={data.penataran_diklat || ''}
+                onChange={(e) => setData({ ...data, penataran_diklat: e.target.value })}
               />
-            </div>
-          </div>
+            </Field>
+          </SeksiForm>
 
-          <div className="flex items-center gap-3 pt-2">
+          <SeksiForm judul="Kepegawaian">
+            <Field label="Status Kepegawaian">
+              <input
+                className="input w-full"
+                placeholder="PNS / PPPK / Honor..."
+                value={data.status_kepegawaian || ''}
+                onChange={(e) => setData({ ...data, status_kepegawaian: e.target.value })}
+              />
+            </Field>
+            <Field label="Jenis PTK">
+              <input className="input w-full" value={data.jenis_ptk || ''} onChange={(e) => setData({ ...data, jenis_ptk: e.target.value })} />
+            </Field>
+            <Field label="Mata Pelajaran yang Diampu">
+              <input
+                className="input w-full"
+                value={data.mata_pelajaran || ''}
+                onChange={(e) => setData({ ...data, mata_pelajaran: e.target.value })}
+              />
+            </Field>
+            <Field label="Tugas Tambahan">
+              <input
+                className="input w-full"
+                value={data.tugas_tambahan || ''}
+                onChange={(e) => setData({ ...data, tugas_tambahan: e.target.value })}
+              />
+            </Field>
+            <Field label="Pangkat / Golongan">
+              <input
+                className="input w-full"
+                placeholder="mis. Penata Muda / III-a"
+                value={data.pangkat_golongan || ''}
+                onChange={(e) => setData({ ...data, pangkat_golongan: e.target.value })}
+              />
+            </Field>
+            <Field label="Sumber Gaji">
+              <input
+                className="input w-full"
+                value={data.sumber_gaji || ''}
+                onChange={(e) => setData({ ...data, sumber_gaji: e.target.value })}
+              />
+            </Field>
+            <Field label="SK CPNS">
+              <input className="input w-full" value={data.sk_cpns || ''} onChange={(e) => setData({ ...data, sk_cpns: e.target.value })} />
+            </Field>
+            <Field label="Tanggal CPNS">
+              <input
+                type="date"
+                className="input w-full"
+                value={data.tanggal_cpns || ''}
+                onChange={(e) => setData({ ...data, tanggal_cpns: e.target.value })}
+              />
+            </Field>
+            <Field label="SK Pengangkatan">
+              <input
+                className="input w-full"
+                value={data.sk_pengangkatan || ''}
+                onChange={(e) => setData({ ...data, sk_pengangkatan: e.target.value })}
+              />
+            </Field>
+            <Field label="TMT Pengangkatan">
+              <input
+                type="date"
+                className="input w-full"
+                value={data.tmt_pengangkatan || ''}
+                onChange={(e) => setData({ ...data, tmt_pengangkatan: e.target.value })}
+              />
+            </Field>
+            <Field label="Lembaga Pengangkatan" full>
+              <input
+                className="input w-full"
+                value={data.lembaga_pengangkatan || ''}
+                onChange={(e) => setData({ ...data, lembaga_pengangkatan: e.target.value })}
+              />
+            </Field>
+            <Field label="TMT PNS">
+              <input
+                type="date"
+                className="input w-full"
+                value={data.tmt_pns || ''}
+                onChange={(e) => setData({ ...data, tmt_pns: e.target.value })}
+              />
+            </Field>
+            <Field label="Karpeg">
+              <input className="input w-full" value={data.karpeg || ''} onChange={(e) => setData({ ...data, karpeg: e.target.value })} />
+            </Field>
+            <Field label="Karis/Karsu">
+              <input
+                className="input w-full"
+                value={data.karis_karsu || ''}
+                onChange={(e) => setData({ ...data, karis_karsu: e.target.value })}
+              />
+            </Field>
+            <Field label="NUKS">
+              <input className="input w-full" value={data.nuks || ''} onChange={(e) => setData({ ...data, nuks: e.target.value })} />
+            </Field>
+            <Field label="Sudah Lisensi Kepsek">
+              <select
+                className="input w-full"
+                value={data.sudah_lisensi_kepsek || 'Tidak'}
+                onChange={(e) => setData({ ...data, sudah_lisensi_kepsek: e.target.value })}
+              >
+                <option value="Tidak">Tidak</option>
+                <option value="Ya">Ya</option>
+              </select>
+            </Field>
+            <Field label="Pernah Diklat Pengawas">
+              <select
+                className="input w-full"
+                value={data.pernah_diklat_pengawas || 'Tidak'}
+                onChange={(e) => setData({ ...data, pernah_diklat_pengawas: e.target.value })}
+              >
+                <option value="Tidak">Tidak</option>
+                <option value="Ya">Ya</option>
+              </select>
+            </Field>
+          </SeksiForm>
+
+          <SeksiForm judul="Alamat & Lokasi">
+            <Field label="Alamat Jalan" full>
+              <input
+                className="input w-full"
+                value={data.alamat_jalan || ''}
+                onChange={(e) => setData({ ...data, alamat_jalan: e.target.value })}
+              />
+            </Field>
+            <Field label="RT">
+              <input className="input w-full" value={data.rt || ''} onChange={(e) => setData({ ...data, rt: e.target.value })} />
+            </Field>
+            <Field label="RW">
+              <input className="input w-full" value={data.rw || ''} onChange={(e) => setData({ ...data, rw: e.target.value })} />
+            </Field>
+            <Field label="Nama Dusun">
+              <input
+                className="input w-full"
+                value={data.nama_dusun || ''}
+                onChange={(e) => setData({ ...data, nama_dusun: e.target.value })}
+              />
+            </Field>
+            <Field label="Desa/Kelurahan">
+              <input
+                className="input w-full"
+                value={data.desa_kelurahan || ''}
+                onChange={(e) => setData({ ...data, desa_kelurahan: e.target.value })}
+              />
+            </Field>
+            <Field label="Kecamatan">
+              <input
+                className="input w-full"
+                value={data.kecamatan || ''}
+                onChange={(e) => setData({ ...data, kecamatan: e.target.value })}
+              />
+            </Field>
+            <Field label="Kode Pos">
+              <input
+                className="input w-full"
+                value={data.kode_pos || ''}
+                onChange={(e) => setData({ ...data, kode_pos: e.target.value })}
+              />
+            </Field>
+            <Field label="Lintang">
+              <input
+                className="input w-full"
+                value={data.lintang ?? ''}
+                onChange={(e) => setData({ ...data, lintang: e.target.value })}
+              />
+            </Field>
+            <Field label="Bujur">
+              <input
+                className="input w-full"
+                value={data.bujur ?? ''}
+                onChange={(e) => setData({ ...data, bujur: e.target.value })}
+              />
+            </Field>
+          </SeksiForm>
+
+          <SeksiForm judul="Kontak">
+            <Field label="Telepon">
+              <input
+                className="input w-full"
+                value={data.telepon || ''}
+                onChange={(e) => setData({ ...data, telepon: e.target.value })}
+              />
+            </Field>
+            <Field label="Nomor HP">
+              <input className="input w-full" value={data.no_hp || ''} onChange={(e) => setData({ ...data, no_hp: e.target.value })} />
+            </Field>
+            <Field label="Email">
+              <input
+                className="input w-full"
+                type="email"
+                value={data.email || ''}
+                onChange={(e) => setData({ ...data, email: e.target.value })}
+              />
+            </Field>
+          </SeksiForm>
+
+          <SeksiForm judul="Lainnya">
+            <Field label="Keahlian Braille">
+              <select
+                className="input w-full"
+                value={data.keahlian_braille || 'Tidak'}
+                onChange={(e) => setData({ ...data, keahlian_braille: e.target.value })}
+              >
+                <option value="Tidak">Tidak</option>
+                <option value="Ya">Ya</option>
+              </select>
+            </Field>
+            <Field label="Keahlian Bahasa Isyarat">
+              <select
+                className="input w-full"
+                value={data.keahlian_bahasa_isyarat || 'Tidak'}
+                onChange={(e) => setData({ ...data, keahlian_bahasa_isyarat: e.target.value })}
+              >
+                <option value="Tidak">Tidak</option>
+                <option value="Ya">Ya</option>
+              </select>
+            </Field>
+            <Field label="NPWP">
+              <input className="input w-full" value={data.npwp || ''} onChange={(e) => setData({ ...data, npwp: e.target.value })} />
+            </Field>
+            <Field label="Nama Wajib Pajak">
+              <input
+                className="input w-full"
+                value={data.nama_wajib_pajak || ''}
+                onChange={(e) => setData({ ...data, nama_wajib_pajak: e.target.value })}
+              />
+            </Field>
+            <Field label="Bank">
+              <input className="input w-full" value={data.bank || ''} onChange={(e) => setData({ ...data, bank: e.target.value })} />
+            </Field>
+            <Field label="Nomor Rekening">
+              <input
+                className="input w-full"
+                value={data.no_rekening || ''}
+                onChange={(e) => setData({ ...data, no_rekening: e.target.value })}
+              />
+            </Field>
+            <Field label="Rekening Atas Nama">
+              <input
+                className="input w-full"
+                value={data.rekening_atas_nama || ''}
+                onChange={(e) => setData({ ...data, rekening_atas_nama: e.target.value })}
+              />
+            </Field>
+          </SeksiForm>
+
+          <div className="flex items-center gap-3 pt-5">
             <button
               type="submit"
               disabled={saving}
