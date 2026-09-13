@@ -9,19 +9,42 @@ import { Link } from 'react-router-dom'
 // untuk mengisi Formulir 8355 (Daftar Calon Peserta Ujian) Kelas 6.
 // Ditaruh terpisah dari form Data Siswa utama supaya tidak mengganggu
 // form yang sudah ada, dan gampang dicari admin saat musim ujian.
+//
+// TAMBAHAN: setiap kolom bisa punya properti `sumber` — daftar nama kolom
+// di tabel `siswa` yang datanya sudah ada di form Data Siswa utama. Kalau
+// ada, nilainya otomatis ditarik ke sini SELAMA kolom 8355-nya masih kosong
+// (supaya tidak menimpa data yang sudah pernah diisi/diubah manual admin).
 const KOLOM_TAMBAHAN = [
   { key: 'no_absen', label: 'No Absen', type: 'number', width: 'w-20' },
   { key: 'kode_peserta_ujian', label: 'Kode Peserta', width: 'w-28' },
   { key: 'no_peserta_ujian', label: 'No Peserta', width: 'w-28' },
-  { key: 'kode_pos', label: 'Kode Pos', width: 'w-24' },
+  { key: 'kode_pos', label: 'Kode Pos', width: 'w-24', sumber: ['kode_pos'] },
   { key: 'hobi_anak', label: 'Hobi Anak', width: 'w-32' },
   { key: 'cita_cita_anak', label: 'Cita-cita Anak', width: 'w-32' },
-  { key: 'gaji_orang_tua', label: 'Gaji Orang Tua', width: 'w-32' },
-  { key: 'jarak_rumah_sekolah', label: 'Jarak Rumah-Sekolah', width: 'w-32' },
-  { key: 'transportasi_ke_sekolah', label: 'Transportasi', width: 'w-28' },
-  { key: 'jumlah_saudara', label: 'Jml Saudara', type: 'number', width: 'w-24' },
-  { key: 'no_skhun', label: 'No SKHUN', width: 'w-28' },
+  { key: 'gaji_orang_tua', label: 'Gaji Orang Tua', width: 'w-32', sumber: ['penghasilan_ayah', 'penghasilan_ibu'] },
+  { key: 'jarak_rumah_sekolah', label: 'Jarak Rumah-Sekolah', width: 'w-32', sumber: ['jarak_rumah_ke_sekolah'] },
+  { key: 'transportasi_ke_sekolah', label: 'Transportasi', width: 'w-28', sumber: ['alat_transportasi'] },
+  { key: 'jumlah_saudara', label: 'Jml Saudara', type: 'number', width: 'w-24', sumber: ['jumlah_saudara_kandung'] },
+  { key: 'no_skhun', label: 'No SKHUN', width: 'w-28', sumber: ['skhun'] },
 ]
+
+// TAMBAHAN: Kelas 6 di beberapa sekolah ditulis dengan angka ("6A", "Kelas 6"),
+// di sekolah lain pakai angka Romawi ("VIA", "Kelas VI"). Supaya penarikan data
+// tidak meleset karena beda gaya penamaan, kecocokan kelas dicek dari KEDUA
+// kemungkinan itu sekaligus.
+function isKelas6(namaKelas) {
+  const nama = (namaKelas || '').trim().toUpperCase()
+  if (!nama) return false
+  // Angka: diawali "6" (mis. "6A", "6", "6-B", "KELAS 6")
+  if (/^6\b/.test(nama)) return true
+  if (/KELAS\s*6\b/.test(nama)) return true
+  // Romawi: diawali "VI" tapi bukan "VII" atau "VIII" (kelas 7/8), dan bukan
+  // "VI" yang jadi bagian kata lain — makanya dicek harus diikuti batas kata,
+  // spasi, atau langsung akhir string / diikuti huruf rombel (A, B, C, ...).
+  if (/^VI([^I]|$)/.test(nama)) return true
+  if (/KELAS\s*VI([^I]|$)/.test(nama)) return true
+  return false
+}
 
 export default function DataUjian8355() {
   const { profil, isAdmin } = useAuth()
@@ -44,15 +67,47 @@ export default function DataUjian8355() {
       return
     }
     setLoading(true)
-    // Kelas 6 diambil dari nama_kelas yang diawali "6" (mis. "6A", "6B",
-    // "Kelas 6"), supaya otomatis mencakup semua rombel paralel kelas 6.
-    const { data } = await supabase
+
+    // PERBAIKAN: filter kelas 6 dulunya hanya .ilike('kelas.nama_kelas', '6%')
+    // sehingga kelas dengan penamaan Romawi ("VIA", "Kelas VI", dst.) tidak
+    // pernah muncul. Sekarang semua siswa sekolah diambil dulu (join kelas),
+    // lalu difilter di sisi client memakai isKelas6() yang menerima kedua
+    // format penamaan (angka "6" maupun Romawi "VI").
+    const { data, error } = await supabase
       .from('siswa')
-      .select('*, kelas!inner(nama_kelas)')
+      .select('*, kelas(nama_kelas)')
       .eq('sekolah_id', sekolahId)
-      .ilike('kelas.nama_kelas', '6%')
       .order('nama_lengkap')
-    setSiswaList(data || [])
+
+    if (error) {
+      console.error('Gagal memuat siswa:', error)
+      setSiswaList([])
+      setLoading(false)
+      return
+    }
+
+    const kelas6 = (data || []).filter((s) => isKelas6(s.kelas?.nama_kelas))
+
+    // TAMBAHAN: sinkronkan otomatis kolom 8355 dari data siswa yang sudah ada
+    // di form Data Siswa utama, TAPI hanya untuk kolom 8355 yang masih kosong
+    // — supaya tidak menimpa data yang sudah pernah diisi/diedit manual oleh
+    // admin sebelumnya di halaman ini.
+    const disinkron = kelas6.map((s) => {
+      const hasil = { ...s }
+      for (const kolom of KOLOM_TAMBAHAN) {
+        if (!kolom.sumber) continue
+        const kosong = hasil[kolom.key] === null || hasil[kolom.key] === undefined || hasil[kolom.key] === ''
+        if (kosong) {
+          const nilaiSumber = kolom.sumber
+            .map((src) => s[src])
+            .find((v) => v !== null && v !== undefined && v !== '')
+          if (nilaiSumber !== undefined) hasil[kolom.key] = nilaiSumber
+        }
+      }
+      return hasil
+    })
+
+    setSiswaList(disinkron)
     setLoading(false)
   }
 
@@ -109,7 +164,8 @@ export default function DataUjian8355() {
       <div className="mb-4 flex items-center justify-between">
         <p className="text-xs text-ink-700/50">
           Field lain (nama, NIS, NISN, tempat/tanggal lahir, nama ayah/ibu, pekerjaan, alamat, dst.) diambil
-          otomatis dari data siswa yang sudah ada — form ini hanya untuk melengkapi kolom yang belum ada.
+          otomatis dari data siswa yang sudah ada. Kolom bertanda <span className="italic">"otomatis dari Data Siswa"</span> di
+          bawah juga sudah ditarik otomatis — cek dan koreksi bila perlu, lalu klik tombol simpan pada baris itu.
         </p>
         <Link to="/cetak-8355" className="btn-secondary shrink-0 ml-4 inline-flex items-center gap-1.5">
           <Printer size={16} /> Ke Halaman Cetak
@@ -118,7 +174,7 @@ export default function DataUjian8355() {
 
       {siswaList.length === 0 ? (
         <div className="card p-6 text-center text-sm text-ink-700/60">
-          Belum ada siswa di Kelas 6 (kelas dengan nama diawali "6"), atau data siswa belum diisi.
+          Belum ada siswa di Kelas 6 (kelas dengan nama diawali "6" atau "VI"), atau data siswa belum diisi.
         </div>
       ) : (
         <div className="card overflow-x-auto">
@@ -127,7 +183,14 @@ export default function DataUjian8355() {
               <tr className="border-b border-ink-900/[0.1]">
                 <th className="text-left py-2 px-2 sticky left-0 bg-white">Nama Siswa</th>
                 {KOLOM_TAMBAHAN.map((k) => (
-                  <th key={k.key} className="text-left py-2 px-2">{k.label}</th>
+                  <th key={k.key} className="text-left py-2 px-2">
+                    {k.label}
+                    {k.sumber && (
+                      <span className="block text-[10px] font-normal text-ink-700/40">
+                        otomatis dari Data Siswa
+                      </span>
+                    )}
+                  </th>
                 ))}
                 <th className="py-2 px-2"></th>
               </tr>
