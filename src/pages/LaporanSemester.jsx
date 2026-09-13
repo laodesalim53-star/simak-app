@@ -193,9 +193,12 @@ export default function LaporanSemester() {
     return hasil
   }
 
-  // TAMBAHAN: muat data tersimpan untuk kombinasi sekolah + semester +
-  // tahun pelajaran saat ini. Dipanggil otomatis saat semester/tahun
-  // pelajaran berubah (lewat useEffect di bawah).
+  // Muat data tersimpan untuk kombinasi sekolah + semester + tahun
+  // pelajaran tertentu. Dipanggil secara eksplisit saat dropdown Semester
+  // diganti, dan saat input Tahun Pelajaran selesai diketik (onBlur) --
+  // bukan lewat useEffect otomatis, supaya tidak menimpa hasil muat
+  // laporan terakhir (lihat muatLaporanTerakhir di bawah) begitu halaman
+  // baru dibuka.
   async function muatDataTersimpan(semesterAktif, tahunAktif) {
     if (!sekolahId || !tahunAktif.trim()) return
 
@@ -232,13 +235,51 @@ export default function LaporanSemester() {
     setMemuatData(false)
   }
 
-  // TAMBAHAN: auto-muat saat semester berubah atau saat tahun pelajaran
-  // selesai diketik (onBlur), bukan setiap ketikan, supaya tidak query
-  // berkali-kali per huruf.
+  // PERBAIKAN: dulu data hanya dimuat kalau Semester + Tahun Pelajaran
+  // sudah diisi PERSIS sama seperti saat disimpan. Masalahnya, setiap kali
+  // halaman ini dibuka ulang (pindah halaman lalu kembali), Tahun Pelajaran
+  // otomatis kosong lagi -> sistem tidak tahu data mana yang harus diambil
+  // -> tabel selalu kelihatan kosong padahal sudah tersimpan di database.
+  //
+  // Sekarang begitu halaman dibuka, sistem otomatis mengambil LAPORAN
+  // TERAKHIR yang tersimpan untuk sekolah ini (diurutkan dari yang paling
+  // baru disimpan), lalu mengisi Semester, Tahun Pelajaran, dan ketiga
+  // tabel sekaligus dari situ -- tanpa perlu diketik ulang.
+  async function muatLaporanTerakhir() {
+    if (!sekolahId) return
+    setMemuatData(true)
+    setErrorSimpan('')
+    const { data: baris, error } = await supabase
+      .from('laporan_semester_data')
+      .select('*')
+      .eq('sekolah_id', sekolahId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (error) {
+      console.error('Gagal memuat laporan terakhir:', error)
+      setErrorSimpan('Gagal memuat data tersimpan: ' + error.message)
+      setMemuatData(false)
+      return
+    }
+
+    if (baris) {
+      setSemester(baris.semester)
+      setTahunPelajaran(baris.tahun_pelajaran)
+      setJamPelajaran(gabungkanData(jamPelajaranKosong(), baris.jam_pelajaran))
+      setDataGedung(gabungkanData(dataGedungKosong(), baris.data_gedung))
+      setDataBuku(gabungkanData(dataBukuKosong(), baris.data_buku))
+      setTersimpan(true)
+    }
+    setMemuatData(false)
+  }
+
+  // Dijalankan sekali saat sekolahId sudah tersedia (halaman baru dibuka).
   useEffect(() => {
-    if (sekolahId) muatDataTersimpan(semester, tahunPelajaran)
+    muatLaporanTerakhir()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sekolahId, semester])
+  }, [sekolahId])
 
   // TAMBAHAN: simpan ketiga tabel ke Supabase
   async function handleSimpan() {
@@ -419,7 +460,11 @@ export default function LaporanSemester() {
             <div className="no-print -mt-1 mb-2">
               <select
                 value={semester}
-                onChange={(e) => setSemester(e.target.value)}
+                onChange={(e) => {
+                  const semesterBaru = e.target.value
+                  setSemester(semesterBaru)
+                  muatDataTersimpan(semesterBaru, tahunPelajaran)
+                }}
                 className="text-xs border border-slate-300 rounded px-2 py-1"
               >
                 <option value="Ganjil">Ganjil</option>
