@@ -29,7 +29,7 @@ import { supabase } from '../lib/supabaseClient'
 // "DINAS PENDIDIKAN DAN KEBUDAYAAN" lalu nama sekolah lalu baris alamat
 // lengkap (jalan, kecamatan, kabupaten, provinsi, kode pos). Format
 // referensi yang benar (4 baris, tanpa baris alamat) adalah:
-//   PEMERINTAH {kabupaten}
+//   PEMERINTAH KABUPATEN {kabupaten}
 //   {dinas_pendidikan}
 //   {NAMA SEKOLAH}            <- lebih besar & tebal
 //   KECAMATAN {kecamatan}
@@ -39,6 +39,10 @@ import { supabase } from '../lib/supabaseClient'
 function formatPemerintah(kabupaten) {
   const v = (kabupaten || '').toString().trim().toUpperCase()
   if (!v) return 'PEMERINTAH KABUPATEN'
+  // Field profil sekolah kadang sudah diisi lengkap "PEMERINTAH KABUPATEN
+  // ..." / "PEMERINTAH KOTA ...", kadang cuma "KABUPATEN ..." / "KOTA ...",
+  // kadang cuma nama kabupatennya saja. Tangani ketiganya tanpa dobel kata.
+  if (v.startsWith('PEMERINTAH')) return v
   if (v.startsWith('KABUPATEN') || v.startsWith('KOTA')) return `PEMERINTAH ${v}`
   return `PEMERINTAH KABUPATEN ${v}`
 }
