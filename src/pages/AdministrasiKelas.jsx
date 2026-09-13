@@ -98,14 +98,50 @@ const SEMUA_KARTU = [
   },
 ]
 
+// TAMBAHAN: set kartu ringkas khusus tenant "kantor" (isKantor dari
+// useAuth, lihat Sidebar.jsx untuk pola yang sama). Sengaja daftar
+// terpisah dari SEMUA_KARTU (bukan hasil filter) supaya perubahan di sini
+// tidak pernah memengaruhi tampilan untuk tenant sekolah.
+const KARTU_KANTOR = [
+  {
+    to: '/jadwal',
+    label: 'Jadwal Kegiatan',
+    icon: CalendarClock,
+    desc: 'Atur jadwal kegiatan kantor.',
+  },
+  {
+    to: '/presensi',
+    label: 'Presensi',
+    icon: ClipboardCheck,
+    desc: 'Catat dan pantau kehadiran pegawai harian.',
+  },
+  {
+    to: '/agenda',
+    label: 'Agenda Kantor',
+    icon: CalendarDays,
+    desc: 'Jadwal kegiatan dan agenda kantor.',
+  },
+]
+
 export default function AdministrasiKelas() {
-  const { isAdmin } = useAuth()
-  const kartu = SEMUA_KARTU.filter((k) => !k.adminOnly || isAdmin)
+  const { isAdmin, isKantor } = useAuth()
+
+  // TAMBAHAN: untuk tenant kantor, pakai daftar kartu ringkas KARTU_KANTOR
+  // apa adanya (tidak melalui filter adminOnly, karena tidak ada kartu
+  // adminOnly di situ). Untuk tenant sekolah, perilaku PERSIS seperti
+  // sebelumnya — tidak ada perubahan.
+  const kartu = isKantor
+    ? KARTU_KANTOR
+    : SEMUA_KARTU.filter((k) => !k.adminOnly || isAdmin)
 
   return (
     <Layout
-      title="Administrasi Kelas"
-      subtitle="Pusat pintasan untuk seluruh administrasi terkait kelas"
+      title={isKantor ? 'Administrasi' : 'Administrasi Kelas'}
+      subtitle={
+        isKantor
+          ? 'Pusat pintasan untuk administrasi kantor'
+          : 'Pusat pintasan untuk seluruh administrasi terkait kelas'
+      }
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {kartu.map((k) => {
