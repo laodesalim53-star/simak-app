@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
-import { useAuth } from "../AuthContext"; // sesuaikan path import-nya
+import { useAuth } from "../lib/AuthContext";
 import "./Loader.css";
 
-const PLACEHOLDER_NAME = "Your School";
+const PLACEHOLDER_NAME = "Your Institution";
 
 export default function Loader() {
   const { profil } = useAuth();
@@ -15,7 +15,7 @@ export default function Loader() {
     if (!el) return;
 
     const displayName = namaSekolah || PLACEHOLDER_NAME;
-    const welcomeText = `Welcome, Teachers of ${displayName}`;
+    const welcomeText = `Welcome to ${displayName}`;
     const accentFrom = welcomeText.indexOf(displayName);
 
     el.innerHTML = "";
@@ -26,16 +26,18 @@ export default function Loader() {
       if (i >= accentFrom) span.classList.add("loader-accent");
       el.appendChild(span);
     });
-  }, [namaSekolah]) // re-run begitu namaSekolah berubah dari undefined -> nilai asli
+  }, [namaSekolah]);
 
   return (
     <div className="loader">
       <div className="loader-code" aria-hidden="true" />
+
       <div className="loader-spinner">
         <div className="loader-ring" />
         <div className="loader-ring-inner" />
         <div className="loader-dot d1" />
         <div className="loader-dot d2" />
+
         <svg className="loader-lock" viewBox="0 0 100 100" fill="none">
           <path d="M32 44 V32 a18 18 0 0 1 36 0 v12" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" />
           <rect x="24" y="44" width="52" height="42" rx="6" stroke="var(--accent-strong)" strokeWidth="3.2" />
@@ -47,6 +49,7 @@ export default function Loader() {
           </g>
         </svg>
       </div>
+
       <p className="loader-welcome" ref={textRef} />
     </div>
   );
