@@ -167,7 +167,7 @@ export default function Login() {
           </div>
           <h1 className="login-title text-2xl font-semibold">SIMAK</h1>
           <p className="login-tagline text-[11px] font-medium uppercase tracking-[0.2em] mt-2">
-            School Management Information System
+            Personnel Management Information System
           </p>
           <p className="login-school text-sm font-medium mt-1.5">WELCOME</p>
         </div>
