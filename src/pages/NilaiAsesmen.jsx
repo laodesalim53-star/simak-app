@@ -8,6 +8,13 @@
 // mapel) — tabel yang SAMA PERSIS dipakai halaman Ijazah.jsx untuk mencetak
 // rekap. Jadi begitu nilai diisi/diimpor di sini, halaman Ijazah otomatis
 // "menarik" data terbaru tanpa perlu ada perubahan kode di Ijazah.jsx.
+//
+// Catatan perubahan:
+// - Halaman ini KHUSUS kelas 6, jadi dropdown pilihan kelas dihapus dan
+//   diganti label statis. Kelas 6 tetap dicari otomatis dari tabel `kelas`.
+// - Nama siswa ditampilkan dalam format Title Case (huruf awal tiap kata
+//   kapital) via formatNama(), supaya tampilan konsisten walau data di
+//   database tersimpan ALL CAPS atau format campuran.
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import Layout from "../components/Layout";
@@ -24,10 +31,22 @@ function tahunPelajaranDefault() {
   return m >= 7 ? `${y}/${y + 1}` : `${y - 1}/${y}`;
 }
 
+// Merapikan nama siswa ke Title Case (mis. "AMELI DJERFUY" -> "Ameli Djerfuy",
+// "Jesayas Komal" tetap "Jesayas Komal"). Hanya untuk tampilan — tidak
+// mengubah data asli di database.
+function formatNama(nama) {
+  if (!nama) return "-";
+  return nama
+    .toLowerCase()
+    .split(" ")
+    .filter(Boolean)
+    .map((kata) => kata.charAt(0).toUpperCase() + kata.slice(1))
+    .join(" ");
+}
+
 export default function NilaiAsesmen() {
   const [tahunPelajaran, setTahunPelajaran] = useState(tahunPelajaranDefault());
-  const [kelasList, setKelasList] = useState([]);
-  const [kelasId, setKelasId] = useState(null);
+  const [kelasAktif, setKelasAktif] = useState(null); // hanya kelas 6, tidak ada pilihan lain
   const [siswaList, setSiswaList] = useState([]);
   const [nilaiMap, setNilaiMap] = useState({}); // siswa_id -> {pend_agama: .., ...}
   const [sekolah, setSekolah] = useState(null);
@@ -37,20 +56,21 @@ export default function NilaiAsesmen() {
   const [detailSiswa, setDetailSiswa] = useState(null); // siswa yang lagi dibuka di modal Detail & Cetak
 
   useEffect(() => {
-    loadKelas();
+    loadKelas6();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    if (kelasId !== null) loadAll();
+    if (kelasAktif) loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tahunPelajaran, kelasId]);
+  }, [tahunPelajaran, kelasAktif]);
 
-  async function loadKelas() {
+  // Ambil kelas dengan tingkat "VI" secara otomatis — tidak ada dropdown
+  // karena laman ini memang dikhususkan untuk kelas 6.
+  async function loadKelas6() {
     const { data: kelas } = await supabase.from("kelas").select("*").order("nama_kelas");
-    setKelasList(kelas || []);
     const kelas6 = (kelas || []).find((k) => String(k.tingkat).trim().toUpperCase() === "VI");
-    setKelasId(kelas6 ? kelas6.id : kelas?.[0]?.id ?? "");
+    setKelasAktif(kelas6 || (kelas || [])[0] || null);
   }
 
   async function loadAll() {
@@ -61,7 +81,7 @@ export default function NilaiAsesmen() {
       .select("*, kelas(tingkat)")
       .eq("status", "aktif")
       .order("nama_lengkap");
-    if (kelasId) siswaQuery = siswaQuery.eq("kelas_id", kelasId);
+    if (kelasAktif?.id) siswaQuery = siswaQuery.eq("kelas_id", kelasAktif.id);
 
     const [{ data: siswa }, { data: nilai }, { data: profil }] = await Promise.all([
       siswaQuery,
@@ -108,20 +128,22 @@ export default function NilaiAsesmen() {
     loadAll();
   }
 
-  const kelasAktif = useMemo(() => kelasList.find((k) => k.id === kelasId), [kelasList, kelasId]);
-
-  const sekolahUntukCetak = sekolah
-    ? {
-        nama_sekolah: sekolah.nama_sekolah,
-        npsn: sekolah.npsn,
-        kabupaten: sekolah.kabupaten,
-        provinsi: sekolah.provinsi,
-        tempat_ttd: sekolah.tempat_ttd,
-        kepala_sekolah: sekolah.kepala_sekolah,
-        nip_kepala_sekolah: sekolah.nip_kepala_sekolah,
-        ttd_url: sekolah.ttd_url,
-      }
-    : null;
+  const sekolahUntukCetak = useMemo(
+    () =>
+      sekolah
+        ? {
+            nama_sekolah: sekolah.nama_sekolah,
+            npsn: sekolah.npsn,
+            kabupaten: sekolah.kabupaten,
+            provinsi: sekolah.provinsi,
+            tempat_ttd: sekolah.tempat_ttd,
+            kepala_sekolah: sekolah.kepala_sekolah,
+            nip_kepala_sekolah: sekolah.nip_kepala_sekolah,
+            ttd_url: sekolah.ttd_url,
+          }
+        : null,
+    [sekolah]
+  );
 
   return (
     <Layout
@@ -153,17 +175,9 @@ export default function NilaiAsesmen() {
         </div>
         <div>
           <label className="block text-xs font-semibold text-ink-700/60 mb-1">Kelas</label>
-          <select
-            className="input-field w-48"
-            value={kelasId || ""}
-            onChange={(e) => setKelasId(e.target.value)}
-          >
-            {kelasList.map((k) => (
-              <option key={k.id} value={k.id}>
-                {k.nama_kelas} (Tingkat {k.tingkat})
-              </option>
-            ))}
-          </select>
+          <div className="input-field w-48 flex items-center bg-ink-900/5 text-ink-700/80 cursor-default select-none">
+            {kelasAktif ? `${kelasAktif.nama_kelas} (Tingkat ${kelasAktif.tingkat})` : "Kelas 6"}
+          </div>
         </div>
         <div className="text-sm text-ink-700/50 flex items-center gap-1.5">
           <FileSpreadsheet size={14} />
@@ -182,8 +196,8 @@ export default function NilaiAsesmen() {
               <tr>
                 <th>Nama Siswa</th>
                 {MAPEL_IJAZAH.map((m) => (
-                  <th key={m.key} className="text-right">
-                    {m.label.split(" ")[0]}
+                  <th key={m.key} className="text-right" title={m.label}>
+                    {m.singkatan}
                   </th>
                 ))}
                 <th className="text-right">Jumlah</th>
@@ -197,7 +211,7 @@ export default function NilaiAsesmen() {
                 return (
                   <tr key={s.id}>
                     <td>
-                      <span className="font-semibold">{s.nama_lengkap}</span>
+                      <span className="font-semibold">{formatNama(s.nama_lengkap)}</span>
                       <div className="text-xs text-ink-700/50 font-mono">{s.nisn}</div>
                     </td>
                     {MAPEL_IJAZAH.map((m) => (
