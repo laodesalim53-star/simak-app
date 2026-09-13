@@ -1,35 +1,41 @@
 import { useEffect, useRef } from "react";
+import { useAuth } from "../AuthContext"; // sesuaikan path import-nya
 import "./Loader.css";
 
-const WELCOME_TEXT = "Welcome, Teachers of SD Negeri Waria";
-const ACCENT_FROM = WELCOME_TEXT.indexOf("SD Negeri Waria");
+const PLACEHOLDER_NAME = "Your School";
 
 export default function Loader() {
+  const { profil } = useAuth();
+  const namaSekolah = profil?.nama_sekolah;
+
   const textRef = useRef(null);
 
   useEffect(() => {
     const el = textRef.current;
     if (!el) return;
+
+    const displayName = namaSekolah || PLACEHOLDER_NAME;
+    const welcomeText = `Welcome, Teachers of ${displayName}`;
+    const accentFrom = welcomeText.indexOf(displayName);
+
     el.innerHTML = "";
-    [...WELCOME_TEXT].forEach((ch, i) => {
+    [...welcomeText].forEach((ch, i) => {
       const span = document.createElement("span");
       span.textContent = ch === " " ? "\u00A0" : ch;
       span.style.animationDelay = `${i * 0.045}s`;
-      if (i >= ACCENT_FROM) span.classList.add("loader-accent");
+      if (i >= accentFrom) span.classList.add("loader-accent");
       el.appendChild(span);
     });
-  }, []);
+  }, [namaSekolah]) // re-run begitu namaSekolah berubah dari undefined -> nilai asli
 
   return (
     <div className="loader">
       <div className="loader-code" aria-hidden="true" />
-
       <div className="loader-spinner">
         <div className="loader-ring" />
         <div className="loader-ring-inner" />
         <div className="loader-dot d1" />
         <div className="loader-dot d2" />
-
         <svg className="loader-lock" viewBox="0 0 100 100" fill="none">
           <path d="M32 44 V32 a18 18 0 0 1 36 0 v12" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" />
           <rect x="24" y="44" width="52" height="42" rx="6" stroke="var(--accent-strong)" strokeWidth="3.2" />
@@ -41,7 +47,6 @@ export default function Loader() {
           </g>
         </svg>
       </div>
-
       <p className="loader-welcome" ref={textRef} />
     </div>
   );
