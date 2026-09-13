@@ -139,8 +139,12 @@ export default function LaporanSemester() {
   }
   const [dataGedung, setDataGedung] = useState(dataGedungKosong)
 
-  // ---------- Tabel 3: Data Keadaan Buku-buku KTSP & K-13 ----------
-  const BUKU_KOLOM = ['Jumlah', 'Baik', 'Rusak Berat', 'Rusak Ringan']
+  // ---------- Tabel 3: Data Keadaan Buku-buku K13 & Kumer ----------
+  // TAMBAHAN: kolom "Jumlah" tunggal diganti jadi dua kolom terpisah
+  // (Tematik untuk buku Kurikulum 2013, Kumer untuk buku Kurikulum
+  // Merdeka) supaya jumlah buku per kurikulum tercatat rapi di kolom,
+  // tidak lagi ditulis manual di kolom Keterangan.
+  const BUKU_KOLOM = ['Tematik', 'Kumer', 'Baik', 'Rusak Berat', 'Rusak Ringan']
   const DAFTAR_BUKU = [
     'PPKn',
     'Pendidikan Agama',
@@ -546,18 +550,20 @@ export default function LaporanSemester() {
 
         {/* ===== TABEL 3: DATA KEADAAN BUKU-BUKU KTSP & K-13 ===== */}
         <h2 className="text-center font-bold text-sm uppercase mb-3 page-break-before-print">
-          Data Keadaan Buku-buku KTSP dan K-13
+          Data Keadaan Buku-buku K13 dan Kumer
         </h2>
         <table className="w-full text-[10px] border-collapse border border-black">
           <thead>
             <tr className="text-center">
               <th rowSpan={2} className="border border-black px-1 py-1 w-8">No.</th>
               <th rowSpan={2} className="border border-black px-1 py-1">Buku Mata Pelajaran</th>
-              <th rowSpan={2} className="border border-black px-1 py-1 w-14">Jumlah</th>
+              <th colSpan={2} className="border border-black px-1 py-1">Jumlah</th>
               <th colSpan={3} className="border border-black px-1 py-1">Keadaan</th>
               <th rowSpan={2} className="border border-black px-1 py-1">Keterangan</th>
             </tr>
             <tr className="text-center">
+              <th className="border border-black px-1 py-1 w-12">Tematik</th>
+              <th className="border border-black px-1 py-1 w-12">Kumer</th>
               <th className="border border-black px-1 py-1 w-14">Baik</th>
               <th className="border border-black px-1 py-1 w-16">Rusak Berat</th>
               <th className="border border-black px-1 py-1 w-16">Rusak Ringan</th>
