@@ -2,16 +2,23 @@ import React from "react";
 
 // Sembilan komponen nilai ijazah, dikelompokkan sesuai format resmi
 // (Kelompok A = mapel ujian, Kelompok B = mapel praktik).
+// `singkatan` = singkatan resmi mapel, dipakai di header tabel input nilai
+// (NilaiAsesmen.jsx) supaya tidak ambigu — sebelumnya header hanya mengambil
+// kata pertama dari `label` sehingga "Pendidikan Agama..." dan "Pendidikan
+// Jasmani..." sama-sama muncul sebagai "PENDIDIKAN", begitu juga "Ilmu
+// Pengetahuan Alam" vs "Ilmu Pengetahuan Sosial" yang sama-sama "ILMU".
+// `label` (nama lengkap) TETAP dipakai apa adanya di cetakan ijazah — tidak
+// berubah sama sekali.
 export const MAPEL_IJAZAH = [
-  { key: "pend_agama", label: "Pendidikan Agama Dan Budi Pekerti", grup: "A" },
-  { key: "pkn", label: "Pendidikan Pancasila Dan Kewarganegaraan", grup: "A" },
-  { key: "bhs_indonesia", label: "Bahasa Indonesia", grup: "A" },
-  { key: "matematika", label: "Matematika", grup: "A" },
-  { key: "ipa", label: "Ilmu Pengetahuan Alam", grup: "A" },
-  { key: "ips", label: "Ilmu Pengetahuan Sosial", grup: "A" },
-  { key: "sbk", label: "Seni Budaya Dan Keterampilan", grup: "B" },
-  { key: "pjok", label: "Pendidikan Jasmani Dan Kesehatan", grup: "B" },
-  { key: "mulok", label: "Muatan Lokal", grup: "B" },
+  { key: "pend_agama", label: "Pendidikan Agama Dan Budi Pekerti", singkatan: "Pend. Agama", grup: "A" },
+  { key: "pkn", label: "Pendidikan Pancasila Dan Kewarganegaraan", singkatan: "PPKn", grup: "A" },
+  { key: "bhs_indonesia", label: "Bahasa Indonesia", singkatan: "B. Indonesia", grup: "A" },
+  { key: "matematika", label: "Matematika", singkatan: "Matematika", grup: "A" },
+  { key: "ipa", label: "Ilmu Pengetahuan Alam", singkatan: "IPA", grup: "A" },
+  { key: "ips", label: "Ilmu Pengetahuan Sosial", singkatan: "IPS", grup: "A" },
+  { key: "sbk", label: "Seni Budaya Dan Keterampilan", singkatan: "SBdP", grup: "B" },
+  { key: "pjok", label: "Pendidikan Jasmani Dan Kesehatan", singkatan: "PJOK", grup: "B" },
+  { key: "mulok", label: "Muatan Lokal", singkatan: "Mulok", grup: "B" },
 ];
 
 export function jumlahNilai(nilai) {
