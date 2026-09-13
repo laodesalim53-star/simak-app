@@ -271,7 +271,15 @@ export default function Cetak8355() {
     return <div className="p-10 text-center text-ink-700/60">Akun ini tidak terhubung ke satu sekolah spesifik.</div>
   }
 
-  // Kop surat + info sekolah diulang di tiap halaman cetak (tiap halaman = 1 lembar cetak sendiri)
+  // PERBAIKAN: grid info sekolah (Nama Sekolah/NPSN/Status/Alamat/
+  // Kecamatan/Kabupaten/Provinsi) dulunya ditaruh di bawah KopSurat,
+  // memakan tempat vertikal sendiri sebelum judul "Daftar Calon Peserta
+  // Ujian (8355)" muncul — padahal sebagian infonya sudah kelihatan juga
+  // di KopSurat (nama sekolah, kecamatan, kabupaten). Sekarang grid ini
+  // dipisah jadi komponen sendiri (InfoSekolah), supaya bisa ditaruh
+  // BERDAMPINGAN dengan blok Judul dalam satu baris — bukan lagi
+  // menumpuk ke bawah — jadi tinggi total 1 halaman berkurang dan sisa
+  // ruang untuk tabel data jadi lebih banyak.
   function KopSurat() {
     return (
       <>
@@ -289,23 +297,33 @@ export default function Cetak8355() {
         </div>
         <div className="border-t-4 border-double border-ink-950 mb-0.5" />
         <div className="border-t border-ink-950 mb-3" />
-
-        <div className="grid grid-cols-2 gap-x-8 gap-y-0.5 text-xs mb-4">
-          <p><span className="text-ink-700/60">Nama Sekolah</span> : {sekolah?.nama_sekolah || '-'}</p>
-          <p><span className="text-ink-700/60">NPSN</span> : {sekolah?.npsn || '-'}</p>
-          <p><span className="text-ink-700/60">Status Sekolah</span> : {statusSekolah || '-'}</p>
-          <p><span className="text-ink-700/60">Alamat Sekolah</span> : {sekolah?.alamat || '-'}</p>
-          <p><span className="text-ink-700/60">Kecamatan</span> : {bersihkanAwalan(sekolah?.kecamatan, ['KECAMATAN'])}</p>
-          <p><span className="text-ink-700/60">Kabupaten</span> : {bersihkanAwalan(sekolah?.kabupaten, ['PEMERINTAH KABUPATEN', 'KABUPATEN', 'PEMERINTAH KOTA', 'KOTA'])}</p>
-          <p><span className="text-ink-700/60">Provinsi</span> : {sekolah?.provinsi || '-'}</p>
-        </div>
       </>
+    )
+  }
+
+  // TAMBAHAN: grid info sekolah — dibuat lebih ringkas (font lebih kecil,
+  // jarak antar baris dipepetkan) karena sekarang cuma perlu setinggi blok
+  // Judul di sebelahnya, bukan lagi selebar halaman sendirian.
+  function InfoSekolah() {
+    return (
+      <div className="grid grid-cols-2 gap-x-6 gap-y-0.5 text-[10.5px] leading-tight">
+        <p><span className="text-ink-700/60">Nama Sekolah</span> : {sekolah?.nama_sekolah || '-'}</p>
+        <p><span className="text-ink-700/60">NPSN</span> : {sekolah?.npsn || '-'}</p>
+        <p><span className="text-ink-700/60">Status Sekolah</span> : {statusSekolah || '-'}</p>
+        <p><span className="text-ink-700/60">Alamat Sekolah</span> : {sekolah?.alamat || '-'}</p>
+        <p><span className="text-ink-700/60">Kecamatan</span> : {bersihkanAwalan(sekolah?.kecamatan, ['KECAMATAN'])}</p>
+        <p><span className="text-ink-700/60">Kabupaten</span> : {bersihkanAwalan(sekolah?.kabupaten, ['PEMERINTAH KABUPATEN', 'KABUPATEN', 'PEMERINTAH KOTA', 'KOTA'])}</p>
+        <p><span className="text-ink-700/60">Provinsi</span> : {sekolah?.provinsi || '-'}</p>
+      </div>
     )
   }
 
   // TAMBAHAN: menerima halamanKe/totalHalaman supaya tiap lembar lanjutan
   // (kalau siswanya lebih dari batas per halaman) jelas menunjukkan urutan
-  // halamannya, mis. "Lampiran 1 (Halaman 2 dari 3)".
+  // halamannya, mis. "Lampiran 1 (Halaman 2 dari 3)". Sekarang dirender
+  // berdampingan dengan InfoSekolah (lihat pemakaiannya di bawah), jadi
+  // margin bawah blok ini dihapus -- jarak ke tabel diatur oleh wrapper
+  // flex yang membungkus keduanya.
   function Judul({ nomorLampiran, halamanKe, totalHalaman }) {
     return (
       <>
@@ -315,7 +333,7 @@ export default function Cetak8355() {
         <p className="text-center text-xs text-ink-700/60 mb-1">
           Kelas 6 · Tahun Pelajaran {tahunPelajaran || '.......................'}
         </p>
-        <p className="text-center text-xs font-semibold uppercase mb-3">
+        <p className="text-center text-xs font-semibold uppercase">
           Lampiran {nomorLampiran}
           {totalHalaman > 1 && ` (Halaman ${halamanKe} dari ${totalHalaman})`}
         </p>
@@ -600,7 +618,17 @@ export default function Cetak8355() {
           }`}
         >
           <KopSurat />
-          <Judul nomorLampiran={lembar.nomorLampiran} halamanKe={lembar.halamanKe} totalHalaman={lembar.totalHalaman} />
+          {/* PERBAIKAN: InfoSekolah dan Judul sekarang berdampingan dalam
+              satu baris (bukan ditumpuk ke bawah) — mengurangi tinggi
+              total kop halaman, jadi sisa ruang untuk tabel data lebih
+              banyak. items-center menjaga keduanya sejajar vertikal
+              walau tinggi kontennya sedikit berbeda. */}
+          <div className="flex items-center justify-between gap-6 mb-3">
+            <InfoSekolah />
+            <div className="shrink-0 w-[260px]">
+              <Judul nomorLampiran={lembar.nomorLampiran} halamanKe={lembar.halamanKe} totalHalaman={lembar.totalHalaman} />
+            </div>
+          </div>
           <TabelLampiran kolom={lembar.kolom} daftar={lembar.daftarSiswaHalaman} />
 
           {/* Tanda tangan hanya di halaman TERAKHIR Lampiran 3 */}
