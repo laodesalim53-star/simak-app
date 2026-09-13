@@ -24,6 +24,11 @@ import { supabase } from '../lib/supabaseClient'
 // yang sudah ada sebelumnya saja tidak cukup — kalau aturan global
 // index.css menyembunyikan .print-only lewat display:none di layar,
 // position:static tidak menolong elemen itu tampil.
+//
+// PERBAIKAN KOP SURAT: baris alamat lengkap (Jl. ..., Kecamatan ...,
+// Kabupaten ..., Provinsi ... Kode Pos) di bawah nama sekolah dihapus —
+// tidak dipakai di format kop surat referensi. Baris kontak
+// telepon/email/website di bawahnya tetap dipertahankan.
 export default function LaporanPendidikanGuru() {
   const navigate = useNavigate()
   const { sekolahId: sekolahIdSaya } = useAuth()
@@ -180,12 +185,6 @@ export default function LaporanPendidikanGuru() {
               {profilSekolah?.dinas_pendidikan || 'Dinas Pendidikan'}
             </p>
             <p className="text-lg font-bold uppercase">{profilSekolah?.nama_sekolah || 'Nama Sekolah'}</p>
-            <p className="text-xs">
-              {[profilSekolah?.alamat, profilSekolah?.kecamatan, profilSekolah?.kabupaten, profilSekolah?.provinsi]
-                .filter(Boolean)
-                .join(', ')}
-              {profilSekolah?.kode_pos ? ` ${profilSekolah.kode_pos}` : ''}
-            </p>
             {(profilSekolah?.telepon || profilSekolah?.email || profilSekolah?.website) && (
               <p className="text-xs">
                 {[profilSekolah?.telepon, profilSekolah?.email, profilSekolah?.website].filter(Boolean).join(' | ')}
