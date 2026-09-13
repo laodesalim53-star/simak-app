@@ -29,7 +29,7 @@ import { supabase } from '../lib/supabaseClient'
 // "DINAS PENDIDIKAN DAN KEBUDAYAAN" lalu nama sekolah lalu baris alamat
 // lengkap (jalan, kecamatan, kabupaten, provinsi, kode pos). Format
 // referensi yang benar (4 baris, tanpa baris alamat) adalah:
-//   PEMERINTAH KABUPATEN {kabupaten}
+//   PEMERINTAH {kabupaten}
 //   {dinas_pendidikan}
 //   {NAMA SEKOLAH}            <- lebih besar & tebal
 //   KECAMATAN {kecamatan}
