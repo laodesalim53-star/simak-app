@@ -24,6 +24,31 @@ import { supabase } from '../lib/supabaseClient'
 // tab tetap berfungsi seperti biasa untuk melihat/mengisi data per laporan
 // (termasuk isian Masuk/Keluar Dalam Bulan Ini); saat window.print()
 // dipanggil, CSS @media print menampilkan semua bagian sekaligus.
+//
+// PERBAIKAN KOP SURAT: format kop surat sebelumnya menampilkan
+// "DINAS PENDIDIKAN DAN KEBUDAYAAN" lalu nama sekolah lalu baris alamat
+// lengkap (jalan, kecamatan, kabupaten, provinsi, kode pos). Format
+// referensi yang benar (4 baris, tanpa baris alamat) adalah:
+//   PEMERINTAH KABUPATEN {kabupaten}
+//   {dinas_pendidikan}
+//   {NAMA SEKOLAH}            <- lebih besar & tebal
+//   KECAMATAN {kecamatan}
+// formatPemerintah/formatKecamatan dibuat defensif supaya tidak
+// menduplikasi kata "KABUPATEN"/"KOTA"/"KECAMATAN" kalau field profil
+// sekolah kebetulan sudah menyertakannya sendiri.
+function formatPemerintah(kabupaten) {
+  const v = (kabupaten || '').toString().trim().toUpperCase()
+  if (!v) return 'PEMERINTAH KABUPATEN'
+  if (v.startsWith('KABUPATEN') || v.startsWith('KOTA')) return `PEMERINTAH ${v}`
+  return `PEMERINTAH KABUPATEN ${v}`
+}
+
+function formatKecamatan(kecamatan) {
+  const v = (kecamatan || '').toString().trim().toUpperCase()
+  if (!v) return ''
+  return v.startsWith('KECAMATAN') ? v : `KECAMATAN ${v}`
+}
+
 export default function LaporanKeadaanMurid() {
   const navigate = useNavigate()
   const { sekolahId: sekolahIdSaya } = useAuth()
@@ -447,21 +472,36 @@ export default function LaporanKeadaanMurid() {
     )
   }
 
+  // PERBAIKAN KOP SURAT: format lama menampilkan
+  //   DINAS PENDIDIKAN DAN KEBUDAYAAN
+  //   NAMA SEKOLAH
+  //   Jl. ..., Kecamatan ..., Kabupaten ..., Provinsi ... Kode Pos
+  // Format referensi yang benar (4 baris, tanpa baris alamat):
+  //   PEMERINTAH KABUPATEN {kabupaten}
+  //   {dinas_pendidikan}
+  //   NAMA SEKOLAH            <- lebih besar & tebal
+  //   KECAMATAN {kecamatan}
   const KopSurat = () => (
     <div className="flex items-center gap-4 border-b-4 border-black pb-3 mb-4">
       {logoUrl && <img src={logoUrl} alt="Logo" className="w-16 h-16 object-contain shrink-0" />}
       <div className="text-center flex-1">
-        <p className="text-sm font-medium uppercase">
-          {profilSekolah?.dinas_pendidikan || 'PEMERINTAH DAERAH'}
+        <p className="text-sm font-bold uppercase leading-tight">
+          {formatPemerintah(profilSekolah?.kabupaten)}
         </p>
-        <p className="text-lg font-bold uppercase">{profilSekolah?.nama_sekolah || 'Nama Sekolah'}</p>
-        <p className="text-xs">
-          {[profilSekolah?.alamat, profilSekolah?.kecamatan, profilSekolah?.kabupaten, profilSekolah?.provinsi]
-            .filter(Boolean)
-            .join(', ')}
-          {profilSekolah?.kode_pos ? ` ${profilSekolah.kode_pos}` : ''}
+        <p className="text-sm font-bold uppercase leading-tight">
+          {profilSekolah?.dinas_pendidikan || 'DINAS PENDIDIKAN DAN KEBUDAYAAN'}
         </p>
+        <p className="text-xl font-bold uppercase leading-tight mt-1">
+          {profilSekolah?.nama_sekolah || 'Nama Sekolah'}
+        </p>
+        {formatKecamatan(profilSekolah?.kecamatan) && (
+          <p className="text-sm font-bold uppercase leading-tight mt-1">
+            {formatKecamatan(profilSekolah?.kecamatan)}
+          </p>
+        )}
       </div>
+      {/* spacer supaya logo di kiri tidak membuat teks tengah bergeser */}
+      {logoUrl && <div className="w-16 shrink-0" />}
     </div>
   )
 
