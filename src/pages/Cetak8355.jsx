@@ -448,7 +448,7 @@ export default function Cetak8355() {
 
           /* TAMBAHAN: cegah satu baris tabel terpotong dua di antara dua
              halaman cetak. Karena tiap halaman sekarang sudah dibatasi
-             maksimal `barisPerHalaman` peserta (lihat bagiHalaman() di
+             maksimal "barisPerHalaman" peserta (lihat bagiHalaman() di
              atas), baris SEHARUSNYA sudah muat penuh di satu halaman —
              aturan ini cuma jaring pengaman kalau kertas/skala printer
              sedikit berbeda dari perkiraan. */
