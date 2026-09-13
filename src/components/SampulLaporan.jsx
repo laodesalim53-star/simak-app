@@ -27,6 +27,12 @@ export const TEMA_SAMPUL = [
   { id: 'daun-hijau', label: 'Tema 8 — Daun Hijau Elegan' },
   { id: 'ombak-biru', label: 'Tema 9 — Ombak Biru Klasik' },
   { id: 'merah-ornamen', label: 'Tema 10 — Merah Ornamen Emas' },
+  { id: 'kunci-hijau', label: 'Tema 11 — Hijau Kunci Sudut (Landscape)' },
+  { id: 'pita-emas-hijau', label: 'Tema 12 — Hijau Pita Emas Diagonal (Landscape)' },
+  { id: 'blok-geometris-hijau', label: 'Tema 13 — Hijau Blok Geometris (Landscape)' },
+  { id: 'floral-hijau', label: 'Tema 14 — Hijau Floral Elegan (Landscape)' },
+  { id: 'kotak-emas-hijau', label: 'Tema 15 — Kotak Emas & Pita Hijau (Landscape)' },
+  { id: 'ombak-hijau', label: 'Tema 16 — Hijau Ombak Mengalir (Landscape)' },
 ]
 
 // Dua pola tata letak sampul yang tersedia. Pola tema warna (TEMA_SAMPUL) tetap
@@ -89,6 +95,104 @@ function HiasanSudut({ warna = '#d4af37', style }) {
       <circle cx="85" cy="42" r="3" fill={warna} />
       <circle cx="60" cy="80" r="3" fill={warna} />
     </svg>
+  )
+}
+
+// Hiasan sudut motif "kunci" bergaya bingkai ukir (dipakai tema 11 & 15,
+// terinspirasi motif kotak-kotak emas/hijau bersusun di pojok bingkai).
+function HiasanKunciSudut({ warna = '#166534', style }) {
+  return (
+    <svg viewBox="0 0 100 100" style={{ width: '54px', height: '54px', ...style }}>
+      <path d="M4,4 H46 V14 H14 V46 H4 Z" fill="none" stroke={warna} strokeWidth="4" />
+      <path d="M18,18 H34 V26 H26 V34 H18 Z" fill="none" stroke={warna} strokeWidth="3" />
+    </svg>
+  )
+}
+
+// Pola titik-titik dekoratif di pojok (dipakai tema 13 & 16).
+function PolaTitikHijau({ warna = '#166534', style }) {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        backgroundImage: `radial-gradient(${warna} 1.5px, transparent 1.5px)`,
+        backgroundSize: '13px 13px',
+        opacity: 0.4,
+        zIndex: 0,
+        ...style,
+      }}
+    />
+  )
+}
+
+// Pita diagonal hijau-emas di satu pojok (dipakai tema 12 & 15). `style`
+// menentukan posisi & ukuran kotak pembungkus; dibalik lewat transform
+// scaleX/scaleY dari pemanggil untuk dapat pojok yang berlawanan.
+function PitaDiagonalHijauEmas({ style }) {
+  return (
+    <div style={{ position: 'absolute', overflow: 'hidden', zIndex: 0, ...style }}>
+      <div
+        style={{
+          position: 'absolute',
+          width: '420px',
+          height: '42px',
+          background: 'linear-gradient(90deg,#14532d,#4ade80,#14532d)',
+          transform: 'rotate(45deg)',
+          top: '4px',
+          right: '-140px',
+        }}
+      />
+      <div
+        style={{
+          position: 'absolute',
+          width: '420px',
+          height: '9px',
+          background: '#d4af37',
+          transform: 'rotate(45deg)',
+          top: '46px',
+          right: '-150px',
+        }}
+      />
+    </div>
+  )
+}
+
+// Tabel identitas sekolah. Saat orientasi landscape, daftar dipecah jadi
+// 2 kolom berdampingan supaya memanfaatkan lebar halaman (bukan cuma satu
+// kolom sempit di tengah kertas lebar) — ini alasan utama tema 11-16 lebih
+// pas dipakai landscape dibanding tema-tema lama.
+function TabelIdentitasDua({ barisIdentitas, warnaLabel, orientasi }) {
+  const renderBaris = (baris) => (
+    <tr key={baris.label}>
+      <td className="pr-2 py-1 align-top whitespace-nowrap font-semibold" style={{ color: warnaLabel }}>
+        {baris.label}
+      </td>
+      <td className="pr-2 py-1 align-top text-slate-700">:</td>
+      <td className="py-1 align-top text-slate-800">{baris.nilai || '-'}</td>
+    </tr>
+  )
+
+  if (orientasi !== 'landscape') {
+    return (
+      <table className="mx-auto">
+        <tbody>{barisIdentitas.map(renderBaris)}</tbody>
+      </table>
+    )
+  }
+
+  const tengah = Math.ceil(barisIdentitas.length / 2)
+  const kolomKiri = barisIdentitas.slice(0, tengah)
+  const kolomKanan = barisIdentitas.slice(tengah)
+
+  return (
+    <div className="grid grid-cols-2 gap-x-10 max-w-[220mm] mx-auto">
+      <table>
+        <tbody>{kolomKiri.map(renderBaris)}</tbody>
+      </table>
+      <table>
+        <tbody>{kolomKanan.map(renderBaris)}</tbody>
+      </table>
+    </div>
   )
 }
 
@@ -840,6 +944,167 @@ function SampulMerahOrnamen({ logoUrl, judulTampil, subJudul, labelTahun, tahunA
   )
 }
 
+// ---------------------------------------------------------------------------
+// TEMA 11–16 — Kelompok "Bingkai Hijau" baru, dirancang khusus supaya enak
+// dilihat saat ORIENTASI LANDSCAPE (tema 1-10 dibuat untuk kolom sempit ala
+// portrait, jadi kalau dipaksa landscape sisi kiri-kanannya kosong). Satu
+// komponen SampulBingkaiHijau dipakai bersama oleh keenamnya — bedanya cuma
+// warna & dekorasi sudut (lihat GAYA_BINGKAI_HIJAU) — dan tabel identitasnya
+// otomatis jadi 2 kolom saat landscape lewat TabelIdentitasDua di atas.
+// ---------------------------------------------------------------------------
+const GAYA_BINGKAI_HIJAU = {
+  'kunci-hijau': {
+    border: '2px solid #166534',
+    warnaJudul: '#166534',
+    warnaKop: '#14532d',
+    warnaAksen: '#166534',
+    dekorasi: 'kunci',
+  },
+  'pita-emas-hijau': {
+    border: '1.5px solid #d4af37',
+    warnaJudul: '#166534',
+    warnaKop: '#14532d',
+    warnaAksen: '#d4af37',
+    dekorasi: 'pita',
+  },
+  'blok-geometris-hijau': {
+    border: 'none',
+    warnaJudul: '#166534',
+    warnaKop: '#14532d',
+    warnaAksen: '#4ade80',
+    dekorasi: 'blok',
+  },
+  'floral-hijau': {
+    border: '1.5px solid #166534',
+    warnaJudul: '#166534',
+    warnaKop: '#14532d',
+    warnaAksen: '#166534',
+    dekorasi: 'floral',
+  },
+  'kotak-emas-hijau': {
+    border: '2px solid #d4af37',
+    warnaJudul: '#166534',
+    warnaKop: '#14532d',
+    warnaAksen: '#d4af37',
+    dekorasi: 'kotak-pita',
+  },
+  'ombak-hijau': {
+    border: 'none',
+    warnaJudul: '#166534',
+    warnaKop: '#14532d',
+    warnaAksen: '#4ade80',
+    dekorasi: 'ombak',
+  },
+}
+
+function SampulBingkaiHijau({ tema, logoUrl, judulTampil, subJudul, labelTahun, tahunAnggaran, barisIdentitas, dibuatOleh, orientasi }) {
+  const gaya = GAYA_BINGKAI_HIJAU[tema] || GAYA_BINGKAI_HIJAU['kunci-hijau']
+  return (
+    <div
+      className="lembar-cetak print-only bg-white mx-auto my-6 flex flex-col relative overflow-hidden"
+      style={{ ...dimensiHalaman(orientasi), padding: '10mm' }}
+    >
+      <div
+        className="flex-1 flex flex-col relative overflow-hidden px-10 py-8"
+        style={{ border: gaya.border !== 'none' ? gaya.border : undefined, borderRadius: '6px' }}
+      >
+        {/* -- dekorasi sesuai tema -- */}
+        {gaya.dekorasi === 'kunci' && (
+          <>
+            <HiasanKunciSudut warna={gaya.warnaAksen} style={{ position: 'absolute', top: '8px', left: '8px', zIndex: 1 }} />
+            <HiasanKunciSudut warna={gaya.warnaAksen} style={{ position: 'absolute', top: '8px', right: '8px', zIndex: 1, transform: 'scaleX(-1)' }} />
+            <HiasanKunciSudut warna={gaya.warnaAksen} style={{ position: 'absolute', bottom: '8px', left: '8px', zIndex: 1, transform: 'scaleY(-1)' }} />
+            <HiasanKunciSudut warna={gaya.warnaAksen} style={{ position: 'absolute', bottom: '8px', right: '8px', zIndex: 1, transform: 'scale(-1,-1)' }} />
+          </>
+        )}
+
+        {gaya.dekorasi === 'pita' && (
+          <PitaDiagonalHijauEmas style={{ top: 0, right: 0, width: '220px', height: '220px' }} />
+        )}
+
+        {gaya.dekorasi === 'blok' && (
+          <>
+            <div className="absolute top-0 right-0" style={{ width: '220px', height: '150px', overflow: 'hidden', zIndex: 0 }}>
+              <div style={{ position: 'absolute', width: '380px', height: '60px', background: '#14532d', transform: 'rotate(45deg)', top: '-30px', right: '-140px' }} />
+              <div style={{ position: 'absolute', width: '380px', height: '30px', background: '#4ade80', transform: 'rotate(45deg)', top: '20px', right: '-160px' }} />
+              <div style={{ position: 'absolute', width: '380px', height: '20px', background: '#86efac', transform: 'rotate(45deg)', top: '55px', right: '-175px' }} />
+            </div>
+            <PolaTitikHijau warna={gaya.warnaAksen} style={{ top: '10px', left: '10px', width: '90px', height: '90px' }} />
+            <PolaTitikHijau warna={gaya.warnaAksen} style={{ bottom: '10px', right: '10px', width: '70px', height: '70px' }} />
+          </>
+        )}
+
+        {gaya.dekorasi === 'floral' && (
+          <>
+            <div style={{ position: 'absolute', inset: '6px', border: '1px solid #86efac', borderRadius: '2px', zIndex: 0, pointerEvents: 'none' }} />
+            <HiasanSudut warna={gaya.warnaAksen} style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 1 }} />
+            <HiasanSudut warna={gaya.warnaAksen} style={{ position: 'absolute', top: '10px', right: '10px', zIndex: 1, transform: 'scaleX(-1)' }} />
+            <HiasanSudut warna={gaya.warnaAksen} style={{ position: 'absolute', bottom: '10px', left: '10px', zIndex: 1, transform: 'scaleY(-1)' }} />
+            <HiasanSudut warna={gaya.warnaAksen} style={{ position: 'absolute', bottom: '10px', right: '10px', zIndex: 1, transform: 'scale(-1,-1)' }} />
+          </>
+        )}
+
+        {gaya.dekorasi === 'kotak-pita' && (
+          <>
+            <HiasanKunciSudut warna={gaya.warnaAksen} style={{ position: 'absolute', top: '8px', left: '8px', zIndex: 1 }} />
+            <HiasanKunciSudut warna={gaya.warnaAksen} style={{ position: 'absolute', top: '8px', right: '8px', zIndex: 1, transform: 'scaleX(-1)' }} />
+            <HiasanKunciSudut warna={gaya.warnaAksen} style={{ position: 'absolute', bottom: '8px', left: '8px', zIndex: 1, transform: 'scaleY(-1)' }} />
+            <HiasanKunciSudut warna={gaya.warnaAksen} style={{ position: 'absolute', bottom: '8px', right: '8px', zIndex: 1, transform: 'scale(-1,-1)' }} />
+            <PitaDiagonalHijauEmas style={{ top: 0, left: 0, width: '220px', height: '220px', transform: 'scaleX(-1)' }} />
+            <PitaDiagonalHijauEmas style={{ bottom: 0, right: 0, width: '220px', height: '220px', transform: 'scale(-1,-1)' }} />
+          </>
+        )}
+
+        {gaya.dekorasi === 'ombak' && (
+          <>
+            <PolaTitikHijau warna={gaya.warnaAksen} style={{ bottom: '10px', left: '10px', width: '80px', height: '110px' }} />
+            <svg viewBox="0 0 800 260" preserveAspectRatio="none" className="absolute top-0 left-0 w-full" style={{ height: '150px', zIndex: 0 }}>
+              <path d="M0,60 C200,10 500,120 800,40 L800,0 L0,0 Z" fill="#86efac" opacity="0.5" />
+              <path d="M0,90 C220,40 520,150 800,70 L800,0 L0,0 Z" fill="#4ade80" opacity="0.6" />
+              <path d="M0,120 C250,70 550,180 800,100 L800,0 L0,0 Z" fill="#166534" opacity="0.85" />
+            </svg>
+          </>
+        )}
+
+        <div className="flex flex-col items-center text-center relative pt-2" style={{ zIndex: 2 }}>
+          {logoUrl && (
+            <div
+              className="flex items-center justify-center bg-white rounded-full mb-3 shadow"
+              style={{ width: '86px', height: '86px', border: `2px solid ${gaya.warnaAksen}` }}
+            >
+              <img src={logoUrl} alt="Logo" className="object-contain" style={{ width: '66px', height: '66px' }} />
+            </div>
+          )}
+          <h1 className="text-xl font-extrabold uppercase leading-snug max-w-[170mm] mt-1" style={{ color: gaya.warnaJudul }}>
+            {judulTampil || 'Judul Laporan'}
+          </h1>
+          {subJudul && (
+            <h2 className="text-sm font-bold uppercase mt-2 tracking-wide text-slate-700">{subJudul}</h2>
+          )}
+          {tahunAnggaran && (
+            <>
+              <p className="text-sm font-bold uppercase mt-1 tracking-wide" style={{ color: gaya.warnaAksen }}>
+                {labelTahun} {tahunAnggaran}
+              </p>
+              <div style={{ height: '1px', width: '80px', background: gaya.warnaAksen, margin: '4px auto 0' }} />
+            </>
+          )}
+        </div>
+
+        <div className="mt-6 relative flex-1 text-sm" style={{ zIndex: 2 }}>
+          <TabelIdentitasDua barisIdentitas={barisIdentitas} warnaLabel={gaya.warnaKop} orientasi={orientasi} />
+        </div>
+
+        <div className="text-right relative pt-4" style={{ zIndex: 2 }}>
+          {dibuatOleh && (
+            <p className="text-sm italic text-slate-800">Dibuat Oleh : {dibuatOleh}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const KOMPONEN_TEMA = {
   gelombang: SampulGelombang,
   geometris: SampulGeometris,
@@ -851,10 +1116,16 @@ const KOMPONEN_TEMA = {
   'daun-hijau': SampulDaunHijau,
   'ombak-biru': SampulOmbakBiru,
   'merah-ornamen': SampulMerahOrnamen,
+  'kunci-hijau': (props) => <SampulBingkaiHijau tema="kunci-hijau" {...props} />,
+  'pita-emas-hijau': (props) => <SampulBingkaiHijau tema="pita-emas-hijau" {...props} />,
+  'blok-geometris-hijau': (props) => <SampulBingkaiHijau tema="blok-geometris-hijau" {...props} />,
+  'floral-hijau': (props) => <SampulBingkaiHijau tema="floral-hijau" {...props} />,
+  'kotak-emas-hijau': (props) => <SampulBingkaiHijau tema="kotak-emas-hijau" {...props} />,
+  'ombak-hijau': (props) => <SampulBingkaiHijau tema="ombak-hijau" {...props} />,
 }
 
 // ---------------------------------------------------------------------------
-// POLA KOP RESMI — satu komponen yang dipakai bersama oleh ke-10 tema warna.
+// POLA KOP RESMI — satu komponen yang dipakai bersama oleh ke-16 tema warna.
 // Susunannya meniru kop dinas resmi (3 baris kop rata tengah → judul laporan
 // → logo besar di tengah → "TAHUN PELAJARAN/ANGGARAN ..." di bawah), persis
 // pola pada dokumen contoh yang diunggah. Warna & bingkai tiap baris ikut
@@ -871,6 +1142,12 @@ const GAYA_KOP_RESMI = {
   'daun-hijau': { background: '#fffdf7', border: '1.5px solid #d4af37', border2: '1px solid #86efac', kopColor: '#14532d', judulColor: '#166534', aksenColor: '#d4af37' },
   'ombak-biru': { background: '#ffffff', border: '1.5px solid #2563eb', kopColor: '#1e3a8a', judulColor: '#1d4ed8', aksenColor: '#2563eb' },
   'merah-ornamen': { background: '#fdfaf5', border: '3px double #7f1d1d', border2: '1px solid #d4af37', kopColor: '#7f1d1d', judulColor: '#7f1d1d', aksenColor: '#d4af37' },
+  'kunci-hijau': { background: '#ffffff', border: '2px solid #166534', kopColor: '#14532d', judulColor: '#166534', aksenColor: '#166534' },
+  'pita-emas-hijau': { background: '#ffffff', border: '1.5px solid #d4af37', kopColor: '#14532d', judulColor: '#166534', aksenColor: '#d4af37' },
+  'blok-geometris-hijau': { background: '#ffffff', border: '2px solid #166534', kopColor: '#14532d', judulColor: '#166534', aksenColor: '#4ade80' },
+  'floral-hijau': { background: '#ffffff', border: '1.5px solid #166534', border2: '1px solid #86efac', kopColor: '#14532d', judulColor: '#166534', aksenColor: '#166534' },
+  'kotak-emas-hijau': { background: '#ffffff', border: '2px solid #d4af37', kopColor: '#14532d', judulColor: '#166534', aksenColor: '#d4af37' },
+  'ombak-hijau': { background: '#ffffff', border: '2px solid #166534', kopColor: '#14532d', judulColor: '#166534', aksenColor: '#4ade80' },
 }
 
 function SampulKopResmi({ tema, logoUrl, kopBaris1, kopBaris2, kopBaris3, judulUtama, kodeLaporan, subJudulEkstra, labelTahun, tahunAnggaran, orientasi }) {
@@ -1135,6 +1412,11 @@ export default function SampulLaporan({
                   <RectangleHorizontal size={15} /> Landscape
                 </button>
               </div>
+              {orientasi === 'landscape' && (
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Tema 11–16 (Bingkai Hijau) tabel identitasnya otomatis jadi 2 kolom di landscape, jadi lebih pas dibanding tema lain.
+                </p>
+              )}
             </div>
 
             <div className="text-xs text-slate-500">
