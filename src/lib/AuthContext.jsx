@@ -195,7 +195,21 @@ export function AuthProvider({ children }) {
     jabatan,
     siswaId,
     hubungan,
+    // 'sekolah' | 'kantor' — menentukan tenant tempat akun/institusi baru
+    // ini akan tergabung. Institusi sekolah maupun kantor sama-sama
+    // disimpan di tabel "sekolah", dibedakan lewat jenis_organisasi.
+    jenisOrganisasi = 'sekolah',
   }) {
+    // Jabatan "orang_tua" hanya konsep tenant sekolah (butuh relasi ke
+    // siswa) — tidak berlaku untuk kantor.
+    if (jenisOrganisasi === 'kantor' && jabatan === 'orang_tua') {
+      return {
+        error: {
+          message: 'Jabatan Orang Tua/Wali tidak berlaku untuk akun Kantor.',
+        },
+      }
+    }
+
     // Orang tua hanya boleh bergabung ke sekolah yang sudah ada.
     if (jabatan === 'orang_tua' && mode !== 'gabung') {
       return {
@@ -254,34 +268,36 @@ export function AuthProvider({ children }) {
 
     let targetSekolahId = sekolahId
 
-    // Jabatan yang dipilih user.
-    const jabatanDipilih = jabatan || 'guru'
+    // Jabatan yang dipilih user. Default disesuaikan dengan jenis
+    // institusi kalau tidak dikirim (kantor -> pegawai, sekolah -> guru).
+    const jabatanDipilih = jabatan || (jenisOrganisasi === 'kantor' ? 'pegawai' : 'guru')
 
     // Default role teknis mengikuti jabatan.
     let role = jabatanDipilih
     let statusAkunBaru = 'menunggu'
 
     // =======================================================
-    // PENDAFTARAN SEKOLAH BARU
+    // PENDAFTARAN INSTITUSI BARU (sekolah ATAU kantor)
     // =======================================================
 
     if (mode === 'baru') {
-      const { data: sekolahBaru, error: sekolahError } =
+      const { data: institusiBaru, error: institusiError } =
         await supabase
           .from('sekolah')
           .insert({
             nama_sekolah: namaSekolah,
+            jenis_organisasi: jenisOrganisasi,
           })
           .select('id')
           .single()
 
-      if (sekolahError) {
-        return { error: sekolahError }
+      if (institusiError) {
+        return { error: institusiError }
       }
 
-      targetSekolahId = sekolahBaru.id
+      targetSekolahId = institusiBaru.id
 
-      // Pendiri sekolah menjadi admin_utama.
+      // Pendiri sekolah/kantor menjadi admin_utama.
       role = 'admin_utama'
       statusAkunBaru = 'menunggu'
     }
