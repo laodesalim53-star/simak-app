@@ -118,7 +118,7 @@ function ProtectedRoute({ children, adminOnly, adminUtamaOnly, superAdminOnly })
   const location = useLocation()
 
   useEffect(() => {
-    const timer = setTimeout(() => setMinTimeElapsed(true), 900)
+    const timer = setTimeout(() => setMinTimeElapsed(true), 2200)
     return () => clearTimeout(timer)
   }, [])
 
