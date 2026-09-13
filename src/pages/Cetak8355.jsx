@@ -50,6 +50,26 @@ function bersihkanAwalan(nilai, awalanList) {
   return hasil || '-'
 }
 
+// PERBAIKAN: sebelumnya tiap Lampiran dicetak sebagai SATU tabel raksasa
+// berisi semua siswa Kelas 6 sekaligus. Kalau siswanya banyak (>~15),
+// browser memotong tabel itu sendiri di titik sembarang saat mencapai
+// batas kertas — hasilnya baris di halaman lanjutan jadi tidak sejajar
+// dengan header kolom (itu yang terlihat rusak di hasil cetak).
+//
+// Sekarang setiap Lampiran dipecah manual jadi beberapa HALAMAN, masing-
+// masing berisi maksimal `ukuran` siswa. Tiap halaman dapat kop surat +
+// judul + tabelnya sendiri secara utuh, dengan page-break yang eksplisit
+// di antaranya — jadi tidak lagi bergantung pada bagaimana browser
+// kebetulan memotong tabel.
+function bagiHalaman(daftar, ukuran) {
+  if (!daftar || daftar.length === 0) return []
+  const hasil = []
+  for (let i = 0; i < daftar.length; i += ukuran) {
+    hasil.push(daftar.slice(i, i + ukuran))
+  }
+  return hasil
+}
+
 // ---------------------------------------------------------------------------
 // Formulir 8355 aslinya (lihat 8355_TEMPLATE.docx) terdiri dari 3 tabel
 // TERPISAH — masing-masing dicetak sebagai satu lembar/lampiran sendiri,
@@ -120,6 +140,12 @@ export default function Cetak8355() {
   const [tanggalAcuanUsia, setTanggalAcuanUsia] = useState(
     new Date().toISOString().slice(0, 10)
   )
+
+  // TAMBAHAN: batas jumlah peserta per halaman cetak. Default 15 (sesuai
+  // permintaan "cukup 14-15 peserta per halaman") tapi dibuat bisa diubah
+  // admin langsung dari layar, tanpa perlu ubah kode, kalau ternyata di
+  // printer/kop surat tertentu 15 baris masih sedikit kepanjangan.
+  const [barisPerHalaman, setBarisPerHalaman] = useState(15)
 
   // Kode Provinsi / Kode Rayon / Kode Sekolah (khusus formulir 8355) —
   // sebelumnya cuma dibaca dari tabel profil_sekolah lewat kolom
@@ -212,6 +238,10 @@ export default function Cetak8355() {
     kode_sekolah_ujian: kodeSekolah,
   }
 
+  // PENTING: nomor urut ("No") tetap dihitung dari POSISI ASLI siswa di
+  // seluruh daftar (siswaList), BUKAN posisi di dalam potongan halaman —
+  // supaya penomoran tetap berlanjut 1, 2, 3, ... dst dari halaman pertama
+  // sampai halaman terakhir, bukan reset ke 1 tiap ganti halaman.
   function nilaiSel(siswa, kolom) {
     if (kolom.key === 'no') return siswaList.indexOf(siswa) + 1
     if (kolom.dariSekolah) return kodeUjian[kolom.dariSekolah] || '-'
@@ -241,7 +271,7 @@ export default function Cetak8355() {
     return <div className="p-10 text-center text-ink-700/60">Akun ini tidak terhubung ke satu sekolah spesifik.</div>
   }
 
-  // Kop surat + info sekolah diulang di tiap lampiran (tiap lampiran = 1 halaman cetak sendiri)
+  // Kop surat + info sekolah diulang di tiap halaman cetak (tiap halaman = 1 lembar cetak sendiri)
   function KopSurat() {
     return (
       <>
@@ -273,7 +303,10 @@ export default function Cetak8355() {
     )
   }
 
-  function Judul({ nomorLampiran }) {
+  // TAMBAHAN: menerima halamanKe/totalHalaman supaya tiap lembar lanjutan
+  // (kalau siswanya lebih dari batas per halaman) jelas menunjukkan urutan
+  // halamannya, mis. "Lampiran 1 (Halaman 2 dari 3)".
+  function Judul({ nomorLampiran, halamanKe, totalHalaman }) {
     return (
       <>
         <h2 className="text-center font-display font-bold text-base uppercase mb-0.5">
@@ -282,12 +315,20 @@ export default function Cetak8355() {
         <p className="text-center text-xs text-ink-700/60 mb-1">
           Kelas 6 · Tahun Pelajaran {tahunPelajaran || '.......................'}
         </p>
-        <p className="text-center text-xs font-semibold uppercase mb-3">Lampiran {nomorLampiran}</p>
+        <p className="text-center text-xs font-semibold uppercase mb-3">
+          Lampiran {nomorLampiran}
+          {totalHalaman > 1 && ` (Halaman ${halamanKe} dari ${totalHalaman})`}
+        </p>
       </>
     )
   }
 
-  function TabelLampiran({ kolom }) {
+  // TAMBAHAN: sekarang menerima `daftar` (potongan siswa untuk halaman ini)
+  // sebagai isi baris tabel, bukan langsung memakai seluruh siswaList —
+  // itulah inti perbaikan pagination-nya. Nomor urut & nilai tiap sel tetap
+  // dihitung lewat nilaiSel() yang merujuk ke siswaList penuh (lihat komentar
+  // di nilaiSel), jadi penomoran tetap berlanjut lintas halaman.
+  function TabelLampiran({ kolom, daftar }) {
     return (
       <table className="tabel-8355 w-full border-collapse mb-6" style={{ tableLayout: 'fixed' }}>
         <colgroup>
@@ -303,14 +344,14 @@ export default function Cetak8355() {
           </tr>
         </thead>
         <tbody>
-          {siswaList.map((s) => (
+          {daftar.map((s) => (
             <tr key={s.id}>
               {kolom.map((k) => (
                 <td key={k.key}>{nilaiSel(s, k)}</td>
               ))}
             </tr>
           ))}
-          {siswaList.length === 0 && (
+          {daftar.length === 0 && (
             <tr>
               <td colSpan={kolom.length} className="text-center py-3 text-ink-700/50">
                 Belum ada siswa Kelas 6.
@@ -322,6 +363,61 @@ export default function Cetak8355() {
     )
   }
 
+  // Blok tanda tangan — dulu ditulis langsung di dalam Lampiran 3, sekarang
+  // dipisah jadi fungsi sendiri karena harus ditaruh di HALAMAN TERAKHIR
+  // Lampiran 3 (bisa jadi bukan halaman pertamanya lagi kalau siswa Kelas 6
+  // lebih dari batas per halaman).
+  function TandaTangan() {
+    return (
+      <div className="flex justify-end mt-8 text-xs">
+        <div className="text-center">
+          <p>
+            {sekolah?.tempat_ttd || '.......................'}, {formatTanggal(new Date().toISOString())}
+          </p>
+          <p className="mb-1 font-semibold">Kepala Sekolah</p>
+          <div className="h-14" />
+          <p className="font-semibold border-t border-ink-950/40 pt-1 inline-block px-6">
+            {sekolah?.kepala_sekolah || '(.......................................)'}
+          </p>
+          {sekolah?.nip_kepala_sekolah && (
+            <p className="text-[11px] text-ink-700/60">NIP. {sekolah.nip_kepala_sekolah}</p>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // TAMBAHAN: pecah siswaList jadi kelompok-kelompok sebesar `barisPerHalaman`.
+  // Kelompok yang SAMA dipakai untuk Lampiran 1, 2, dan 3 — supaya "Halaman 1"
+  // di ketiga lampiran itu berisi peserta yang sama persis, hanya kolomnya
+  // yang beda (sesuai pembagian tabel di 8355_TEMPLATE.docx).
+  const halamanSiswa = bagiHalaman(siswaList, Math.max(1, Number(barisPerHalaman) || 15))
+
+  // Susun daftar semua LEMBAR yang akan dicetak: tiap Lampiran (1/2/3)
+  // menghasilkan satu lembar per kelompok siswa. Kalau belum ada siswa sama
+  // sekali, tetap tampilkan 1 lembar per lampiran (tabel kosong dengan pesan
+  // "Belum ada siswa"), supaya kop surat & judul tetap terlihat.
+  const daftarLampiran = [
+    { nomor: 1, kolom: LAMPIRAN_1_KOLOM },
+    { nomor: 2, kolom: LAMPIRAN_2_KOLOM },
+    { nomor: 3, kolom: LAMPIRAN_3_KOLOM },
+  ]
+  const daftarLembarCetak = []
+  daftarLampiran.forEach((lampiran) => {
+    const halamanUntukLampiranIni = halamanSiswa.length > 0 ? halamanSiswa : [[]]
+    halamanUntukLampiranIni.forEach((daftarSiswaHalaman, i) => {
+      daftarLembarCetak.push({
+        key: `lampiran-${lampiran.nomor}-halaman-${i + 1}`,
+        nomorLampiran: lampiran.nomor,
+        kolom: lampiran.kolom,
+        daftarSiswaHalaman,
+        halamanKe: i + 1,
+        totalHalaman: halamanUntukLampiranIni.length,
+        halamanTerakhirLampiranIni: i === halamanUntukLampiranIni.length - 1,
+      })
+    })
+  })
+
   return (
     <div className="min-h-screen bg-ink-950/5 py-8 print:bg-white print:py-0">
       <style>{`
@@ -330,17 +426,25 @@ export default function Cetak8355() {
           .lembar-cetak { box-shadow: none !important; margin: 0 !important; max-width: none !important; width: 100% !important; }
           body { background: white; }
           @page { size: A4 landscape !important; margin: 8mm !important; }
-          .lampiran-break { page-break-before: always; }
+          .lampiran-break { page-break-before: always; break-before: page; }
+
+          /* TAMBAHAN: cegah satu baris tabel terpotong dua di antara dua
+             halaman cetak. Karena tiap halaman sekarang sudah dibatasi
+             maksimal `barisPerHalaman` peserta (lihat bagiHalaman() di
+             atas), baris SEHARUSNYA sudah muat penuh di satu halaman —
+             aturan ini cuma jaring pengaman kalau kertas/skala printer
+             sedikit berbeda dari perkiraan. */
+          .tabel-8355 tr { page-break-inside: avoid; break-inside: avoid; }
 
           /* CSS global (index.css) punya aturan:
                body * { visibility: hidden; }
                .print-only, .print-only * { visibility: visible; }
              yang tadinya dibuat khusus untuk Kuitansi/Nota (1 lembar).
-             Halaman ini pakai .print-only juga (lihat 3 div lampiran di
+             Halaman ini pakai .print-only juga (lihat setiap lembar di
              bawah) supaya isinya kasat mata saat print, TAPI di sini ada
-             3 lembar terpisah dengan page-break, jadi override posisi
+             banyak lembar terpisah dengan page-break, jadi override posisi
              "fixed" bawaan .print-only global menjadi "static" — supaya
-             page-break-before antar lampiran tetap jalan mengikuti alur
+             page-break-before antar lembar tetap jalan mengikuti alur
              dokumen normal, bukan menumpuk di satu titik fixed. */
           .lembar-cetak.print-only {
             position: static !important;
@@ -353,12 +457,12 @@ export default function Cetak8355() {
         }
 
         /* Override aturan global "@media screen { .print-only { display: none } }"
-           (index.css) — ketiga lembar Lampiran 1/2/3 di bawah memang harus
+           (index.css) — semua lembar Lampiran di bawah memang harus
            tetap tampil di layar sebagai pratinjau sebelum dicetak, mengikuti
            pola yang sama seperti LaporanTenagaPengajar.jsx / LaporanSemester.jsx.
-           Tanpa override ini, Lampiran 1-3 hanya kelihatan saat proses print
-           (kosong di layar), dan lembar cetak sebelumnya jadi susah dicek
-           dulu isinya sebelum ditekan Cetak. */
+           Tanpa override ini, lembar-lembar itu hanya kelihatan saat proses
+           print (kosong di layar), dan hasil cetak jadi susah dicek dulu
+           sebelum ditekan Cetak. */
         @media screen {
           .lembar-cetak.print-only {
             display: block !important;
@@ -405,6 +509,18 @@ export default function Cetak8355() {
               className="input-field"
               value={tanggalAcuanUsia}
               onChange={(e) => setTanggalAcuanUsia(e.target.value)}
+            />
+          </div>
+          {/* TAMBAHAN: kontrol jumlah maksimal peserta per halaman cetak */}
+          <div>
+            <label className="label-field">Maks. Peserta / Halaman</label>
+            <input
+              type="number"
+              min={5}
+              max={30}
+              className="input-field w-28"
+              value={barisPerHalaman}
+              onChange={(e) => setBarisPerHalaman(e.target.value)}
             />
           </div>
         </div>
@@ -466,48 +582,31 @@ export default function Cetak8355() {
         </p>
       </div>
 
-      {/* ---------------- LAMPIRAN 1 ---------------- */}
+      {/* ---------------- SEMUA LEMBAR LAMPIRAN (dipecah per halaman) ---------------- */}
       {/* Class "print-only" ditambahkan: CSS global menyembunyikan SEMUA
           elemen (body *) saat print kecuali yang berkelas print-only.
-          Tanpa class ini, 3 lembar lampiran di bawah ikut tersembunyi
+          Tanpa class ini, lembar-lembar lampiran di bawah ikut tersembunyi
           walau tinggi/jumlah halamannya tetap terhitung — itu sebabnya
-          hasil cetak sebelumnya "5 halaman" tapi kosong semua. */}
-      <div className="lampiran lembar-cetak print-only max-w-[1200px] mx-auto bg-white shadow-lg p-6 text-sm text-ink-950">
-        <KopSurat />
-        <Judul nomorLampiran={1} />
-        <TabelLampiran kolom={LAMPIRAN_1_KOLOM} />
-      </div>
+          hasil cetak sebelumnya kelihatan berantakan/kosong sebagian.
+          Lembar PERTAMA (idx 0) tidak diberi page-break (memang halaman
+          pertama); semua lembar sesudahnya diberi class "lampiran-break"
+          supaya selalu mulai di halaman baru, baik itu halaman lanjutan
+          dalam lampiran yang sama maupun pindah ke lampiran berikutnya. */}
+      {daftarLembarCetak.map((lembar, idx) => (
+        <div
+          key={lembar.key}
+          className={`lampiran lembar-cetak print-only max-w-[1200px] mx-auto bg-white shadow-lg p-6 text-sm text-ink-950 ${
+            idx === 0 ? '' : 'lampiran-break mt-8 print:mt-0'
+          }`}
+        >
+          <KopSurat />
+          <Judul nomorLampiran={lembar.nomorLampiran} halamanKe={lembar.halamanKe} totalHalaman={lembar.totalHalaman} />
+          <TabelLampiran kolom={lembar.kolom} daftar={lembar.daftarSiswaHalaman} />
 
-      {/* ---------------- LAMPIRAN 2 ---------------- */}
-      <div className="lampiran lampiran-break lembar-cetak print-only max-w-[1200px] mx-auto bg-white shadow-lg p-6 mt-8 print:mt-0 text-sm text-ink-950">
-        <KopSurat />
-        <Judul nomorLampiran={2} />
-        <TabelLampiran kolom={LAMPIRAN_2_KOLOM} />
-      </div>
-
-      {/* ---------------- LAMPIRAN 3 ---------------- */}
-      <div className="lampiran lampiran-break lembar-cetak print-only max-w-[1200px] mx-auto bg-white shadow-lg p-6 mt-8 print:mt-0 text-sm text-ink-950">
-        <KopSurat />
-        <Judul nomorLampiran={3} />
-        <TabelLampiran kolom={LAMPIRAN_3_KOLOM} />
-
-        {/* ---------------- TANDA TANGAN (hanya di lampiran terakhir) ---------------- */}
-        <div className="flex justify-end mt-8 text-xs">
-          <div className="text-center">
-            <p>
-              {sekolah?.tempat_ttd || '.......................'}, {formatTanggal(new Date().toISOString())}
-            </p>
-            <p className="mb-1 font-semibold">Kepala Sekolah</p>
-            <div className="h-14" />
-            <p className="font-semibold border-t border-ink-950/40 pt-1 inline-block px-6">
-              {sekolah?.kepala_sekolah || '(.......................................)'}
-            </p>
-            {sekolah?.nip_kepala_sekolah && (
-              <p className="text-[11px] text-ink-700/60">NIP. {sekolah.nip_kepala_sekolah}</p>
-            )}
-          </div>
+          {/* Tanda tangan hanya di halaman TERAKHIR Lampiran 3 */}
+          {lembar.nomorLampiran === 3 && lembar.halamanTerakhirLampiranIni && <TandaTangan />}
         </div>
-      </div>
+      ))}
     </div>
   )
 }
