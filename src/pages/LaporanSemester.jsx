@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Printer, Loader2, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, Printer, Loader2, AlertTriangle, Save, CheckCircle2 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 
@@ -15,12 +15,13 @@ import { supabase } from '../lib/supabaseClient'
 //   3) Tabel Data Jumlah & Keadaan Gedung/Ruang Sekolah
 //   4) Tabel Data Keadaan Buku-buku KTSP & K-13
 //
-// Tabel 2-4 di dokumen aslinya adalah FORM KOSONG yang diisi tangan tiap
-// semester (bukan data yang sudah ada di database manapun di aplikasi
-// ini). Karena itu, sama seperti isian "Masuk/Keluar Dalam Bulan Ini" di
-// LaporanKeadaanMurid.jsx, ketiga tabel itu dibuat sebagai input yang
-// diisi manual di layar (state lokal, TIDAK disimpan ke Supabase), lalu
-// ikut tercetak lewat pola .no-print / .only-print yang sama.
+// TAMBAHAN: Tabel 2-4 dulunya cuma state lokal (hilang kalau halaman
+// direfresh). Sekarang ada tombol "Simpan Data" yang menyimpan Semester,
+// Tahun Pelajaran, dan ketiga tabel itu ke tabel `laporan_semester_data`
+// di Supabase (satu baris per kombinasi sekolah + semester + tahun
+// pelajaran, lewat upsert). Saat semester/tahun pelajaran diisi/diubah,
+// data yang sudah pernah disimpan untuk kombinasi itu otomatis dimuat
+// kembali ke layar.
 //
 // PENTING — sesuaikan nama kolom di bawah:
 // Nama kolom profil_sekolah untuk NSS/NPSN, status sekolah, tahun
@@ -41,6 +42,12 @@ export default function LaporanSemester() {
   // --- identitas laporan (tidak ada di profil_sekolah, diisi manual) ---
   const [semester, setSemester] = useState('Ganjil') // 'Ganjil' | 'Genap'
   const [tahunPelajaran, setTahunPelajaran] = useState('')
+
+  // TAMBAHAN: status simpan/muat data laporan (tabel jam/gedung/buku)
+  const [saving, setSaving] = useState(false)
+  const [tersimpan, setTersimpan] = useState(false)
+  const [errorSimpan, setErrorSimpan] = useState('')
+  const [memuatData, setMemuatData] = useState(false)
 
   useEffect(() => {
     async function muat() {
@@ -92,14 +99,15 @@ export default function LaporanSemester() {
     'PJOK',
     'Pengembangan Diri',
   ]
-  const [jamPelajaran, setJamPelajaran] = useState(() => {
+  function jamPelajaranKosong() {
     const awal = {}
     MATA_PELAJARAN.forEach((mp) => {
       awal[mp] = {}
       KELAS_ROMAWI.forEach((k) => { awal[mp][k] = '' })
     })
     return awal
-  })
+  }
+  const [jamPelajaran, setJamPelajaran] = useState(jamPelajaranKosong)
 
   // ---------- Tabel 2: Data Jumlah & Keadaan Gedung/Ruang Sekolah ----------
   const RUANG_KOLOM = ['Milik', 'Bukan Milik', 'Baik', 'Rusak Berat', 'Rusak Sedang', 'Rusak Ringan']
@@ -121,14 +129,15 @@ export default function LaporanSemester() {
     'Rumah Dinas Guru',
     'Lain-lain',
   ]
-  const [dataGedung, setDataGedung] = useState(() => {
+  function dataGedungKosong() {
     const awal = {}
     DAFTAR_RUANG.forEach((r) => {
       awal[r] = { keterangan: '' }
       RUANG_KOLOM.forEach((k) => { awal[r][k] = '' })
     })
     return awal
-  })
+  }
+  const [dataGedung, setDataGedung] = useState(dataGedungKosong)
 
   // ---------- Tabel 3: Data Keadaan Buku-buku KTSP & K-13 ----------
   const BUKU_KOLOM = ['Jumlah', 'Baik', 'Rusak Berat', 'Rusak Ringan']
@@ -144,24 +153,126 @@ export default function LaporanSemester() {
     'Mulok',
     'Penjaskes',
   ]
-  const [dataBuku, setDataBuku] = useState(() => {
+  function dataBukuKosong() {
     const awal = {}
     DAFTAR_BUKU.forEach((b) => {
       awal[b] = { keterangan: '' }
       BUKU_KOLOM.forEach((k) => { awal[b][k] = '' })
     })
     return awal
-  })
+  }
+  const [dataBuku, setDataBuku] = useState(dataBukuKosong)
 
   // Updater generik untuk ketiga tabel (baris -> kolom -> nilai)
   function buatUpdater(setter) {
     return function updateSel(baris, kolom, nilai) {
+      setTersimpan(false)
       setter((prev) => ({ ...prev, [baris]: { ...prev[baris], [kolom]: nilai } }))
     }
   }
   const updateJam = buatUpdater(setJamPelajaran)
   const updateGedung = buatUpdater(setDataGedung)
   const updateBuku = buatUpdater(setDataBuku)
+
+  // TAMBAHAN: gabungkan data tersimpan dengan struktur baris/kolom saat ini,
+  // supaya kalau daftar mata pelajaran/ruang/buku berubah di kemudian hari,
+  // baris baru tetap muncul kosong (tidak hilang / error) dan baris yang
+  // sudah dihapus dari daftar tidak ikut terbawa.
+  function gabungkanData(kosong, tersimpanDb) {
+    if (!tersimpanDb) return kosong
+    const hasil = { ...kosong }
+    Object.keys(hasil).forEach((baris) => {
+      if (tersimpanDb[baris]) {
+        hasil[baris] = { ...hasil[baris], ...tersimpanDb[baris] }
+      }
+    })
+    return hasil
+  }
+
+  // TAMBAHAN: muat data tersimpan untuk kombinasi sekolah + semester +
+  // tahun pelajaran saat ini. Dipanggil otomatis saat semester/tahun
+  // pelajaran berubah (lewat useEffect di bawah).
+  async function muatDataTersimpan(semesterAktif, tahunAktif) {
+    if (!sekolahId || !tahunAktif.trim()) return
+
+    setMemuatData(true)
+    setErrorSimpan('')
+    const { data: baris, error } = await supabase
+      .from('laporan_semester_data')
+      .select('*')
+      .eq('sekolah_id', sekolahId)
+      .eq('semester', semesterAktif)
+      .eq('tahun_pelajaran', tahunAktif.trim())
+      .maybeSingle()
+
+    if (error) {
+      console.error('Gagal memuat data laporan semester:', error)
+      setErrorSimpan('Gagal memuat data tersimpan: ' + error.message)
+      setMemuatData(false)
+      return
+    }
+
+    if (baris) {
+      setJamPelajaran(gabungkanData(jamPelajaranKosong(), baris.jam_pelajaran))
+      setDataGedung(gabungkanData(dataGedungKosong(), baris.data_gedung))
+      setDataBuku(gabungkanData(dataBukuKosong(), baris.data_buku))
+      setTersimpan(true)
+    } else {
+      // Belum pernah disimpan untuk kombinasi ini -> tabel dikosongkan
+      // supaya tidak tertukar dengan data semester/tahun pelajaran lain.
+      setJamPelajaran(jamPelajaranKosong())
+      setDataGedung(dataGedungKosong())
+      setDataBuku(dataBukuKosong())
+      setTersimpan(false)
+    }
+    setMemuatData(false)
+  }
+
+  // TAMBAHAN: auto-muat saat semester berubah atau saat tahun pelajaran
+  // selesai diketik (onBlur), bukan setiap ketikan, supaya tidak query
+  // berkali-kali per huruf.
+  useEffect(() => {
+    if (sekolahId) muatDataTersimpan(semester, tahunPelajaran)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sekolahId, semester])
+
+  // TAMBAHAN: simpan ketiga tabel ke Supabase
+  async function handleSimpan() {
+    if (!sekolahId) {
+      alert('Sekolah aktif belum dipilih.')
+      return
+    }
+    if (!tahunPelajaran.trim()) {
+      alert('Isi Tahun Pelajaran terlebih dahulu sebelum menyimpan.')
+      return
+    }
+
+    setSaving(true)
+    setErrorSimpan('')
+    const payload = {
+      sekolah_id: sekolahId,
+      semester,
+      tahun_pelajaran: tahunPelajaran.trim(),
+      jam_pelajaran: jamPelajaran,
+      data_gedung: dataGedung,
+      data_buku: dataBuku,
+      updated_at: new Date().toISOString(),
+    }
+
+    const { error } = await supabase
+      .from('laporan_semester_data')
+      .upsert(payload, { onConflict: 'sekolah_id,semester,tahun_pelajaran' })
+
+    setSaving(false)
+    if (error) {
+      console.error('Gagal menyimpan data laporan semester:', error)
+      setErrorSimpan('Gagal menyimpan: ' + error.message)
+      alert('Gagal menyimpan: ' + error.message)
+    } else {
+      setTersimpan(true)
+      setTimeout(() => setTersimpan(false), 3000)
+    }
+  }
 
   if (loading) {
     return (
@@ -208,7 +319,7 @@ export default function LaporanSemester() {
   // Baris "Label : nilai" dengan input untuk layar dan span untuk cetak,
   // dipakai untuk identitas yang bukan dari profil_sekolah (semester) dan
   // untuk field profil_sekolah yang nama kolomnya belum pasti (SESUAIKAN).
-  const BarisIdentitas = ({ label, value, onChange, editable = true }) => (
+  const BarisIdentitas = ({ label, value, onChange, onBlur, editable = true }) => (
     <p className="flex text-xs mb-1">
       <span className="w-52 shrink-0">{label}</span>
       <span className="w-4 shrink-0">:</span>
@@ -219,6 +330,7 @@ export default function LaporanSemester() {
             className="no-print border-b border-dotted border-slate-400 outline-none flex-1 text-xs"
             value={value}
             onChange={(e) => onChange(e.target.value)}
+            onBlur={onBlur}
           />
           <span className="only-print">{value}</span>
         </>
@@ -232,28 +344,52 @@ export default function LaporanSemester() {
     <div className="min-h-screen bg-slate-100">
       {/* Toolbar — hilang saat dicetak */}
       <div className="no-print sticky top-0 z-10 bg-white border-b border-slate-200 px-4 py-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <button
             onClick={() => navigate(-1)}
             className="flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-800"
           >
             <ArrowLeft size={16} /> Kembali
           </button>
-          <button
-            onClick={() => window.print()}
-            className="flex items-center gap-1.5 bg-blue-600 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-blue-700"
-          >
-            <Printer size={16} /> Cetak Laporan
-          </button>
+          <div className="flex items-center gap-2">
+            {/* TAMBAHAN: tombol Simpan Data */}
+            <button
+              onClick={handleSimpan}
+              disabled={saving || memuatData}
+              className="flex items-center gap-1.5 bg-emerald-600 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-60"
+            >
+              {saving ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : tersimpan ? (
+                <CheckCircle2 size={16} />
+              ) : (
+                <Save size={16} />
+              )}
+              {tersimpan ? 'Tersimpan' : 'Simpan Data'}
+            </button>
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 bg-blue-600 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-blue-700"
+            >
+              <Printer size={16} /> Cetak Laporan
+            </button>
+          </div>
         </div>
         <p className="no-print text-center text-[11px] text-slate-400 mt-2">
-          Isi semester, tahun pelajaran, dan ketiga tabel di bawah sebelum mencetak.
+          Isi semester, tahun pelajaran, dan ketiga tabel di bawah, lalu klik "Simpan Data" sebelum mencetak.
+          {memuatData && ' Memuat data tersimpan...'}
         </p>
 
         {errorMuat && (
           <div className="no-print mt-3 flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700">
             <AlertTriangle size={15} className="shrink-0 mt-0.5" />
             <span>{errorMuat}</span>
+          </div>
+        )}
+        {errorSimpan && (
+          <div className="no-print mt-3 flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700">
+            <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+            <span>{errorSimpan}</span>
           </div>
         )}
       </div>
@@ -286,7 +422,12 @@ export default function LaporanSemester() {
                 <option value="Genap">Genap</option>
               </select>
             </div>
-            <BarisIdentitas label="Tahun Pelajaran" value={tahunPelajaran} onChange={setTahunPelajaran} />
+            <BarisIdentitas
+              label="Tahun Pelajaran"
+              value={tahunPelajaran}
+              onChange={setTahunPelajaran}
+              onBlur={() => muatDataTersimpan(semester, tahunPelajaran)}
+            />
             {/* SESUAIKAN: ganti profilSekolah?.nss / npsn kalau nama kolomnya berbeda */}
             <BarisIdentitas
               label="NSS / NPSN"
