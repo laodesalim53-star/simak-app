@@ -104,12 +104,6 @@ const SEMUA_KARTU = [
 // tidak pernah memengaruhi tampilan untuk tenant sekolah.
 const KARTU_KANTOR = [
   {
-    to: '/jadwal',
-    label: 'Jadwal Kegiatan',
-    icon: CalendarClock,
-    desc: 'Atur jadwal kegiatan kantor.',
-  },
-  {
     to: '/presensi',
     label: 'Presensi',
     icon: ClipboardCheck,
