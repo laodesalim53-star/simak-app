@@ -458,7 +458,10 @@ export default function LaporanBulanan() {
 
             <div className="mt-8 text-sm" style={{ textAlign: 'right' }}>
               <p>{profilSekolah?.tempat_ttd || '(isi Nama Tempat di Profil Sekolah)'}, {jumlahHariDalamBulan(tahun, bulan)} {NAMA_BULAN[bulan - 1].toUpperCase()} {tahun}</p>
-              <p>KEPALA SEKOLAH</p>
+              {/* UBAHAN: label pimpinan sekarang dinamis dari kolom profil_sekolah.label_pimpinan.
+                  Kalau kolom itu kosong (kasus tenant sekolah yang sudah ada), tetap tampil
+                  "KEPALA SEKOLAH" seperti semula — tidak ada perubahan untuk tenant lama. */}
+              <p>{profilSekolah?.label_pimpinan || 'KEPALA SEKOLAH'}</p>
               {/* TAMBAHAN: tanda tangan elektronik, diambil otomatis dari Profil Sekolah.
                   Kalau belum diupload di Profil Sekolah, tetap tampil ruang kosong seperti semula. */}
               <div style={{ height: 64, display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
