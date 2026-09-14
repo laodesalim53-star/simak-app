@@ -267,6 +267,7 @@ export default function App() {
           <Route path="/materi-wakaf" element={<ProtectedRoute adminOnly><MateriWakaf /></ProtectedRoute>} />
           <Route path="/materi-akhlak" element={<ProtectedRoute adminOnly><MateriAkhlak /></ProtectedRoute>} />
           <Route path="/kelas" element={<ProtectedRoute adminOnly><Kelas /></ProtectedRoute>} />
+          <Route path="/profil-kantor" element={<ProtectedRoute adminOnly><ProfilKantor /></ProtectedRoute>} />
 
           {/* ============================================================
               3. LAPORAN GURU & SAMPUL LAPORAN
