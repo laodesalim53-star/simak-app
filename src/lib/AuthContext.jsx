@@ -60,24 +60,25 @@ export function AuthProvider({ children }) {
     const jenisOrganisasi = data.sekolah?.jenis_organisasi || 'sekolah'
     const namaSekolah = data.sekolah?.nama_sekolah || null
 
-    if (jenisOrganisasi === 'kantor' && data.pegawai_id) {
-      const { data: pegawai } = await supabase
-        .from('pegawai_kantor')
-        .select('nama_lengkap, foto_profil_path')
-        .eq('id', data.pegawai_id)
-        .maybeSingle()
+if (jenisOrganisasi === 'kantor' && data.pegawai_id) {
+  const { data: pegawai } = await supabase
+    .from('pegawai_kantor')
+    .select('nama_lengkap, foto_profil_path, nip')
+    .eq('id', data.pegawai_id)
+    .maybeSingle()
 
-      if (requestId !== profilRequestIdRef.current) return
+  if (requestId !== profilRequestIdRef.current) return
 
-      setProfil({
-        ...data,
-        jenis_organisasi: jenisOrganisasi,
-        nama_sekolah: namaSekolah,
-        nama_lengkap: pegawai?.nama_lengkap || data.nama_lengkap_pendaftar,
-        foto_profil_path: pegawai?.foto_profil_path || data.foto_profil_path,
-      })
-      return
-    }
+  setProfil({
+    ...data,
+    jenis_organisasi: jenisOrganisasi,
+    nama_sekolah: namaSekolah,
+    nama_lengkap: pegawai?.nama_lengkap || data.nama_lengkap_pendaftar,
+    foto_profil_path: pegawai?.foto_profil_path || data.foto_profil_path,
+    nip: pegawai?.nip || null,
+  })
+  return
+}
 
     if (data.guru_id) {
       const { data: guru } = await supabase
