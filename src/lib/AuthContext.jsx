@@ -79,7 +79,6 @@ if (jenisOrganisasi === 'kantor' && data.pegawai_id) {
   })
   return
 }
-
     if (data.guru_id) {
       const { data: guru } = await supabase
         .from('guru')
