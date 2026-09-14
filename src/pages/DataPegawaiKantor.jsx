@@ -14,6 +14,10 @@ import * as XLSX from 'xlsx'
 //  1) Data pegawai kantor tidak tercampur dengan data guru sekolah.
 //  2) Field-field di sini relevan untuk kantor (tidak ada NUPTK, mata
 //     pelajaran, karpeg, dsb — itu semua konsep khusus tenaga pendidik).
+//     Sejak migrasi-hapus-kolom-nuptk-jenis-ptk-pegawai-kantor.sql, kolom
+//     `nuptk` dan `jenis_ptk` juga sudah tidak ada lagi di tabel
+//     `pegawai_kantor` itu sendiri — jadi pemisahan ini sekarang ditegakkan
+//     di level skema database, bukan cuma konvensi di form/JS ini.
 //
 // FITUR "Isi dari SK": mengunggah dokumen SK (PDF/gambar/Word) ATAU rekap
 // Excel lalu mengisi form secara otomatis. Ada dua jalur ekstraksi:
@@ -96,7 +100,9 @@ function jenisKelaminDariTeks(teks) {
 function statusKepegawaianDariTeks(teks) {
   if (!teks) return ''
   const t = String(teks).trim().toLowerCase()
-  if (t.includes('pppk')) return 'PPPK'
+  // "Tentang" SK PPPK biasanya berbunyi "...dengan Perjanjian Kerja..." dan
+  // tidak selalu menyebut singkatan "PPPK" secara eksplisit.
+  if (t.includes('pppk') || t.includes('perjanjian kerja')) return 'PPPK'
   if (t.includes('pegawai negeri sipil') || /\bpns\b/.test(t)) return 'PNS'
   if (t.includes('honorer')) return 'Honorer'
   return ''
@@ -121,12 +127,29 @@ function parseBarisExcelSk(baris) {
   return peta
 }
 
+// Ambil bagian utama sebuah label kolom, tanpa keterangan tambahan dalam
+// tanda kurung — mis. "Ditetapkan oleh (a.n. Menteri Agama)" -> "ditetapkan
+// oleh". Tanpa ini, pencarian label pendek seperti "Agama" bisa salah
+// menemukan baris ini hanya karena kata "Agama" ikut disebut di keterangan.
+function labelUtama(label) {
+  return label.split('(')[0].trim()
+}
+
 // Cari nilai di peta berdasarkan satu atau beberapa kemungkinan nama label
-// (dicocokkan sebagai substring, tidak peka huruf besar/kecil), supaya tetap
-// jalan walau format Excel sedikit berbeda-beda (mis. "NIP" vs "Nomor NIP").
+// (dicocokkan pada bagian utama label saja, tidak peka huruf besar/kecil),
+// supaya tetap jalan walau format Excel sedikit berbeda-beda (mis. "NIP" vs
+// "Nomor Induk PPPK"). Baris yang labelnya menyebut "... Penetap" (pejabat
+// penanda tangan SK) sengaja DILEWATI di sini karena itu bukan data pegawai
+// yang bersangkutan — mencegah mis. "NIP Penetap" ikut tertukar jadi NIP
+// pegawai.
 function cariNilaiExcel(peta, ...kemungkinanLabel) {
   for (const label of kemungkinanLabel) {
-    const cocok = Object.keys(peta).find((k) => k.includes(label.toLowerCase()))
+    const labelLower = label.toLowerCase()
+    const cocok = Object.keys(peta).find((k) => {
+      if (k.includes('penetap')) return false
+      const utama = labelUtama(k)
+      return utama === labelLower || utama.startsWith(labelLower) || utama.includes(labelLower)
+    })
     if (cocok) return peta[cocok]
   }
   return ''
@@ -139,7 +162,7 @@ function hasilDariExcelSk(peta) {
   const tentang = cariNilaiExcel(peta, 'tentang')
   return {
     nama_lengkap: cariNilaiExcel(peta, 'nama'),
-    nip: cariNilaiExcel(peta, 'nip', 'nomor induk'),
+    nip: cariNilaiExcel(peta, 'nomor induk', 'nip'),
     jabatan_definitif: cariNilaiExcel(peta, 'jabatan'),
     pangkat_golongan: cariNilaiExcel(peta, 'golongan', 'pangkat'),
     status_kepegawaian: statusKepegawaianDariTeks(tentang) || cariNilaiExcel(peta, 'status kepegawaian'),
