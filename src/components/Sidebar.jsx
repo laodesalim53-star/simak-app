@@ -261,7 +261,6 @@ function getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelum
         ...(isAdminUtama
           ? [
               { to: '/persetujuan-akun', label: 'Persetujuan Akun', icon: ShieldCheck, badge: jumlahMenunggu },
-              { to: '/profil-sekolah', label: 'Profil Kantor', icon: Landmark },
             ]
           : []),
       ],
