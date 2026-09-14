@@ -255,6 +255,8 @@ export default function App() {
           {/* Data Pegawai (tenant kantor) — route BARU & TERPISAH dari /guru,
               supaya "Data Guru" milik sekolah tidak tersentuh sama sekali.
               Menulis ke tabel `pegawai_kantor` (lihat DataPegawaiKantor.jsx). */}
+          <Route path="/presensi-kantor" element={<ProtectedRoute adminOnly><PresensiKantor /></ProtectedRoute>} />
+          <Route path="/daftar-hadir-kantor" element={<ProtectedRoute adminOnly><DaftarHadirKantor /></ProtectedRoute>} />
           <Route path="/data-pegawai-kantor" element={<ProtectedRoute adminOnly><DataPegawaiKantor /></ProtectedRoute>} />
           <Route path="/kelas" element={<ProtectedRoute adminOnly><Kelas /></ProtectedRoute>} />
 
