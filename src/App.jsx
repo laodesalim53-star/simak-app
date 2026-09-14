@@ -97,6 +97,8 @@ const PusatMateriMajelis = lazy(() => import('./pages/PusatMateriMajelis'))
 const MateriKeluargaSakinah = lazy(() => import('./pages/MateriKeluargaSakinah'))
 const MateriPengelolaanZakat = lazy(() => import('./pages/MateriPengelolaanZakat'))
 const MateriWakaf = lazy(() => import('./pages/MateriWakaf'))
+const MateriAkhlak = lazy(() => import('./pages/MateriAkhlak'))
+// ...
 const AdminLiveChat = lazy(() => import('./pages/AdminLiveChat'))
 const ScanDokumen = lazy(() => import('./pages/ScanDokumen'))
 const Rapat = lazy(() => import('./pages/Rapat'))
@@ -263,6 +265,7 @@ export default function App() {
           <Route path="/materi-keluarga-sakinah" element={<ProtectedRoute adminOnly><MateriKeluargaSakinah /></ProtectedRoute>} />
           <Route path="/materi-pengelolaan-zakat" element={<ProtectedRoute adminOnly><MateriPengelolaanZakat /></ProtectedRoute>} />
           <Route path="/materi-wakaf" element={<ProtectedRoute adminOnly><MateriWakaf /></ProtectedRoute>} />
+          <Route path="/materi-akhlak" element={<ProtectedRoute adminOnly><MateriAkhlak /></ProtectedRoute>} />
           <Route path="/kelas" element={<ProtectedRoute adminOnly><Kelas /></ProtectedRoute>} />
 
           {/* ============================================================
