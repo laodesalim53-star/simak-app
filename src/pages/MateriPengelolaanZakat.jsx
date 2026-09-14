@@ -11,6 +11,7 @@ export default function MateriPengelolaanZakat() {
     >
       <style>{`
         @media print {
+          @page { size: A4; margin: 15mm; }
           body * { visibility: hidden; }
           #area-cetak, #area-cetak * { visibility: visible; }
           #area-cetak { position: absolute; left: 0; top: 0; width: 100%; padding: 0; }
