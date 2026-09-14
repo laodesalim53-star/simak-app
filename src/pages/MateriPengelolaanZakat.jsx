@@ -9,17 +9,7 @@ export default function MateriPengelolaanZakat() {
       title="Materi: Pengelolaan Zakat"
       subtitle="Bahan majelis lengkap dengan daftar hadir peserta, siap cetak."
     >
-      <style>{`
-        @media print {
-          @page { size: A4; margin: 15mm; }
-          body * { visibility: hidden; }
-          #area-cetak, #area-cetak * { visibility: visible; }
-          #area-cetak { position: absolute; left: 0; top: 0; width: 100%; padding: 0; }
-          .print\\:hidden { display: none !important; }
-        }
-      `}</style>
-
-      <div className="print:hidden flex items-center justify-between mb-5">
+      <div className="no-print flex items-center justify-between mb-5">
         <Link
           to="/pusat-materi-majelis"
           className="inline-flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900"
@@ -34,7 +24,10 @@ export default function MateriPengelolaanZakat() {
         </button>
       </div>
 
-      <div id="area-cetak" className="bg-white rounded-2xl border border-slate-100 p-5 sm:p-8">
+      <div
+        className="lembar-cetak print-only bg-white rounded-2xl border border-slate-100 p-5 sm:p-8 mx-auto"
+        style={{ width: '210mm' }}
+      >
         <div className="flex items-center gap-3 mb-6">
           <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
             <Coins size={20} />
@@ -131,8 +124,53 @@ export default function MateriPengelolaanZakat() {
           </section>
         </div>
 
-        <DaftarHadirCetak jumlahBaris={15} />
+        <div className="hadir-cetak">
+          <DaftarHadirCetak jumlahBaris={15} />
+        </div>
       </div>
+
+      <style>{`
+        .lembar-cetak.print-only {
+          position: static !important;
+          top: auto !important;
+          left: auto !important;
+          right: auto !important;
+          margin-left: auto !important;
+          margin-right: auto !important;
+        }
+
+        @media screen {
+          .lembar-cetak.print-only {
+            display: block !important;
+          }
+        }
+        @media print {
+          .no-print { display: none !important; }
+          body { background: white; }
+          .lembar-cetak {
+            box-shadow: none !important;
+            width: 210mm !important;
+            max-width: 100% !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
+          }
+          .hadir-cetak {
+            page-break-before: always;
+            break-before: page;
+          }
+          .hadir-cetak table {
+            page-break-inside: auto;
+          }
+          .hadir-cetak tr {
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+        }
+        @page {
+          size: A4;
+          margin: 15mm;
+        }
+      `}</style>
     </Layout>
   )
 }
