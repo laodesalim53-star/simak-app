@@ -48,6 +48,14 @@ const emptyForm = {
   sk_pengangkatan: '',
   tmt_pengangkatan: '',
   tugas_tambahan: '',
+  // --- Detail SK & penempatan (kolom baru dari migrasi-tambah-kolom-sk-pegawai-kantor.sql) ---
+  tentang: '',
+  masa_kerja_selesai: '',
+  gaji: '',
+  unit_kerja: '',
+  instansi: '',
+  ditetapkan_di: '',
+  tanggal_ditetapkan: '',
   alamat: '',
   telepon_kantor: '', // (tidak dipakai, dibiarkan konsisten dgn no_hp saja di bawah)
   no_hp: '',
@@ -87,6 +95,22 @@ function tanggalIndoKeISO(teks) {
   const bulan = BULAN_ID[namaBulan]
   if (!bulan) return ''
   return `${tahun}-${bulan}-${tgl.padStart(2, '0')}`
+}
+
+// "Rp 3.203.600" -> 3203600. Kalau tidak ada angka sama sekali, null.
+function angkaDariTeksRupiah(teks) {
+  if (!teks) return null
+  const bersih = String(teks).replace(/[^0-9]/g, '')
+  if (!bersih) return null
+  return Number(bersih)
+}
+
+// 3203600 -> "Rp 3.203.600" (untuk tampilan di kartu profil).
+function formatRupiah(angka) {
+  if (angka === null || angka === undefined || angka === '') return null
+  const n = Number(angka)
+  if (Number.isNaN(n)) return null
+  return 'Rp ' + n.toLocaleString('id-ID')
 }
 
 function jenisKelaminDariTeks(teks) {
@@ -173,6 +197,14 @@ function hasilDariExcelSk(peta) {
     jenis_kelamin: jenisKelaminDariTeks(cariNilaiExcel(peta, 'jenis kelamin')),
     pendidikan_terakhir: cariNilaiExcel(peta, 'pendidikan'),
     agama: cariNilaiExcel(peta, 'agama'),
+    // --- Detail SK & penempatan ---
+    tentang_sk: tentang,
+    masa_kerja_selesai: tanggalIndoKeISO(cariNilaiExcel(peta, 'masa kerja selesai')),
+    gaji: angkaDariTeksRupiah(cariNilaiExcel(peta, 'gaji')),
+    unit_kerja: cariNilaiExcel(peta, 'unit kerja'),
+    instansi: cariNilaiExcel(peta, 'instansi'),
+    ditetapkan_di: cariNilaiExcel(peta, 'ditetapkan di'),
+    tanggal_ditetapkan: tanggalIndoKeISO(cariNilaiExcel(peta, 'tanggal ditetapkan')),
   }
 }
 
@@ -262,6 +294,9 @@ export default function DataPegawaiKantor() {
       ...row,
       tanggal_lahir: row.tanggal_lahir ? String(row.tanggal_lahir).slice(0, 10) : '',
       tmt_pengangkatan: row.tmt_pengangkatan ? String(row.tmt_pengangkatan).slice(0, 10) : '',
+      masa_kerja_selesai: row.masa_kerja_selesai ? String(row.masa_kerja_selesai).slice(0, 10) : '',
+      tanggal_ditetapkan: row.tanggal_ditetapkan ? String(row.tanggal_ditetapkan).slice(0, 10) : '',
+      gaji: row.gaji !== null && row.gaji !== undefined ? String(row.gaji) : '',
     })
     setEditingId(row.id)
     setSkError('')
@@ -381,6 +416,18 @@ export default function DataPegawaiKantor() {
           prev.jenis_kelamin === 'L' && hasil.jenis_kelamin ? hasil.jenis_kelamin : prev.jenis_kelamin,
         pendidikan_terakhir: prev.pendidikan_terakhir || hasil.pendidikan_terakhir || '',
         agama: prev.agama || hasil.agama || '',
+        // --- Detail SK & penempatan ---
+        // Catatan: field-field ini baru terisi otomatis kalau sumbernya file
+        // Excel. Untuk PDF/gambar/Word, Edge Function `ekstrak-sk` (Gemini)
+        // perlu diperbarui juga supaya ikut mengembalikan field-field ini —
+        // sampai saat itu, field ini tetap bisa diisi manual di form.
+        tentang: prev.tentang || hasil.tentang_sk || '',
+        masa_kerja_selesai: prev.masa_kerja_selesai || hasil.masa_kerja_selesai || '',
+        gaji: prev.gaji || (hasil.gaji !== null && hasil.gaji !== undefined ? String(hasil.gaji) : ''),
+        unit_kerja: prev.unit_kerja || hasil.unit_kerja || '',
+        instansi: prev.instansi || hasil.instansi || '',
+        ditetapkan_di: prev.ditetapkan_di || hasil.ditetapkan_di || '',
+        tanggal_ditetapkan: prev.tanggal_ditetapkan || hasil.tanggal_ditetapkan || '',
       }))
 
       // Kalau SK ini menyebutkan tugas tambahan (Plt./Plh./Kepala unit dsb),
@@ -420,6 +467,9 @@ export default function DataPegawaiKantor() {
       sekolah_id: sekolahId,
       tanggal_lahir: form.tanggal_lahir || null,
       tmt_pengangkatan: form.tmt_pengangkatan || null,
+      masa_kerja_selesai: form.masa_kerja_selesai || null,
+      tanggal_ditetapkan: form.tanggal_ditetapkan || null,
+      gaji: form.gaji !== '' ? angkaDariTeksRupiah(form.gaji) : null,
     }
     const { error } = editingId
       ? await supabase.from('pegawai_kantor').update(payload).eq('id', editingId).eq('sekolah_id', sekolahId)
@@ -614,6 +664,18 @@ export default function DataPegawaiKantor() {
               </Field>
             </SeksiForm>
 
+            <SeksiForm judul="Detail SK & Penempatan">
+              <Field label="Tentang (perihal SK)" full>
+                <input className="input-field" value={form.tentang} onChange={(e) => setForm({ ...form, tentang: e.target.value })} />
+              </Field>
+              <Field label="Masa Kerja Selesai"><input type="date" className="input-field" value={form.masa_kerja_selesai} onChange={(e) => setForm({ ...form, masa_kerja_selesai: e.target.value })} /></Field>
+              <Field label="Gaji (Rp)"><input type="number" min="0" className="input-field" value={form.gaji} onChange={(e) => setForm({ ...form, gaji: e.target.value })} /></Field>
+              <Field label="Unit Kerja" full><input className="input-field" value={form.unit_kerja} onChange={(e) => setForm({ ...form, unit_kerja: e.target.value })} /></Field>
+              <Field label="Instansi"><input className="input-field" value={form.instansi} onChange={(e) => setForm({ ...form, instansi: e.target.value })} /></Field>
+              <Field label="Ditetapkan di"><input className="input-field" value={form.ditetapkan_di} onChange={(e) => setForm({ ...form, ditetapkan_di: e.target.value })} /></Field>
+              <Field label="Tanggal Ditetapkan"><input type="date" className="input-field" value={form.tanggal_ditetapkan} onChange={(e) => setForm({ ...form, tanggal_ditetapkan: e.target.value })} /></Field>
+            </SeksiForm>
+
             <SeksiForm judul="Kontak & Alamat">
               <Field label="Alamat" full><textarea className="input-field" rows={2} value={form.alamat} onChange={(e) => setForm({ ...form, alamat: e.target.value })} /></Field>
               <Field label="No. HP"><input className="input-field" value={form.no_hp} onChange={(e) => setForm({ ...form, no_hp: e.target.value })} /></Field>
@@ -689,6 +751,16 @@ export default function DataPegawaiKantor() {
                   <ProfilRow label="SK Pengangkatan" value={profilLihat.sk_pengangkatan} />
                   <ProfilRow label="TMT Pengangkatan" value={formatTanggal(profilLihat.tmt_pengangkatan)} />
                   <ProfilRow label="Tugas Tambahan" value={profilLihat.tugas_tambahan} />
+                </SeksiProfil>
+
+                <SeksiProfil judul="Detail SK & Penempatan">
+                  <ProfilRow label="Tentang" value={profilLihat.tentang} />
+                  <ProfilRow label="Masa Kerja Selesai" value={formatTanggal(profilLihat.masa_kerja_selesai)} />
+                  <ProfilRow label="Gaji" value={formatRupiah(profilLihat.gaji)} />
+                  <ProfilRow label="Unit Kerja" value={profilLihat.unit_kerja} />
+                  <ProfilRow label="Instansi" value={profilLihat.instansi} />
+                  <ProfilRow label="Ditetapkan di" value={profilLihat.ditetapkan_di} />
+                  <ProfilRow label="Tanggal Ditetapkan" value={formatTanggal(profilLihat.tanggal_ditetapkan)} />
                 </SeksiProfil>
 
                 <SeksiProfil judul="Kontak">
