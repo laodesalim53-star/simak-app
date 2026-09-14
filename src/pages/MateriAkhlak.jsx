@@ -1,7 +1,25 @@
+import { useState, useEffect } from 'react'
+import { useAuth } from '../lib/AuthContext'
+import { supabase } from '../lib/supabaseClient'
 import { Link } from 'react-router-dom'
 import { Printer, ArrowLeft, HeartHandshake } from 'lucide-react'
 import Layout from '../components/Layout'
 import DaftarHadirCetak from '../components/DaftarHadirCetak'
+export default function MateriAkhlak() {
+  const { profil } = useAuth()
+  const [profilKantor, setProfilKantor] = useState(null)
+
+  useEffect(() => {
+    supabase
+      .from('profil_kantor')
+      .select('kepala_kua, nip_kepala_kua')
+      .eq('id', 1)
+      .maybeSingle()
+      .then(({ data }) => setProfilKantor(data))
+  }, [])
+
+  return (
+    ...
 
 export default function MateriAkhlak() {
   return (
@@ -193,28 +211,29 @@ export default function MateriAkhlak() {
           <DaftarHadirCetak jumlahBaris={15} />
 
           <div className="ttd-block flex justify-between mt-10 text-sm text-slate-700">
-            <div className="text-center w-48">
-              <p>Mengetahui,</p>
-              <p>Kepala KUA</p>
-              <div className="h-20" />
-              <p className="font-semibold border-t border-slate-400 pt-1">
-                (..............................)
-              </p>
-              <p className="text-xs text-slate-500">NIP. ..............................</p>
-            </div>
-            <div className="text-center w-48">
-              <p>&nbsp;</p>
-              <p>Penyuluh Agama Islam</p>
-              <div className="h-20" />
-              <p className="font-semibold border-t border-slate-400 pt-1">
-                (..............................)
-              </p>
-              <p className="text-xs text-slate-500">NIP. ..............................</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
+  <div className="text-center w-48">
+    <p>Mengetahui,</p>
+    <p>Kepala KUA</p>
+    <div className="h-20" />
+    <p className="font-semibold border-t border-slate-400 pt-1">
+      ({profilKantor?.kepala_kua || '..............................'})
+    </p>
+    <p className="text-xs text-slate-500">
+      NIP. {profilKantor?.nip_kepala_kua || '..............................'}
+    </p>
+  </div>
+  <div className="text-center w-48">
+    <p>&nbsp;</p>
+    <p>Penyuluh Agama Islam</p>
+    <div className="h-20" />
+    <p className="font-semibold border-t border-slate-400 pt-1">
+      ({profil?.nama_lengkap || '..............................'})
+    </p>
+    <p className="text-xs text-slate-500">
+      NIP. {profil?.nip || '..............................'}
+    </p>
+  </div>
+</div>
       <style>{`
         .lembar-cetak.print-only {
           position: static !important;
