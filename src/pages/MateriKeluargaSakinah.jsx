@@ -120,7 +120,9 @@ export default function MateriKeluargaSakinah() {
           </section>
         </div>
 
-        <DaftarHadirCetak jumlahBaris={15} />
+        <div className="hadir-cetak">
+          <DaftarHadirCetak jumlahBaris={15} />
+        </div>
       </div>
 
       <style>{`
@@ -147,6 +149,17 @@ export default function MateriKeluargaSakinah() {
             max-width: 100% !important;
             margin-left: auto !important;
             margin-right: auto !important;
+          }
+          .hadir-cetak {
+            page-break-before: always;
+            break-before: page;
+          }
+          .hadir-cetak table {
+            page-break-inside: auto;
+          }
+          .hadir-cetak tr {
+            page-break-inside: avoid;
+            break-inside: avoid;
           }
         }
         @page {
