@@ -4,6 +4,7 @@ import Layout from '../components/Layout'
 import { useAuth } from '../lib/AuthContext'
 import TeleponLink from '../components/TeleponLink'
 import { Plus, Pencil, Trash2, Search, X, Loader2, Briefcase, UploadCloud } from 'lucide-react'
+import mammoth from 'mammoth'
 
 // Halaman "Data Pegawai" KHUSUS tenant kantor — menulis ke tabel `pegawai_kantor`
 // (dibuat lewat migrasi-pegawai-kantor-kepegawaian.sql +
@@ -133,6 +134,8 @@ export default function DataPegawaiKantor() {
   // Konversi file ke base64, kirim ke Edge Function `ekstrak-sk`, lalu isi
   // field form yang MASIH KOSONG dengan hasil ekstraksi (tidak menimpa
   // field yang sudah diisi manual oleh admin).
+  const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+
   async function handleSkFile(e) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -141,16 +144,32 @@ export default function DataPegawaiKantor() {
     setSkLoading(true)
 
     try {
-      const base64 = await new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result.split(',')[1])
-        reader.onerror = reject
-        reader.readAsDataURL(file)
-      })
+      const isDocx = file.type === DOCX_MIME || file.name.toLowerCase().endsWith('.docx')
 
-      const { data: hasil, error } = await supabase.functions.invoke('ekstrak-sk', {
-        body: { file_base64: base64, media_type: file.type },
-      })
+      let body
+      if (isDocx) {
+        // File Word (.docx) bukan gambar/PDF, jadi tidak bisa dikirim sebagai
+        // inline_data ke Gemini. Ekstrak dulu teksnya di browser pakai
+        // mammoth, baru teks itu yang dikirim ke Edge Function.
+        const arrayBuffer = await file.arrayBuffer()
+        const { value: extractedText } = await mammoth.extractRawText({ arrayBuffer })
+        if (!extractedText || !extractedText.trim()) {
+          throw new Error('Tidak ada teks yang bisa dibaca dari file Word ini.')
+        }
+        body = { extracted_text: extractedText }
+      } else {
+        // Gambar (JPG/PNG) atau PDF: dikirim langsung sebagai base64,
+        // Gemini bisa "membaca" file ini secara visual.
+        const base64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result.split(',')[1])
+          reader.onerror = reject
+          reader.readAsDataURL(file)
+        })
+        body = { file_base64: base64, media_type: file.type }
+      }
+
+      const { data: hasil, error } = await supabase.functions.invoke('ekstrak-sk', { body })
 
       if (error) throw error
       if (hasil?.error) throw new Error(hasil.error)
@@ -344,7 +363,7 @@ export default function DataPegawaiKantor() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*,application/pdf"
+                  accept="image/*,application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                   className="hidden"
                   onChange={handleSkFile}
                   disabled={skLoading}
