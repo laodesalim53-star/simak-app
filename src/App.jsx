@@ -26,6 +26,7 @@ const Guru = lazy(() => import('./pages/Guru'))
 const PresensiKantor = lazy(() => import('./pages/PresensiKantor'))
 const DaftarHadirKantor = lazy(() => import('./pages/DaftarHadirKantor'))
 const DataPegawaiKantor = lazy(() => import('./pages/DataPegawaiKantor'))
+const ProfilKantor = lazy(() => import('./pages/ProfilKantor'))
 const Kelas = lazy(() => import('./pages/Kelas'))
 
 const LaporanNominatifGuru = lazy(() => import('./pages/LaporanNominatifGuru'))
