@@ -27,7 +27,6 @@ const PALET_WARNA = {
     hoverBorder: 'hover:border-amber-400',
     hoverShadow: 'hover:shadow-amber-100',
   },
-}
  sky: {
     bg: 'bg-sky-50',
     icon: 'text-sky-600',
