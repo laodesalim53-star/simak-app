@@ -171,7 +171,23 @@ export default function DataPegawaiKantor() {
 
       const { data: hasil, error } = await supabase.functions.invoke('ekstrak-sk', { body })
 
-      if (error) throw error
+      if (error) {
+        // Supabase JS hanya memberi pesan generik ("non-2xx status code") di
+        // 'error.message'. Pesan asli dari Edge Function (mis. detail error
+        // dari Gemini, termasuk kalau kena rate limit/kuota) ada di body
+        // response-nya sendiri, jadi kita baca ulang di sini supaya
+        // terlihat jelas di Console dan membantu diagnosa.
+        let pesanAsli = error.message
+        try {
+          if (error.context && typeof error.context.json === 'function') {
+            const bodyError = await error.context.json()
+            if (bodyError?.error) pesanAsli = bodyError.error
+          }
+        } catch {
+          // biarkan pesanAsli tetap yang generik kalau body tidak bisa dibaca
+        }
+        throw new Error(pesanAsli)
+      }
       if (hasil?.error) throw new Error(hasil.error)
 
       // Kolom "jabatan" di tabel diisi dari jabatan definitif. Kalau SK ini
@@ -203,7 +219,12 @@ export default function DataPegawaiKantor() {
       }
     } catch (err) {
       console.error('Gagal mengekstrak SK:', err)
-      setSkError('Gagal membaca SK. Coba unggah scan yang lebih jelas atau isi manual.')
+      // Tampilkan pesan error asli (dari Edge Function/Gemini) di layar,
+      // supaya admin/Anda tidak perlu buka DevTools untuk tahu penyebabnya.
+      // Kalau pesan terlalu teknis/panjang, tetap tampilkan sebagian +
+      // saran umum di baris kedua.
+      const pesanAsli = err?.message || 'Kesalahan tidak diketahui'
+      setSkError(`Gagal membaca SK: ${pesanAsli}`)
     } finally {
       setSkLoading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
