@@ -245,6 +245,12 @@ function getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelum
   ],
 },
     {
+  label: 'Keagamaan',
+  links: [
+    { to: '/pusat-materi-majelis', label: 'Materi Majelis', icon: BookOpenCheck },
+  ],
+},
+    {
       label: 'Administrasi',
       links: [
         { to: '/agenda', label: 'Agenda Kantor', icon: CalendarDays },
