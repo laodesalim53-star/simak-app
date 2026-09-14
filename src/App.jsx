@@ -4,9 +4,6 @@ import { useAuth } from './lib/AuthContext'
 import { supabase } from './lib/supabaseClient'
 import Loader from './components/Loader'
 import { CartProvider } from './lib/CartContext'
-import PresensiKantor from './pages/PresensiKantor'
-import DaftarHadirKantor from './pages/DaftarHadirKantor'
-// ...
 
 // ============================================================
 // LAZY-LOADED PAGES
