@@ -24,7 +24,10 @@ export default function MateriKeluargaSakinah() {
         </button>
       </div>
 
-      <div className="lembar-cetak print-only bg-white rounded-2xl border border-slate-100 p-5 sm:p-8">
+      <div
+        className="lembar-cetak print-only bg-white rounded-2xl border border-slate-100 p-5 sm:p-8 mx-auto"
+        style={{ width: '210mm' }}
+      >
         <div className="flex items-center gap-3 mb-6">
           <div className="w-11 h-11 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
             <Heart size={20} />
@@ -140,8 +143,10 @@ export default function MateriKeluargaSakinah() {
           body { background: white; }
           .lembar-cetak {
             box-shadow: none !important;
-            margin: 0 !important;
-            width: 100% !important;
+            width: 210mm !important;
+            max-width: 100% !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
           }
         }
         @page {
