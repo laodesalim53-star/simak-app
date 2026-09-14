@@ -5,6 +5,7 @@ import { useAuth } from '../lib/AuthContext'
 import TeleponLink from '../components/TeleponLink'
 import { Plus, Pencil, Trash2, Search, X, Loader2, Briefcase, UploadCloud } from 'lucide-react'
 import mammoth from 'mammoth'
+import * as XLSX from 'xlsx'
 
 // Halaman "Data Pegawai" KHUSUS tenant kantor — menulis ke tabel `pegawai_kantor`
 // (dibuat lewat migrasi-pegawai-kantor-kepegawaian.sql +
@@ -14,12 +15,20 @@ import mammoth from 'mammoth'
 //  2) Field-field di sini relevan untuk kantor (tidak ada NUPTK, mata
 //     pelajaran, karpeg, dsb — itu semua konsep khusus tenaga pendidik).
 //
-// FITUR "Isi dari SK": mengunggah dokumen SK (PDF/gambar) lalu memanggil
-// Supabase Edge Function `ekstrak-sk` (lihat supabase/functions/ekstrak-sk/index.ts)
-// yang mengekstrak field kepegawaian dan mengembalikannya sebagai JSON.
-// Hasil ekstraksi HANYA mengisi state form di browser — tidak pernah menulis
-// langsung ke tabel — sehingga isolasi multi-tenant tetap terjaga karena
-// penyimpanan akhir selalu lewat handleSubmit yang sudah scoped ke sekolahId.
+// FITUR "Isi dari SK": mengunggah dokumen SK (PDF/gambar/Word) ATAU rekap
+// Excel lalu mengisi form secara otomatis. Ada dua jalur ekstraksi:
+//  1) PDF/gambar/Word -> dikirim ke Supabase Edge Function `ekstrak-sk`
+//     (lihat supabase/functions/ekstrak-sk/index.ts) yang memakai Gemini
+//     untuk membaca dokumen dan mengembalikan field kepegawaian sebagai JSON.
+//  2) Excel (.xlsx/.xls) -> TIDAK dikirim ke Gemini. Datanya diasumsikan
+//     sudah terstruktur rapi dalam dua kolom "Field"/"Nilai" (format yang
+//     sama seperti rekap SK manual), jadi cukup dibaca & dipetakan langsung
+//     di browser dengan SheetJS (`xlsx`). Ini lebih cepat, tidak kena biaya
+//     panggilan AI, dan tidak mengirim data pegawai ke pihak ketiga.
+// Kedua jalur menghasilkan bentuk objek `hasil` yang sama, lalu HANYA mengisi
+// state form di browser — tidak pernah menulis langsung ke tabel — sehingga
+// isolasi multi-tenant tetap terjaga karena penyimpanan akhir selalu lewat
+// handleSubmit yang sudah scoped ke sekolahId.
 const emptyForm = {
   nama_lengkap: '',
   nip: '',
@@ -54,6 +63,109 @@ function formatTanggal(tgl) {
   } catch {
     return tgl
   }
+}
+
+// --- Bantuan untuk membaca file Excel rekap SK (format kolom Field/Nilai) ---
+
+const BULAN_ID = {
+  januari: '01', februari: '02', maret: '03', april: '04', mei: '05', juni: '06',
+  juli: '07', agustus: '08', september: '09', oktober: '10', november: '11', desember: '12',
+}
+
+// "17 Mei 2000" -> "2000-05-17" (format yang dipakai <input type="date">).
+// Kalau formatnya tidak dikenali, dikembalikan string kosong supaya field
+// tanggal di form tidak terisi nilai yang salah/tidak valid.
+function tanggalIndoKeISO(teks) {
+  if (!teks) return ''
+  const m = String(teks).trim().toLowerCase().match(/(\d{1,2})\s+([a-z]+)\s+(\d{4})/)
+  if (!m) return ''
+  const [, tgl, namaBulan, tahun] = m
+  const bulan = BULAN_ID[namaBulan]
+  if (!bulan) return ''
+  return `${tahun}-${bulan}-${tgl.padStart(2, '0')}`
+}
+
+function jenisKelaminDariTeks(teks) {
+  if (!teks) return ''
+  const t = String(teks).trim().toLowerCase()
+  if (t.includes('wanita') || t.includes('perempuan') || t === 'p') return 'P'
+  if (t.includes('pria') || t.includes('laki') || t === 'l') return 'L'
+  return ''
+}
+
+function statusKepegawaianDariTeks(teks) {
+  if (!teks) return ''
+  const t = String(teks).trim().toLowerCase()
+  if (t.includes('pppk')) return 'PPPK'
+  if (t.includes('pegawai negeri sipil') || /\bpns\b/.test(t)) return 'PNS'
+  if (t.includes('honorer')) return 'Honorer'
+  return ''
+}
+
+// Ubah lembar Excel (dibaca dengan header:1, jadi array-of-arrays) menjadi
+// peta { "label huruf kecil": "nilai" }. Baris judul tabel ("Field"/"Nilai")
+// dan baris kosong dilewati. Cukup ambil 2 sel pertama yang tidak kosong di
+// tiap baris supaya tetap toleran walau ada kolom kosong di antaranya.
+function parseBarisExcelSk(baris) {
+  const peta = {}
+  for (const row of baris) {
+    if (!Array.isArray(row)) continue
+    const isi = row
+      .map((v) => (v === undefined || v === null ? '' : String(v).trim()))
+      .filter((v) => v !== '')
+    if (isi.length < 2) continue
+    const [label, nilai] = isi
+    if (label.toLowerCase() === 'field' && nilai.toLowerCase() === 'nilai') continue
+    peta[label.toLowerCase()] = nilai
+  }
+  return peta
+}
+
+// Cari nilai di peta berdasarkan satu atau beberapa kemungkinan nama label
+// (dicocokkan sebagai substring, tidak peka huruf besar/kecil), supaya tetap
+// jalan walau format Excel sedikit berbeda-beda (mis. "NIP" vs "Nomor NIP").
+function cariNilaiExcel(peta, ...kemungkinanLabel) {
+  for (const label of kemungkinanLabel) {
+    const cocok = Object.keys(peta).find((k) => k.includes(label.toLowerCase()))
+    if (cocok) return peta[cocok]
+  }
+  return ''
+}
+
+// Petakan peta Field/Nilai hasil parse Excel ke bentuk yang sama seperti
+// respons Edge Function `ekstrak-sk`, supaya bisa dipakai lewat alur
+// setForm yang sama persis dengan hasil ekstraksi PDF/gambar/Word.
+function hasilDariExcelSk(peta) {
+  const tentang = cariNilaiExcel(peta, 'tentang')
+  return {
+    nama_lengkap: cariNilaiExcel(peta, 'nama'),
+    nip: cariNilaiExcel(peta, 'nip', 'nomor induk'),
+    jabatan_definitif: cariNilaiExcel(peta, 'jabatan'),
+    pangkat_golongan: cariNilaiExcel(peta, 'golongan', 'pangkat'),
+    status_kepegawaian: statusKepegawaianDariTeks(tentang) || cariNilaiExcel(peta, 'status kepegawaian'),
+    no_sk: cariNilaiExcel(peta, 'nomor sk'),
+    tmt: tanggalIndoKeISO(cariNilaiExcel(peta, 'masa kerja mulai', 'tmt')),
+    tempat_lahir: cariNilaiExcel(peta, 'tempat lahir'),
+    tanggal_lahir: tanggalIndoKeISO(cariNilaiExcel(peta, 'tanggal lahir')),
+    jenis_kelamin: jenisKelaminDariTeks(cariNilaiExcel(peta, 'jenis kelamin')),
+    pendidikan_terakhir: cariNilaiExcel(peta, 'pendidikan'),
+    agama: cariNilaiExcel(peta, 'agama'),
+  }
+}
+
+// Ambil pesan error asli dari Edge Function (kalau ada) alih-alih pesan
+// generik "non-2xx status code" dari Supabase JS.
+async function ambilPesanErrorFungsi(error) {
+  let pesanAsli = error.message
+  try {
+    if (error.context && typeof error.context.json === 'function') {
+      const bodyError = await error.context.json()
+      if (bodyError?.error) pesanAsli = bodyError.error
+    }
+  } catch {
+    // biarkan pesanAsli tetap yang generik kalau body tidak bisa dibaca
+  }
+  return pesanAsli
 }
 
 export default function DataPegawaiKantor() {
@@ -134,10 +246,16 @@ export default function DataPegawaiKantor() {
     setShowForm(true)
   }
 
-  // Konversi file ke base64, kirim ke Edge Function `ekstrak-sk`, lalu isi
-  // field form yang MASIH KOSONG dengan hasil ekstraksi (tidak menimpa
-  // field yang sudah diisi manual oleh admin).
+  // Konversi file ke base64 (untuk PDF/gambar) atau teks (untuk Word), kirim
+  // ke Edge Function `ekstrak-sk`, ATAU — khusus Excel — baca & petakan
+  // langsung di browser tanpa memanggil Edge Function sama sekali. Field
+  // form yang MASIH KOSONG akan diisi hasil ekstraksi (tidak menimpa field
+  // yang sudah diisi manual oleh admin).
   const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  const XLSX_MIME_LIST = [
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-excel',
+  ]
 
   async function handleSkFile(e) {
     const file = e.target.files?.[0]
@@ -147,10 +265,28 @@ export default function DataPegawaiKantor() {
     setSkLoading(true)
 
     try {
-      const isDocx = file.type === DOCX_MIME || file.name.toLowerCase().endsWith('.docx')
+      const namaFile = file.name.toLowerCase()
+      const isExcel = XLSX_MIME_LIST.includes(file.type) || namaFile.endsWith('.xlsx') || namaFile.endsWith('.xls')
+      const isDocx = !isExcel && (file.type === DOCX_MIME || namaFile.endsWith('.docx'))
 
-      let body
-      if (isDocx) {
+      let hasil
+
+      if (isExcel) {
+        // File Excel rekap SK (format kolom "Field"/"Nilai"). Data sudah
+        // terstruktur, jadi cukup dibaca dengan SheetJS di browser — tidak
+        // dikirim ke Gemini/Edge Function.
+        const arrayBuffer = await file.arrayBuffer()
+        const wb = XLSX.read(arrayBuffer, { type: 'array' })
+        const sheet = wb.Sheets[wb.SheetNames[0]]
+        const baris = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
+        const peta = parseBarisExcelSk(baris)
+        if (Object.keys(peta).length === 0) {
+          throw new Error(
+            'Tidak ada data yang bisa dibaca dari file Excel ini. Pastikan formatnya kolom "Field" dan "Nilai".'
+          )
+        }
+        hasil = hasilDariExcelSk(peta)
+      } else if (isDocx) {
         // File Word (.docx) bukan gambar/PDF, jadi tidak bisa dikirim sebagai
         // inline_data ke Gemini. Ekstrak dulu teksnya di browser pakai
         // mammoth, baru teks itu yang dikirim ke Edge Function.
@@ -159,7 +295,12 @@ export default function DataPegawaiKantor() {
         if (!extractedText || !extractedText.trim()) {
           throw new Error('Tidak ada teks yang bisa dibaca dari file Word ini.')
         }
-        body = { extracted_text: extractedText }
+        const { data, error } = await supabase.functions.invoke('ekstrak-sk', {
+          body: { extracted_text: extractedText },
+        })
+        if (error) throw new Error(await ambilPesanErrorFungsi(error))
+        if (data?.error) throw new Error(data.error)
+        hasil = data
       } else {
         // Gambar (JPG/PNG) atau PDF: dikirim langsung sebagai base64,
         // Gemini bisa "membaca" file ini secara visual.
@@ -169,29 +310,13 @@ export default function DataPegawaiKantor() {
           reader.onerror = reject
           reader.readAsDataURL(file)
         })
-        body = { file_base64: base64, media_type: file.type }
+        const { data, error } = await supabase.functions.invoke('ekstrak-sk', {
+          body: { file_base64: base64, media_type: file.type },
+        })
+        if (error) throw new Error(await ambilPesanErrorFungsi(error))
+        if (data?.error) throw new Error(data.error)
+        hasil = data
       }
-
-      const { data: hasil, error } = await supabase.functions.invoke('ekstrak-sk', { body })
-
-      if (error) {
-        // Supabase JS hanya memberi pesan generik ("non-2xx status code") di
-        // 'error.message'. Pesan asli dari Edge Function (mis. detail error
-        // dari Gemini, termasuk kalau kena rate limit/kuota) ada di body
-        // response-nya sendiri, jadi kita baca ulang di sini supaya
-        // terlihat jelas di Console dan membantu diagnosa.
-        let pesanAsli = error.message
-        try {
-          if (error.context && typeof error.context.json === 'function') {
-            const bodyError = await error.context.json()
-            if (bodyError?.error) pesanAsli = bodyError.error
-          }
-        } catch {
-          // biarkan pesanAsli tetap yang generik kalau body tidak bisa dibaca
-        }
-        throw new Error(pesanAsli)
-      }
-      if (hasil?.error) throw new Error(hasil.error)
 
       // Kolom "jabatan" di tabel diisi dari jabatan definitif. Kalau SK ini
       // ternyata tidak menyebutkan jabatan definitif (mis. SK-nya murni SK
@@ -226,8 +351,9 @@ export default function DataPegawaiKantor() {
         tempat_lahir: prev.tempat_lahir || hasil.tempat_lahir || '',
         tanggal_lahir: prev.tanggal_lahir || hasil.tanggal_lahir || '',
         // jenis_kelamin punya default 'L' di emptyForm, jadi cuma ditimpa
-        // kalau field-nya memang masih 'L' bawaan DAN Gemini menemukan nilai
-        // — supaya tidak menimpa pilihan 'P' yang sudah dipilih manual.
+        // kalau field-nya memang masih 'L' bawaan DAN hasil ekstraksi
+        // menemukan nilai — supaya tidak menimpa pilihan 'P' yang sudah
+        // dipilih manual.
         jenis_kelamin:
           prev.jenis_kelamin === 'L' && hasil.jenis_kelamin ? hasil.jenis_kelamin : prev.jenis_kelamin,
         pendidikan_terakhir: prev.pendidikan_terakhir || hasil.pendidikan_terakhir || '',
@@ -247,10 +373,9 @@ export default function DataPegawaiKantor() {
       }
     } catch (err) {
       console.error('Gagal mengekstrak SK:', err)
-      // Tampilkan pesan error asli (dari Edge Function/Gemini) di layar,
-      // supaya admin/Anda tidak perlu buka DevTools untuk tahu penyebabnya.
-      // Kalau pesan terlalu teknis/panjang, tetap tampilkan sebagian +
-      // saran umum di baris kedua.
+      // Tampilkan pesan error asli (dari Edge Function/Gemini, atau dari
+      // pembacaan Excel) di layar, supaya admin/Anda tidak perlu buka
+      // DevTools untuk tahu penyebabnya.
       const pesanAsli = err?.message || 'Kesalahan tidak diketahui'
       setSkError(`Gagal membaca SK: ${pesanAsli}`)
     } finally {
@@ -404,7 +529,7 @@ export default function DataPegawaiKantor() {
             <div className="mb-4 p-3 rounded-xl border border-dashed border-blue-600/30 bg-blue-600/[0.03] flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-sm text-ink-700/70">
                 <UploadCloud size={16} className="text-blue-700 shrink-0" />
-                <span>Punya file SK? Unggah untuk mengisi data otomatis.</span>
+                <span>Punya file SK (PDF/gambar/Word) atau rekap Excel? Unggah untuk mengisi data otomatis.</span>
               </div>
               <label className="btn-secondary cursor-pointer shrink-0">
                 {skLoading ? <Loader2 size={15} className="animate-spin" /> : <UploadCloud size={15} />}
@@ -412,7 +537,7 @@ export default function DataPegawaiKantor() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*,application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  accept="image/*,application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                   className="hidden"
                   onChange={handleSkFile}
                   disabled={skLoading}
