@@ -9,20 +9,7 @@ export default function MateriKeluargaSakinah() {
       title="Materi: Keluarga Sakinah"
       subtitle="Bahan majelis lengkap dengan daftar hadir peserta, siap cetak."
     >
-      {/* Trik cetak: saat print, sembunyikan seluruh halaman (termasuk
-          Layout/sidebar) lalu tampilkan HANYA #area-cetak. Dengan begini
-          kita tidak perlu mengubah komponen Layout sama sekali. */}
-      <style>{`
-        @media print {
-          @page { size: A4; margin: 15mm; }
-          body * { visibility: hidden; }
-          #area-cetak, #area-cetak * { visibility: visible; }
-          #area-cetak { position: absolute; left: 0; top: 0; width: 100%; padding: 0; }
-          .print\\:hidden { display: none !important; }
-        }
-      `}</style>
-
-      <div className="print:hidden flex items-center justify-between mb-5">
+      <div className="no-print flex items-center justify-between mb-5">
         <Link
           to="/pusat-materi-majelis"
           className="inline-flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900"
@@ -37,7 +24,7 @@ export default function MateriKeluargaSakinah() {
         </button>
       </div>
 
-      <div id="area-cetak" className="bg-white rounded-2xl border border-slate-100 p-5 sm:p-8">
+      <div className="lembar-cetak print-only bg-white rounded-2xl border border-slate-100 p-5 sm:p-8">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-11 h-11 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
             <Heart size={20} />
@@ -132,6 +119,36 @@ export default function MateriKeluargaSakinah() {
 
         <DaftarHadirCetak jumlahBaris={15} />
       </div>
+
+      <style>{`
+        .lembar-cetak.print-only {
+          position: static !important;
+          top: auto !important;
+          left: auto !important;
+          right: auto !important;
+          margin-left: auto !important;
+          margin-right: auto !important;
+        }
+
+        @media screen {
+          .lembar-cetak.print-only {
+            display: block !important;
+          }
+        }
+        @media print {
+          .no-print { display: none !important; }
+          body { background: white; }
+          .lembar-cetak {
+            box-shadow: none !important;
+            margin: 0 !important;
+            width: 100% !important;
+          }
+        }
+        @page {
+          size: A4;
+          margin: 15mm;
+        }
+      `}</style>
     </Layout>
   )
 }
