@@ -4,6 +4,9 @@ import { useAuth } from './lib/AuthContext'
 import { supabase } from './lib/supabaseClient'
 import Loader from './components/Loader'
 import { CartProvider } from './lib/CartContext'
+import PresensiKantor from './pages/PresensiKantor'
+import DaftarHadirKantor from './pages/DaftarHadirKantor'
+// ...
 
 // ============================================================
 // LAZY-LOADED PAGES
@@ -250,6 +253,8 @@ export default function App() {
           {/* Data Pegawai (tenant kantor) — route BARU & TERPISAH dari /guru,
               supaya "Data Guru" milik sekolah tidak tersentuh sama sekali.
               Menulis ke tabel `pegawai_kantor` (lihat DataPegawaiKantor.jsx). */}
+          <Route path="/presensi-kantor" element={<PrivateRoute adminOnly><PresensiKantor /></PrivateRoute>} />
+          <Route path="/daftar-hadir-kantor" element={<PrivateRoute adminOnly><DaftarHadirKantor /></PrivateRoute>} />
           <Route path="/data-pegawai-kantor" element={<ProtectedRoute adminOnly><DataPegawaiKantor /></ProtectedRoute>} />
           <Route path="/kelas" element={<ProtectedRoute adminOnly><Kelas /></ProtectedRoute>} />
 
