@@ -3,6 +3,10 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './lib/AuthContext'
 import { supabase } from './lib/supabaseClient'
 import Loader from './components/Loader'
+const PusatMateriMajelis = lazy(() => import('./pages/PusatMateriMajelis'))
+const MateriKeluargaSakinah = lazy(() => import('./pages/MateriKeluargaSakinah'))
+const MateriPengelolaanZakat = lazy(() => import('./pages/MateriPengelolaanZakat'))
+const MateriWakaf = lazy(() => import('./pages/MateriWakaf'))
 import { CartProvider } from './lib/CartContext'
 
 // ============================================================
@@ -93,6 +97,10 @@ const Galeri = lazy(() => import('./pages/Galeri'))
 const Dokumen = lazy(() => import('./pages/Dokumen'))
 const Pesan = lazy(() => import('./pages/Pesan'))
 const AdministrasiKantor = lazy(() => import('./pages/AdministrasiKantor'))
+const PusatMateriMajelis = lazy(() => import('./pages/PusatMateriMajelis'))
+const MateriKeluargaSakinah = lazy(() => import('./pages/MateriKeluargaSakinah'))
+const MateriPengelolaanZakat = lazy(() => import('./pages/MateriPengelolaanZakat'))
+const MateriWakaf = lazy(() => import('./pages/MateriWakaf'))
 const AdminLiveChat = lazy(() => import('./pages/AdminLiveChat'))
 const ScanDokumen = lazy(() => import('./pages/ScanDokumen'))
 const Rapat = lazy(() => import('./pages/Rapat'))
@@ -255,6 +263,10 @@ export default function App() {
           <Route path="/presensi-kantor" element={<ProtectedRoute adminOnly><PresensiKantor /></ProtectedRoute>} />
           <Route path="/daftar-hadir-kantor" element={<ProtectedRoute adminOnly><DaftarHadirKantor /></ProtectedRoute>} />
           <Route path="/data-pegawai-kantor" element={<ProtectedRoute adminOnly><DataPegawaiKantor /></ProtectedRoute>} />
+          <Route path="/pusat-materi-majelis" element={<ProtectedRoute adminOnly><PusatMateriMajelis /></ProtectedRoute>} />
+          <Route path="/materi-keluarga-sakinah" element={<ProtectedRoute adminOnly><MateriKeluargaSakinah /></ProtectedRoute>} />
+          <Route path="/materi-pengelolaan-zakat" element={<ProtectedRoute adminOnly><MateriPengelolaanZakat /></ProtectedRoute>} />
+          <Route path="/materi-wakaf" element={<ProtectedRoute adminOnly><MateriWakaf /></ProtectedRoute>} />
           <Route path="/kelas" element={<ProtectedRoute adminOnly><Kelas /></ProtectedRoute>} />
 
           {/* ============================================================
