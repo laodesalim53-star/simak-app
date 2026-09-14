@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Heart, Coins, Landmark, LayoutDashboard } from 'lucide-react'
+import { Heart, Coins, Landmark, LayoutDashboard, Sparkles } from 'lucide-react'
 import Layout from '../components/Layout'
 
 // Palet warna per kartu — pola sama seperti PusatLaporanGuru.jsx, supaya
@@ -27,7 +27,7 @@ const PALET_WARNA = {
     hoverBorder: 'hover:border-amber-400',
     hoverShadow: 'hover:shadow-amber-100',
   },
- sky: {
+  sky: {
     bg: 'bg-sky-50',
     icon: 'text-sky-600',
     border: 'border-sky-100',
@@ -64,6 +64,14 @@ const daftarMateri = [
     icon: Landmark,
     path: '/materi-wakaf',
     warna: 'amber',
+  },
+  {
+    id: 'akhlak',
+    judul: 'Akhlak',
+    deskripsi: 'Materi tentang akhlak mulia dalam kehidupan sehari-hari sesuai tuntunan Al-Qur\'an dan Sunnah.',
+    icon: Sparkles,
+    path: '/materi-akhlak',
+    warna: 'sky',
   },
 ]
 
