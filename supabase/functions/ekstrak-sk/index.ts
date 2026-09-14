@@ -7,14 +7,31 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 // Deploy: supabase functions deploy ekstrak-sk
 // Set secret: supabase secrets set ANTHROPIC_API_KEY=sk-ant-xxxxx
 
+// Header CORS — WAJIB ada di SETIAP response (termasuk response error),
+// kalau tidak browser akan memblokir permintaan dari domain frontend
+// (mis. https://www.simaksdmaria.site) dengan error "blocked by CORS policy".
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+}
+
 Deno.serve(async (req) => {
+  // Browser selalu mengirim request "preflight" bermetode OPTIONS terlebih
+  // dahulu sebelum POST yang sesungguhnya. Kalau tidak dijawab dengan status
+  // 200 + header CORS di sini, browser akan langsung membatalkan request
+  // POST-nya dan Edge Function ini bahkan tidak pernah dieksekusi.
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders })
+  }
+
   try {
     const { file_base64, media_type } = await req.json()
 
     if (!file_base64 || !media_type) {
       return new Response(JSON.stringify({ error: "File atau tipe file tidak ditemukan" }), {
         status: 400,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       })
     }
 
@@ -51,7 +68,7 @@ Panduan pengisian:
     if (!apiKey) {
       return new Response(JSON.stringify({ error: "ANTHROPIC_API_KEY belum diset di secrets" }), {
         status: 500,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       })
     }
 
@@ -78,7 +95,7 @@ Panduan pengisian:
       const errText = await res.text()
       return new Response(JSON.stringify({ error: `Gagal memanggil AI: ${errText}` }), {
         status: 502,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       })
     }
 
@@ -92,17 +109,17 @@ Panduan pengisian:
     } catch {
       return new Response(JSON.stringify({ error: "Gagal mem-parsing hasil ekstraksi AI" }), {
         status: 500,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       })
     }
 
     return new Response(JSON.stringify(parsed), {
-      headers: { "Content-Type": "application/json" },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     })
   } catch (err) {
     return new Response(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }), {
       status: 500,
-      headers: { "Content-Type": "application/json" },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     })
   }
 })
