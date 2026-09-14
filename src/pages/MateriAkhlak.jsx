@@ -20,7 +20,7 @@ export default function MateriAkhlak() {
   useEffect(() => {
     supabase
       .from('profil_kantor')
-      .select('nama_kantor, alamat, kabupaten, kecamatan, telepon, email, kepala_kua, nip_kepala_kua, tempat_ttd, logo_path')
+      .select('nama_kantor, alamat, kabupaten, kecamatan, telepon, email, kepala_kua, nip_kepala_kua, tempat_ttd, logo_path, ttd_kepala_kua_path')
       .eq('id', 1)
       .maybeSingle()
       .then(({ data }) => setProfilKantor(data))
@@ -28,6 +28,10 @@ export default function MateriAkhlak() {
 
   const logoUrl = profilKantor?.logo_path
     ? supabase.storage.from(LOGO_BUCKET).getPublicUrl(profilKantor.logo_path).data.publicUrl
+    : null
+
+  const ttdKepalaKuaUrl = profilKantor?.ttd_kepala_kua_path
+    ? supabase.storage.from(LOGO_BUCKET).getPublicUrl(profilKantor.ttd_kepala_kua_path).data.publicUrl
     : null
 
   const tempatTtd = profilKantor?.tempat_ttd || profilKantor?.kabupaten || ''
@@ -254,7 +258,15 @@ export default function MateriAkhlak() {
             <div className="text-center w-48">
               <p>Mengetahui,</p>
               <p>Kepala KUA</p>
-              <div className="h-20" />
+              <div className="h-20 flex items-end justify-center">
+                {ttdKepalaKuaUrl && (
+                  <img
+                    src={ttdKepalaKuaUrl}
+                    alt="Tanda Tangan Kepala KUA"
+                    className="max-h-20 object-contain"
+                  />
+                )}
+              </div>
               <p className="font-semibold border-t border-slate-400 pt-1">
                 ({profilKantor?.kepala_kua || '..............................'})
               </p>
