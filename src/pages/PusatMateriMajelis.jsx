@@ -28,6 +28,14 @@ const PALET_WARNA = {
     hoverShadow: 'hover:shadow-amber-100',
   },
 }
+ sky: {
+    bg: 'bg-sky-50',
+    icon: 'text-sky-600',
+    border: 'border-sky-100',
+    hoverBorder: 'hover:border-sky-400',
+    hoverShadow: 'hover:shadow-sky-100',
+  },
+}
 
 // Halaman "bagan" / hub untuk semua materi majelis yang siap dicetak
 // lengkap dengan daftar hadir. Tambahkan SATU kartu di sini setiap kali
