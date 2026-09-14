@@ -240,6 +240,7 @@ function getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelum
     // PERBAIKAN: sebelumnya reuse "/presensi" (punya guru) — sekarang pakai
     // rute & tabel presensi_pegawai_kantor sendiri (lihat PresensiKantor.jsx).
     { to: '/presensi-kantor', label: 'Presensi Pegawai', icon: ClipboardCheck },
+    { to: '/profil-kantor', label: 'Profil Kantor', icon: Building2 },
     { to: '/daftar-hadir-kantor', label: 'Daftar Hadir Kantor', icon: FileSpreadsheet },
     { to: '/laporan-guru', label: 'Pusat Laporan Kepegawaian', icon: GraduationCap },
   ],
