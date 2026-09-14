@@ -34,6 +34,7 @@ const emptyForm = {
   pangkat_golongan: '',
   sk_pengangkatan: '',
   tmt_pengangkatan: '',
+  tugas_tambahan: '',
   alamat: '',
   telepon_kantor: '', // (tidak dipakai, dibiarkan konsisten dgn no_hp saja di bawah)
   no_hp: '',
@@ -69,9 +70,11 @@ export default function DataPegawaiKantor() {
   // --- state untuk fitur "Isi dari SK" ---
   const [skLoading, setSkLoading] = useState(false)
   const [skError, setSkError] = useState('')
-  // Catatan tugas tambahan (Plt./Plh./Kepala unit dsb) hasil ekstraksi SK.
-  // SENGAJA tidak disimpan ke tabel pegawai_kantor (tidak ada kolomnya) —
-  // ini murni informasi untuk admin, dicatat manual jika diperlukan.
+  // Info ringkas hasil ekstraksi SK ditampilkan sekilas di atas form (mis.
+  // kalau SK ini juga berisi tugas tambahan) — TAPI datanya sendiri sudah
+  // langsung ditulis ke field form.tugas_tambahan (kolom asli di tabel
+  // pegawai_kantor), jadi kotak info ini murni informasi, bukan satu-satunya
+  // tempat datanya tersimpan seperti versi sebelumnya.
   const [skCatatanTambahan, setSkCatatanTambahan] = useState(null)
   const fileInputRef = useRef(null)
 
@@ -196,6 +199,20 @@ export default function DataPegawaiKantor() {
       // field tidak kosong.
       const jabatanUntukForm = hasil.jabatan_definitif || hasil.jabatan_tambahan || hasil.jabatan || ''
 
+      // Ringkasan tugas tambahan (Plt./Plh./Kepala unit dsb) dalam satu
+      // kalimat, dipakai untuk mengisi field form.tugas_tambahan secara
+      // otomatis — sebelumnya info ini cuma ditampilkan sekilas dan tidak
+      // pernah benar-benar tersimpan ke database.
+      const ringkasanTugasTambahan = hasil.jabatan_tambahan
+        ? [
+            hasil.jabatan_tambahan,
+            hasil.unit_kerja_tambahan && `di ${hasil.unit_kerja_tambahan}`,
+            hasil.masa_tugas_tambahan && `selama ${hasil.masa_tugas_tambahan}`,
+          ]
+            .filter(Boolean)
+            .join(' ')
+        : ''
+
       setForm((prev) => ({
         ...prev,
         nama_lengkap: prev.nama_lengkap || hasil.nama_lengkap || '',
@@ -205,11 +222,22 @@ export default function DataPegawaiKantor() {
         status_kepegawaian: prev.status_kepegawaian || hasil.status_kepegawaian || '',
         sk_pengangkatan: prev.sk_pengangkatan || hasil.no_sk || '',
         tmt_pengangkatan: prev.tmt_pengangkatan || hasil.tmt || '',
+        tugas_tambahan: prev.tugas_tambahan || ringkasanTugasTambahan,
+        tempat_lahir: prev.tempat_lahir || hasil.tempat_lahir || '',
+        tanggal_lahir: prev.tanggal_lahir || hasil.tanggal_lahir || '',
+        // jenis_kelamin punya default 'L' di emptyForm, jadi cuma ditimpa
+        // kalau field-nya memang masih 'L' bawaan DAN Gemini menemukan nilai
+        // — supaya tidak menimpa pilihan 'P' yang sudah dipilih manual.
+        jenis_kelamin:
+          prev.jenis_kelamin === 'L' && hasil.jenis_kelamin ? hasil.jenis_kelamin : prev.jenis_kelamin,
+        pendidikan_terakhir: prev.pendidikan_terakhir || hasil.pendidikan_terakhir || '',
+        agama: prev.agama || hasil.agama || '',
       }))
 
       // Kalau SK ini menyebutkan tugas tambahan (Plt./Plh./Kepala unit dsb),
-      // tampilkan sebagai catatan info — TIDAK disimpan ke tabel karena
-      // belum ada kolomnya. Admin bisa mencatatnya manual jika perlu.
+      // tetap tampilkan sebagai info sekilas di atas form — datanya sendiri
+      // sudah otomatis masuk ke field "Tugas Tambahan" di atas, admin
+      // tinggal cek/koreksi kalau perlu.
       if (hasil.jabatan_tambahan) {
         setSkCatatanTambahan({
           jabatan: hasil.jabatan_tambahan,
@@ -402,7 +430,7 @@ export default function DataPegawaiKantor() {
                   {skCatatanTambahan.masaTugas && <> selama <strong>{skCatatanTambahan.masaTugas}</strong></>}.
                 </p>
                 <p className="text-xs text-ink-700/60 mt-1">
-                  Info ini belum punya kolom tersendiri di data pegawai — silakan catat manual jika diperlukan (misalnya di kolom Jabatan atau catatan internal Anda).
+                  Sudah otomatis diisikan ke field "Tugas Tambahan" di bawah — silakan cek/koreksi kalau perlu.
                 </p>
               </div>
             )}
@@ -433,6 +461,9 @@ export default function DataPegawaiKantor() {
               <Field label="Pangkat / Golongan"><input className="input-field" value={form.pangkat_golongan} onChange={(e) => setForm({ ...form, pangkat_golongan: e.target.value })} /></Field>
               <Field label="SK Pengangkatan"><input className="input-field" value={form.sk_pengangkatan} onChange={(e) => setForm({ ...form, sk_pengangkatan: e.target.value })} /></Field>
               <Field label="TMT Pengangkatan"><input type="date" className="input-field" value={form.tmt_pengangkatan} onChange={(e) => setForm({ ...form, tmt_pengangkatan: e.target.value })} /></Field>
+              <Field label="Tugas Tambahan (Plt./Plh./Kepala Unit, jika ada)" full>
+                <input className="input-field" value={form.tugas_tambahan} onChange={(e) => setForm({ ...form, tugas_tambahan: e.target.value })} />
+              </Field>
             </SeksiForm>
 
             <SeksiForm judul="Kontak & Alamat">
@@ -509,6 +540,7 @@ export default function DataPegawaiKantor() {
                   <ProfilRow label="Pangkat / Golongan" value={profilLihat.pangkat_golongan} />
                   <ProfilRow label="SK Pengangkatan" value={profilLihat.sk_pengangkatan} />
                   <ProfilRow label="TMT Pengangkatan" value={formatTanggal(profilLihat.tmt_pengangkatan)} />
+                  <ProfilRow label="Tugas Tambahan" value={profilLihat.tugas_tambahan} />
                 </SeksiProfil>
 
                 <SeksiProfil judul="Kontak">
