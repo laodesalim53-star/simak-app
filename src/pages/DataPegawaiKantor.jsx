@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import Layout from '../components/Layout'
 import { useAuth } from '../lib/AuthContext'
 import TeleponLink from '../components/TeleponLink'
-import { Plus, Pencil, Trash2, Search, X, Loader2, Briefcase } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, X, Loader2, Briefcase, UploadCloud } from 'lucide-react'
 
 // Halaman "Data Pegawai" KHUSUS tenant kantor — menulis ke tabel `pegawai_kantor`
 // (dibuat lewat migrasi-pegawai-kantor-kepegawaian.sql +
@@ -12,6 +12,13 @@ import { Plus, Pencil, Trash2, Search, X, Loader2, Briefcase } from 'lucide-reac
 //  1) Data pegawai kantor tidak tercampur dengan data guru sekolah.
 //  2) Field-field di sini relevan untuk kantor (tidak ada NUPTK, mata
 //     pelajaran, karpeg, dsb — itu semua konsep khusus tenaga pendidik).
+//
+// FITUR "Isi dari SK": mengunggah dokumen SK (PDF/gambar) lalu memanggil
+// Supabase Edge Function `ekstrak-sk` (lihat supabase/functions/ekstrak-sk/index.ts)
+// yang mengekstrak field kepegawaian dan mengembalikannya sebagai JSON.
+// Hasil ekstraksi HANYA mengisi state form di browser — tidak pernah menulis
+// langsung ke tabel — sehingga isolasi multi-tenant tetap terjaga karena
+// penyimpanan akhir selalu lewat handleSubmit yang sudah scoped ke sekolahId.
 const emptyForm = {
   nama_lengkap: '',
   nip: '',
@@ -58,6 +65,15 @@ export default function DataPegawaiKantor() {
   const [saving, setSaving] = useState(false)
   const [profilLihat, setProfilLihat] = useState(null)
 
+  // --- state untuk fitur "Isi dari SK" ---
+  const [skLoading, setSkLoading] = useState(false)
+  const [skError, setSkError] = useState('')
+  // Catatan tugas tambahan (Plt./Plh./Kepala unit dsb) hasil ekstraksi SK.
+  // SENGAJA tidak disimpan ke tabel pegawai_kantor (tidak ada kolomnya) —
+  // ini murni informasi untuk admin, dicatat manual jika diperlukan.
+  const [skCatatanTambahan, setSkCatatanTambahan] = useState(null)
+  const fileInputRef = useRef(null)
+
   async function loadData() {
     if (!sekolahId) {
       setData([])
@@ -96,6 +112,8 @@ export default function DataPegawaiKantor() {
   function openAdd() {
     setForm(emptyForm)
     setEditingId(null)
+    setSkError('')
+    setSkCatatanTambahan(null)
     setShowForm(true)
   }
 
@@ -107,7 +125,70 @@ export default function DataPegawaiKantor() {
       tmt_pengangkatan: row.tmt_pengangkatan ? String(row.tmt_pengangkatan).slice(0, 10) : '',
     })
     setEditingId(row.id)
+    setSkError('')
+    setSkCatatanTambahan(null)
     setShowForm(true)
+  }
+
+  // Konversi file ke base64, kirim ke Edge Function `ekstrak-sk`, lalu isi
+  // field form yang MASIH KOSONG dengan hasil ekstraksi (tidak menimpa
+  // field yang sudah diisi manual oleh admin).
+  async function handleSkFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setSkError('')
+    setSkCatatanTambahan(null)
+    setSkLoading(true)
+
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result.split(',')[1])
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+
+      const { data: hasil, error } = await supabase.functions.invoke('ekstrak-sk', {
+        body: { file_base64: base64, media_type: file.type },
+      })
+
+      if (error) throw error
+      if (hasil?.error) throw new Error(hasil.error)
+
+      // Kolom "jabatan" di tabel diisi dari jabatan definitif. Kalau SK ini
+      // ternyata tidak menyebutkan jabatan definitif (mis. SK-nya murni SK
+      // tugas tambahan), pakai jabatan tambahan sebagai fallback supaya
+      // field tidak kosong.
+      const jabatanUntukForm = hasil.jabatan_definitif || hasil.jabatan_tambahan || hasil.jabatan || ''
+
+      setForm((prev) => ({
+        ...prev,
+        nama_lengkap: prev.nama_lengkap || hasil.nama_lengkap || '',
+        nip: prev.nip || hasil.nip || '',
+        jabatan: prev.jabatan || jabatanUntukForm,
+        pangkat_golongan: prev.pangkat_golongan || hasil.pangkat_golongan || '',
+        status_kepegawaian: prev.status_kepegawaian || hasil.status_kepegawaian || '',
+        sk_pengangkatan: prev.sk_pengangkatan || hasil.no_sk || '',
+        tmt_pengangkatan: prev.tmt_pengangkatan || hasil.tmt || '',
+      }))
+
+      // Kalau SK ini menyebutkan tugas tambahan (Plt./Plh./Kepala unit dsb),
+      // tampilkan sebagai catatan info — TIDAK disimpan ke tabel karena
+      // belum ada kolomnya. Admin bisa mencatatnya manual jika perlu.
+      if (hasil.jabatan_tambahan) {
+        setSkCatatanTambahan({
+          jabatan: hasil.jabatan_tambahan,
+          unitKerja: hasil.unit_kerja_tambahan || '',
+          masaTugas: hasil.masa_tugas_tambahan || '',
+        })
+      }
+    } catch (err) {
+      console.error('Gagal mengekstrak SK:', err)
+      setSkError('Gagal membaca SK. Coba unggah scan yang lebih jelas atau isi manual.')
+    } finally {
+      setSkLoading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
   }
 
   async function handleSubmit(e) {
@@ -250,6 +331,41 @@ export default function DataPegawaiKantor() {
               </div>
               <h2 className="font-display text-xl font-semibold">{editingId ? 'Ubah Data Pegawai' : 'Tambah Pegawai'}</h2>
             </div>
+
+            {/* --- Kotak "Isi dari SK" --- */}
+            <div className="mb-4 p-3 rounded-xl border border-dashed border-blue-600/30 bg-blue-600/[0.03] flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-sm text-ink-700/70">
+                <UploadCloud size={16} className="text-blue-700 shrink-0" />
+                <span>Punya file SK? Unggah untuk mengisi data otomatis.</span>
+              </div>
+              <label className="btn-secondary cursor-pointer shrink-0">
+                {skLoading ? <Loader2 size={15} className="animate-spin" /> : <UploadCloud size={15} />}
+                {skLoading ? 'Memproses...' : 'Unggah SK'}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,application/pdf"
+                  className="hidden"
+                  onChange={handleSkFile}
+                  disabled={skLoading}
+                />
+              </label>
+            </div>
+            {skError && <p className="text-xs text-red-900 mb-3">{skError}</p>}
+
+            {skCatatanTambahan && (
+              <div className="mb-4 p-3 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] text-sm text-ink-700">
+                <p className="font-medium text-amber-800 mb-1">SK ini juga berisi tugas tambahan</p>
+                <p>
+                  Terdeteksi tugas tambahan sebagai <strong>{skCatatanTambahan.jabatan}</strong>
+                  {skCatatanTambahan.unitKerja && <> di <strong>{skCatatanTambahan.unitKerja}</strong></>}
+                  {skCatatanTambahan.masaTugas && <> selama <strong>{skCatatanTambahan.masaTugas}</strong></>}.
+                </p>
+                <p className="text-xs text-ink-700/60 mt-1">
+                  Info ini belum punya kolom tersendiri di data pegawai — silakan catat manual jika diperlukan (misalnya di kolom Jabatan atau catatan internal Anda).
+                </p>
+              </div>
+            )}
 
             <SeksiForm judul="Data Pribadi">
               <Field label="Nama Lengkap" full>
