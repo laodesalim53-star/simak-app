@@ -26,6 +26,8 @@ const HasilUjian = lazy(() => import('./pages/HasilUjian'))
 const Guru = lazy(() => import('./pages/Guru'))
 // Data Pegawai (tenant kantor) — komponen & tabel TERPISAH dari Guru/`guru`.
 // Lihat DataPegawaiKantor.jsx: menulis ke tabel `pegawai_kantor`.
+const PresensiKantor = lazy(() => import('./pages/PresensiKantor'))
+const DaftarHadirKantor = lazy(() => import('./pages/DaftarHadirKantor'))
 const DataPegawaiKantor = lazy(() => import('./pages/DataPegawaiKantor'))
 const Kelas = lazy(() => import('./pages/Kelas'))
 
@@ -253,8 +255,6 @@ export default function App() {
           {/* Data Pegawai (tenant kantor) — route BARU & TERPISAH dari /guru,
               supaya "Data Guru" milik sekolah tidak tersentuh sama sekali.
               Menulis ke tabel `pegawai_kantor` (lihat DataPegawaiKantor.jsx). */}
-          <Route path="/presensi-kantor" element={<PrivateRoute adminOnly><PresensiKantor /></PrivateRoute>} />
-          <Route path="/daftar-hadir-kantor" element={<PrivateRoute adminOnly><DaftarHadirKantor /></PrivateRoute>} />
           <Route path="/data-pegawai-kantor" element={<ProtectedRoute adminOnly><DataPegawaiKantor /></ProtectedRoute>} />
           <Route path="/kelas" element={<ProtectedRoute adminOnly><Kelas /></ProtectedRoute>} />
 
