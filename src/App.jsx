@@ -3,10 +3,6 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './lib/AuthContext'
 import { supabase } from './lib/supabaseClient'
 import Loader from './components/Loader'
-const PusatMateriMajelis = lazy(() => import('./pages/PusatMateriMajelis'))
-const MateriKeluargaSakinah = lazy(() => import('./pages/MateriKeluargaSakinah'))
-const MateriPengelolaanZakat = lazy(() => import('./pages/MateriPengelolaanZakat'))
-const MateriWakaf = lazy(() => import('./pages/MateriWakaf'))
 import { CartProvider } from './lib/CartContext'
 
 // ============================================================
