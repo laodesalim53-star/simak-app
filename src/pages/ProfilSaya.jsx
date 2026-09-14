@@ -20,11 +20,16 @@ const LABEL_JABATAN = {
 
 // Kartu profil untuk akun yang tidak tertaut ke tabel `guru` (admin / admin_utama /
 // superadmin / kepala sekolah). Dibuat setara dengan kartu guru: foto profil, QR code,
-// barcode identitas, dan field data diri yang sama (NUPTK, pangkat/golongan, no HP,
+// barcode identitas, dan field data diri yang sama (NIPA, pangkat/golongan, no HP,
 // tanggal lahir, pendidikan terakhir, alamat) — plus nama sekolah, karena admin/kepsek
 // tidak punya baris di tabel `guru` untuk menyimpan semua ini.
 // `adminData` diambil terpisah (bukan dari AuthContext) karena AuthContext hanya
 // mengambil role/jabatan/guru_id/sekolah_id/status_akun, tidak termasuk field-field ini.
+//
+// CATATAN LABEL "NIPA": nama kolom database untuk field ini TETAP `nuptk` (tidak ada
+// migrasi SQL yang dijalankan) — hanya label & placeholder di UI yang diubah dari
+// "NUPTK" menjadi "NIPA", karena field ini dipakai lintas tenant kantor & sekolah dan
+// tidak semua akun admin/kepsek adalah tenaga pendidik pemegang NUPTK.
 function ProfilAdminCard({ profil, userId, adminData }) {
   const { refreshProfil } = useAuth()
   const [form, setForm] = useState({
@@ -266,10 +271,12 @@ function ProfilAdminCard({ profil, userId, adminData }) {
             />
           </div>
           <div>
-            <label className="text-xs text-ink-700/60 mb-1 block">NUPTK</label>
+            <label className="text-xs text-ink-700/60 mb-1 block">NIPA</label>
             <input
               className="input w-full"
-              placeholder="mis. 1234567890123456"
+              placeholder="mis. 765368787875555"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={form.nuptk}
               onChange={(e) => setForm({ ...form, nuptk: e.target.value })}
             />
@@ -501,7 +508,7 @@ function ModalTambahAnak({ sekolahId, anakSudahTerhubung, onClose, onBerhasil })
 }
 
 // Kartu profil untuk akun ORANG TUA/WALI — jauh lebih sederhana dari kartu
-// guru/admin (tidak ada NUPTK, pangkat/golongan, QR/barcode identitas
+// guru/admin (tidak ada NIPA, pangkat/golongan, QR/barcode identitas
 // pegawai — semua itu tidak relevan untuk orang tua). Field yang bisa
 // diisi hanya identitas dasar (nama, email, no HP, alamat) + foto profil.
 // Di bawah kartu, ditampilkan juga daftar anak yang tertaut ke akun ini
@@ -766,6 +773,11 @@ function ProfilOrangTuaCard({ profil, userId }) {
 // secara lengkap, dikelompokkan dengan struktur seksi yang sama seperti
 // form admin, supaya konsisten. SeksiForm/Field di bawah ini adalah
 // helper lokal untuk file ini (terpisah dari yang ada di Guru.jsx).
+//
+// CATATAN: field NUPTK di form guru DI BAWAH INI TETAP berlabel "NUPTK"
+// (tidak diganti "NIPA") karena field ini untuk tenaga pendidik tenant
+// sekolah — beda dari NIPA di ProfilAdminCard di atas, yang khusus akun
+// admin/kepsek/superadmin (termasuk tenant kantor seperti KUA).
 function SeksiForm({ judul, children }) {
   return (
     <div className="mt-5 first:mt-0">
