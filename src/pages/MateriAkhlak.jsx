@@ -7,7 +7,7 @@ import Layout from '../components/Layout'
 import DaftarHadirCetak from '../components/DaftarHadirCetak'
 
 // Ganti 'logo' di bawah ini kalau nama bucket storage-mu berbeda
-const LOGO_BUCKET = 'logo'
+const LOGO_BUCKET = 'profil-kantor'
 
 function formatTanggalIndonesia(date) {
   return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
