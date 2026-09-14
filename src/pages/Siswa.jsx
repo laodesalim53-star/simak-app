@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
@@ -7,7 +7,7 @@ import BulkImportModal from '../components/BulkImportModal'
 import DapodikImportModal from '../components/DapodikImportModal'
 import TeleponLink from '../components/TeleponLink'
 import { matchKelasByName } from '../lib/kelasMatch'
-import { Plus, UploadCloud, Pencil, Trash2, Search, X, Loader2, Download, FileSpreadsheet, Printer, ChevronDown, Camera, IdCard, RotateCcw } from 'lucide-react'
+import { Plus, UploadCloud, Pencil, Trash2, Search, X, Loader2, Download, FileSpreadsheet, Printer, ChevronDown, ChevronRight, Camera, IdCard, RotateCcw } from 'lucide-react'
 
 const AGAMA_OPTIONS = ['Islam', 'Kristen', 'Katolik', 'Hindu', 'Buddha', 'Khonghucu', 'Lainnya']
 // Opsi ini HARUS sama persis dengan KATEGORI_KEWARGANEGARAAN di
@@ -15,6 +15,37 @@ const AGAMA_OPTIONS = ['Islam', 'Kristen', 'Katolik', 'Hindu', 'Buddha', 'Khongh
 // Kewarganegaraan" benar-benar mencerminkan data yang diisi di sini,
 // bukan selalu default 'WNI asli' karena kolomnya tidak pernah diisi.
 const KEWARGANEGARAAN_OPTIONS = ['WNI asli', 'WNI Keturunan', 'WNA']
+
+// TAMBAHAN: palet warna per kelas — dipakai untuk mengelompokkan tabel siswa
+// per kelas dengan warna berbeda-beda. Kelas diurutkan sesuai urutan di
+// kelasList (order by nama_kelas), lalu warnanya diambil berdasarkan posisi
+// urut itu (bukan berdasarkan ID) supaya tetap stabil selama daftar kelas
+// tidak berubah urutannya. Kelas ke-13 dst akan mengulang dari awal palet.
+// PENTING: kelas-kelas string di sini ditulis literal (bukan digabung/
+// interpolasi) supaya tetap terdeteksi oleh Tailwind JIT scanner.
+const KELAS_COLOR_PALETTE = [
+  { header: 'from-blue-600 to-blue-800', badge: 'bg-blue-500/15 text-blue-700', border: 'border-blue-200', dot: 'bg-blue-500', ring: 'ring-blue-200' },
+  { header: 'from-emerald-600 to-emerald-800', badge: 'bg-emerald-500/15 text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500', ring: 'ring-emerald-200' },
+  { header: 'from-purple-600 to-purple-800', badge: 'bg-purple-500/15 text-purple-700', border: 'border-purple-200', dot: 'bg-purple-500', ring: 'ring-purple-200' },
+  { header: 'from-rose-600 to-rose-800', badge: 'bg-rose-500/15 text-rose-700', border: 'border-rose-200', dot: 'bg-rose-500', ring: 'ring-rose-200' },
+  { header: 'from-amber-600 to-amber-800', badge: 'bg-amber-500/15 text-amber-700', border: 'border-amber-200', dot: 'bg-amber-500', ring: 'ring-amber-200' },
+  { header: 'from-cyan-600 to-cyan-800', badge: 'bg-cyan-500/15 text-cyan-700', border: 'border-cyan-200', dot: 'bg-cyan-500', ring: 'ring-cyan-200' },
+  { header: 'from-indigo-600 to-indigo-800', badge: 'bg-indigo-500/15 text-indigo-700', border: 'border-indigo-200', dot: 'bg-indigo-500', ring: 'ring-indigo-200' },
+  { header: 'from-orange-600 to-orange-800', badge: 'bg-orange-500/15 text-orange-700', border: 'border-orange-200', dot: 'bg-orange-500', ring: 'ring-orange-200' },
+  { header: 'from-teal-600 to-teal-800', badge: 'bg-teal-500/15 text-teal-700', border: 'border-teal-200', dot: 'bg-teal-500', ring: 'ring-teal-200' },
+  { header: 'from-pink-600 to-pink-800', badge: 'bg-pink-500/15 text-pink-700', border: 'border-pink-200', dot: 'bg-pink-500', ring: 'ring-pink-200' },
+  { header: 'from-lime-600 to-lime-800', badge: 'bg-lime-500/15 text-lime-700', border: 'border-lime-200', dot: 'bg-lime-500', ring: 'ring-lime-200' },
+  { header: 'from-violet-600 to-violet-800', badge: 'bg-violet-500/15 text-violet-700', border: 'border-violet-200', dot: 'bg-violet-500', ring: 'ring-violet-200' },
+]
+// Warna khusus untuk kelompok "Tanpa Kelas" (siswa yang belum punya kelas)
+const KELAS_COLOR_TANPA_KELAS = { header: 'from-ink-700 to-ink-900', badge: 'bg-ink-900/10 text-ink-700', border: 'border-ink-900/15', dot: 'bg-ink-700', ring: 'ring-ink-900/10' }
+
+function getKelasColor(kelasId, kelasList) {
+  if (!kelasId) return KELAS_COLOR_TANPA_KELAS
+  const idx = kelasList.findIndex((k) => k.id === kelasId)
+  if (idx === -1) return KELAS_COLOR_TANPA_KELAS
+  return KELAS_COLOR_PALETTE[idx % KELAS_COLOR_PALETTE.length]
+}
 
 const emptyForm = {
   nis: '',
@@ -208,6 +239,7 @@ export default function Siswa() {
   const [selectedIds, setSelectedIds] = useState([]) // TAMBAHAN: untuk fitur Hapus Massal
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [aktivasiId, setAktivasiId] = useState(null) // TAMBAHAN: id siswa yang sedang diproses "Aktifkan Kembali"
+  const [collapsedKelas, setCollapsedKelas] = useState(new Set()) // TAMBAHAN: kelas yang sedang di-collapse pada tampilan per-kelas
 
   async function loadData() {
     if (!sekolahId) {
@@ -429,14 +461,24 @@ export default function Siswa() {
     )
   }
 
-  function toggleSelectAll() {
-    const idsDitampilkan = filtered.map((s) => s.id)
-    const semuaTerpilih = idsDitampilkan.length > 0 && idsDitampilkan.every((id) => selectedIds.includes(id))
+  // Pilih/batalkan semua siswa pada sekelompok id (dipakai untuk checkbox "pilih semua" per kelas)
+  function toggleSelectGroup(ids) {
+    const semuaTerpilih = ids.length > 0 && ids.every((id) => selectedIds.includes(id))
     if (semuaTerpilih) {
-      setSelectedIds((prev) => prev.filter((id) => !idsDitampilkan.includes(id)))
+      setSelectedIds((prev) => prev.filter((id) => !ids.includes(id)))
     } else {
-      setSelectedIds((prev) => Array.from(new Set([...prev, ...idsDitampilkan])))
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...ids])))
     }
+  }
+
+  // TAMBAHAN: buka/tutup satu kelompok kelas pada tampilan per-kelas
+  function toggleCollapse(key) {
+    setCollapsedKelas((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
   }
 
   async function handleBulkDelete() {
@@ -529,6 +571,31 @@ export default function Siswa() {
     const cocokStatus = statusTab === 'semua' ? true : s.status === statusTab
     return cocokPencarian && cocokStatus
   })
+
+  // TAMBAHAN: kelompokkan siswa hasil filter per kelas, diurutkan sesuai
+  // urutan kelasList (nama_kelas), dengan "Tanpa Kelas" selalu di akhir.
+  const grouped = useMemo(() => {
+    const map = new Map()
+    filtered.forEach((s) => {
+      const key = s.kelas_id || 'tanpa-kelas'
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          kelasId: s.kelas_id || null,
+          namaKelas: s.kelas?.nama_kelas || 'Tanpa Kelas',
+          siswa: [],
+        })
+      }
+      map.get(key).siswa.push(s)
+    })
+    const urutanKelas = kelasList.map((k) => k.id)
+    return Array.from(map.values()).sort((a, b) => {
+      if (!a.kelasId && !b.kelasId) return 0
+      if (!a.kelasId) return 1
+      if (!b.kelasId) return -1
+      return urutanKelas.indexOf(a.kelasId) - urutanKelas.indexOf(b.kelasId)
+    })
+  }, [filtered, kelasList])
 
   const jumlahAktif = data.filter((s) => s.status === 'aktif').length
   const jumlahNonaktif = data.filter((s) => s.status === 'nonaktif').length
@@ -834,127 +901,172 @@ export default function Siswa() {
         </TabStatus>
       </div>
 
-      <div className="card relative overflow-hidden overflow-x-auto">
-        <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-900 to-brass-400" />
-        <table className="table-shell">
-          <thead>
-            <tr>
-              {isAdmin && (
-                <th>
-                  <input
-                    type="checkbox"
-                    checked={filtered.length > 0 && filtered.every((s) => selectedIds.includes(s.id))}
-                    onChange={toggleSelectAll}
-                  />
-                </th>
-              )}
-              <th>Foto</th>
-              <th>Nama Lengkap</th>
-              <th>NIS</th>
-              <th>NISN</th>
-              <th>NIK</th>
-              <th>Tempat, Tanggal Lahir</th>
-              <th>Kelas</th>
-              <th>Jenis Kelamin</th>
-              <th>Status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr><td colSpan={isAdmin ? 11 : 10} className="text-center py-8 text-ink-700/50">Memuat data...</td></tr>
-            )}
-            {!loading && filtered.length === 0 && (
-              <tr><td colSpan={isAdmin ? 11 : 10} className="text-center py-8 text-ink-700/50">Belum ada data siswa.</td></tr>
-            )}
-            {filtered.map((s) => (
-              <tr key={s.id}>
-                {isAdmin && (
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.includes(s.id)}
-                      onChange={() => toggleSelectOne(s.id)}
-                    />
-                  </td>
-                )}
-                <td>
-                  <label className="relative block w-10 h-10 rounded-full overflow-hidden bg-ink-900/[0.06] cursor-pointer shrink-0 group">
-                    {fotoUrl(s.foto_path) ? (
-                      <img src={fotoUrl(s.foto_path)} alt="" className="w-full h-full object-cover" />
+      {/* TAMBAHAN: Data siswa dikelompokkan per kelas, masing-masing kelas punya warna sendiri */}
+      {loading && (
+        <div className="card p-8 text-center text-ink-700/50">Memuat data...</div>
+      )}
+
+      {!loading && grouped.length === 0 && (
+        <div className="card p-8 text-center text-ink-700/50">Belum ada data siswa.</div>
+      )}
+
+      {!loading && grouped.length > 0 && (
+        <div className="space-y-4">
+          {grouped.map((group) => {
+            const warna = getKelasColor(group.kelasId, kelasList)
+            const groupIds = group.siswa.map((s) => s.id)
+            const semuaTerpilih = groupIds.length > 0 && groupIds.every((id) => selectedIds.includes(id))
+            const collapsed = collapsedKelas.has(group.key)
+
+            return (
+              <div key={group.key} className={`card relative overflow-hidden border ${warna.border}`}>
+                {/* Header kelompok kelas — warna berbeda per kelas */}
+                <button
+                  type="button"
+                  onClick={() => toggleCollapse(group.key)}
+                  className={`w-full flex items-center justify-between gap-3 px-4 py-3 bg-gradient-to-r ${warna.header} text-left`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {collapsed ? (
+                      <ChevronRight size={16} className="text-white/80 shrink-0" />
                     ) : (
-                      <span className="w-full h-full flex items-center justify-center text-xs font-semibold text-ink-700/40">
-                        {s.nama_lengkap?.[0]}
-                      </span>
+                      <ChevronDown size={16} className="text-white/80 shrink-0" />
                     )}
-                    <span className="absolute inset-0 bg-ink-950/0 group-hover:bg-ink-950/40 flex items-center justify-center transition-colors">
-                      {uploadingId === s.id ? (
-                        <Loader2 size={14} className="animate-spin text-white" />
-                      ) : (
-                        <Camera size={13} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                      )}
-                    </span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      disabled={uploadingId === s.id}
-                      onChange={(e) => e.target.files?.[0] && handleFotoUpload(s.id, e.target.files[0])}
-                    />
-                  </label>
-                </td>
-                <td className="font-medium">
-                  <button
-                    type="button"
-                    onClick={() => setProfilLihat(s)}
-                    className="hover:underline hover:text-blue-900 text-left"
-                  >
-                    {s.nama_lengkap}
-                  </button>
-                </td>
-                <td className="font-mono text-xs">{s.nis}</td>
-                <td className="font-mono text-xs">{s.nisn}</td>
-                <td className="font-mono text-xs">{s.nik || '—'}</td>
-                <td className="text-xs whitespace-nowrap">{tempatTanggalLahir(s)}</td>
-                <td>{s.kelas?.nama_kelas || '—'}</td>
-                <td>{s.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan'}</td>
-                <td>
-                  <span className={`badge ${s.status === 'aktif' ? 'bg-sage-500/15 text-sage-500' : 'bg-ink-900/10 text-ink-700'}`}>
-                    {s.status}
-                  </span>
-                </td>
-                <td>
+                    <span className={`w-2.5 h-2.5 rounded-full ${warna.dot} ring-2 ring-white/40 shrink-0`} />
+                    <span className="font-display font-semibold text-white truncate">{group.namaKelas}</span>
+                    <span className="text-xs text-white/70 shrink-0">{group.siswa.length} siswa</span>
+                  </div>
                   {isAdmin && (
-                    <div className="flex items-center gap-1 justify-end">
-                      {/* TAMBAHAN: tombol Aktifkan Kembali, hanya muncul untuk siswa berstatus nonaktif */}
-                      {s.status === 'nonaktif' && (
-                        <button
-                          onClick={() => handleAktifkanKembali(s.id)}
-                          disabled={aktivasiId === s.id}
-                          title="Aktifkan Kembali"
-                          className="p-2 hover:bg-sage-50 rounded-lg text-sage-600"
-                        >
-                          {aktivasiId === s.id ? (
-                            <Loader2 size={15} className="animate-spin" />
-                          ) : (
-                            <RotateCcw size={15} />
-                          )}
-                        </button>
-                      )}
-                      <button onClick={() => openEdit(s)} className="p-2 hover:bg-ink-900/5 rounded-lg text-ink-700/60">
-                        <Pencil size={15} />
-                      </button>
-                      <button onClick={() => handleDelete(s.id)} className="p-2 hover:bg-red-50 rounded-lg text-red-600/70">
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => { e.stopPropagation(); toggleSelectGroup(groupIds) }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); toggleSelectGroup(groupIds) } }}
+                      className="flex items-center gap-1.5 text-xs text-white/80 hover:text-white shrink-0"
+                      title="Pilih semua siswa di kelas ini"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={semuaTerpilih}
+                        onChange={() => {}}
+                        className="pointer-events-none"
+                      />
+                      Pilih semua
+                    </span>
                   )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                </button>
+
+                {!collapsed && (
+                  <div className="overflow-x-auto">
+                    <table className="table-shell">
+                      <thead>
+                        <tr>
+                          {isAdmin && <th></th>}
+                          <th>Foto</th>
+                          <th>Nama Lengkap</th>
+                          <th>NIS</th>
+                          <th>NISN</th>
+                          <th>NIK</th>
+                          <th>Tempat, Tanggal Lahir</th>
+                          <th>Jenis Kelamin</th>
+                          <th>Status</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {group.siswa.map((s) => (
+                          <tr key={s.id}>
+                            {isAdmin && (
+                              <td>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedIds.includes(s.id)}
+                                  onChange={() => toggleSelectOne(s.id)}
+                                />
+                              </td>
+                            )}
+                            <td>
+                              <label className="relative block w-10 h-10 rounded-full overflow-hidden bg-ink-900/[0.06] cursor-pointer shrink-0 group">
+                                {fotoUrl(s.foto_path) ? (
+                                  <img src={fotoUrl(s.foto_path)} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  <span className="w-full h-full flex items-center justify-center text-xs font-semibold text-ink-700/40">
+                                    {s.nama_lengkap?.[0]}
+                                  </span>
+                                )}
+                                <span className="absolute inset-0 bg-ink-950/0 group-hover:bg-ink-950/40 flex items-center justify-center transition-colors">
+                                  {uploadingId === s.id ? (
+                                    <Loader2 size={14} className="animate-spin text-white" />
+                                  ) : (
+                                    <Camera size={13} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                  )}
+                                </span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  disabled={uploadingId === s.id}
+                                  onChange={(e) => e.target.files?.[0] && handleFotoUpload(s.id, e.target.files[0])}
+                                />
+                              </label>
+                            </td>
+                            <td className="font-medium">
+                              <button
+                                type="button"
+                                onClick={() => setProfilLihat(s)}
+                                className="hover:underline hover:text-blue-900 text-left"
+                              >
+                                {s.nama_lengkap}
+                              </button>
+                            </td>
+                            <td className="font-mono text-xs">{s.nis}</td>
+                            <td className="font-mono text-xs">{s.nisn}</td>
+                            <td className="font-mono text-xs">{s.nik || '—'}</td>
+                            <td className="text-xs whitespace-nowrap">{tempatTanggalLahir(s)}</td>
+                            <td>{s.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan'}</td>
+                            <td>
+                              <span className={`badge ${s.status === 'aktif' ? 'bg-sage-500/15 text-sage-500' : 'bg-ink-900/10 text-ink-700'}`}>
+                                {s.status}
+                              </span>
+                            </td>
+                            <td>
+                              {isAdmin && (
+                                <div className="flex items-center gap-1 justify-end">
+                                  {/* TAMBAHAN: tombol Aktifkan Kembali, hanya muncul untuk siswa berstatus nonaktif */}
+                                  {s.status === 'nonaktif' && (
+                                    <button
+                                      onClick={() => handleAktifkanKembali(s.id)}
+                                      disabled={aktivasiId === s.id}
+                                      title="Aktifkan Kembali"
+                                      className="p-2 hover:bg-sage-50 rounded-lg text-sage-600"
+                                    >
+                                      {aktivasiId === s.id ? (
+                                        <Loader2 size={15} className="animate-spin" />
+                                      ) : (
+                                        <RotateCcw size={15} />
+                                      )}
+                                    </button>
+                                  )}
+                                  <button onClick={() => openEdit(s)} className="p-2 hover:bg-ink-900/5 rounded-lg text-ink-700/60">
+                                    <Pencil size={15} />
+                                  </button>
+                                  <button onClick={() => handleDelete(s.id)} className="p-2 hover:bg-red-50 rounded-lg text-red-600/70">
+                                    <Trash2 size={15} />
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-4">
