@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Heart, Coins, Landmark, LayoutDashboard, Sparkles, Scale, Handshake } from 'lucide-react'
+import { Heart, Coins, Landmark, LayoutDashboard, Sparkles, Scale, Handshake, ClipboardList } from 'lucide-react'
 import Layout from '../components/Layout'
 
 // Palet warna per kartu — pola sama seperti PusatLaporanGuru.jsx, supaya
@@ -47,6 +47,13 @@ const PALET_WARNA = {
     border: 'border-teal-100',
     hoverBorder: 'hover:border-teal-400',
     hoverShadow: 'hover:shadow-teal-100',
+  },
+  violet: {
+    bg: 'bg-violet-50',
+    icon: 'text-violet-600',
+    border: 'border-violet-100',
+    hoverBorder: 'hover:border-violet-400',
+    hoverShadow: 'hover:shadow-violet-100',
   },
 }
 
@@ -102,6 +109,14 @@ const daftarMateri = [
     icon: Handshake,
     path: '/laporan-masyarakat-bermoral-harmonis',
     warna: 'teal',
+  },
+  {
+    id: 'rencana-kerja-tahunan',
+    judul: 'Rencana Kerja Tahunan (RKT)',
+    deskripsi: 'Susun RKT penyuluh per tahun, simpan otomatis, dan dapatkan rekomendasi materi terkait tiap kegiatan.',
+    icon: ClipboardList,
+    path: '/rencana-kerja-tahunan',
+    warna: 'violet',
   },
 ]
 
