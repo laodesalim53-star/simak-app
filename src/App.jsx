@@ -102,6 +102,7 @@ const MateriAkhlak = lazy(() => import('./pages/MateriAkhlak'))
 const MateriModerasiBeragama = lazy(() => import('./pages/MateriModerasiBeragama'))
 const LaporanPenyuluhanMasyarakatBermoral = lazy(() => import('./pages/LaporanPenyuluhanMasyarakatBermoral'))
 const RencanaKerjaTahunan = lazy(() => import('./pages/RencanaKerjaTahunan'))
+const MateriMajelisTaklim = lazy(() => import('./pages/MateriMajelisTaklim'))
 // ...
 const AdminLiveChat = lazy(() => import('./pages/AdminLiveChat'))
 const ScanDokumen = lazy(() => import('./pages/ScanDokumen'))
@@ -273,6 +274,7 @@ export default function App() {
           <Route path="/materi-moderasi-beragama" element={<ProtectedRoute adminOnly><MateriModerasiBeragama /></ProtectedRoute>} />
           <Route path="/laporan-masyarakat-bermoral-harmonis" element={<ProtectedRoute adminOnly><LaporanPenyuluhanMasyarakatBermoral /></ProtectedRoute>} />
           <Route path="/rencana-kerja-tahunan" element={<ProtectedRoute><RencanaKerjaTahunan /></ProtectedRoute>} />
+          <Route path="/materi-majelis-taklim" element={<ProtectedRoute adminOnly><MateriMajelisTaklim /></ProtectedRoute>} />
           <Route path="/kelas" element={<ProtectedRoute adminOnly><Kelas /></ProtectedRoute>} />
           <Route path="/profil-kantor" element={<ProtectedRoute adminOnly><ProfilKantor /></ProtectedRoute>} />
 
