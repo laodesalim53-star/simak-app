@@ -51,7 +51,7 @@ export default function MateriModerasiBeragama() {
         </Link>
         <button
           onClick={() => window.print()}
-          className="inline-flex items-center gap-2 bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
         >
           <Printer size={16} /> Cetak Laporan
         </button>
@@ -90,7 +90,7 @@ export default function MateriModerasiBeragama() {
         </div>
 
         <div className="flex items-center gap-3 mb-6">
-          <div className="w-11 h-11 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
+          <div className="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
             <Scale size={20} />
           </div>
           <div>
