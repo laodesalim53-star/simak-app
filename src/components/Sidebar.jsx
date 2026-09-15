@@ -64,6 +64,18 @@ import {
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 
+// Helper: hapus channel Supabase Realtime dengan nama (topic) yang sama
+// kalau masih ada, sebelum bikin channel baru dengan nama itu lagi.
+// Mencegah error "cannot add postgres_changes callback after subscribe()"
+// yang muncul kalau channel dengan topic sama sempat ter-subscribe dua
+// kali — biasanya karena React StrictMode menjalankan useEffect dua kali
+// saat development, atau navigasi cepat antar halaman sebelum channel
+// lama sempat dibersihkan oleh fungsi cleanup useEffect.
+function bersihkanChannelLama(namaChannel) {
+  const channelLama = supabase.getChannels().find((ch) => ch.topic === `realtime:${namaChannel}`)
+  if (channelLama) supabase.removeChannel(channelLama)
+}
+
 // Menu ADMIN dikelompokkan per kategori supaya tidak jadi satu daftar panjang.
 // Dibuat sebagai fungsi karena "Persetujuan Akun" dan "Profil Sekolah" hanya
 // boleh tampil untuk admin utama / superadmin, bukan admin biasa.
@@ -514,6 +526,10 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
 
     // Dengarkan perubahan tabel profil secara real-time (pendaftar baru, disetujui, ditolak, dll)
     // supaya badge notifikasi ter-update otomatis tanpa perlu refresh halaman.
+    // PERBAIKAN: bersihkan channel lama dengan nama sama dulu (kalau masih
+    // ada) sebelum subscribe baru — mencegah error "cannot add
+    // postgres_changes callback after subscribe()".
+    bersihkanChannelLama('persetujuan-akun-notifikasi')
     const channel = supabase
       .channel('persetujuan-akun-notifikasi')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profil' }, () => {
@@ -549,6 +565,7 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
 
     muatJumlahPengajuanToko()
 
+    bersihkanChannelLama('pengajuan-toko-notifikasi')
     const channel = supabase
       .channel('pengajuan-toko-notifikasi')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pengajuan_toko' }, () => {
@@ -586,6 +603,7 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
 
     muatJumlahSiapDicairkan()
 
+    bersihkanChannelLama('pencairan-dana-notifikasi')
     const channel = supabase
       .channel('pencairan-dana-notifikasi')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pesanan' }, () => {
@@ -632,6 +650,7 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
 
     muatJumlahPesan()
 
+    bersihkanChannelLama('pesan-notifikasi')
     const channel = supabase
       .channel('pesan-notifikasi')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pesan' }, () => {
@@ -678,6 +697,7 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
 
     muatJumlahPesanPusat()
 
+    bersihkanChannelLama('pesan-pusat-notifikasi')
     const channel = supabase
       .channel('pesan-pusat-notifikasi')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pesan_pusat' }, () => {
@@ -719,6 +739,7 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
 
     muatJumlahLiveChat()
 
+    bersihkanChannelLama('live-chat-notifikasi')
     const channel = supabase
       .channel('live-chat-notifikasi')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'live_chat_pesan' }, () => {
