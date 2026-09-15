@@ -47,6 +47,15 @@ function NotificationBell() {
     ambilNotifikasi()
 
     // Dengarkan notifikasi baru secara realtime
+    // PERBAIKAN: bersihkan channel lama dengan nama sama dulu (kalau masih
+    // ada) sebelum subscribe baru — mencegah error "cannot add
+    // postgres_changes callback after subscribe()" yang muncul kalau
+    // channel dengan topic sama sempat ter-subscribe dua kali (React
+    // StrictMode menjalankan useEffect dua kali saat development, atau
+    // navigasi cepat sebelum channel lama sempat dibersihkan).
+    const channelLama = supabase.getChannels().find((ch) => ch.topic === 'realtime:notifikasi-realtime')
+    if (channelLama) supabase.removeChannel(channelLama)
+
     const channel = supabase
       .channel('notifikasi-realtime')
       .on(
