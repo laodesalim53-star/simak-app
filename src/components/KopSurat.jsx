@@ -32,22 +32,10 @@ export default function KopSurat() {
   const baris1 = profilKantor?.nama_kementerian || 'KEMENTERIAN AGAMA REPUBLIK INDONESIA'
   const baris2 = profilKantor?.nama_kantor_kabupaten || ''
   const baris3 = profilKantor?.nama_kantor || 'Nama Kantor Belum Diatur'
-
-  const alamatLengkap = [
-    profilKantor?.alamat,
-    profilKantor?.kode_pos && `KP.${profilKantor.kode_pos}`,
-  ]
-    .filter(Boolean)
-    .join(', ')
-
   const kontak = [
     profilKantor?.email && `Email:${profilKantor.email}`,
     profilKantor?.telepon && `Telp/HP: ${profilKantor.telepon}`,
   ]
-    .filter(Boolean)
-    .join(' ')
-
-  const barisAlamat = [alamatLengkap, kontak].filter(Boolean).join('- ')
 
   return (
     <div className="kop-surat-resmi mb-6">
