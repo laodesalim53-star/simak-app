@@ -26,6 +26,8 @@ const Guru = lazy(() => import('./pages/Guru'))
 const PresensiKantor = lazy(() => import('./pages/PresensiKantor'))
 const DaftarHadirKantor = lazy(() => import('./pages/DaftarHadirKantor'))
 const DataPegawaiKantor = lazy(() => import('./pages/DataPegawaiKantor'))
+const DaftarHadirPegawai = lazy(() => import('./pages/DaftarHadirPegawai'))
+...
 const ProfilKantor = lazy(() => import('./pages/ProfilKantor'))
 const Kelas = lazy(() => import('./pages/Kelas'))
 
@@ -267,6 +269,7 @@ export default function App() {
           <Route path="/daftar-hadir-kantor" element={<ProtectedRoute adminOnly><DaftarHadirKantor /></ProtectedRoute>} />
           <Route path="/data-pegawai-kantor" element={<ProtectedRoute adminOnly><DataPegawaiKantor /></ProtectedRoute>} />
           <Route path="/pusat-materi-majelis" element={<ProtectedRoute adminOnly><PusatMateriMajelis /></ProtectedRoute>} />
+          <Route path="/daftar-hadir-pegawai" element={<ProtectedRoute adminOnly><DaftarHadirPegawai /></ProtectedRoute>} />
           <Route path="/materi-keluarga-sakinah" element={<ProtectedRoute adminOnly><MateriKeluargaSakinah /></ProtectedRoute>} />
           <Route path="/materi-pengelolaan-zakat" element={<ProtectedRoute adminOnly><MateriPengelolaanZakat /></ProtectedRoute>} />
           <Route path="/materi-wakaf" element={<ProtectedRoute adminOnly><MateriWakaf /></ProtectedRoute>} />
