@@ -12,21 +12,10 @@ const NAMA_BULAN = [
   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
 ]
 
-// CATATAN PENTING:
-// Kolom tabel `presensi_pegawai_kantor` di bawah ini (pegawai_id, tanggal, status)
-// adalah ASUMSI karena saya belum bisa memastikan struktur aslinya (koneksi
-// Supabase yang tersambung ke saya ternyata project kosong, beda dengan project
-// yang dipakai aplikasi ini). Tolong cek dulu nama kolom aslinya lewat SQL:
-//
-//   SELECT column_name, data_type FROM information_schema.columns
-//   WHERE table_schema = 'public' AND table_name = 'presensi_pegawai_kantor'
-//   ORDER BY ordinal_position;
-//
-// lalu sesuaikan nama kolom di query .select()/.eq() pada useEffect di bawah
-// kalau namanya berbeda dari asumsi ini.
-const KOLOM_RELASI_PEGAWAI = 'pegawai_id' // FK ke pegawai_kantor.id
-const KOLOM_TANGGAL = 'tanggal'           // date
-const KOLOM_STATUS = 'status'             // text: Hadir / Izin / Sakit / Alpa
+// Kolom tabel `presensi_pegawai_kantor` — disamakan dengan PresensiKantor.jsx
+const KOLOM_RELASI_PEGAWAI = 'pegawai_kantor_id' // FK ke pegawai_kantor.id
+const KOLOM_TANGGAL = 'tanggal'                  // date
+const KOLOM_STATUS = 'status'                    // text: hadir / izin / sakit / alpa
 
 // Singkatan status yang ditampilkan di kolom tanggal
 const SINGKATAN_STATUS = {
@@ -43,7 +32,7 @@ function formatTanggalIndonesia(date) {
 }
 
 export default function DaftarHadirPegawai() {
-  const { profil } = useAuth()
+  const { profil, sekolahId } = useAuth()
   const [profilKantor, setProfilKantor] = useState(null)
   const [pegawaiList, setPegawaiList] = useState([])
   const [presensiMap, setPresensiMap] = useState({})
@@ -70,11 +59,18 @@ export default function DaftarHadirPegawai() {
 
   useEffect(() => {
     async function muatData() {
+      if (!sekolahId) {
+        setPegawaiList([])
+        setPresensiMap({})
+        setLoading(false)
+        return
+      }
       setLoading(true)
 
       const { data: pegawai } = await supabase
         .from('pegawai_kantor')
         .select('id, nama_lengkap, jabatan, nip')
+        .eq('sekolah_id', sekolahId)
         .eq('status', 'aktif')
         .order('nama_lengkap', { ascending: true })
 
@@ -87,6 +83,7 @@ export default function DaftarHadirPegawai() {
       const { data: presensi, error } = await supabase
         .from('presensi_pegawai_kantor')
         .select(`${KOLOM_RELASI_PEGAWAI}, ${KOLOM_TANGGAL}, ${KOLOM_STATUS}`)
+        .eq('sekolah_id', sekolahId)
         .gte(KOLOM_TANGGAL, tanggalAwal)
         .lte(KOLOM_TANGGAL, tanggalAkhir)
 
@@ -111,7 +108,8 @@ export default function DaftarHadirPegawai() {
     }
 
     muatData()
-  }, [bulan, tahun, jumlahHari])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bulan, tahun, jumlahHari, sekolahId])
 
   const logoUrl = profilKantor?.logo_path
     ? supabase.storage.from(LOGO_BUCKET).getPublicUrl(profilKantor.logo_path).data.publicUrl
