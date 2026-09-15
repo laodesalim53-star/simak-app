@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Heart, Coins, Landmark, LayoutDashboard, Sparkles } from 'lucide-react'
+import { Heart, Coins, Landmark, LayoutDashboard, Sparkles, Scale } from 'lucide-react'
 import Layout from '../components/Layout'
 
 // Palet warna per kartu — pola sama seperti PusatLaporanGuru.jsx, supaya
@@ -33,6 +33,13 @@ const PALET_WARNA = {
     border: 'border-sky-100',
     hoverBorder: 'hover:border-sky-400',
     hoverShadow: 'hover:shadow-sky-100',
+  },
+  indigo: {
+    bg: 'bg-indigo-50',
+    icon: 'text-indigo-600',
+    border: 'border-indigo-100',
+    hoverBorder: 'hover:border-indigo-400',
+    hoverShadow: 'hover:shadow-indigo-100',
   },
 }
 
@@ -72,6 +79,14 @@ const daftarMateri = [
     icon: Sparkles,
     path: '/materi-akhlak',
     warna: 'sky',
+  },
+  {
+    id: 'moderasi-beragama',
+    judul: 'Moderasi Beragama',
+    deskripsi: 'Pengertian, empat indikator, bahaya ekstremisme, dan implementasi moderasi beragama sehari-hari.',
+    icon: Scale,
+    path: '/materi-moderasi-beragama',
+    warna: 'indigo',
   },
 ]
 
