@@ -3,6 +3,7 @@ import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import { Printer } from 'lucide-react'
 import Layout from '../components/Layout'
+import KopSurat from '../components/KopSurat'
 
 // Ganti 'logo' di bawah ini kalau nama bucket storage-mu berbeda
 const LOGO_BUCKET = 'profil-kantor'
@@ -111,10 +112,6 @@ export default function DaftarHadirPegawai() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bulan, tahun, jumlahHari, sekolahId])
 
-  const logoUrl = profilKantor?.logo_path
-    ? supabase.storage.from(LOGO_BUCKET).getPublicUrl(profilKantor.logo_path).data.publicUrl
-    : null
-
   const ttdKepalaKuaUrl = profilKantor?.ttd_kepala_kua_path
     ? supabase.storage.from(LOGO_BUCKET).getPublicUrl(profilKantor.ttd_kepala_kua_path).data.publicUrl
     : null
@@ -175,29 +172,7 @@ export default function DaftarHadirPegawai() {
           className="lembar-cetak print-only bg-white rounded-2xl border border-slate-100 p-5 sm:p-8 mx-auto"
           style={{ width: '297mm' }}
         >
-          {/* === KOP SURAT OTOMATIS === */}
-          <div className="kop-surat flex items-center gap-4 border-b-2 border-slate-800 pb-3 mb-6">
-            {logoUrl && (
-              <img src={logoUrl} alt="Logo Instansi" className="w-16 h-16 object-contain shrink-0" />
-            )}
-            <div className="text-center flex-1">
-              <p className="font-display text-base font-bold uppercase text-slate-900 leading-tight">
-                {profilKantor?.nama_kantor || 'Nama Kantor Belum Diatur'}
-              </p>
-              <p className="text-xs text-slate-600 leading-tight">
-                {[profilKantor?.alamat, profilKantor?.kecamatan, profilKantor?.kabupaten]
-                  .filter(Boolean)
-                  .join(', ')}
-              </p>
-              {(profilKantor?.telepon || profilKantor?.email) && (
-                <p className="text-xs text-slate-600 leading-tight">
-                  {[profilKantor?.telepon && `Telp. ${profilKantor.telepon}`, profilKantor?.email]
-                    .filter(Boolean)
-                    .join(' | ')}
-                </p>
-              )}
-            </div>
-          </div>
+          <KopSurat />
 
           <div className="text-center mb-5">
             <h1 className="font-display text-base font-bold uppercase text-slate-900 underline">
