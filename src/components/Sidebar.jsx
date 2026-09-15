@@ -242,7 +242,6 @@ function getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelum
     { to: '/presensi-kantor', label: 'Presensi Pegawai', icon: ClipboardCheck },
     { to: '/profil-kantor', label: 'Profil Kantor', icon: Building2 },
     { to: '/daftar-hadir-kantor', label: 'Daftar Hadir Kantor', icon: FileSpreadsheet },
-    { to: '/laporan-guru', label: 'Pusat Laporan Kepegawaian', icon: GraduationCap },
   ],
 },
     {
