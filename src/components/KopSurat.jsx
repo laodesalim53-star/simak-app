@@ -33,12 +33,10 @@ export default function KopSurat() {
   const baris2 = profilKantor?.nama_kantor_kabupaten || ''
   const baris3 = profilKantor?.nama_kantor || 'Nama Kantor Belum Diatur'
 
-  const alamatLengkap = [
-    profilKantor?.alamat,
-    profilKantor?.kode_pos && `KP.${profilKantor.kode_pos}`,
-  ]
-    .filter(Boolean)
-    .join(', ')
+  // PERBAIKAN: baris "KP.xxxxx" (kode pos) dihapus dari kop surat sesuai
+  // permintaan — alamat sekarang cuma menampilkan teks alamat saja, tanpa
+  // kode pos.
+  const alamatLengkap = [profilKantor?.alamat].filter(Boolean).join(', ')
 
   const kontak = [
     profilKantor?.email && `Email:${profilKantor.email}`,
