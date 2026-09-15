@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Heart, Coins, Landmark, LayoutDashboard, Sparkles, Scale } from 'lucide-react'
+import { Heart, Coins, Landmark, LayoutDashboard, Sparkles, Scale, Handshake } from 'lucide-react'
 import Layout from '../components/Layout'
 
 // Palet warna per kartu — pola sama seperti PusatLaporanGuru.jsx, supaya
@@ -40,6 +40,13 @@ const PALET_WARNA = {
     border: 'border-indigo-100',
     hoverBorder: 'hover:border-indigo-400',
     hoverShadow: 'hover:shadow-indigo-100',
+  },
+  teal: {
+    bg: 'bg-teal-50',
+    icon: 'text-teal-600',
+    border: 'border-teal-100',
+    hoverBorder: 'hover:border-teal-400',
+    hoverShadow: 'hover:shadow-teal-100',
   },
 }
 
@@ -87,6 +94,14 @@ const daftarMateri = [
     icon: Scale,
     path: '/materi-moderasi-beragama',
     warna: 'indigo',
+  },
+  {
+    id: 'laporan-masyarakat-bermoral-harmonis',
+    judul: 'Laporan Penyuluhan: Masyarakat Bermoral & Harmonis',
+    deskripsi: 'Laporan kegiatan penyuluhan lengkap dengan data kegiatan, hasil, kesimpulan, saran, dan daftar hadir.',
+    icon: Handshake,
+    path: '/laporan-masyarakat-bermoral-harmonis',
+    warna: 'teal',
   },
 ]
 
