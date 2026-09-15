@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Heart, Coins, Landmark, LayoutDashboard, Sparkles, Scale, Handshake, ClipboardList } from 'lucide-react'
+import { Heart, Coins, Landmark, LayoutDashboard, Sparkles, Scale, Handshake, ClipboardList, BookOpen } from 'lucide-react'
 import Layout from '../components/Layout'
 
 // Palet warna per kartu — pola sama seperti PusatLaporanGuru.jsx, supaya
@@ -118,8 +118,15 @@ const daftarMateri = [
     path: '/rencana-kerja-tahunan',
     warna: 'violet',
   },
+  {
+  id: 'majelis-taklim',
+  judul: 'Majelis Taklim',
+  deskripsi: 'Iman & taqwa, akhlak sehari-hari, shalat, bahaya pergaulan bebas, dan ukhuwah islamiyah.',
+  icon: BookOpen,
+  path: '/materi-majelis-taklim',
+  warna: 'fuchsia',
+},
 ]
-
 // Sama seperti BatikOverlay di PusatLaporanGuru.jsx — dipakai di banner
 // atas supaya identitas visual (motif batik + gradasi) konsisten dengan
 // hub lain di aplikasi.
