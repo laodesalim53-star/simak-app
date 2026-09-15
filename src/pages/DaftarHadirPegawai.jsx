@@ -384,12 +384,12 @@ export default function DaftarHadirPegawai() {
       ) : (
         // === MODE PERORANGAN: kertas A4 potret, tabel detail per hari ===
         <div
-          className="lembar-cetak lembar-perorangan print-only bg-white rounded-2xl border border-slate-100 p-5 sm:p-8 mx-auto"
+          className="lembar-cetak lembar-perorangan print-only bg-white rounded-2xl border border-slate-100 p-4 sm:p-6 mx-auto"
           style={{ width: '190mm' }}
         >
           <KopSurat />
 
-          <div className="text-center mb-5">
+          <div className="text-center mb-3">
             <h1 className="font-display text-base font-bold uppercase text-slate-900 underline">
               Daftar Hadir Perorangan
             </h1>
@@ -403,7 +403,7 @@ export default function DaftarHadirPegawai() {
               {/* Info pegawai — dibuat sebagai tabel 3 baris supaya kolon (:)
                   selalu sejajar rapi, tidak lagi grid 2 kolom yang bikin NIP
                   meloncat posisi kalau angkanya panjang. */}
-              <table className="text-sm text-slate-700 mb-4">
+              <table className="text-sm text-slate-700 mb-3">
                 <tbody>
                   <tr>
                     <td className="w-20 align-top pr-1 py-0.5">Nama</td>
@@ -460,20 +460,20 @@ export default function DaftarHadirPegawai() {
               </table>
 
               {rekapPegawaiTerpilih && (
-                <p className="text-[10px] text-slate-600 mt-2">
+                <p className="text-[10px] text-slate-600 mt-1.5">
                   Rekap bulan ini: Hadir {rekapPegawaiTerpilih.hadir}, Izin {rekapPegawaiTerpilih.izin}, Sakit {rekapPegawaiTerpilih.sakit}, Alpa {rekapPegawaiTerpilih.alpa}.
                   <span className="text-red-600"> Baris merah</span> = hari Minggu/libur.
                 </p>
               )}
 
               {/* === TANDA TANGAN OTOMATIS DARI PROFIL KANTOR === */}
-              <div className="ttd-block flex justify-between mt-10 text-sm text-slate-700">
+              <div className="ttd-block flex justify-between mt-5 text-sm text-slate-700">
                 <div className="text-center w-44">
                   <p>Mengetahui,</p>
                   <p>Kepala KUA</p>
-                  <div className="h-20 flex items-end justify-center">
+                  <div className="h-14 flex items-end justify-center">
                     {ttdKepalaKuaUrl && (
-                      <img src={ttdKepalaKuaUrl} alt="Tanda Tangan Kepala KUA" className="max-h-20 object-contain" />
+                      <img src={ttdKepalaKuaUrl} alt="Tanda Tangan Kepala KUA" className="max-h-14 object-contain" />
                     )}
                   </div>
                   <p className="font-semibold border-t border-slate-400 pt-1">
@@ -486,7 +486,7 @@ export default function DaftarHadirPegawai() {
                 <div className="text-center w-44">
                   <p>{tempatTtd ? `${tempatTtd}, ${tanggalCetak}` : '\u00A0'}</p>
                   <p>Pegawai Bersangkutan</p>
-                  <div className="h-20" />
+                  <div className="h-14" />
                   <p className="font-semibold border-t border-slate-400 pt-1">
                     ({pegawaiTerpilih.nama_lengkap})
                   </p>
@@ -530,10 +530,13 @@ export default function DaftarHadirPegawai() {
           }
           /* Mode Perorangan pakai kertas A4 potret (lebih pas untuk tabel
              5 kolom ini) — halaman Kolektif tetap A4 lanskap dari aturan
-             @page default di bawah. */
+             @page default di bawah. Padding & margin dipangkas supaya
+             seluruh isi (tabel 1 bulan + tanda tangan) muat di 1 lembar. */
           .lembar-perorangan {
             page: perorangan;
             width: 190mm !important;
+            padding: 4mm 6mm !important;
+            border-radius: 0 !important;
           }
           .ttd-block {
             page-break-inside: avoid;
@@ -546,7 +549,7 @@ export default function DaftarHadirPegawai() {
         }
         @page perorangan {
           size: A4 portrait;
-          margin: 14mm;
+          margin: 6mm;
         }
       `}</style>
     </Layout>
