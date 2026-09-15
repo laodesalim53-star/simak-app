@@ -58,6 +58,7 @@ import {
   Sparkles,
   FileStack,
   Briefcase,
+  BookOpen,
   LayoutGrid,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
@@ -242,6 +243,7 @@ function getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelum
     { to: '/presensi-kantor', label: 'Presensi Pegawai', icon: ClipboardCheck },
     { to: '/profil-kantor', label: 'Profil Kantor', icon: Building2 },
     { to: '/daftar-hadir-kantor', label: 'Daftar Hadir Kantor', icon: FileSpreadsheet },
+    { to: '/daftar-hadir-pegawai', label: 'Daftar Hadir Pegawai', icon: ClipboardList },
   ],
 },
     {
