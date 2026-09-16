@@ -10,9 +10,15 @@ const LOGO_BUCKET = 'profil-kantor'
 // alamat/kontak, ditutup garis pemisah tebal-tipis.
 //
 // Pakai di halaman cetak manapun cukup dengan: <KopSurat />
-// Ganti div "kop-surat" manual yang lama (logo + nama_kantor + alamat) di
-// tiap halaman Materi/Laporan dengan komponen ini supaya formatnya seragam
-// dan cukup dikelola dari satu tempat.
+//
+// PERBAIKAN: sebelumnya logo dan blok teks diletakkan berdampingan dalam
+// satu flex row, sehingga teks (termasuk baris email/telepon) ter-center
+// hanya terhadap sisa ruang setelah logo — bukan terhadap lebar kop surat
+// secara keseluruhan. Akibatnya semua baris teks, termasuk baris kontak,
+// terlihat bergeser ke kanan. Sekarang dipakai grid 3 kolom yang seimbang
+// (logo | teks tengah | spacer sebesar logo) supaya benar-benar center
+// terhadap lebar kop surat. Baris kontak juga dibuat lebih kecil dan tidak
+// bold, supaya proporsional terhadap 3 baris judul di atasnya.
 export default function KopSurat() {
   const [profilKantor, setProfilKantor] = useState(null)
 
@@ -33,31 +39,36 @@ export default function KopSurat() {
   const baris2 = profilKantor?.nama_kantor_kabupaten || ''
   const baris3 = profilKantor?.nama_kantor || 'Nama Kantor Belum Diatur'
 
-  // PERBAIKAN: baris "KP.xxxxx" (kode pos) dihapus dari kop surat sesuai
-  // permintaan — alamat sekarang cuma menampilkan teks alamat saja, tanpa
-  // kode pos.
+  // Alamat tanpa kode pos sesuai permintaan sebelumnya
   const alamatLengkap = [profilKantor?.alamat].filter(Boolean).join(', ')
 
   const kontak = [
-    profilKantor?.email && `Email:${profilKantor.email}`,
+    profilKantor?.email && `Email: ${profilKantor.email}`,
     profilKantor?.telepon && `Telp/HP: ${profilKantor.telepon}`,
   ]
     .filter(Boolean)
-    .join(' ')
+    .join('  |  ')
 
-  const barisAlamat = [alamatLengkap, kontak].filter(Boolean).join('- ')
+  const barisAlamat = [alamatLengkap, kontak].filter(Boolean).join('  —  ')
 
   return (
     <div className="kop-surat-resmi mb-6">
-      <div className="flex items-center gap-4 pb-1">
-        {logoUrl && (
-          <img
-            src={logoUrl}
-            alt="Logo Instansi"
-            className="w-20 h-20 object-contain shrink-0"
-          />
-        )}
-        <div className="text-center flex-1">
+      {/* Grid 3 kolom seimbang: logo di kiri, teks di tengah (col otomatis
+          selebar konten terpanjang di antara logo & kolom kanan), spacer
+          kosong di kanan sebesar logo — sehingga teks benar-benar center
+          terhadap lebar kop surat, bukan cuma terhadap sisa ruang. */}
+      <div className="grid grid-cols-[80px_1fr_80px] items-center gap-4 pb-1">
+        <div className="flex justify-start">
+          {logoUrl && (
+            <img
+              src={logoUrl}
+              alt="Logo Instansi"
+              className="w-20 h-20 object-contain shrink-0"
+            />
+          )}
+        </div>
+
+        <div className="text-center">
           <p className="font-display text-[15px] font-bold uppercase text-slate-900 leading-tight">
             {baris1}
           </p>
@@ -69,12 +80,17 @@ export default function KopSurat() {
           <p className="font-display text-[13px] font-bold uppercase text-slate-900 leading-tight">
             {baris3}
           </p>
-        </div>
-      </div>
 
-      {barisAlamat && (
-        <p className="text-center text-xs text-slate-700 mb-0.5">{barisAlamat}</p>
-      )}
+          {barisAlamat && (
+            <p className="text-[10.5px] font-normal text-slate-600 leading-snug mt-1">
+              {barisAlamat}
+            </p>
+          )}
+        </div>
+
+        {/* spacer kosong, lebarnya disamakan dengan kolom logo */}
+        <div aria-hidden="true" />
+      </div>
 
       {/* Garis pemisah khas kop surat resmi: tipis lalu tebal */}
       <div className="border-t border-slate-900" />
