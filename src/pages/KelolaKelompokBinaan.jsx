@@ -271,7 +271,7 @@ export default function KelolaKelompokBinaan() {
                 <button
                   type="submit"
                   disabled={!desaBaru.trim() && !kelompokBaru.trim()}
-                  className="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors w-full sm:w-auto justify-center"
+                  className="inline-flex items-center justify-center gap-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors w-full sm:w-auto"
                 >
                   <FolderPlus size={16} /> Buat kelompok
                 </button>
@@ -306,7 +306,7 @@ export default function KelolaKelompokBinaan() {
                 <button
                   type="submit"
                   disabled={menyimpan || !namaBaru.trim()}
-                  className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors w-full sm:w-auto justify-center"
+                  className="inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors w-full sm:w-auto"
                 >
                   {menyimpan ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
                   Simpan
@@ -327,8 +327,8 @@ export default function KelolaKelompokBinaan() {
             </p>
           ) : (
             daftarGrup.map((grup) => (
-              <div key={grup.key} className="bg-white rounded-2xl border border-slate-100 p-5 sm:p-6">
-                <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end">
+              <div key={grup.key} className="bg-white rounded-2xl border border-slate-100 p-4 sm:p-6">
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 sm:items-end">
                   <div>
                     <label className="text-xs font-medium text-slate-600 block mb-1">Nama Desa</label>
                     <input
@@ -368,7 +368,7 @@ export default function KelolaKelompokBinaan() {
                       type="button"
                       onClick={() => simpanKelompok(grup)}
                       disabled={grupMenyimpan === grup.key}
-                      className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                      className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
                     >
                       {grupMenyimpan === grup.key ? (
                         <Loader2 size={16} className="animate-spin" />
@@ -382,7 +382,7 @@ export default function KelolaKelompokBinaan() {
                     <button
                       type="button"
                       onClick={() => hapusKelompok(grup)}
-                      className="text-rose-500 hover:text-rose-700 p-2"
+                      className="text-rose-500 hover:text-rose-700 p-2 shrink-0"
                       title="Hapus kelompok"
                     >
                       <Trash2 size={16} />
@@ -402,48 +402,50 @@ export default function KelolaKelompokBinaan() {
                       Belum ada peserta di kelompok ini. Tambahkan lewat kolom di bawah.
                     </p>
                   ) : (
-                    <table className="w-full border-collapse text-sm">
-                      <thead>
-                        <tr className="bg-slate-100">
-                          <th className="border border-slate-200 px-2 py-2 w-10">No</th>
-                          <th className="border border-slate-200 px-2 py-2 text-left">
-                            Nama Peserta
-                          </th>
-                          <th className="border border-slate-200 px-2 py-2 w-12"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {grup.anggota.map((a, i) => (
-                          <tr key={a.id}>
-                            <td className="border border-slate-200 px-2 py-1.5 text-center text-slate-500">
-                              {i + 1}
-                            </td>
-                            <td className="border border-slate-200 px-1 py-1">
-                              <input
-                                value={a.nama || ''}
-                                onChange={(e) => {
-                                  perbaruiField(a.id, 'nama', e.target.value)
-                                  setBelumTersimpan((prev) => ({ ...prev, [grup.key]: true }))
-                                }}
-                                className="w-full text-sm px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-slate-300"
-                              />
-                            </td>
-                            <td className="border border-slate-200 px-2 py-1.5 text-center">
-                              <button
-                                onClick={() => hapusAnggota(a.id)}
-                                className="text-rose-500 hover:text-rose-700"
-                                title="Hapus peserta"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </td>
+                    <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+                      <table className="w-full min-w-[320px] border-collapse text-sm">
+                        <thead>
+                          <tr className="bg-slate-100">
+                            <th className="border border-slate-200 px-2 py-2 w-10">No</th>
+                            <th className="border border-slate-200 px-2 py-2 text-left">
+                              Nama Peserta
+                            </th>
+                            <th className="border border-slate-200 px-2 py-2 w-12"></th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {grup.anggota.map((a, i) => (
+                            <tr key={a.id}>
+                              <td className="border border-slate-200 px-2 py-1.5 text-center text-slate-500">
+                                {i + 1}
+                              </td>
+                              <td className="border border-slate-200 px-1 py-1">
+                                <input
+                                  value={a.nama || ''}
+                                  onChange={(e) => {
+                                    perbaruiField(a.id, 'nama', e.target.value)
+                                    setBelumTersimpan((prev) => ({ ...prev, [grup.key]: true }))
+                                  }}
+                                  className="w-full text-sm px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-slate-300"
+                                />
+                              </td>
+                              <td className="border border-slate-200 px-2 py-1.5 text-center">
+                                <button
+                                  onClick={() => hapusAnggota(a.id)}
+                                  className="text-rose-500 hover:text-rose-700"
+                                  title="Hapus peserta"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
 
-                  <div className="flex gap-2 mt-3">
+                  <div className="flex flex-col sm:flex-row gap-2 mt-3">
                     <input
                       value={pesertaBaru[grup.key] || ''}
                       onChange={(e) =>
@@ -462,7 +464,7 @@ export default function KelolaKelompokBinaan() {
                       type="button"
                       onClick={() => tambahPeserta(grup)}
                       disabled={!(pesertaBaru[grup.key] || '').trim() || grupMenyimpan === grup.key}
-                      className="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shrink-0"
+                      className="inline-flex items-center justify-center gap-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors w-full sm:w-auto shrink-0"
                     >
                       <Plus size={16} /> Tambah
                     </button>
@@ -476,51 +478,53 @@ export default function KelolaKelompokBinaan() {
             Belum ada peserta. Tambahkan lewat form di atas — data akan tersimpan permanen.
           </p>
         ) : (
-          <div className="bg-white rounded-2xl border border-slate-100 p-5 sm:p-6">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="bg-slate-100">
-                  <th className="border border-slate-200 px-2 py-2 w-10">No</th>
-                  <th className="border border-slate-200 px-2 py-2 text-left">Nama</th>
-                  <th className="border border-slate-200 px-2 py-2 text-left">Alamat</th>
-                  <th className="border border-slate-200 px-2 py-2 w-12"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {anggota.map((a, i) => (
-                  <tr key={a.id}>
-                    <td className="border border-slate-200 px-2 py-1.5 text-center text-slate-500">
-                      {i + 1}
-                    </td>
-                    <td className="border border-slate-200 px-1 py-1">
-                      <input
-                        value={a.nama || ''}
-                        onChange={(e) => perbaruiField(a.id, 'nama', e.target.value)}
-                        onBlur={(e) => simpanField(a.id, 'nama', e.target.value)}
-                        className="w-full text-sm px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-slate-300"
-                      />
-                    </td>
-                    <td className="border border-slate-200 px-1 py-1">
-                      <input
-                        value={a.alamat || ''}
-                        onChange={(e) => perbaruiField(a.id, 'alamat', e.target.value)}
-                        onBlur={(e) => simpanField(a.id, 'alamat', e.target.value)}
-                        className="w-full text-sm px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-slate-300"
-                      />
-                    </td>
-                    <td className="border border-slate-200 px-2 py-1.5 text-center">
-                      <button
-                        onClick={() => hapusAnggota(a.id)}
-                        className="text-rose-500 hover:text-rose-700"
-                        title="Hapus"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
+          <div className="bg-white rounded-2xl border border-slate-100 p-4 sm:p-6">
+            <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+              <table className="w-full min-w-[420px] border-collapse text-sm">
+                <thead>
+                  <tr className="bg-slate-100">
+                    <th className="border border-slate-200 px-2 py-2 w-10">No</th>
+                    <th className="border border-slate-200 px-2 py-2 text-left">Nama</th>
+                    <th className="border border-slate-200 px-2 py-2 text-left">Alamat</th>
+                    <th className="border border-slate-200 px-2 py-2 w-12"></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {anggota.map((a, i) => (
+                    <tr key={a.id}>
+                      <td className="border border-slate-200 px-2 py-1.5 text-center text-slate-500">
+                        {i + 1}
+                      </td>
+                      <td className="border border-slate-200 px-1 py-1">
+                        <input
+                          value={a.nama || ''}
+                          onChange={(e) => perbaruiField(a.id, 'nama', e.target.value)}
+                          onBlur={(e) => simpanField(a.id, 'nama', e.target.value)}
+                          className="w-full text-sm px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-slate-300"
+                        />
+                      </td>
+                      <td className="border border-slate-200 px-1 py-1">
+                        <input
+                          value={a.alamat || ''}
+                          onChange={(e) => perbaruiField(a.id, 'alamat', e.target.value)}
+                          onBlur={(e) => simpanField(a.id, 'alamat', e.target.value)}
+                          className="w-full text-sm px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-slate-300"
+                        />
+                      </td>
+                      <td className="border border-slate-200 px-2 py-1.5 text-center">
+                        <button
+                          onClick={() => hapusAnggota(a.id)}
+                          className="text-rose-500 hover:text-rose-700"
+                          title="Hapus"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
