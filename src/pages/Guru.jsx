@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
+import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabaseClient'
 import Layout from '../components/Layout'
 import { useAuth } from '../lib/AuthContext'
 import BulkImportModal from '../components/BulkImportModal'
 import TeleponLink from '../components/TeleponLink'
-import { Plus, UploadCloud, Pencil, Trash2, Search, X, Loader2, GraduationCap, CalendarDays } from 'lucide-react'
+import { Plus, UploadCloud, Pencil, Trash2, Search, X, Loader2, GraduationCap, CalendarDays, Download, FileSpreadsheet, Printer, ChevronDown } from 'lucide-react'
 
 // emptyForm mengikuti seluruh field Formulir Dapodik (bukan hanya data inti)
 const emptyForm = {
@@ -76,6 +77,25 @@ const emptyForm = {
   status: 'aktif',
 }
 
+// TAMBAHAN: urutan kolom untuk Unduh Excel (data lengkap) — mencakup SEMUA
+// field guru (Data Pribadi, Riwayat Pendidikan, Kepegawaian, Alamat, Kontak,
+// Lainnya), supaya file unduhan bisa dipakai sebagai arsip/laporan menyeluruh,
+// bukan hanya ringkasan seperti yang tampil di tabel halaman ini.
+const GURU_EXCEL_HEADERS = [
+  'nama_lengkap', 'nip', 'nuptk', 'nik', 'no_kk', 'jenis_kelamin(L/P)', 'tempat_lahir', 'tanggal_lahir(YYYY-MM-DD)',
+  'agama', 'kewarganegaraan', 'status_perkawinan', 'nama_ibu_kandung', 'nama_pasangan', 'nip_pasangan',
+  'pekerjaan_pasangan', 'jumlah_anak_tanggungan', 'pendidikan_terakhir',
+  'nama_lembaga_pendidikan', 'fakultas', 'jurusan', 'tahun_lulus', 'penataran_diklat',
+  'status_kepegawaian', 'jenis_ptk', 'mata_pelajaran', 'tugas_tambahan', 'pangkat_golongan', 'sumber_gaji',
+  'sk_cpns', 'tanggal_cpns(YYYY-MM-DD)', 'sk_pengangkatan', 'tmt_pengangkatan(YYYY-MM-DD)', 'lembaga_pengangkatan',
+  'tmt_pns(YYYY-MM-DD)', 'sudah_lisensi_kepsek(Ya/Tidak)', 'pernah_diklat_pengawas(Ya/Tidak)',
+  'karpeg', 'karis_karsu', 'nuks',
+  'alamat_jalan', 'rt', 'rw', 'nama_dusun', 'desa_kelurahan', 'kecamatan', 'kode_pos', 'lintang', 'bujur',
+  'telepon', 'no_hp', 'email',
+  'keahlian_braille(Ya/Tidak)', 'keahlian_bahasa_isyarat(Ya/Tidak)', 'npwp', 'nama_wajib_pajak',
+  'bank', 'no_rekening', 'rekening_atas_nama', 'status',
+]
+
 function formatTanggal(tgl) {
   if (!tgl) return null
   try {
@@ -130,6 +150,10 @@ export default function Guru() {
   const [saving, setSaving] = useState(false)
   const [profilLihat, setProfilLihat] = useState(null) // guru yang sedang dilihat detail profilnya
 
+  // TAMBAHAN: dropdown menu "Unduh / Cetak" — pola sama seperti di halaman Data Siswa
+  const [showExportMenu, setShowExportMenu] = useState(false)
+  const exportMenuRef = useRef(null)
+
   // Widget "Hari Libur Terdekat" — mengambil dari tabel hari_libur yang sama dengan halaman Hari Libur
   const [liburMendatang, setLiburMendatang] = useState([])
   const [loadingLibur, setLoadingLibur] = useState(true)
@@ -179,6 +203,17 @@ export default function Guru() {
     loadData()
     loadLiburMendatang()
   }, [sekolahId])
+
+  // Tutup dropdown "Unduh / Cetak" saat klik di luar area tombolnya
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target)) {
+        setShowExportMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   // Foto profil guru — memakai bucket & kolom yang sama persis dengan Profil Saya
   function fotoUrl(path) {
@@ -249,12 +284,189 @@ export default function Guru() {
     `${g.nama_lengkap} ${g.nip} ${g.nuptk} ${g.jenis_ptk}`.toLowerCase().includes(search.toLowerCase())
   )
 
+  // TAMBAHAN: Unduh Excel (.xlsx) — data LENGKAP seluruh guru hasil filter
+  // pencarian, memuat semua kolom Formulir Dapodik (bukan cuma yang tampil
+  // di tabel), memakai pola yang sama seperti Unduh Excel di halaman Data Siswa.
+  function handleExportExcel() {
+    setShowExportMenu(false)
+    const rows = filtered.map((g) => ({
+      nama_lengkap: g.nama_lengkap || '',
+      nip: g.nip || '',
+      nuptk: g.nuptk || '',
+      nik: g.nik || '',
+      no_kk: g.no_kk || '',
+      'jenis_kelamin(L/P)': g.jenis_kelamin || '',
+      tempat_lahir: g.tempat_lahir || '',
+      'tanggal_lahir(YYYY-MM-DD)': g.tanggal_lahir || '',
+      agama: g.agama || '',
+      kewarganegaraan: g.kewarganegaraan || '',
+      status_perkawinan: g.status_perkawinan || '',
+      nama_ibu_kandung: g.nama_ibu_kandung || '',
+      nama_pasangan: g.nama_pasangan || '',
+      nip_pasangan: g.nip_pasangan || '',
+      pekerjaan_pasangan: g.pekerjaan_pasangan || '',
+      jumlah_anak_tanggungan: g.jumlah_anak_tanggungan ?? '',
+      pendidikan_terakhir: g.pendidikan_terakhir || '',
+      nama_lembaga_pendidikan: g.nama_lembaga_pendidikan || '',
+      fakultas: g.fakultas || '',
+      jurusan: g.jurusan || '',
+      tahun_lulus: g.tahun_lulus ?? '',
+      penataran_diklat: g.penataran_diklat || '',
+      status_kepegawaian: g.status_kepegawaian || '',
+      jenis_ptk: g.jenis_ptk || '',
+      mata_pelajaran: g.mata_pelajaran || '',
+      tugas_tambahan: g.tugas_tambahan || '',
+      pangkat_golongan: g.pangkat_golongan || '',
+      sumber_gaji: g.sumber_gaji || '',
+      sk_cpns: g.sk_cpns || '',
+      'tanggal_cpns(YYYY-MM-DD)': g.tanggal_cpns || '',
+      sk_pengangkatan: g.sk_pengangkatan || '',
+      'tmt_pengangkatan(YYYY-MM-DD)': g.tmt_pengangkatan || '',
+      lembaga_pengangkatan: g.lembaga_pengangkatan || '',
+      'tmt_pns(YYYY-MM-DD)': g.tmt_pns || '',
+      'sudah_lisensi_kepsek(Ya/Tidak)': g.sudah_lisensi_kepsek || '',
+      'pernah_diklat_pengawas(Ya/Tidak)': g.pernah_diklat_pengawas || '',
+      karpeg: g.karpeg || '',
+      karis_karsu: g.karis_karsu || '',
+      nuks: g.nuks || '',
+      alamat_jalan: g.alamat_jalan || '',
+      rt: g.rt || '',
+      rw: g.rw || '',
+      nama_dusun: g.nama_dusun || '',
+      desa_kelurahan: g.desa_kelurahan || '',
+      kecamatan: g.kecamatan || '',
+      kode_pos: g.kode_pos || '',
+      lintang: g.lintang ?? '',
+      bujur: g.bujur ?? '',
+      telepon: g.telepon || '',
+      no_hp: g.no_hp || '',
+      email: g.email || '',
+      'keahlian_braille(Ya/Tidak)': g.keahlian_braille || '',
+      'keahlian_bahasa_isyarat(Ya/Tidak)': g.keahlian_bahasa_isyarat || '',
+      npwp: g.npwp || '',
+      nama_wajib_pajak: g.nama_wajib_pajak || '',
+      bank: g.bank || '',
+      no_rekening: g.no_rekening || '',
+      rekening_atas_nama: g.rekening_atas_nama || '',
+      status: g.status || '',
+    }))
+
+    const ws = XLSX.utils.json_to_sheet(rows, { header: GURU_EXCEL_HEADERS })
+    ws['!cols'] = GURU_EXCEL_HEADERS.map(() => ({ wch: 18 }))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Data Guru')
+    XLSX.writeFile(wb, `Data-Guru-${new Date().toISOString().slice(0, 10)}.xlsx`)
+  }
+
+  // TAMBAHAN: Cetak / Unduh PDF (lewat dialog cetak browser) — menampilkan
+  // SELURUH guru hasil filter pencarian dalam satu tabel ringkas siap cetak,
+  // memakai pola yang sama seperti Cetak PDF di halaman Data Siswa.
+  function handlePrintPDF() {
+    setShowExportMenu(false)
+    const tanggal = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+
+    const rowsHtml = filtered
+      .map(
+        (g, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${g.nama_lengkap || '-'}</td>
+          <td>${g.nip || '-'}</td>
+          <td>${g.nuptk || '-'}</td>
+          <td>${g.jenis_ptk || '-'}</td>
+          <td>${g.status_kepegawaian || '-'}</td>
+          <td>${g.jenis_kelamin === 'L' ? 'Laki-laki' : g.jenis_kelamin === 'P' ? 'Perempuan' : '-'}</td>
+          <td>${g.no_hp || g.telepon || '-'}</td>
+          <td>${g.email || '-'}</td>
+          <td>${g.status || '-'}</td>
+        </tr>`
+      )
+      .join('')
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Data Guru</title>
+        <style>
+          body { font-family: Arial, Helvetica, sans-serif; padding: 24px; color: #1a1a1a; }
+          h1 { font-size: 18px; margin-bottom: 2px; }
+          p.subtitle { font-size: 12px; color: #666; margin-top: 0; margin-bottom: 16px; }
+          table { width: 100%; border-collapse: collapse; font-size: 11px; }
+          th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+          th { background: #f2f2f2; }
+          @media print {
+            @page { size: landscape; margin: 16mm; }
+          }
+        </style>
+      </head>
+      <body>
+        <h1>Data Guru & Staf</h1>
+        <p class="subtitle">Dicetak pada ${tanggal} · Total ${filtered.length} guru/staf</p>
+        <table>
+          <thead>
+            <tr>
+              <th>No</th>
+              <th>Nama Lengkap</th>
+              <th>NIP</th>
+              <th>NUPTK</th>
+              <th>Jenis PTK</th>
+              <th>Status Kepegawaian</th>
+              <th>Jenis Kelamin</th>
+              <th>No. HP</th>
+              <th>Email</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+        <script>
+          window.onload = function () {
+            window.print();
+          };
+        </script>
+      </body>
+      </html>
+    `
+
+    const printWindow = window.open('', '_blank')
+    printWindow.document.write(html)
+    printWindow.document.close()
+  }
+
   return (
     <Layout
       title="Data Guru"
       subtitle={`${data.length} guru & staf terdaftar`}
       actions={
         <>
+          {/* TAMBAHAN: dropdown "Unduh / Cetak" — Excel data lengkap & Cetak/Unduh PDF,
+              menampilkan keseluruhan data guru hasil filter pencarian, sama seperti di
+              halaman Data Siswa. */}
+          <div className="relative" ref={exportMenuRef}>
+            <button className="btn-secondary" onClick={() => setShowExportMenu((v) => !v)}>
+              <Download size={16} /> Unduh / Cetak <ChevronDown size={14} />
+            </button>
+            {showExportMenu && (
+              <div className="absolute right-0 mt-1.5 w-64 card p-1.5 z-20 shadow-lg">
+                <button
+                  onClick={handleExportExcel}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-ink-700 hover:bg-ink-900/[0.05] text-left"
+                >
+                  <FileSpreadsheet size={16} /> Unduh Excel (data lengkap)
+                </button>
+                <button
+                  onClick={handlePrintPDF}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-ink-700 hover:bg-ink-900/[0.05] text-left"
+                >
+                  <Printer size={16} /> Cetak / Unduh PDF
+                </button>
+              </div>
+            )}
+          </div>
           <button className="btn-secondary" onClick={() => setShowImport(true)}>
             <UploadCloud size={16} /> Impor Massal
           </button>
