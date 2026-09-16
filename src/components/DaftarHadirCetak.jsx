@@ -7,6 +7,15 @@ import { supabase } from '../lib/supabaseClient'
 // (nama majelis/tanggal/tempat/pemateri) disembunyikan saat print lewat
 // class `print:hidden` — yang tercetak hanya ringkasan teks + tabel.
 //
+// Nama majelis/tanggal/tempat/pemateri bisa diisi otomatis dari halaman
+// induk lewat prop *Awal (namaMajelisAwal, tanggalAwal, tempatAwal,
+// pemateriAwal). Kalau halaman induk tidak mengirim prop ini, field tetap
+// kosong seperti sebelumnya dan bisa diisi manual di layar. Field tetap
+// bisa dikoreksi manual meski sudah terisi otomatis — perubahan pada prop
+// *Awal (misal user mengedit form di halaman induk) akan menimpa isian
+// manual di komponen ini, karena field ini memang ditujukan sebagai
+// cerminan data induk.
+//
 // BARU: ada dropdown "Kelompok Binaan". Begitu dipilih, nama & alamat
 // anggota ditarik otomatis dari tabel kelompok_binaan_anggota (dikelola
 // di /pusat-kelompok-binaan) — tidak perlu diketik manual tiap cetak.
@@ -15,6 +24,13 @@ import { supabase } from '../lib/supabaseClient'
 // Cara pakai:
 //   <DaftarHadirCetak jumlahBaris={15} />
 //   <DaftarHadirCetak jumlahBaris={15} kelompokAwal="majelis-taklim" />
+//   <DaftarHadirCetak
+//     jumlahBaris={15}
+//     namaMajelisAwal={lokasiPenyuluhan}
+//     tanggalAwal={waktuKegiatan}
+//     tempatAwal={tempatKegiatan}
+//     pemateriAwal={namaPenyuluh}
+//   />
 const OPSI_KELOMPOK = [
   { slug: '', label: 'Isi manual (tanpa kelompok binaan)' },
   { slug: 'majelis-taklim', label: 'Majelis Taklim' },
@@ -23,11 +39,36 @@ const OPSI_KELOMPOK = [
   { slug: 'masyarakat', label: 'Masyarakat' },
 ]
 
-export default function DaftarHadirCetak({ jumlahBaris = 15, kelompokAwal = '' }) {
-  const [namaMajelis, setNamaMajelis] = useState('')
-  const [tanggal, setTanggal] = useState('')
-  const [tempat, setTempat] = useState('')
-  const [pemateri, setPemateri] = useState('')
+export default function DaftarHadirCetak({
+  jumlahBaris = 15,
+  kelompokAwal = '',
+  namaMajelisAwal = '',
+  tanggalAwal = '',
+  tempatAwal = '',
+  pemateriAwal = '',
+}) {
+  const [namaMajelis, setNamaMajelis] = useState(namaMajelisAwal)
+  const [tanggal, setTanggal] = useState(tanggalAwal)
+  const [tempat, setTempat] = useState(tempatAwal)
+  const [pemateri, setPemateri] = useState(pemateriAwal)
+
+  // Sinkron otomatis kalau data di halaman induk berubah (misalnya admin
+  // mengedit Lokasi/Waktu/Tempat/Nama Penyuluh di form kegiatan).
+  useEffect(() => {
+    setNamaMajelis(namaMajelisAwal)
+  }, [namaMajelisAwal])
+
+  useEffect(() => {
+    setTanggal(tanggalAwal)
+  }, [tanggalAwal])
+
+  useEffect(() => {
+    setTempat(tempatAwal)
+  }, [tempatAwal])
+
+  useEffect(() => {
+    setPemateri(pemateriAwal)
+  }, [pemateriAwal])
 
   const [kelompokSlug, setKelompokSlug] = useState(kelompokAwal)
   const [daftarAnggota, setDaftarAnggota] = useState([])
