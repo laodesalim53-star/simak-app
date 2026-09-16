@@ -570,9 +570,12 @@ export default function Guru() {
                   </span>
                 </td>
                 <td>
+                  {/* PERBAIKAN: area sentuh tombol Ubah/Hapus diperbesar (p-2 -> p-2.5)
+                      agar lebih mendekati standar minimum 44px untuk HP. -m-0.5 dipakai
+                      supaya lebar kolom tabel tidak melebar signifikan. */}
                   <div className="flex items-center gap-1 justify-end">
-                    <button onClick={() => openEdit(g)} className="p-2 hover:bg-blue-600/10 rounded-lg text-blue-700/70"><Pencil size={15} /></button>
-                    <button onClick={() => handleDelete(g.id)} className="p-2 hover:bg-red-900/10 rounded-lg text-red-900/70"><Trash2 size={15} /></button>
+                    <button onClick={() => openEdit(g)} className="p-2.5 -m-0.5 hover:bg-blue-600/10 rounded-lg text-blue-700/70"><Pencil size={15} /></button>
+                    <button onClick={() => handleDelete(g.id)} className="p-2.5 -m-0.5 hover:bg-red-900/10 rounded-lg text-red-900/70"><Trash2 size={15} /></button>
                   </div>
                 </td>
               </tr>
@@ -977,11 +980,14 @@ export default function Guru() {
   )
 }
 
+// PERBAIKAN: grid form kini responsif — 1 kolom di layar sempit (HP) dan
+// 2 kolom mulai breakpoint sm ke atas, agar label & input (NIP, NIK, tanggal,
+// dll) tidak "kepenyet" di layar HP (~360px).
 function SeksiForm({ judul, children }) {
   return (
     <div className="mt-5 first:mt-0">
       <p className="eyebrow text-blue-700 mb-2">{judul}</p>
-      <div className="grid grid-cols-2 gap-3">{children}</div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{children}</div>
     </div>
   )
 }
@@ -997,7 +1003,7 @@ function SeksiProfil({ judul, children }) {
 
 function Field({ label, children, full }) {
   return (
-    <div className={full ? 'col-span-2' : ''}>
+    <div className={full ? 'col-span-1 sm:col-span-2' : ''}>
       <label className="eyebrow mb-1.5 block">{label}</label>
       {children}
     </div>
