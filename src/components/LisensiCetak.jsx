@@ -1,45 +1,28 @@
 import { useEffect, useState } from "react";
+import { useAuth } from "../lib/AuthContext";
+import { supabase } from "../lib/supabaseClient";
 
 /**
- * LisensiCetak — versi portabel
+ * LisensiCetak — versi otomatis per sekolah (multi-tenant)
  * -------------------------------------------------------------
- * Satu file yang sama disalin ke semua aplikasi. Yang berbeda
- * antar aplikasi hanya isi PRESET di bawah, atau nilai yang
- * dikirim lewat props.
+ * Aplikasi ini dipakai banyak sekolah sekaligus, jadi komponen
+ * ini TIDAK memakai nama tetap. Ia membaca sendiri profil sekolah
+ * dari akun yang sedang login (sama seperti NotaDenganSekolah /
+ * Kuitansi.jsx), lalu menampilkannya di catatan kaki setiap
+ * halaman yang dicetak.
  *
- * Pasang SEKALI di root (App.jsx). Tidak tampil di layar,
- * hanya ikut tercetak di kaki SETIAP halaman.
+ * Pasang SEKALI di root (App.jsx), di dalam CartProvider, di luar
+ * Suspense — supaya jejaknya tetap muncul walau halaman rute
+ * sedang lazy-load:
  *
- *   <LisensiCetak app="kua" />
- *   <LisensiCetak app="sekolah" />
- *   <LisensiCetak produk="Aplikasi Lain" pemilik="..." />  // manual
+ *   <LisensiCetak />
+ *
+ * Kalau untuk sementara ingin memaksa satu nama tetap (mis. saat
+ * profil sekolah belum lengkap), bisa override lewat props:
+ *
+ *   <LisensiCetak produk="Nama Sekolah Manual" />
  */
 
-/* ============================================================
-   1. PRESET — sunting bagian ini sesuai aplikasi Anda
-   ============================================================ */
-export const PRESET = {
-  kua: {
-    produk: "Aplikasi Penyuluh Agama Islam",
-    pemilik: "KUA Kec. Aru Selatan",
-    lisensi:
-      "Dokumen dihasilkan secara elektronik. Penggandaan di luar keperluan dinas harus seizin pemilik aplikasi.",
-    situs: "",
-    prefixKode: "PAI",
-  },
-  sekolah: {
-    produk: "SIMAK App",
-    pemilik: "",           // isi nama Anda / sekolah pemegang lisensi
-    lisensi:
-      "Lisensi pemakaian tunggal. Dilarang menggandakan atau menjual ulang tanpa izin tertulis.",
-    situs: "",
-    prefixKode: "SMK",
-  },
-};
-
-/* ============================================================
-   2. Komponen
-   ============================================================ */
 function buatKodeCetak(prefix) {
   const t = Date.now().toString(36).toUpperCase();
   const r = Math.random().toString(36).slice(2, 6).toUpperCase();
@@ -56,26 +39,59 @@ function waktuCetak() {
   });
 }
 
-export default function LisensiCetak({ app, onCetak, ...props }) {
-  const cfg = { ...(PRESET[app] ?? {}), ...props };
-  const {
-    produk = "Aplikasi",
-    pemilik = "",
-    lisensi = "",
-    situs = "",
-    prefixKode = "CTK",
-  } = cfg;
+export default function LisensiCetak({
+  produk,          // override manual (opsional) — kalau kosong, diambil dari profil_sekolah
+  pemilik = "",
+  lisensi = "Dokumen dihasilkan secara elektronik oleh aplikasi sekolah.",
+  situs = "",
+  prefixKode = "SMK",
+  onCetak,
+}) {
+  const { profil } = useAuth();
+  const sekolahId = profil?.sekolah_id;
 
+  const [namaSekolah, setNamaSekolah] = useState(null);
   const [kode, setKode] = useState(() => buatKodeCetak(prefixKode));
   const [waktu, setWaktu] = useState(waktuCetak);
+
+  // Ambil profil sekolah milik akun yang sedang login — sama seperti
+  // pola di NotaDenganSekolah, supaya tiap sekolah lihat namanya sendiri.
+  useEffect(() => {
+    if (!sekolahId) return;
+    supabase
+      .from("profil_sekolah")
+      .select("nama_sekolah")
+      .eq("sekolah_id", sekolahId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.nama_sekolah) setNamaSekolah(data.nama_sekolah);
+      });
+  }, [sekolahId]);
+
+  const produkTampil = produk || namaSekolah || "Aplikasi Sekolah";
 
   useEffect(() => {
     const segarkan = () => {
       const baru = buatKodeCetak(prefixKode);
       setKode(baru);
       setWaktu(waktuCetak());
-      // Kait opsional: simpan jejak cetak ke database
-      onCetak?.({ kode: baru, produk, dicetakPada: new Date().toISOString() });
+      // Kait opsional: simpan jejak cetak ke database (siapa mencetak apa, kapan)
+      onCetak?.({
+        kode: baru,
+        produk: produkTampil,
+        sekolahId,
+        dicetakPada: new Date().toISOString(),
+      });
+
+      // --- Paksa reflow sebelum Chrome membuat pratinjau cetak ---
+      // Chrome kadang tidak langsung merender elemen `position: fixed`
+      // pada pratinjau pertama (baru muncul setelah ada interaksi lain
+      // di dialog print, mis. centang "Headers and footers"). Membaca
+      // offsetHeight memaksa browser menghitung ulang layout SEBELUM
+      // pratinjau dibuat, sehingga catatan ini langsung tampil tanpa
+      // perlu klik apa pun lagi.
+      // eslint-disable-next-line no-unused-expressions
+      document.body.offsetHeight;
     };
 
     window.addEventListener("beforeprint", segarkan);
@@ -87,7 +103,7 @@ export default function LisensiCetak({ app, onCetak, ...props }) {
       window.removeEventListener("beforeprint", segarkan);
       mq?.removeEventListener?.("change", onMq);
     };
-  }, [prefixKode, produk, onCetak]);
+  }, [prefixKode, produkTampil, sekolahId, onCetak]);
 
   return (
     <>
@@ -132,7 +148,7 @@ export default function LisensiCetak({ app, onCetak, ...props }) {
       <footer className="jejak-lisensi" aria-hidden="true">
         <div className="jejak-baris">
           <p>
-            <span className="jejak-produk">{produk}</span>
+            <span className="jejak-produk">{produkTampil}</span>
             {pemilik && <span className="jejak-ket"> — hak cipta {pemilik}</span>}
             {situs && <span className="jejak-ket"> · {situs}</span>}
           </p>
@@ -145,30 +161,32 @@ export default function LisensiCetak({ app, onCetak, ...props }) {
 }
 
 /* ============================================================
-   3. Pemasangan
+   Pemasangan di App.jsx (di dalam CartProvider, setelah Suspense):
 
-   src/components/LisensiCetak.jsx   <- salin file ini apa adanya
+     <CartProvider>
+       <Suspense fallback={<FallbackLoader />}>
+         <Routes>
+           ...
+         </Routes>
+       </Suspense>
 
-   App.jsx:
-     import LisensiCetak from "./components/LisensiCetak";
+       <LisensiCetak />
+     </CartProvider>
 
-     export default function App() {
-       return (
-         <>
-           <RouterAnda />
-           <LisensiCetak app="kua" />
-         </>
-       );
-     }
+   Karena LisensiCetak sekarang memanggil useAuth() sendiri, ia
+   HARUS berada di dalam komponen yang sudah dibungkus AuthProvider
+   di pohon React (biasanya AuthProvider ada di main.jsx/index.jsx
+   membungkus <App />, bukan di dalam App.jsx itu sendiri — jadi
+   ini seharusnya aman tanpa perubahan tambahan).
 
-   Menyimpan jejak cetak ke Supabase (opsional):
+   Menyimpan jejak cetak ke Supabase (opsional, per-sekolah):
 
      <LisensiCetak
-       app="sekolah"
-       onCetak={async ({ kode, produk, dicetakPada }) => {
+       onCetak={async ({ kode, produk, sekolahId, dicetakPada }) => {
          const { data: { user } } = await supabase.auth.getUser();
          await supabase.from("log_cetak").insert({
-           kode, produk, user_id: user?.id, dicetak_pada: dicetakPada,
+           kode, produk, sekolah_id: sekolahId,
+           user_id: user?.id, dicetak_pada: dicetakPada,
          });
        }}
      />
@@ -178,15 +196,18 @@ export default function LisensiCetak({ app, onCetak, ...props }) {
        id bigint generated always as identity primary key,
        kode text not null,
        produk text,
+       sekolah_id uuid,
        user_id uuid references auth.users(id),
        dicetak_pada timestamptz default now()
      );
 
-   Catatan penting:
-   - Letakkan komponen sebagai anak langsung root React. Kalau
-     berada di dalam elemen ber-`transform` atau `overflow: hidden`,
-     position: fixed akan terkunci dan catatan hanya muncul sekali.
-   - Kalau halaman cetak sudah punya footer sendiri (mis. kop surat
-     KUA dengan blok tanda tangan), beri margin bawah ekstra pada
-     wrapper cetak agar tidak bertumpuk.
+   Catatan:
+   - Sebelum profil_sekolah selesai dimuat, produkTampil sementara
+     menampilkan "Aplikasi Sekolah". Ini normal — begitu data datang,
+     nama sekolah muncul di cetakan berikutnya. Kalau ingin memaksa
+     tunggu data siap dulu sebelum tombol cetak aktif, itu diatur di
+     halaman yang memanggil window.print(), bukan di komponen ini.
+   - Sesuaikan path import useAuth/supabase di atas ("../lib/...")
+     kalau lokasi file LisensiCetak.jsx Anda berbeda kedalamannya
+     dari folder lib/.
 ============================================================ */
