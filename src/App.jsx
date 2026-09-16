@@ -105,6 +105,8 @@ const MateriModerasiBeragama = lazy(() => import('./pages/MateriModerasiBeragama
 const LaporanPenyuluhanMasyarakatBermoral = lazy(() => import('./pages/LaporanPenyuluhanMasyarakatBermoral'))
 const RencanaKerjaTahunan = lazy(() => import('./pages/RencanaKerjaTahunan'))
 const MateriMajelisTaklim = lazy(() => import('./pages/MateriMajelisTaklim'))
+const PusatKelompokBinaan = lazy(() => import('./pages/PusatKelompokBinaan'))
+const KelolaKelompokBinaan = lazy(() => import('./pages/KelolaKelompokBinaan'))
 // ...
 const AdminLiveChat = lazy(() => import('./pages/AdminLiveChat'))
 const ScanDokumen = lazy(() => import('./pages/ScanDokumen'))
@@ -278,6 +280,8 @@ export default function App() {
           <Route path="/laporan-masyarakat-bermoral-harmonis" element={<ProtectedRoute adminOnly><LaporanPenyuluhanMasyarakatBermoral /></ProtectedRoute>} />
           <Route path="/rencana-kerja-tahunan" element={<ProtectedRoute><RencanaKerjaTahunan /></ProtectedRoute>} />
           <Route path="/materi-majelis-taklim" element={<ProtectedRoute adminOnly><MateriMajelisTaklim /></ProtectedRoute>} />
+          <Route path="/pusat-kelompok-binaan" element={<ProtectedRoute adminOnly><PusatKelompokBinaan /></ProtectedRoute>} />
+          <Route path="/kelompok-binaan/:slug" element={<ProtectedRoute adminOnly><KelolaKelompokBinaan /></ProtectedRoute>} />
           <Route path="/kelas" element={<ProtectedRoute adminOnly><Kelas /></ProtectedRoute>} />
           <Route path="/profil-kantor" element={<ProtectedRoute adminOnly><ProfilKantor /></ProtectedRoute>} />
 
