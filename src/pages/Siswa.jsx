@@ -149,6 +149,83 @@ const EXCEL_HEADERS = [
   'sekolah_asal',
 ]
 
+// Satu sumber kebenaran untuk baris ekspor Excel, supaya ekspor "semua siswa"
+// dan ekspor "per kelas" tidak pernah beda kolomnya.
+function toExcelRow(s) {
+  return {
+    nama_lengkap: s.nama_lengkap || '',
+    nis: s.nis || '',
+    nisn: s.nisn || '',
+    nik: s.nik || '',
+    no_kk: s.no_kk || '',
+    nomor_ujian: s.nomor_ujian || '',
+    no_seri_ijazah: s.no_seri_ijazah || '',
+    skhun: s.skhun || '',
+    kelas: s.kelas?.nama_kelas || '',
+    'jenis_kelamin(L/P)': s.jenis_kelamin || '',
+    agama: s.agama || '',
+    'kewarganegaraan(WNI asli/WNI Keturunan/WNA)': s.kewarganegaraan || '',
+    tempat_lahir: s.tempat_lahir || '',
+    'tanggal_lahir(YYYY-MM-DD)': s.tanggal_lahir || '',
+    tahun_lahir: s.tahun_lahir || '',
+    nama_ayah: s.nama_ayah || '',
+    nik_ayah: s.nik_ayah || '',
+    tahun_lahir_ayah: s.tahun_lahir_ayah || '',
+    pendidikan_ayah: s.pendidikan_ayah || '',
+    pekerjaan_ayah: s.pekerjaan_ayah || '',
+    penghasilan_ayah: s.penghasilan_ayah || '',
+    nama_ibu: s.nama_ibu || '',
+    nik_ibu: s.nik_ibu || '',
+    tahun_lahir_ibu: s.tahun_lahir_ibu || '',
+    pendidikan_ibu: s.pendidikan_ibu || '',
+    pekerjaan_ibu: s.pekerjaan_ibu || '',
+    penghasilan_ibu: s.penghasilan_ibu || '',
+    nama_orang_tua: s.nama_orang_tua || '',
+    no_hp_orang_tua: s.no_hp_orang_tua || '',
+    alamat: s.alamat || '',
+    alamat_tinggal: s.alamat_tinggal || '',
+    rt: s.rt || '',
+    rw: s.rw || '',
+    dusun: s.dusun || '',
+    kelurahan: s.kelurahan || '',
+    kecamatan: s.kecamatan || '',
+    kode_pos: s.kode_pos || '',
+    jenis_tinggal: s.jenis_tinggal || '',
+    alat_transportasi: s.alat_transportasi || '',
+    telepon: s.telepon || '',
+    hp: s.hp || '',
+    email: s.email || '',
+    'penerima_kps(Ya/Tidak)': s.penerima_kps || '',
+    no_kps: s.no_kps || '',
+    'penerima_kip(Ya/Tidak)': s.penerima_kip || '',
+    nomor_kip: s.nomor_kip || '',
+    nama_di_kip: s.nama_di_kip || '',
+    nomor_kks: s.nomor_kks || '',
+    'layak_pip(Ya/Tidak)': s.layak_pip || '',
+    alasan_layak_pip: s.alasan_layak_pip || '',
+    no_registrasi_akta_lahir: s.no_registrasi_akta_lahir || '',
+    bank: s.bank || '',
+    no_rekening: s.no_rekening || '',
+    rekening_atas_nama: s.rekening_atas_nama || '',
+    kebutuhan_khusus: s.kebutuhan_khusus || '',
+    berat_badan: s.berat_badan || '',
+    tinggi_badan: s.tinggi_badan || '',
+    lingkar_kepala: s.lingkar_kepala || '',
+    anak_ke: s.anak_ke || '',
+    jumlah_saudara_kandung: s.jumlah_saudara_kandung || '',
+    sekolah_asal: s.sekolah_asal || '',
+  }
+}
+
+function unduhExcel(daftarSiswa, namaSheet, namaFile) {
+  const rows = daftarSiswa.map(toExcelRow)
+  const ws = XLSX.utils.json_to_sheet(rows, { header: EXCEL_HEADERS })
+  ws['!cols'] = EXCEL_HEADERS.map(() => ({ wch: 18 }))
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, namaSheet.slice(0, 30))
+  XLSX.writeFile(wb, namaFile)
+}
+
 // Motif batik (kawung + parang) — sama persis dengan Profil Saya, Dasbor, Galeri & Dokumen,
 // warna garis menyesuaikan latar (emas di atas navy).
 function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 72 }) {
@@ -294,6 +371,17 @@ export default function Siswa() {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  // RESPONSIF: saat modal terbuka, kunci scroll halaman di belakangnya supaya
+  // di HP tidak ikut ter-scroll saat isi modal digulir.
+  useEffect(() => {
+    const adaModal = showForm || profilLihat
+    if (adaModal) {
+      const sebelumnya = document.body.style.overflow
+      document.body.style.overflow = 'hidden'
+      return () => { document.body.style.overflow = sebelumnya }
+    }
+  }, [showForm, profilLihat])
 
   // --- Foto profil: memakai bucket & kolom yang sama persis dengan fitur Cetak Kartu ---
   function fotoUrl(path) {
@@ -605,149 +693,17 @@ export default function Siswa() {
   // unduh -> edit data massal di Excel -> upload lagi lewat "Impor Massal" tanpa perlu ubah header.
   function handleExportExcel() {
     setShowExportMenu(false)
-    const rows = filtered.map((s) => ({
-      nama_lengkap: s.nama_lengkap || '',
-      nis: s.nis || '',
-      nisn: s.nisn || '',
-      nik: s.nik || '',
-      no_kk: s.no_kk || '',
-      nomor_ujian: s.nomor_ujian || '',
-      no_seri_ijazah: s.no_seri_ijazah || '',
-      skhun: s.skhun || '',
-      kelas: s.kelas?.nama_kelas || '',
-      'jenis_kelamin(L/P)': s.jenis_kelamin || '',
-      agama: s.agama || '',
-      'kewarganegaraan(WNI asli/WNI Keturunan/WNA)': s.kewarganegaraan || '',
-      tempat_lahir: s.tempat_lahir || '',
-      'tanggal_lahir(YYYY-MM-DD)': s.tanggal_lahir || '',
-      tahun_lahir: s.tahun_lahir || '',
-      nama_ayah: s.nama_ayah || '',
-      nik_ayah: s.nik_ayah || '',
-      tahun_lahir_ayah: s.tahun_lahir_ayah || '',
-      pendidikan_ayah: s.pendidikan_ayah || '',
-      pekerjaan_ayah: s.pekerjaan_ayah || '',
-      penghasilan_ayah: s.penghasilan_ayah || '',
-      nama_ibu: s.nama_ibu || '',
-      nik_ibu: s.nik_ibu || '',
-      tahun_lahir_ibu: s.tahun_lahir_ibu || '',
-      pendidikan_ibu: s.pendidikan_ibu || '',
-      pekerjaan_ibu: s.pekerjaan_ibu || '',
-      penghasilan_ibu: s.penghasilan_ibu || '',
-      nama_orang_tua: s.nama_orang_tua || '',
-      no_hp_orang_tua: s.no_hp_orang_tua || '',
-      alamat: s.alamat || '',
-      alamat_tinggal: s.alamat_tinggal || '',
-      rt: s.rt || '',
-      rw: s.rw || '',
-      dusun: s.dusun || '',
-      kelurahan: s.kelurahan || '',
-      kecamatan: s.kecamatan || '',
-      kode_pos: s.kode_pos || '',
-      jenis_tinggal: s.jenis_tinggal || '',
-      alat_transportasi: s.alat_transportasi || '',
-      telepon: s.telepon || '',
-      hp: s.hp || '',
-      email: s.email || '',
-      'penerima_kps(Ya/Tidak)': s.penerima_kps || '',
-      no_kps: s.no_kps || '',
-      'penerima_kip(Ya/Tidak)': s.penerima_kip || '',
-      nomor_kip: s.nomor_kip || '',
-      nama_di_kip: s.nama_di_kip || '',
-      nomor_kks: s.nomor_kks || '',
-      'layak_pip(Ya/Tidak)': s.layak_pip || '',
-      alasan_layak_pip: s.alasan_layak_pip || '',
-      no_registrasi_akta_lahir: s.no_registrasi_akta_lahir || '',
-      bank: s.bank || '',
-      no_rekening: s.no_rekening || '',
-      rekening_atas_nama: s.rekening_atas_nama || '',
-      kebutuhan_khusus: s.kebutuhan_khusus || '',
-      berat_badan: s.berat_badan || '',
-      tinggi_badan: s.tinggi_badan || '',
-      lingkar_kepala: s.lingkar_kepala || '',
-      anak_ke: s.anak_ke || '',
-      jumlah_saudara_kandung: s.jumlah_saudara_kandung || '',
-      sekolah_asal: s.sekolah_asal || '',
-    }))
-
-    const ws = XLSX.utils.json_to_sheet(rows, { header: EXCEL_HEADERS })
-    ws['!cols'] = EXCEL_HEADERS.map(() => ({ wch: 18 }))
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Data Siswa')
-    XLSX.writeFile(wb, `Data-Siswa-${new Date().toISOString().slice(0, 10)}.xlsx`)
+    unduhExcel(filtered, 'Data Siswa', `Data-Siswa-${new Date().toISOString().slice(0, 10)}.xlsx`)
   }
 
-  // TAMBAHAN: Export Excel (.xlsx) khusus satu kelas — dipanggil dari dropdown
-  // "Unduh / Cetak" pada header masing-masing kelompok kelas.
+  // TAMBAHAN: Export Excel (.xlsx) khusus satu kelas — dipanggil dari tombol
+  // "Excel" pada header masing-masing kelompok kelas.
   function handleExportExcelKelasTertentu(group) {
-    const rows = group.siswa.map((s) => ({
-      nama_lengkap: s.nama_lengkap || '',
-      nis: s.nis || '',
-      nisn: s.nisn || '',
-      nik: s.nik || '',
-      no_kk: s.no_kk || '',
-      nomor_ujian: s.nomor_ujian || '',
-      no_seri_ijazah: s.no_seri_ijazah || '',
-      skhun: s.skhun || '',
-      kelas: s.kelas?.nama_kelas || '',
-      'jenis_kelamin(L/P)': s.jenis_kelamin || '',
-      agama: s.agama || '',
-      'kewarganegaraan(WNI asli/WNI Keturunan/WNA)': s.kewarganegaraan || '',
-      tempat_lahir: s.tempat_lahir || '',
-      'tanggal_lahir(YYYY-MM-DD)': s.tanggal_lahir || '',
-      tahun_lahir: s.tahun_lahir || '',
-      nama_ayah: s.nama_ayah || '',
-      nik_ayah: s.nik_ayah || '',
-      tahun_lahir_ayah: s.tahun_lahir_ayah || '',
-      pendidikan_ayah: s.pendidikan_ayah || '',
-      pekerjaan_ayah: s.pekerjaan_ayah || '',
-      penghasilan_ayah: s.penghasilan_ayah || '',
-      nama_ibu: s.nama_ibu || '',
-      nik_ibu: s.nik_ibu || '',
-      tahun_lahir_ibu: s.tahun_lahir_ibu || '',
-      pendidikan_ibu: s.pendidikan_ibu || '',
-      pekerjaan_ibu: s.pekerjaan_ibu || '',
-      penghasilan_ibu: s.penghasilan_ibu || '',
-      nama_orang_tua: s.nama_orang_tua || '',
-      no_hp_orang_tua: s.no_hp_orang_tua || '',
-      alamat: s.alamat || '',
-      alamat_tinggal: s.alamat_tinggal || '',
-      rt: s.rt || '',
-      rw: s.rw || '',
-      dusun: s.dusun || '',
-      kelurahan: s.kelurahan || '',
-      kecamatan: s.kecamatan || '',
-      kode_pos: s.kode_pos || '',
-      jenis_tinggal: s.jenis_tinggal || '',
-      alat_transportasi: s.alat_transportasi || '',
-      telepon: s.telepon || '',
-      hp: s.hp || '',
-      email: s.email || '',
-      'penerima_kps(Ya/Tidak)': s.penerima_kps || '',
-      no_kps: s.no_kps || '',
-      'penerima_kip(Ya/Tidak)': s.penerima_kip || '',
-      nomor_kip: s.nomor_kip || '',
-      nama_di_kip: s.nama_di_kip || '',
-      nomor_kks: s.nomor_kks || '',
-      'layak_pip(Ya/Tidak)': s.layak_pip || '',
-      alasan_layak_pip: s.alasan_layak_pip || '',
-      no_registrasi_akta_lahir: s.no_registrasi_akta_lahir || '',
-      bank: s.bank || '',
-      no_rekening: s.no_rekening || '',
-      rekening_atas_nama: s.rekening_atas_nama || '',
-      kebutuhan_khusus: s.kebutuhan_khusus || '',
-      berat_badan: s.berat_badan || '',
-      tinggi_badan: s.tinggi_badan || '',
-      lingkar_kepala: s.lingkar_kepala || '',
-      anak_ke: s.anak_ke || '',
-      jumlah_saudara_kandung: s.jumlah_saudara_kandung || '',
-      sekolah_asal: s.sekolah_asal || '',
-    }))
-
-    const ws = XLSX.utils.json_to_sheet(rows, { header: EXCEL_HEADERS })
-    ws['!cols'] = EXCEL_HEADERS.map(() => ({ wch: 18 }))
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, group.namaKelas.slice(0, 30))
-    XLSX.writeFile(wb, `Data-Siswa-${group.namaKelas}-${new Date().toISOString().slice(0, 10)}.xlsx`)
+    unduhExcel(
+      group.siswa,
+      group.namaKelas,
+      `Data-Siswa-${group.namaKelas}-${new Date().toISOString().slice(0, 10)}.xlsx`
+    )
   }
 
   // --- Export: Excel (CSV) ---
@@ -827,11 +783,13 @@ export default function Siswa() {
       <html>
       <head>
         <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>Data Siswa</title>
         <style>
           body { font-family: Arial, Helvetica, sans-serif; padding: 24px; color: #1a1a1a; }
           h1 { font-size: 18px; margin-bottom: 2px; }
           p.subtitle { font-size: 12px; color: #666; margin-top: 0; margin-bottom: 16px; }
+          .scroll { width: 100%; overflow-x: auto; }
           table { width: 100%; border-collapse: collapse; font-size: 11px; }
           th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
           th { background: #f2f2f2; }
@@ -843,6 +801,7 @@ export default function Siswa() {
       <body>
         <h1>Data Siswa</h1>
         <p class="subtitle">Dicetak pada ${tanggal} · Total ${filtered.length} siswa</p>
+        <div class="scroll">
         <table>
           <thead>
             <tr>
@@ -861,6 +820,7 @@ export default function Siswa() {
             ${rowsHtml}
           </tbody>
         </table>
+        </div>
         <script>
           window.onload = function () {
             window.print();
@@ -871,6 +831,10 @@ export default function Siswa() {
     `
 
     const printWindow = window.open('', '_blank')
+    if (!printWindow) {
+      alert('Jendela cetak diblokir browser. Izinkan pop-up untuk situs ini lalu coba lagi.')
+      return
+    }
     printWindow.document.write(html)
     printWindow.document.close()
   }
@@ -902,11 +866,13 @@ export default function Siswa() {
       <html>
       <head>
         <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>Data Siswa - ${group.namaKelas}</title>
         <style>
           body { font-family: Arial, Helvetica, sans-serif; padding: 24px; color: #1a1a1a; }
           h1 { font-size: 18px; margin-bottom: 2px; }
           p.subtitle { font-size: 12px; color: #666; margin-top: 0; margin-bottom: 16px; }
+          .scroll { width: 100%; overflow-x: auto; }
           table { width: 100%; border-collapse: collapse; font-size: 11px; }
           th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
           th { background: #f2f2f2; }
@@ -918,6 +884,7 @@ export default function Siswa() {
       <body>
         <h1>Data Siswa — ${group.namaKelas}</h1>
         <p class="subtitle">Dicetak pada ${tanggal} · Total ${group.siswa.length} siswa</p>
+        <div class="scroll">
         <table>
           <thead>
             <tr>
@@ -936,6 +903,7 @@ export default function Siswa() {
             ${rowsHtml}
           </tbody>
         </table>
+        </div>
         <script>
           window.onload = function () {
             window.print();
@@ -946,6 +914,10 @@ export default function Siswa() {
     `
 
     const printWindow = window.open('', '_blank')
+    if (!printWindow) {
+      alert('Jendela cetak diblokir browser. Izinkan pop-up untuk situs ini lalu coba lagi.')
+      return
+    }
     printWindow.document.write(html)
     printWindow.document.close()
   }
@@ -953,8 +925,8 @@ export default function Siswa() {
   if (!sekolahId) {
     return (
       <Layout title="Data Siswa" subtitle="Belum ada sekolah aktif">
-        <div className="card p-8 text-center">
-          <p className="font-display text-lg font-semibold text-ink-950">Belum ada sekolah aktif.</p>
+        <div className="card p-6 sm:p-8 text-center">
+          <p className="font-display text-base sm:text-lg font-semibold text-ink-950">Belum ada sekolah aktif.</p>
           <p className="text-sm text-ink-700/60 mt-1">Pilih sekolah aktif terlebih dahulu untuk melihat data siswa.</p>
         </div>
       </Layout>
@@ -966,79 +938,97 @@ export default function Siswa() {
       title="Data Siswa"
       subtitle={`${data.length} siswa terdaftar · ${jumlahAktif} aktif, ${jumlahNonaktif} nonaktif`}
       actions={
-        <>
+        // RESPONSIF: tombol aksi dibungkus flex-wrap supaya turun baris di HP,
+        // bukan memaksa header melebar ke samping.
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto sm:justify-end">
           {isAdmin && selectedIds.length > 0 && (
-            <button className="btn-secondary text-red-600 hover:bg-red-50" onClick={handleBulkDelete} disabled={bulkDeleting}>
+            <button
+              className="btn-secondary text-red-600 hover:bg-red-50 whitespace-nowrap"
+              onClick={handleBulkDelete}
+              disabled={bulkDeleting}
+            >
               {bulkDeleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-              Hapus Massal ({selectedIds.length})
+              <span className="hidden sm:inline">Hapus Massal</span>
+              <span className="sm:hidden">Hapus</span>
+              {' '}({selectedIds.length})
             </button>
           )}
           <div className="relative" ref={exportMenuRef}>
-            <button className="btn-secondary" onClick={() => setShowExportMenu((v) => !v)}>
-              <Download size={16} /> Unduh / Cetak <ChevronDown size={14} />
+            <button className="btn-secondary whitespace-nowrap" onClick={() => setShowExportMenu((v) => !v)}>
+              <Download size={16} />
+              <span className="hidden sm:inline">Unduh / Cetak</span>
+              <span className="sm:hidden">Unduh</span>
+              <ChevronDown size={14} />
             </button>
             {showExportMenu && (
-              <div className="absolute right-0 mt-1.5 w-64 card p-1.5 z-20 shadow-lg">
+              <div className="absolute right-0 mt-1.5 w-[15rem] max-w-[calc(100vw-2rem)] card p-1.5 z-20 shadow-lg">
                 <button
                   onClick={handleExportExcel}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-ink-700 hover:bg-ink-900/[0.05] text-left"
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-ink-700 hover:bg-ink-900/[0.05] text-left"
                 >
-                  <FileSpreadsheet size={16} /> Unduh Excel (siap edit & impor ulang)
+                  <FileSpreadsheet size={16} className="shrink-0" /> Unduh Excel (siap edit & impor ulang)
                 </button>
                 <button
                   onClick={handleExportCSV}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-ink-700 hover:bg-ink-900/[0.05] text-left"
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-ink-700 hover:bg-ink-900/[0.05] text-left"
                 >
-                  <FileSpreadsheet size={16} /> Unduh Excel (.csv)
+                  <FileSpreadsheet size={16} className="shrink-0" /> Unduh Excel (.csv)
                 </button>
                 <button
                   onClick={handlePrintPDF}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-ink-700 hover:bg-ink-900/[0.05] text-left"
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-ink-700 hover:bg-ink-900/[0.05] text-left"
                 >
-                  <Printer size={16} /> Cetak / Unduh PDF
+                  <Printer size={16} className="shrink-0" /> Cetak / Unduh PDF
                 </button>
               </div>
             )}
           </div>
           {isAdmin && (
-            <button className="btn-secondary" onClick={() => setShowImport(true)}>
-              <UploadCloud size={16} /> Impor Massal
+            <button className="btn-secondary whitespace-nowrap" onClick={() => setShowImport(true)}>
+              <UploadCloud size={16} />
+              <span className="hidden sm:inline">Impor Massal</span>
+              <span className="sm:hidden">Impor</span>
             </button>
           )}
           {isAdmin && (
-            <button className="btn-secondary" onClick={() => setShowImportDapodik(true)}>
-              <UploadCloud size={16} /> Impor dari Dapodik
+            <button className="btn-secondary whitespace-nowrap" onClick={() => setShowImportDapodik(true)}>
+              <UploadCloud size={16} />
+              <span className="hidden sm:inline">Impor dari Dapodik</span>
+              <span className="sm:hidden">Dapodik</span>
             </button>
           )}
           {isAdmin && (
-            <button className="btn-primary" onClick={openAdd}>
-              <Plus size={16} /> Tambah Siswa
+            <button className="btn-primary whitespace-nowrap" onClick={openAdd}>
+              <Plus size={16} />
+              <span className="hidden sm:inline">Tambah Siswa</span>
+              <span className="sm:hidden">Tambah</span>
             </button>
           )}
-        </>
+        </div>
       }
     >
       {/* Kartu pencarian — background biru tua (navy), sama seperti kartu identitas di Profil Saya, dengan corak batik emas */}
-      <div className="relative overflow-hidden rounded-xl p-6 mb-4 flex items-center gap-4 bg-gradient-to-br from-blue-900 to-blue-950">
+      <div className="relative overflow-hidden rounded-xl p-4 sm:p-6 mb-4 flex items-center gap-3 sm:gap-4 bg-gradient-to-br from-blue-900 to-blue-950">
         <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/5 pointer-events-none" />
         <div className="absolute -bottom-14 -left-6 w-32 h-32 rounded-full bg-white/5 pointer-events-none" />
         <BatikOverlay patternId="batikSiswaBanner" strokeColor="#d4af37" />
 
-        <div className="relative w-10 h-10 rounded-full bg-white/10 ring-2 ring-white/20 text-white flex items-center justify-center shrink-0">
+        <div className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/10 ring-2 ring-white/20 text-white flex items-center justify-center shrink-0">
           <Search size={18} />
         </div>
-        <div className="relative max-w-sm w-full">
+        <div className="relative w-full sm:max-w-sm">
           <input
-            className="input-field w-full"
-            placeholder="Cari nama, NIS, NISN, NIK, atau Nomor Ujian..."
+            className="input-field w-full text-base sm:text-sm"
+            placeholder="Cari nama, NIS, NISN, NIK, atau No. Ujian..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
       </div>
 
-      {/* TAMBAHAN: Tab status — menggantikan halaman terpisah "Siswa Nonaktif" */}
-      <div className="flex items-center gap-1.5 mb-4">
+      {/* TAMBAHAN: Tab status — menggantikan halaman terpisah "Siswa Nonaktif".
+          RESPONSIF: bisa digeser ke samping kalau layar sempit. */}
+      <div className="flex items-center gap-1.5 mb-4 overflow-x-auto -mx-1 px-1 pb-1">
         <TabStatus active={statusTab === 'semua'} onClick={() => setStatusTab('semua')}>
           Semua ({data.length})
         </TabStatus>
@@ -1069,147 +1059,106 @@ export default function Siswa() {
 
             return (
               <div key={group.key} className={`card relative overflow-hidden border ${warna.border}`}>
-                {/* Header kelompok kelas — warna berbeda per kelas */}
-                <button
-                  type="button"
-                  onClick={() => toggleCollapse(group.key)}
-                  className={`w-full flex items-center justify-between gap-3 px-4 py-3 bg-gradient-to-r ${warna.header} text-left`}
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
+                {/* Header kelompok kelas — warna berbeda per kelas.
+                    PERBAIKAN: dulu tombol aksi berada DI DALAM <button> (HTML tidak valid
+                    dan sulit ditekan di layar sentuh). Sekarang jadi <div> dengan tombol
+                    terpisah, dan di HP labelnya disembunyikan (tinggal ikon). */}
+                <div className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 bg-gradient-to-r ${warna.header}`}>
+                  <button
+                    type="button"
+                    onClick={() => toggleCollapse(group.key)}
+                    className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1 text-left py-1"
+                    aria-expanded={!collapsed}
+                  >
                     {collapsed ? (
                       <ChevronRight size={16} className="text-white/80 shrink-0" />
                     ) : (
                       <ChevronDown size={16} className="text-white/80 shrink-0" />
                     )}
-                    <span className={`w-2.5 h-2.5 rounded-full ${warna.dot} ring-2 ring-white/40 shrink-0`} />
-                    <span className="font-display font-semibold text-white truncate">{group.namaKelas}</span>
-                    <span className="text-xs text-white/70 shrink-0">{group.siswa.length} siswa</span>
-                  </div>
+                    <span className={`w-2.5 h-2.5 rounded-full ${warna.dot} ring-2 ring-white/40 shrink-0 hidden sm:block`} />
+                    <span className="font-display font-semibold text-white text-sm sm:text-base truncate">{group.namaKelas}</span>
+                    <span className="text-[11px] sm:text-xs text-white/70 shrink-0">{group.siswa.length} siswa</span>
+                  </button>
 
                   {/* TAMBAHAN: grup aksi per-kelas — Cetak, Unduh Excel, dan Pilih Semua,
-                      dijejer di kanan header supaya tiap kelompok kelas bisa diproses
-                      sendiri-sendiri tanpa harus lewat data siswa kelas lain. */}
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onClick={(e) => { e.stopPropagation(); handlePrintKelasTertentu(group) }}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); handlePrintKelasTertentu(group) } }}
-                      className="flex items-center gap-1.5 text-xs text-white/80 hover:text-white"
+                      supaya tiap kelompok kelas bisa diproses sendiri-sendiri. */}
+                  <div className="flex items-center gap-1 sm:gap-3 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handlePrintKelasTertentu(group)}
+                      className="flex items-center gap-1.5 text-xs text-white/80 hover:text-white p-1.5 rounded-lg hover:bg-white/10"
                       title={`Cetak data siswa kelas ${group.namaKelas}`}
                     >
-                      <Printer size={14} />
-                      Cetak
-                    </span>
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onClick={(e) => { e.stopPropagation(); handleExportExcelKelasTertentu(group) }}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); handleExportExcelKelasTertentu(group) } }}
-                      className="flex items-center gap-1.5 text-xs text-white/80 hover:text-white"
+                      <Printer size={15} />
+                      <span className="hidden sm:inline">Cetak</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleExportExcelKelasTertentu(group)}
+                      className="flex items-center gap-1.5 text-xs text-white/80 hover:text-white p-1.5 rounded-lg hover:bg-white/10"
                       title={`Unduh Excel data siswa kelas ${group.namaKelas}`}
                     >
-                      <FileSpreadsheet size={14} />
-                      Excel
-                    </span>
+                      <FileSpreadsheet size={15} />
+                      <span className="hidden sm:inline">Excel</span>
+                    </button>
                     {isAdmin && (
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        onClick={(e) => { e.stopPropagation(); toggleSelectGroup(groupIds) }}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); toggleSelectGroup(groupIds) } }}
-                        className="flex items-center gap-1.5 text-xs text-white/80 hover:text-white"
+                      <label
+                        className="flex items-center gap-1.5 text-xs text-white/80 hover:text-white p-1.5 rounded-lg hover:bg-white/10 cursor-pointer"
                         title="Pilih semua siswa di kelas ini"
                       >
                         <input
                           type="checkbox"
+                          className="w-4 h-4"
                           checked={semuaTerpilih}
-                          onChange={() => {}}
-                          className="pointer-events-none"
+                          onChange={() => toggleSelectGroup(groupIds)}
                         />
-                        Pilih semua
-                      </span>
+                        <span className="hidden sm:inline">Pilih semua</span>
+                      </label>
                     )}
                   </div>
-                </button>
+                </div>
 
                 {!collapsed && (
-                  <div className="overflow-x-auto">
-                    <table className="table-shell">
-                      <thead>
-                        <tr>
-                          {isAdmin && <th></th>}
-                          <th>Foto</th>
-                          <th>Nama Lengkap</th>
-                          <th>NIS</th>
-                          <th>NISN</th>
-                          <th>NIK</th>
-                          <th>Tempat, Tanggal Lahir</th>
-                          <th>Jenis Kelamin</th>
-                          <th>Status</th>
-                          <th></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {group.siswa.map((s) => (
-                          <tr key={s.id}>
-                            {isAdmin && (
-                              <td>
-                                <input
-                                  type="checkbox"
-                                  checked={selectedIds.includes(s.id)}
-                                  onChange={() => toggleSelectOne(s.id)}
-                                />
-                              </td>
-                            )}
-                            <td>
-                              <label className="relative block w-10 h-10 rounded-full overflow-hidden bg-ink-900/[0.06] cursor-pointer shrink-0 group">
-                                {fotoUrl(s.foto_path) ? (
-                                  <img src={fotoUrl(s.foto_path)} alt="" className="w-full h-full object-cover" />
-                                ) : (
-                                  <span className="w-full h-full flex items-center justify-center text-xs font-semibold text-ink-700/40">
-                                    {s.nama_lengkap?.[0]}
-                                  </span>
-                                )}
-                                <span className="absolute inset-0 bg-ink-950/0 group-hover:bg-ink-950/40 flex items-center justify-center transition-colors">
-                                  {uploadingId === s.id ? (
-                                    <Loader2 size={14} className="animate-spin text-white" />
-                                  ) : (
-                                    <Camera size={13} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                                  )}
-                                </span>
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  className="hidden"
-                                  disabled={uploadingId === s.id}
-                                  onChange={(e) => e.target.files?.[0] && handleFotoUpload(s.id, e.target.files[0])}
-                                />
-                              </label>
-                            </td>
-                            <td className="font-medium">
-                              <button
-                                type="button"
-                                onClick={() => setProfilLihat(s)}
-                                className="hover:underline hover:text-blue-900 text-left"
-                              >
-                                {s.nama_lengkap}
-                              </button>
-                            </td>
-                            <td className="font-mono text-xs">{s.nis}</td>
-                            <td className="font-mono text-xs">{s.nisn}</td>
-                            <td className="font-mono text-xs">{s.nik || '—'}</td>
-                            <td className="text-xs whitespace-nowrap">{tempatTanggalLahir(s)}</td>
-                            <td>{s.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan'}</td>
-                            <td>
+                  <>
+                    {/* --- Tampilan HP: daftar kartu, bukan tabel --- */}
+                    <div className="md:hidden divide-y divide-ink-900/[0.06]">
+                      {group.siswa.map((s) => (
+                        <div key={s.id} className="p-3 flex items-start gap-3">
+                          {isAdmin && (
+                            <input
+                              type="checkbox"
+                              className="mt-3 w-4 h-4 shrink-0"
+                              checked={selectedIds.includes(s.id)}
+                              onChange={() => toggleSelectOne(s.id)}
+                            />
+                          )}
+                          <FotoSiswa
+                            src={fotoUrl(s.foto_path)}
+                            inisial={s.nama_lengkap?.[0]}
+                            uploading={uploadingId === s.id}
+                            onPick={(file) => handleFotoUpload(s.id, file)}
+                            className="w-11 h-11"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <button
+                              type="button"
+                              onClick={() => setProfilLihat(s)}
+                              className="font-medium text-left text-ink-950 leading-snug break-words"
+                            >
+                              {s.nama_lengkap}
+                            </button>
+                            <p className="font-mono text-[11px] text-ink-700/60 mt-0.5 break-all">
+                              NIS {s.nis || '—'} · NISN {s.nisn || '—'}
+                            </p>
+                            <p className="text-[11px] text-ink-700/60 mt-0.5">
+                              {s.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan'} · {tempatTanggalLahir(s)}
+                            </p>
+                            <div className="flex items-center justify-between gap-2 mt-1.5">
                               <span className={`badge ${s.status === 'aktif' ? 'bg-sage-500/15 text-sage-500' : 'bg-ink-900/10 text-ink-700'}`}>
                                 {s.status}
                               </span>
-                            </td>
-                            <td>
                               {isAdmin && (
-                                <div className="flex items-center gap-1 justify-end">
-                                  {/* TAMBAHAN: tombol Aktifkan Kembali, hanya muncul untuk siswa berstatus nonaktif */}
+                                <div className="flex items-center gap-0.5">
                                   {s.status === 'nonaktif' && (
                                     <button
                                       onClick={() => handleAktifkanKembali(s.id)}
@@ -1218,26 +1167,116 @@ export default function Siswa() {
                                       className="p-2 hover:bg-sage-50 rounded-lg text-sage-600"
                                     >
                                       {aktivasiId === s.id ? (
-                                        <Loader2 size={15} className="animate-spin" />
+                                        <Loader2 size={16} className="animate-spin" />
                                       ) : (
-                                        <RotateCcw size={15} />
+                                        <RotateCcw size={16} />
                                       )}
                                     </button>
                                   )}
-                                  <button onClick={() => openEdit(s)} className="p-2 hover:bg-ink-900/5 rounded-lg text-ink-700/60">
-                                    <Pencil size={15} />
+                                  <button onClick={() => openEdit(s)} title="Ubah" className="p-2 hover:bg-ink-900/5 rounded-lg text-ink-700/60">
+                                    <Pencil size={16} />
                                   </button>
-                                  <button onClick={() => handleDelete(s.id)} className="p-2 hover:bg-red-50 rounded-lg text-red-600/70">
-                                    <Trash2 size={15} />
+                                  <button onClick={() => handleDelete(s.id)} title="Hapus" className="p-2 hover:bg-red-50 rounded-lg text-red-600/70">
+                                    <Trash2 size={16} />
                                   </button>
                                 </div>
                               )}
-                            </td>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* --- Tampilan tablet & desktop: tabel seperti semula --- */}
+                    <div className="hidden md:block overflow-x-auto">
+                      <table className="table-shell min-w-[880px]">
+                        <thead>
+                          <tr>
+                            {isAdmin && <th></th>}
+                            <th>Foto</th>
+                            <th>Nama Lengkap</th>
+                            <th>NIS</th>
+                            <th>NISN</th>
+                            <th>NIK</th>
+                            <th>Tempat, Tanggal Lahir</th>
+                            <th>Jenis Kelamin</th>
+                            <th>Status</th>
+                            <th></th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {group.siswa.map((s) => (
+                            <tr key={s.id}>
+                              {isAdmin && (
+                                <td>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedIds.includes(s.id)}
+                                    onChange={() => toggleSelectOne(s.id)}
+                                  />
+                                </td>
+                              )}
+                              <td>
+                                <FotoSiswa
+                                  src={fotoUrl(s.foto_path)}
+                                  inisial={s.nama_lengkap?.[0]}
+                                  uploading={uploadingId === s.id}
+                                  onPick={(file) => handleFotoUpload(s.id, file)}
+                                  className="w-10 h-10"
+                                />
+                              </td>
+                              <td className="font-medium">
+                                <button
+                                  type="button"
+                                  onClick={() => setProfilLihat(s)}
+                                  className="hover:underline hover:text-blue-900 text-left"
+                                >
+                                  {s.nama_lengkap}
+                                </button>
+                              </td>
+                              <td className="font-mono text-xs">{s.nis}</td>
+                              <td className="font-mono text-xs">{s.nisn}</td>
+                              <td className="font-mono text-xs">{s.nik || '—'}</td>
+                              <td className="text-xs whitespace-nowrap">{tempatTanggalLahir(s)}</td>
+                              <td>{s.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan'}</td>
+                              <td>
+                                <span className={`badge ${s.status === 'aktif' ? 'bg-sage-500/15 text-sage-500' : 'bg-ink-900/10 text-ink-700'}`}>
+                                  {s.status}
+                                </span>
+                              </td>
+                              <td>
+                                {isAdmin && (
+                                  <div className="flex items-center gap-1 justify-end">
+                                    {/* TAMBAHAN: tombol Aktifkan Kembali, hanya muncul untuk siswa berstatus nonaktif */}
+                                    {s.status === 'nonaktif' && (
+                                      <button
+                                        onClick={() => handleAktifkanKembali(s.id)}
+                                        disabled={aktivasiId === s.id}
+                                        title="Aktifkan Kembali"
+                                        className="p-2 hover:bg-sage-50 rounded-lg text-sage-600"
+                                      >
+                                        {aktivasiId === s.id ? (
+                                          <Loader2 size={15} className="animate-spin" />
+                                        ) : (
+                                          <RotateCcw size={15} />
+                                        )}
+                                      </button>
+                                    )}
+                                    <button onClick={() => openEdit(s)} className="p-2 hover:bg-ink-900/5 rounded-lg text-ink-700/60">
+                                      <Pencil size={15} />
+                                    </button>
+                                    <button onClick={() => handleDelete(s.id)} className="p-2 hover:bg-red-50 rounded-lg text-red-600/70">
+                                      <Trash2 size={15} />
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
                 )}
               </div>
             )
@@ -1245,41 +1284,34 @@ export default function Siswa() {
         </div>
       )}
 
+      {/* Modal form — di HP tampil penuh satu layar, di desktop tetap kotak mengambang */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-4">
-          <form onSubmit={handleSubmit} className="card w-full max-w-2xl p-6 relative max-h-[90vh] overflow-y-auto">
-            <button type="button" onClick={() => setShowForm(false)} className="absolute top-4 right-4 text-ink-700/40 hover:text-ink-900">
+        <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-ink-950/50 backdrop-blur-sm p-0 sm:p-4">
+          <form
+            onSubmit={handleSubmit}
+            className="card w-full sm:max-w-2xl p-4 sm:p-6 relative h-full sm:h-auto sm:max-h-[90vh] overflow-y-auto rounded-none sm:rounded-xl"
+          >
+            <button
+              type="button"
+              onClick={() => setShowForm(false)}
+              className="absolute top-3 right-3 sm:top-4 sm:right-4 p-1.5 text-ink-700/40 hover:text-ink-900"
+            >
               <X size={20} />
             </button>
-            <h2 className="font-display text-xl font-semibold mb-4">
+            <h2 className="font-display text-lg sm:text-xl font-semibold mb-4 pr-10">
               {editingId ? 'Ubah Data Siswa' : 'Tambah Siswa'}
             </h2>
 
             {editingId && (
               <div className="flex items-center gap-4 mb-4 p-3 rounded-lg bg-ink-900/[0.03]">
-                <label className="relative block w-16 h-16 rounded-full overflow-hidden bg-ink-900/[0.06] cursor-pointer shrink-0 group">
-                  {fotoUrl(data.find((d) => d.id === editingId)?.foto_path) ? (
-                    <img src={fotoUrl(data.find((d) => d.id === editingId)?.foto_path)} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="w-full h-full flex items-center justify-center text-lg font-semibold text-ink-700/40">
-                      {form.nama_lengkap?.[0]}
-                    </span>
-                  )}
-                  <span className="absolute inset-0 bg-ink-950/0 group-hover:bg-ink-950/40 flex items-center justify-center transition-colors">
-                    {uploadingId === editingId ? (
-                      <Loader2 size={16} className="animate-spin text-white" />
-                    ) : (
-                      <Camera size={15} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                    )}
-                  </span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    disabled={uploadingId === editingId}
-                    onChange={(e) => e.target.files?.[0] && handleFotoUpload(editingId, e.target.files[0])}
-                  />
-                </label>
+                <FotoSiswa
+                  src={fotoUrl(data.find((d) => d.id === editingId)?.foto_path)}
+                  inisial={form.nama_lengkap?.[0]}
+                  uploading={uploadingId === editingId}
+                  onPick={(file) => handleFotoUpload(editingId, file)}
+                  className="w-16 h-16"
+                  besar
+                />
                 <p className="text-xs text-ink-700/50">Klik foto untuk mengganti. Foto ini juga dipakai untuk Cetak Kartu Pelajar/Perpustakaan.</p>
               </div>
             )}
@@ -1290,19 +1322,19 @@ export default function Siswa() {
                   onChange={(e) => setForm({ ...form, nama_lengkap: e.target.value })} />
               </Field>
               <Field label="NIS">
-                <input className="input-field" value={form.nis}
+                <input className="input-field" inputMode="numeric" value={form.nis}
                   onChange={(e) => setForm({ ...form, nis: e.target.value })} />
               </Field>
               <Field label="NISN">
-                <input className="input-field" value={form.nisn}
+                <input className="input-field" inputMode="numeric" value={form.nisn}
                   onChange={(e) => setForm({ ...form, nisn: e.target.value })} />
               </Field>
               <Field label="NIK">
-                <input className="input-field" placeholder="16 digit NIK sesuai KK/KTP" value={form.nik}
+                <input className="input-field" inputMode="numeric" placeholder="16 digit NIK sesuai KK/KTP" value={form.nik}
                   onChange={(e) => setForm({ ...form, nik: e.target.value })} />
               </Field>
               <Field label="No. KK">
-                <input className="input-field" value={form.no_kk}
+                <input className="input-field" inputMode="numeric" value={form.no_kk}
                   onChange={(e) => setForm({ ...form, no_kk: e.target.value })} />
               </Field>
               <Field label="No. Registrasi Akta Lahir" full>
@@ -1344,7 +1376,7 @@ export default function Siswa() {
                 <input type="date" className="input-field" value={form.tanggal_lahir || ''}
                   onChange={(e) => setForm({ ...form, tanggal_lahir: e.target.value })} />
               </Field>
-              <Field label="Tahun Lahir (jika tanggal pasti tidak diketahui)">
+              <Field label="Tahun Lahir (jika tanggal pasti tidak diketahui)" full>
                 <input type="number" placeholder="Contoh: 2015" className="input-field" value={form.tahun_lahir || ''}
                   onChange={(e) => setForm({ ...form, tahun_lahir: e.target.value })} />
               </Field>
@@ -1356,7 +1388,7 @@ export default function Siswa() {
                 <input type="number" className="input-field" value={form.jumlah_saudara_kandung || ''}
                   onChange={(e) => setForm({ ...form, jumlah_saudara_kandung: e.target.value })} />
               </Field>
-              <Field label="Kebutuhan Khusus">
+              <Field label="Kebutuhan Khusus" full>
                 <input className="input-field" placeholder="Contoh: Tidak ada" value={form.kebutuhan_khusus}
                   onChange={(e) => setForm({ ...form, kebutuhan_khusus: e.target.value })} />
               </Field>
@@ -1391,13 +1423,13 @@ export default function Siswa() {
                 <textarea className="input-field" rows={2} value={form.alamat_tinggal}
                   onChange={(e) => setForm({ ...form, alamat_tinggal: e.target.value })} />
               </Field>
-              <Field label="RT"><input className="input-field" value={form.rt} onChange={(e) => setForm({ ...form, rt: e.target.value })} /></Field>
-              <Field label="RW"><input className="input-field" value={form.rw} onChange={(e) => setForm({ ...form, rw: e.target.value })} /></Field>
+              <Field label="RT"><input className="input-field" inputMode="numeric" value={form.rt} onChange={(e) => setForm({ ...form, rt: e.target.value })} /></Field>
+              <Field label="RW"><input className="input-field" inputMode="numeric" value={form.rw} onChange={(e) => setForm({ ...form, rw: e.target.value })} /></Field>
               <Field label="Dusun"><input className="input-field" value={form.dusun} onChange={(e) => setForm({ ...form, dusun: e.target.value })} /></Field>
               <Field label="Kelurahan/Desa"><input className="input-field" value={form.kelurahan} onChange={(e) => setForm({ ...form, kelurahan: e.target.value })} /></Field>
               <Field label="Kecamatan"><input className="input-field" value={form.kecamatan} onChange={(e) => setForm({ ...form, kecamatan: e.target.value })} /></Field>
-              <Field label="Kode Pos"><input className="input-field" value={form.kode_pos} onChange={(e) => setForm({ ...form, kode_pos: e.target.value })} /></Field>
-              <Field label="Jenis Tinggal">
+              <Field label="Kode Pos"><input className="input-field" inputMode="numeric" value={form.kode_pos} onChange={(e) => setForm({ ...form, kode_pos: e.target.value })} /></Field>
+              <Field label="Jenis Tinggal" full>
                 <select className="input-field" value={form.jenis_tinggal} onChange={(e) => setForm({ ...form, jenis_tinggal: e.target.value })}>
                   <option value="">-</option>
                   <option value="Bersama Orang Tua">Bersama Orang Tua</option>
@@ -1408,34 +1440,34 @@ export default function Siswa() {
                   <option value="Lainnya">Lainnya</option>
                 </select>
               </Field>
-              <Field label="Alat Transportasi"><input className="input-field" value={form.alat_transportasi} onChange={(e) => setForm({ ...form, alat_transportasi: e.target.value })} /></Field>
+              <Field label="Alat Transportasi" full><input className="input-field" value={form.alat_transportasi} onChange={(e) => setForm({ ...form, alat_transportasi: e.target.value })} /></Field>
               <Field label="Lintang"><input className="input-field" value={form.lintang} onChange={(e) => setForm({ ...form, lintang: e.target.value })} /></Field>
               <Field label="Bujur"><input className="input-field" value={form.bujur} onChange={(e) => setForm({ ...form, bujur: e.target.value })} /></Field>
             </Seksi>
 
             <Seksi judul="Kontak">
-              <Field label="Telepon"><input className="input-field" value={form.telepon} onChange={(e) => setForm({ ...form, telepon: e.target.value })} /></Field>
-              <Field label="HP"><input className="input-field" value={form.hp} onChange={(e) => setForm({ ...form, hp: e.target.value })} /></Field>
-              <Field label="Email"><input type="email" className="input-field" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
-              <Field label="No. HP Orang Tua/Wali"><input className="input-field" value={form.no_hp_orang_tua} onChange={(e) => setForm({ ...form, no_hp_orang_tua: e.target.value })} /></Field>
+              <Field label="Telepon"><input className="input-field" type="tel" inputMode="tel" value={form.telepon} onChange={(e) => setForm({ ...form, telepon: e.target.value })} /></Field>
+              <Field label="HP"><input className="input-field" type="tel" inputMode="tel" value={form.hp} onChange={(e) => setForm({ ...form, hp: e.target.value })} /></Field>
+              <Field label="Email" full><input type="email" inputMode="email" className="input-field" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
+              <Field label="No. HP Orang Tua/Wali" full><input className="input-field" type="tel" inputMode="tel" value={form.no_hp_orang_tua} onChange={(e) => setForm({ ...form, no_hp_orang_tua: e.target.value })} /></Field>
             </Seksi>
 
             <Seksi judul="Data Ayah">
-              <Field label="Nama Ayah"><input className="input-field" value={form.nama_ayah} onChange={(e) => setForm({ ...form, nama_ayah: e.target.value })} /></Field>
-              <Field label="NIK Ayah"><input className="input-field" placeholder="16 digit NIK" value={form.nik_ayah} onChange={(e) => setForm({ ...form, nik_ayah: e.target.value })} /></Field>
+              <Field label="Nama Ayah" full><input className="input-field" value={form.nama_ayah} onChange={(e) => setForm({ ...form, nama_ayah: e.target.value })} /></Field>
+              <Field label="NIK Ayah"><input className="input-field" inputMode="numeric" placeholder="16 digit NIK" value={form.nik_ayah} onChange={(e) => setForm({ ...form, nik_ayah: e.target.value })} /></Field>
               <Field label="Tahun Lahir Ayah"><input type="number" placeholder="Contoh: 1985" className="input-field" value={form.tahun_lahir_ayah || ''} onChange={(e) => setForm({ ...form, tahun_lahir_ayah: e.target.value })} /></Field>
               <Field label="Pendidikan Ayah"><input className="input-field" value={form.pendidikan_ayah} onChange={(e) => setForm({ ...form, pendidikan_ayah: e.target.value })} /></Field>
               <Field label="Pekerjaan Ayah"><input className="input-field" value={form.pekerjaan_ayah} onChange={(e) => setForm({ ...form, pekerjaan_ayah: e.target.value })} /></Field>
-              <Field label="Penghasilan Ayah"><input className="input-field" value={form.penghasilan_ayah} onChange={(e) => setForm({ ...form, penghasilan_ayah: e.target.value })} /></Field>
+              <Field label="Penghasilan Ayah" full><input className="input-field" value={form.penghasilan_ayah} onChange={(e) => setForm({ ...form, penghasilan_ayah: e.target.value })} /></Field>
             </Seksi>
 
             <Seksi judul="Data Ibu">
-              <Field label="Nama Ibu"><input className="input-field" value={form.nama_ibu} onChange={(e) => setForm({ ...form, nama_ibu: e.target.value })} /></Field>
-              <Field label="NIK Ibu"><input className="input-field" placeholder="16 digit NIK" value={form.nik_ibu} onChange={(e) => setForm({ ...form, nik_ibu: e.target.value })} /></Field>
+              <Field label="Nama Ibu" full><input className="input-field" value={form.nama_ibu} onChange={(e) => setForm({ ...form, nama_ibu: e.target.value })} /></Field>
+              <Field label="NIK Ibu"><input className="input-field" inputMode="numeric" placeholder="16 digit NIK" value={form.nik_ibu} onChange={(e) => setForm({ ...form, nik_ibu: e.target.value })} /></Field>
               <Field label="Tahun Lahir Ibu"><input type="number" placeholder="Contoh: 1988" className="input-field" value={form.tahun_lahir_ibu || ''} onChange={(e) => setForm({ ...form, tahun_lahir_ibu: e.target.value })} /></Field>
               <Field label="Pendidikan Ibu"><input className="input-field" value={form.pendidikan_ibu} onChange={(e) => setForm({ ...form, pendidikan_ibu: e.target.value })} /></Field>
               <Field label="Pekerjaan Ibu"><input className="input-field" value={form.pekerjaan_ibu} onChange={(e) => setForm({ ...form, pekerjaan_ibu: e.target.value })} /></Field>
-              <Field label="Penghasilan Ibu"><input className="input-field" value={form.penghasilan_ibu} onChange={(e) => setForm({ ...form, penghasilan_ibu: e.target.value })} /></Field>
+              <Field label="Penghasilan Ibu" full><input className="input-field" value={form.penghasilan_ibu} onChange={(e) => setForm({ ...form, penghasilan_ibu: e.target.value })} /></Field>
             </Seksi>
 
             <Seksi judul="Orang Tua/Wali (Umum)">
@@ -1443,7 +1475,7 @@ export default function Siswa() {
                 <input className="input-field" value={form.nama_orang_tua}
                   onChange={(e) => setForm({ ...form, nama_orang_tua: e.target.value })} />
               </Field>
-              <Field label="Status">
+              <Field label="Status" full>
                 <select className="input-field" value={form.status}
                   onChange={(e) => setForm({ ...form, status: e.target.value })}>
                   <option value="aktif">Aktif</option>
@@ -1462,12 +1494,12 @@ export default function Siswa() {
             </Seksi>
 
             <Seksi judul="Wali Peserta Didik (isi jika ada, selain orang tua)">
-              <Field label="Nama Wali"><input className="input-field" value={form.nama_wali} onChange={(e) => setForm({ ...form, nama_wali: e.target.value })} /></Field>
-              <Field label="NIK Wali"><input className="input-field" value={form.nik_wali} onChange={(e) => setForm({ ...form, nik_wali: e.target.value })} /></Field>
+              <Field label="Nama Wali" full><input className="input-field" value={form.nama_wali} onChange={(e) => setForm({ ...form, nama_wali: e.target.value })} /></Field>
+              <Field label="NIK Wali"><input className="input-field" inputMode="numeric" value={form.nik_wali} onChange={(e) => setForm({ ...form, nik_wali: e.target.value })} /></Field>
               <Field label="Tahun Lahir Wali"><input type="number" className="input-field" value={form.tahun_lahir_wali || ''} onChange={(e) => setForm({ ...form, tahun_lahir_wali: e.target.value })} /></Field>
               <Field label="Pendidikan Wali"><input className="input-field" value={form.pendidikan_wali} onChange={(e) => setForm({ ...form, pendidikan_wali: e.target.value })} /></Field>
               <Field label="Pekerjaan Wali"><input className="input-field" value={form.pekerjaan_wali} onChange={(e) => setForm({ ...form, pekerjaan_wali: e.target.value })} /></Field>
-              <Field label="Penghasilan Wali"><input className="input-field" value={form.penghasilan_wali} onChange={(e) => setForm({ ...form, penghasilan_wali: e.target.value })} /></Field>
+              <Field label="Penghasilan Wali" full><input className="input-field" value={form.penghasilan_wali} onChange={(e) => setForm({ ...form, penghasilan_wali: e.target.value })} /></Field>
               <Field label="Alamat Wali" full>
                 <textarea className="input-field" rows={2} value={form.alamat_wali}
                   onChange={(e) => setForm({ ...form, alamat_wali: e.target.value })} />
@@ -1475,7 +1507,7 @@ export default function Siswa() {
             </Seksi>
 
             <Seksi judul="Akademik & Kelulusan">
-              <Field label="Nomor Ujian"><input className="input-field" placeholder="Dipakai di SKL" value={form.nomor_ujian} onChange={(e) => setForm({ ...form, nomor_ujian: e.target.value })} /></Field>
+              <Field label="Nomor Ujian" full><input className="input-field" placeholder="Dipakai di SKL" value={form.nomor_ujian} onChange={(e) => setForm({ ...form, nomor_ujian: e.target.value })} /></Field>
               <Field label="No. Seri Ijazah"><input className="input-field" value={form.no_seri_ijazah} onChange={(e) => setForm({ ...form, no_seri_ijazah: e.target.value })} /></Field>
               <Field label="SKHUN"><input className="input-field" value={form.skhun} onChange={(e) => setForm({ ...form, skhun: e.target.value })} /></Field>
             </Seksi>
@@ -1495,7 +1527,7 @@ export default function Siswa() {
               <Field label="Nomor KIP"><input className="input-field" value={form.nomor_kip} onChange={(e) => setForm({ ...form, nomor_kip: e.target.value })} /></Field>
               <Field label="Nama di KIP"><input className="input-field" value={form.nama_di_kip} onChange={(e) => setForm({ ...form, nama_di_kip: e.target.value })} /></Field>
               <Field label="Nomor KKS"><input className="input-field" value={form.nomor_kks} onChange={(e) => setForm({ ...form, nomor_kks: e.target.value })} /></Field>
-              <Field label="Layak PIP (usulan sekolah)">
+              <Field label="Layak PIP (usulan sekolah)" full>
                 <select className="input-field" value={form.layak_pip} onChange={(e) => setForm({ ...form, layak_pip: e.target.value })}>
                   <option value="">-</option><option value="Ya">Ya</option><option value="Tidak">Tidak</option>
                 </select>
@@ -1504,14 +1536,14 @@ export default function Siswa() {
             </Seksi>
 
             <Seksi judul="Rekening (untuk pencairan bantuan)">
-              <Field label="Bank"><input className="input-field" value={form.bank} onChange={(e) => setForm({ ...form, bank: e.target.value })} /></Field>
-              <Field label="Nomor Rekening"><input className="input-field" value={form.no_rekening} onChange={(e) => setForm({ ...form, no_rekening: e.target.value })} /></Field>
+              <Field label="Bank" full><input className="input-field" value={form.bank} onChange={(e) => setForm({ ...form, bank: e.target.value })} /></Field>
+              <Field label="Nomor Rekening"><input className="input-field" inputMode="numeric" value={form.no_rekening} onChange={(e) => setForm({ ...form, no_rekening: e.target.value })} /></Field>
               <Field label="Rekening Atas Nama"><input className="input-field" value={form.rekening_atas_nama} onChange={(e) => setForm({ ...form, rekening_atas_nama: e.target.value })} /></Field>
             </Seksi>
 
-            <div className="mt-5 flex justify-end gap-3 sticky bottom-0 bg-white pt-3">
-              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Batal</button>
-              <button type="submit" disabled={saving} className="btn-primary">
+            <div className="mt-5 flex justify-end gap-2 sm:gap-3 sticky bottom-0 bg-white pt-3 pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 border-t border-ink-900/[0.06] sm:border-t-0">
+              <button type="button" className="btn-secondary flex-1 sm:flex-none justify-center" onClick={() => setShowForm(false)}>Batal</button>
+              <button type="submit" disabled={saving} className="btn-primary flex-1 sm:flex-none justify-center">
                 {saving && <Loader2 size={16} className="animate-spin" />}
                 Simpan
               </button>
@@ -1522,12 +1554,12 @@ export default function Siswa() {
 
       {/* Modal Lihat Profil — identitas lengkap + foto besar, dibuka dengan klik nama siswa */}
       {profilLihat && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-4">
-          <div className="card w-full max-w-md p-0 relative overflow-hidden max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-ink-950/50 backdrop-blur-sm p-0 sm:p-4">
+          <div className="card w-full sm:max-w-md p-0 relative overflow-y-auto h-full sm:h-auto sm:max-h-[90vh] rounded-none sm:rounded-xl">
             <button
               type="button"
               onClick={() => setProfilLihat(null)}
-              className="absolute top-4 right-4 z-10 text-white/80 hover:text-white bg-ink-950/20 rounded-full p-1"
+              className="absolute top-3 right-3 sm:top-4 sm:right-4 z-10 text-white/80 hover:text-white bg-ink-950/30 rounded-full p-2"
             >
               <X size={18} />
             </button>
@@ -1536,20 +1568,20 @@ export default function Siswa() {
               <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/5 pointer-events-none" />
               <div className="absolute -bottom-14 -left-6 w-32 h-32 rounded-full bg-white/5 pointer-events-none" />
               <BatikOverlay patternId="batikSiswaModal" strokeColor="#d4af37" />
-              <div className="relative w-24 h-24 rounded-full overflow-hidden ring-4 ring-white/20 bg-white/10 flex items-center justify-center shrink-0">
+              <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden ring-4 ring-white/20 bg-white/10 flex items-center justify-center shrink-0">
                 {fotoUrl(profilLihat.foto_path) ? (
                   <img src={fotoUrl(profilLihat.foto_path)} alt="" className="w-full h-full object-cover" />
                 ) : (
                   <span className="text-3xl font-semibold text-white/60">{profilLihat.nama_lengkap?.[0]}</span>
                 )}
               </div>
-              <p className="relative font-display font-semibold text-lg text-white mt-3 text-center px-6">{profilLihat.nama_lengkap}</p>
+              <p className="relative font-display font-semibold text-base sm:text-lg text-white mt-3 text-center px-6 break-words">{profilLihat.nama_lengkap}</p>
               <span className={`relative badge mt-1.5 ${profilLihat.status === 'aktif' ? 'bg-sage-500/20 text-sage-100' : 'bg-white/10 text-white/70'}`}>
                 {profilLihat.status}
               </span>
             </div>
 
-            <div className="px-6 -mt-8 pb-6">
+            <div className="px-4 sm:px-6 -mt-8 pb-6">
               <div className="card p-4 space-y-4 bg-white shadow-md">
                 <SeksiProfil judul="Data Pribadi">
                   <ProfilRow label="NIS" value={profilLihat.nis} />
@@ -1633,7 +1665,7 @@ export default function Siswa() {
                 </SeksiProfil>
               </div>
 
-              <div className="flex gap-2 mt-4">
+              <div className="flex flex-col sm:flex-row gap-2 mt-4">
                 {isAdmin && (
                   <button
                     type="button"
@@ -1764,7 +1796,7 @@ function TabStatus({ active, onClick, children }) {
     <button
       type="button"
       onClick={onClick}
-      className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+      className={`px-3 sm:px-3.5 py-2 sm:py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap shrink-0 transition-colors ${
         active
           ? 'bg-blue-900 text-white'
           : 'bg-ink-900/[0.05] text-ink-700/70 hover:bg-ink-900/[0.08]'
@@ -1775,11 +1807,41 @@ function TabStatus({ active, onClick, children }) {
   )
 }
 
+// Foto siswa yang bisa diklik untuk ganti — dipakai di tabel, daftar HP, dan form edit.
+function FotoSiswa({ src, inisial, uploading, onPick, className = 'w-10 h-10', besar }) {
+  return (
+    <label className={`relative block ${className} rounded-full overflow-hidden bg-ink-900/[0.06] cursor-pointer shrink-0 group`}>
+      {src ? (
+        <img src={src} alt="" className="w-full h-full object-cover" />
+      ) : (
+        <span className={`w-full h-full flex items-center justify-center font-semibold text-ink-700/40 ${besar ? 'text-lg' : 'text-xs'}`}>
+          {inisial}
+        </span>
+      )}
+      <span className="absolute inset-0 bg-ink-950/0 group-hover:bg-ink-950/40 flex items-center justify-center transition-colors">
+        {uploading ? (
+          <Loader2 size={besar ? 16 : 14} className="animate-spin text-white" />
+        ) : (
+          <Camera size={besar ? 15 : 13} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+        )}
+      </span>
+      <input
+        type="file"
+        accept="image/*"
+        className="hidden"
+        disabled={uploading}
+        onChange={(e) => e.target.files?.[0] && onPick(e.target.files[0])}
+      />
+    </label>
+  )
+}
+
 function Seksi({ judul, children }) {
   return (
     <div className="mt-5 first:mt-0 pt-4 first:pt-0 border-t first:border-t-0 border-ink-900/[0.08]">
       <p className="eyebrow mb-2 text-blue-900">{judul}</p>
-      <div className="grid grid-cols-2 gap-3">{children}</div>
+      {/* RESPONSIF: satu kolom di HP, dua kolom mulai layar kecil ke atas */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{children}</div>
     </div>
   )
 }
@@ -1795,7 +1857,7 @@ function SeksiProfil({ judul, children }) {
 
 function Field({ label, children, full }) {
   return (
-    <div className={full ? 'col-span-2' : ''}>
+    <div className={full ? 'sm:col-span-2' : ''}>
       <label className="eyebrow mb-1.5 block">{label}</label>
       {children}
     </div>
@@ -1805,9 +1867,9 @@ function Field({ label, children, full }) {
 function ProfilRow({ label, value, telepon }) {
   if (value === null || value === undefined || value === '') return null
   return (
-    <div className="flex items-start justify-between gap-4 text-sm">
+    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-0.5 sm:gap-4 text-sm">
       <span className="text-ink-700/50 shrink-0">{label}</span>
-      <span className="text-ink-950 font-medium text-right inline-flex items-center gap-1.5">
+      <span className="text-ink-950 font-medium sm:text-right inline-flex items-center gap-1.5 break-words min-w-0">
         {value}
         {telepon && <TeleponLink nomor={value} />}
       </span>
