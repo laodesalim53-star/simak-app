@@ -4,6 +4,7 @@ import { useAuth } from './lib/AuthContext'
 import { supabase } from './lib/supabaseClient'
 import Loader from './components/Loader'
 import { CartProvider } from './lib/CartContext'
+import LisensiCetak from "./components/LisensiCetak";
 
 // ============================================================
 // LAZY-LOADED PAGES
