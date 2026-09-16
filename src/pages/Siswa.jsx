@@ -676,6 +676,80 @@ export default function Siswa() {
     XLSX.writeFile(wb, `Data-Siswa-${new Date().toISOString().slice(0, 10)}.xlsx`)
   }
 
+  // TAMBAHAN: Export Excel (.xlsx) khusus satu kelas — dipanggil dari dropdown
+  // "Unduh / Cetak" pada header masing-masing kelompok kelas.
+  function handleExportExcelKelasTertentu(group) {
+    const rows = group.siswa.map((s) => ({
+      nama_lengkap: s.nama_lengkap || '',
+      nis: s.nis || '',
+      nisn: s.nisn || '',
+      nik: s.nik || '',
+      no_kk: s.no_kk || '',
+      nomor_ujian: s.nomor_ujian || '',
+      no_seri_ijazah: s.no_seri_ijazah || '',
+      skhun: s.skhun || '',
+      kelas: s.kelas?.nama_kelas || '',
+      'jenis_kelamin(L/P)': s.jenis_kelamin || '',
+      agama: s.agama || '',
+      'kewarganegaraan(WNI asli/WNI Keturunan/WNA)': s.kewarganegaraan || '',
+      tempat_lahir: s.tempat_lahir || '',
+      'tanggal_lahir(YYYY-MM-DD)': s.tanggal_lahir || '',
+      tahun_lahir: s.tahun_lahir || '',
+      nama_ayah: s.nama_ayah || '',
+      nik_ayah: s.nik_ayah || '',
+      tahun_lahir_ayah: s.tahun_lahir_ayah || '',
+      pendidikan_ayah: s.pendidikan_ayah || '',
+      pekerjaan_ayah: s.pekerjaan_ayah || '',
+      penghasilan_ayah: s.penghasilan_ayah || '',
+      nama_ibu: s.nama_ibu || '',
+      nik_ibu: s.nik_ibu || '',
+      tahun_lahir_ibu: s.tahun_lahir_ibu || '',
+      pendidikan_ibu: s.pendidikan_ibu || '',
+      pekerjaan_ibu: s.pekerjaan_ibu || '',
+      penghasilan_ibu: s.penghasilan_ibu || '',
+      nama_orang_tua: s.nama_orang_tua || '',
+      no_hp_orang_tua: s.no_hp_orang_tua || '',
+      alamat: s.alamat || '',
+      alamat_tinggal: s.alamat_tinggal || '',
+      rt: s.rt || '',
+      rw: s.rw || '',
+      dusun: s.dusun || '',
+      kelurahan: s.kelurahan || '',
+      kecamatan: s.kecamatan || '',
+      kode_pos: s.kode_pos || '',
+      jenis_tinggal: s.jenis_tinggal || '',
+      alat_transportasi: s.alat_transportasi || '',
+      telepon: s.telepon || '',
+      hp: s.hp || '',
+      email: s.email || '',
+      'penerima_kps(Ya/Tidak)': s.penerima_kps || '',
+      no_kps: s.no_kps || '',
+      'penerima_kip(Ya/Tidak)': s.penerima_kip || '',
+      nomor_kip: s.nomor_kip || '',
+      nama_di_kip: s.nama_di_kip || '',
+      nomor_kks: s.nomor_kks || '',
+      'layak_pip(Ya/Tidak)': s.layak_pip || '',
+      alasan_layak_pip: s.alasan_layak_pip || '',
+      no_registrasi_akta_lahir: s.no_registrasi_akta_lahir || '',
+      bank: s.bank || '',
+      no_rekening: s.no_rekening || '',
+      rekening_atas_nama: s.rekening_atas_nama || '',
+      kebutuhan_khusus: s.kebutuhan_khusus || '',
+      berat_badan: s.berat_badan || '',
+      tinggi_badan: s.tinggi_badan || '',
+      lingkar_kepala: s.lingkar_kepala || '',
+      anak_ke: s.anak_ke || '',
+      jumlah_saudara_kandung: s.jumlah_saudara_kandung || '',
+      sekolah_asal: s.sekolah_asal || '',
+    }))
+
+    const ws = XLSX.utils.json_to_sheet(rows, { header: EXCEL_HEADERS })
+    ws['!cols'] = EXCEL_HEADERS.map(() => ({ wch: 18 }))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, group.namaKelas.slice(0, 30))
+    XLSX.writeFile(wb, `Data-Siswa-${group.namaKelas}-${new Date().toISOString().slice(0, 10)}.xlsx`)
+  }
+
   // --- Export: Excel (CSV) ---
   function handleExportCSV() {
     setShowExportMenu(false)
@@ -778,6 +852,81 @@ export default function Siswa() {
               <th>NISN</th>
               <th>NIK</th>
               <th>Kelas</th>
+              <th>Jenis Kelamin</th>
+              <th>Agama</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+        <script>
+          window.onload = function () {
+            window.print();
+          };
+        </script>
+      </body>
+      </html>
+    `
+
+    const printWindow = window.open('', '_blank')
+    printWindow.document.write(html)
+    printWindow.document.close()
+  }
+
+  // TAMBAHAN: Cetak/Unduh PDF khusus satu kelas — dipanggil dari tombol cetak
+  // pada header masing-masing kelompok kelas, hanya berisi siswa di kelas itu.
+  function handlePrintKelasTertentu(group) {
+    const tanggal = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+
+    const rowsHtml = group.siswa
+      .map(
+        (s, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${s.nama_lengkap || '-'}</td>
+          <td>${s.nis || '-'}</td>
+          <td>${s.nisn || '-'}</td>
+          <td>${s.nik || '-'}</td>
+          <td>${tempatTanggalLahir(s)}</td>
+          <td>${s.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan'}</td>
+          <td>${s.agama || '-'}</td>
+          <td>${s.status || '-'}</td>
+        </tr>`
+      )
+      .join('')
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Data Siswa - ${group.namaKelas}</title>
+        <style>
+          body { font-family: Arial, Helvetica, sans-serif; padding: 24px; color: #1a1a1a; }
+          h1 { font-size: 18px; margin-bottom: 2px; }
+          p.subtitle { font-size: 12px; color: #666; margin-top: 0; margin-bottom: 16px; }
+          table { width: 100%; border-collapse: collapse; font-size: 11px; }
+          th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+          th { background: #f2f2f2; }
+          @media print {
+            @page { size: landscape; margin: 16mm; }
+          }
+        </style>
+      </head>
+      <body>
+        <h1>Data Siswa — ${group.namaKelas}</h1>
+        <p class="subtitle">Dicetak pada ${tanggal} · Total ${group.siswa.length} siswa</p>
+        <table>
+          <thead>
+            <tr>
+              <th>No</th>
+              <th>Nama Lengkap</th>
+              <th>NIS</th>
+              <th>NISN</th>
+              <th>NIK</th>
+              <th>Tempat, Tanggal Lahir</th>
               <th>Jenis Kelamin</th>
               <th>Agama</th>
               <th>Status</th>
@@ -936,24 +1085,52 @@ export default function Siswa() {
                     <span className="font-display font-semibold text-white truncate">{group.namaKelas}</span>
                     <span className="text-xs text-white/70 shrink-0">{group.siswa.length} siswa</span>
                   </div>
-                  {isAdmin && (
+
+                  {/* TAMBAHAN: grup aksi per-kelas — Cetak, Unduh Excel, dan Pilih Semua,
+                      dijejer di kanan header supaya tiap kelompok kelas bisa diproses
+                      sendiri-sendiri tanpa harus lewat data siswa kelas lain. */}
+                  <div className="flex items-center gap-3 shrink-0">
                     <span
                       role="button"
                       tabIndex={0}
-                      onClick={(e) => { e.stopPropagation(); toggleSelectGroup(groupIds) }}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); toggleSelectGroup(groupIds) } }}
-                      className="flex items-center gap-1.5 text-xs text-white/80 hover:text-white shrink-0"
-                      title="Pilih semua siswa di kelas ini"
+                      onClick={(e) => { e.stopPropagation(); handlePrintKelasTertentu(group) }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); handlePrintKelasTertentu(group) } }}
+                      className="flex items-center gap-1.5 text-xs text-white/80 hover:text-white"
+                      title={`Cetak data siswa kelas ${group.namaKelas}`}
                     >
-                      <input
-                        type="checkbox"
-                        checked={semuaTerpilih}
-                        onChange={() => {}}
-                        className="pointer-events-none"
-                      />
-                      Pilih semua
+                      <Printer size={14} />
+                      Cetak
                     </span>
-                  )}
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => { e.stopPropagation(); handleExportExcelKelasTertentu(group) }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); handleExportExcelKelasTertentu(group) } }}
+                      className="flex items-center gap-1.5 text-xs text-white/80 hover:text-white"
+                      title={`Unduh Excel data siswa kelas ${group.namaKelas}`}
+                    >
+                      <FileSpreadsheet size={14} />
+                      Excel
+                    </span>
+                    {isAdmin && (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => { e.stopPropagation(); toggleSelectGroup(groupIds) }}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); toggleSelectGroup(groupIds) } }}
+                        className="flex items-center gap-1.5 text-xs text-white/80 hover:text-white"
+                        title="Pilih semua siswa di kelas ini"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={semuaTerpilih}
+                          onChange={() => {}}
+                          className="pointer-events-none"
+                        />
+                        Pilih semua
+                      </span>
+                    )}
+                  </div>
                 </button>
 
                 {!collapsed && (
