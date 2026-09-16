@@ -28,6 +28,7 @@ export default function PersetujuanAkun() {
   const [modalGuru, setModalGuru] = useState(null) // akun yang sedang diproses link guru-nya
   const [modalEdit, setModalEdit] = useState(null) // akun yang sedang diedit datanya
   const [modalPassword, setModalPassword] = useState(null) // akun yang sedang diganti password-nya
+  const [modalPegawai, setModalPegawai] = useState(null) // akun kantor yang sedang dihubungkan ke data pegawai
 
   // Anak-anak dari akun orang tua yang AKUNNYA SUDAH AKTIF, yang baru
   // ditambahkan lewat fitur "Tambah Anak" (bukan anak pertama saat
@@ -42,7 +43,7 @@ export default function PersetujuanAkun() {
     let query = supabase
       .from('profil')
       .select(
-        'id, role, jabatan, status_akun, nama_lengkap_pendaftar, email_pendaftar, catatan_admin, dibuat_pada, sekolah_id, guru_id, sekolah:sekolah_id(nama_sekolah)'
+        'id, role, jabatan, status_akun, nama_lengkap_pendaftar, email_pendaftar, catatan_admin, dibuat_pada, sekolah_id, guru_id, pegawai_id, sekolah:sekolah_id(nama_sekolah)'
       )
       .order('dibuat_pada', { ascending: false })
 
@@ -152,10 +153,11 @@ export default function PersetujuanAkun() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  async function ubahStatus(id, statusBaru, catatan = '', guruId = null) {
+  async function ubahStatus(id, statusBaru, catatan = '', guruId = null, pegawaiId = null) {
     setProsesId(id)
     const payload = { status_akun: statusBaru, catatan_admin: catatan || null }
     if (guruId) payload.guru_id = guruId
+    if (pegawaiId) payload.pegawai_id = pegawaiId
     await supabase.from('profil').update(payload).eq('id', id)
 
     // Kalau akun ini orang tua/wali, ikut sinkronkan status hubungan
@@ -177,6 +179,7 @@ export default function PersetujuanAkun() {
 
     setProsesId(null)
     setModalGuru(null)
+    setModalPegawai(null)
     muatData()
     muatAnakMenunggu()
   }
@@ -190,12 +193,36 @@ export default function PersetujuanAkun() {
     return (akun.jabatan || akun.role) === 'guru'
   }
 
+  function isJabatanPegawai(akun) {
+    return ['pegawai', 'kepala_kantor'].includes(akun.jabatan || akun.role)
+  }
+
   function handleSetujui(akun) {
     if (isJabatanGuru(akun)) {
       setModalGuru(akun) // buka modal, jangan langsung ubah status
+    } else if (isJabatanPegawai(akun)) {
+      setModalPegawai(akun) // buka modal, jangan langsung ubah status
     } else {
       ubahStatus(akun.id, 'aktif')
     }
+  }
+
+  // Hubungkan akun kantor yang SUDAH aktif ke data pegawai_kantor, tanpa
+  // mengubah status_akun — dipakai untuk akun yang sempat disetujui
+  // langsung (sebelum modal ini ada) sehingga pegawai_id-nya masih kosong.
+  async function hubungkanPegawaiSaja(akun, pegawaiId) {
+    setProsesId(akun.id)
+    const { error } = await supabase
+      .from('profil')
+      .update({ pegawai_id: pegawaiId })
+      .eq('id', akun.id)
+    setProsesId(null)
+    setModalPegawai(null)
+    if (error) {
+      window.alert('Gagal menghubungkan data pegawai: ' + error.message)
+      return
+    }
+    muatData()
   }
 
   // Kirim/edit pesan (catatan_admin) untuk akun yang sudah disetujui
@@ -552,6 +579,16 @@ export default function PersetujuanAkun() {
                           </button>
                         )}
 
+                        {akun.status_akun === 'aktif' && isJabatanPegawai(akun) && !akun.pegawai_id && (
+                          <button
+                            onClick={() => setModalPegawai(akun)}
+                            disabled={prosesId === akun.id}
+                            className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-cyan-50 text-cyan-600 hover:bg-cyan-100 disabled:opacity-60"
+                          >
+                            <UserPlus size={14} /> Hubungkan Pegawai
+                          </button>
+                        )}
+
                         {akun.status_akun !== 'menunggu' && (
                           <button
                             onClick={() => handleResetStatus(akun)}
@@ -667,6 +704,18 @@ export default function PersetujuanAkun() {
           akun={modalGuru}
           onClose={() => setModalGuru(null)}
           onSelesai={(guruId) => ubahStatus(modalGuru.id, 'aktif', '', guruId)}
+        />
+      )}
+
+      {modalPegawai && (
+        <ModalHubungkanPegawai
+          akun={modalPegawai}
+          onClose={() => setModalPegawai(null)}
+          onSelesai={(pegawaiId) =>
+            modalPegawai.status_akun === 'menunggu'
+              ? ubahStatus(modalPegawai.id, 'aktif', '', null, pegawaiId)
+              : hubungkanPegawaiSaja(modalPegawai, pegawaiId)
+          }
         />
       )}
 
@@ -823,6 +872,152 @@ function ModalHubungkanGuru({ akun, onClose, onSelesai }) {
               className="w-full bg-blue-600 text-white text-sm font-medium py-2.5 rounded-lg disabled:opacity-50"
             >
               {memproses ? 'Memproses...' : 'Buat Data Guru Baru & Setujui'}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ModalHubungkanPegawai({ akun, onClose, onSelesai }) {
+  const [daftarPegawai, setDaftarPegawai] = useState([])
+  const [pegawaiIdTerpilih, setPegawaiIdTerpilih] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [memproses, setMemproses] = useState(false)
+  const [mode, setMode] = useState('pilih') // 'pilih' | 'baru'
+
+  const sedangDiajukan = akun.status_akun === 'menunggu'
+
+  useEffect(() => {
+    async function muat() {
+      // Pegawai kantor yang sama, yang BELUM terhubung ke akun profil manapun
+      const { data: sudahTerhubung } = await supabase
+        .from('profil')
+        .select('pegawai_id')
+        .not('pegawai_id', 'is', null)
+
+      const idTerpakai = (sudahTerhubung || []).map((p) => p.pegawai_id)
+
+      const { data } = await supabase
+        .from('pegawai_kantor')
+        .select('id, nama_lengkap, nip, jabatan')
+        .eq('sekolah_id', akun.sekolah_id)
+        .order('nama_lengkap')
+
+      const belumTerhubung = (data || []).filter((p) => !idTerpakai.includes(p.id))
+      setDaftarPegawai(belumTerhubung)
+      setLoading(false)
+    }
+    muat()
+  }, [akun.sekolah_id])
+
+  async function handleHubungkan() {
+    if (!pegawaiIdTerpilih) return
+    setMemproses(true)
+    onSelesai(pegawaiIdTerpilih)
+  }
+
+  async function handleBuatBaru() {
+    setMemproses(true)
+    const { data: pegawaiBaru, error } = await supabase
+      .from('pegawai_kantor')
+      .insert({
+        nama_lengkap: akun.nama_lengkap_pendaftar,
+        email: akun.email_pendaftar,
+        sekolah_id: akun.sekolah_id,
+        status: 'aktif',
+      })
+      .select('id')
+      .single()
+
+    setMemproses(false)
+    if (error) {
+      window.alert('Gagal membuat data pegawai baru: ' + error.message)
+      return
+    }
+    onSelesai(pegawaiBaru.id)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center px-4 z-50">
+      <div className="bg-white rounded-2xl max-w-md w-full p-5">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="font-semibold text-slate-800">Hubungkan Data Pegawai</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <X size={18} />
+          </button>
+        </div>
+        <p className="text-xs text-slate-500 mb-4">
+          {akun.nama_lengkap_pendaftar} ({akun.email_pendaftar}) perlu dihubungkan ke data Pegawai
+          Kantor supaya muncul di Presensi, Data Pegawai, dan fitur lain.
+        </p>
+
+        <div className="flex gap-2 p-1 bg-slate-100 rounded-lg mb-4">
+          <button
+            onClick={() => setMode('pilih')}
+            className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-medium py-2 rounded-md transition-colors ${
+              mode === 'pilih' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'
+            }`}
+          >
+            <UserCheck size={14} /> Data Sudah Ada
+          </button>
+          <button
+            onClick={() => setMode('baru')}
+            className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-medium py-2 rounded-md transition-colors ${
+              mode === 'baru' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'
+            }`}
+          >
+            <UserPlus size={14} /> Buat Baru
+          </button>
+        </div>
+
+        {mode === 'pilih' ? (
+          <>
+            {loading ? (
+              <p className="text-sm text-slate-400 text-center py-4">Memuat data pegawai...</p>
+            ) : daftarPegawai.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-4">
+                Tidak ada data pegawai yang belum terhubung di kantor ini. Gunakan tab "Buat Baru".
+              </p>
+            ) : (
+              <select
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm mb-4"
+                value={pegawaiIdTerpilih}
+                onChange={(e) => setPegawaiIdTerpilih(e.target.value)}
+              >
+                <option value="">-- Pilih Data Pegawai --</option>
+                {daftarPegawai.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nama_lengkap} {p.nip ? `(NIP: ${p.nip})` : ''} {p.jabatan ? `- ${p.jabatan}` : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button
+              onClick={handleHubungkan}
+              disabled={!pegawaiIdTerpilih || memproses}
+              className="w-full bg-blue-600 text-white text-sm font-medium py-2.5 rounded-lg disabled:opacity-50"
+            >
+              {memproses ? 'Memproses...' : sedangDiajukan ? 'Hubungkan & Setujui' : 'Hubungkan'}
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="text-xs text-slate-500 mb-4">
+              Data pegawai baru akan dibuat otomatis dari nama & email pendaftaran. Lengkapi NIP,
+              jabatan, dll nanti di halaman Data Pegawai.
+            </p>
+            <button
+              onClick={handleBuatBaru}
+              disabled={memproses}
+              className="w-full bg-blue-600 text-white text-sm font-medium py-2.5 rounded-lg disabled:opacity-50"
+            >
+              {memproses
+                ? 'Memproses...'
+                : sedangDiajukan
+                  ? 'Buat Data Pegawai Baru & Setujui'
+                  : 'Buat Data Pegawai Baru & Hubungkan'}
             </button>
           </>
         )}
