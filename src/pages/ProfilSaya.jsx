@@ -3,12 +3,18 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
 import GrafikAktivitas from '../components/GrafikAktivitas'
-import { Camera, Loader2, Save, Users, School, ShieldCheck, UserCircle2, Clock, CheckCircle2, XCircle, UserPlus, X } from 'lucide-react'
+import { Camera, Loader2, Save, Users, School, ShieldCheck, UserCircle2, Clock, CheckCircle2, XCircle, UserPlus, X, Printer, FileSpreadsheet } from 'lucide-react'
 // ASUMSI: menggunakan library `react-barcode` untuk membuat kode batang (linear barcode) di sisi klien.
 // Install dulu kalau belum ada: npm install react-barcode
 import Barcode from 'react-barcode'
 // Menggunakan library `qrcode` (sudah ada di package.json) untuk membuat QR code sebagai data URL PNG.
 import QRCode from 'qrcode'
+// `xlsx` dan `jspdf`/`jspdf-autotable` sudah ada di package.json (dipakai fitur
+// lain di aplikasi ini), jadi tombol "Cetak PDF" & "Export Excel" di bawah
+// memakainya langsung tanpa dependency baru.
+import * as XLSX from 'xlsx'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 const LABEL_JABATAN = {
   admin: 'Admin',
@@ -16,6 +22,72 @@ const LABEL_JABATAN = {
   superadmin: 'Superadmin',
   kepala_sekolah: 'Kepala Sekolah',
   guru: 'Guru',
+}
+
+// ============================================================================
+// FITUR BARU: Cetak PDF & Export Excel untuk Data Diri
+// ----------------------------------------------------------------------------
+// - Export Excel: `fields` (array {label, value}) diubah jadi 2 kolom (Data /
+//   Nilai) pakai SheetJS (xlsx), lalu diunduh sebagai file .xlsx.
+// - Cetak PDF: diunduh langsung sebagai file .pdf pakai jsPDF + jspdf-autotable
+//   (bukan window.print()) — judul + nama orang di atas, lalu tabel dua kolom
+//   (Data / Nilai) di bawahnya. Tidak butuh popup window / CSS @media print.
+// ============================================================================
+
+function exportDataDiriExcel(fields, namaFile) {
+  const rows = fields.map((f) => ({ Data: f.label, Nilai: f.value === null || f.value === undefined || f.value === '' ? '-' : f.value }))
+  const ws = XLSX.utils.json_to_sheet(rows)
+  ws['!cols'] = [{ wch: 30 }, { wch: 40 }]
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Data Diri')
+  XLSX.writeFile(wb, `${namaFile}.xlsx`)
+}
+
+function cetakDataDiriPDF(fields, judul, namaOrang, namaFile) {
+  const doc = new jsPDF()
+  const tanggal = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+
+  doc.setFontSize(14)
+  doc.setTextColor(30, 58, 95) // navy, senada dengan tema kartu identitas
+  doc.text(judul, 14, 18)
+  doc.setFontSize(10)
+  doc.setTextColor(90)
+  doc.text(`${namaOrang || '-'}  \u00b7  Dicetak ${tanggal}`, 14, 25)
+
+  autoTable(doc, {
+    startY: 32,
+    head: [['Data', 'Nilai']],
+    body: fields.map((f) => [f.label, f.value === null || f.value === undefined || f.value === '' ? '-' : String(f.value)]),
+    styles: { fontSize: 9, cellPadding: 3 },
+    headStyles: { fillColor: [30, 58, 95] },
+    columnStyles: { 0: { cellWidth: 62, fontStyle: 'bold' } },
+  })
+
+  doc.save(`${namaFile}.pdf`)
+}
+
+// Tombol "Cetak PDF" + "Export Excel" dipakai di ketiga kartu profil (admin,
+// orang tua, guru) — cukup dikasih `fields` (array {label, value}), `judul`
+// & `namaOrang` untuk kop lembar PDF, dan `namaFile` untuk nama file unduhan.
+function TombolCetakDataDiri({ fields, judul, namaOrang, namaFile }) {
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => cetakDataDiriPDF(fields, judul, namaOrang, namaFile)}
+        className="flex items-center gap-2 px-4 py-2 rounded-lg border border-ink-900/10 text-ink-700 text-sm font-medium hover:bg-ink-900/[0.04]"
+      >
+        <Printer size={16} /> Cetak PDF
+      </button>
+      <button
+        type="button"
+        onClick={() => exportDataDiriExcel(fields, namaFile)}
+        className="flex items-center gap-2 px-4 py-2 rounded-lg border border-ink-900/10 text-ink-700 text-sm font-medium hover:bg-ink-900/[0.04]"
+      >
+        <FileSpreadsheet size={16} /> Export Excel
+      </button>
+    </>
+  )
 }
 
 // Kartu profil untuk akun yang tidak tertaut ke tabel `guru` (admin / admin_utama /
@@ -167,216 +239,239 @@ function ProfilAdminCard({ profil, userId, adminData }) {
   const isSuperadmin = !profil?.sekolah_id
   const namaSekolah = adminData?.nama_sekolah
 
+  // Data untuk tombol "Cetak PDF" / "Export Excel" di bawah — dibangun dari
+  // state form yang sedang tampil, supaya hasil cetak/export selalu sinkron
+  // dengan apa yang terlihat di layar (termasuk perubahan yang belum disimpan).
+  const namaFileDataDiri = `Data-Diri-${(form.nama_lengkap_pendaftar || labelJabatan).replace(/\s+/g, '-')}`
+  const dataDiriFields = [
+    { label: 'Nama Lengkap', value: form.nama_lengkap_pendaftar },
+    { label: 'Jabatan', value: labelJabatan },
+    { label: 'Sekolah', value: isSuperadmin ? 'Akses Semua Sekolah' : namaSekolah },
+    { label: 'NIPA', value: form.nuptk },
+    { label: 'Pangkat / Golongan', value: form.pangkat_golongan },
+    { label: 'Nomor HP', value: form.no_hp },
+    { label: 'Email', value: form.email_pendaftar },
+    { label: 'Tanggal Lahir', value: form.tanggal_lahir },
+    { label: 'Pendidikan Terakhir', value: form.pendidikan_terakhir },
+    { label: 'Alamat', value: form.alamat },
+  ]
+
   return (
     <form onSubmit={handleSave} className="max-w-2xl space-y-5">
       {/* Kartu identitas — gaya & tata letak disamakan dengan kartu guru: gradasi navy +
-          motif batik emas, foto di kiri, QR code berseberangan di kanan */}
-      <div className="relative overflow-hidden rounded-xl p-6 flex items-center justify-between gap-5 bg-gradient-to-br from-blue-900 to-blue-950">
-        <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/5 pointer-events-none" />
-        <div className="absolute -bottom-14 -left-6 w-32 h-32 rounded-full bg-white/5 pointer-events-none" />
+            motif batik emas, foto di kiri, QR code berseberangan di kanan */}
+        <div className="relative overflow-hidden rounded-xl p-6 flex items-center justify-between gap-5 bg-gradient-to-br from-blue-900 to-blue-950">
+          <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/5 pointer-events-none" />
+          <div className="absolute -bottom-14 -left-6 w-32 h-32 rounded-full bg-white/5 pointer-events-none" />
 
-        {/* Corak batik abstrak emas — sama seperti kartu guru, supaya konsisten secara visual */}
-        <svg
-          className="absolute inset-0 w-full h-full pointer-events-none"
-          preserveAspectRatio="xMidYMid slice"
-          aria-hidden="true"
-        >
-          <defs>
-            <pattern
-              id="batikEmasAdmin"
-              x="0"
-              y="0"
-              width="72"
-              height="72"
-              patternUnits="userSpaceOnUse"
-              patternTransform="rotate(8)"
-            >
-              <g fill="none" stroke="#d4af37" strokeWidth="1.1">
-                <ellipse cx="36" cy="24" rx="9" ry="14" opacity="0.55" />
-                <ellipse cx="36" cy="48" rx="9" ry="14" opacity="0.55" />
-                <ellipse cx="24" cy="36" rx="14" ry="9" opacity="0.55" />
-                <ellipse cx="48" cy="36" rx="14" ry="9" opacity="0.55" />
-                <circle cx="36" cy="36" r="3" opacity="0.7" />
-              </g>
-              <path
-                d="M0 72 L18 54 L36 72 L54 54 L72 72"
-                fill="none"
-                stroke="#d4af37"
-                strokeWidth="0.8"
-                opacity="0.35"
-              />
-              <path d="M0 0 L18 18 L0 36" fill="none" stroke="#d4af37" strokeWidth="0.8" opacity="0.3" />
-              <circle cx="8" cy="8" r="1.3" fill="#d4af37" opacity="0.4" />
-              <circle cx="64" cy="16" r="1.3" fill="#d4af37" opacity="0.4" />
-              <circle cx="16" cy="64" r="1.3" fill="#d4af37" opacity="0.4" />
-            </pattern>
-            <linearGradient id="batikFadeAdmin" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="#000000" stopOpacity="0" />
-              <stop offset="100%" stopColor="#000000" stopOpacity="0.15" />
-            </linearGradient>
-          </defs>
-          <rect x="0" y="0" width="100%" height="100%" fill="url(#batikEmasAdmin)" />
-          <rect x="0" y="0" width="100%" height="100%" fill="url(#batikFadeAdmin)" />
-        </svg>
-
-        <div className="relative flex items-center gap-5 min-w-0">
-          <div className="relative shrink-0">
-            <div className="w-20 h-20 rounded-full bg-white/10 ring-2 ring-white/20 overflow-hidden flex items-center justify-center">
-              {fotoUrl() ? (
-                <img src={fotoUrl()} alt="Foto profil" className="w-full h-full object-cover" />
-              ) : (
-                <ShieldCheck size={28} className="text-white/80" />
-              )}
-            </div>
-            <label className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-brass-400 flex items-center justify-center cursor-pointer shadow-md">
-              {uploadingFoto ? (
-                <Loader2 size={13} className="animate-spin text-ink-950" />
-              ) : (
-                <Camera size={13} className="text-ink-950" />
-              )}
-              <input type="file" accept="image/*" className="hidden" onChange={handleFotoChange} disabled={uploadingFoto} />
-            </label>
-          </div>
-          <div className="min-w-0">
-            <p className="font-display font-semibold text-lg text-white truncate">
-              {form.nama_lengkap_pendaftar || 'Nama belum diisi'}
-            </p>
-            <p className="text-sm text-blue-200/70">{labelJabatan}</p>
-            <p className="text-xs text-brass-300/90 mt-0.5 truncate">
-              {isSuperadmin ? 'Akses Semua Sekolah' : namaSekolah || 'Memuat nama sekolah...'}
-            </p>
-          </div>
-        </div>
-
-        {/* QR code — berseberangan (sisi kanan) dengan foto profil di sisi kiri, sama seperti kartu guru */}
-        <div className="relative shrink-0 w-[88px] h-[88px] p-2 rounded-lg bg-white shadow-md flex items-center justify-center">
-          {qrDataUrl ? (
-            <img src={qrDataUrl} alt="QR Code identitas admin/kepsek" width={72} height={72} />
-          ) : (
-            <Loader2 size={18} className="animate-spin text-ink-700/30" />
-          )}
-        </div>
-      </div>
-
-      <div className="card relative overflow-hidden p-6 space-y-4">
-        <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-900 to-brass-400" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs text-ink-700/60 mb-1 block">Nama Lengkap</label>
-            <input
-              className="input w-full"
-              value={form.nama_lengkap_pendaftar}
-              onChange={(e) => setForm({ ...form, nama_lengkap_pendaftar: e.target.value })}
-              required
-            />
-          </div>
-          <div>
-            <label className="text-xs text-ink-700/60 mb-1 block">NIPA</label>
-            <input
-              className="input w-full"
-              placeholder="mis. 765368787875555"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={form.nuptk}
-              onChange={(e) => setForm({ ...form, nuptk: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="text-xs text-ink-700/60 mb-1 block">Pangkat / Golongan</label>
-            <input
-              className="input w-full"
-              placeholder="mis. Penata Muda / III-a"
-              value={form.pangkat_golongan}
-              onChange={(e) => setForm({ ...form, pangkat_golongan: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="text-xs text-ink-700/60 mb-1 block">Nomor HP</label>
-            <input
-              className="input w-full"
-              value={form.no_hp}
-              onChange={(e) => setForm({ ...form, no_hp: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="text-xs text-ink-700/60 mb-1 block">Email</label>
-            <input
-              className="input w-full"
-              type="email"
-              value={form.email_pendaftar}
-              onChange={(e) => setForm({ ...form, email_pendaftar: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="text-xs text-ink-700/60 mb-1 block">Tanggal Lahir</label>
-            <input
-              className="input w-full"
-              type="date"
-              value={form.tanggal_lahir || ''}
-              onChange={(e) => setForm({ ...form, tanggal_lahir: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="text-xs text-ink-700/60 mb-1 block">Pendidikan Terakhir</label>
-            <input
-              className="input w-full"
-              placeholder="mis. S1 Pendidikan Guru SD"
-              value={form.pendidikan_terakhir}
-              onChange={(e) => setForm({ ...form, pendidikan_terakhir: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="text-xs text-ink-700/60 mb-1 block">Jabatan</label>
-            <input className="input w-full" value={labelJabatan} disabled />
-          </div>
-          <div>
-            <label className="text-xs text-ink-700/60 mb-1 block">Sekolah</label>
-            <input
-              className="input w-full"
-              value={isSuperadmin ? 'Akses Semua Sekolah' : namaSekolah || 'Memuat...'}
-              disabled
-            />
-          </div>
-
-          <div className="sm:col-span-2">
-            <label className="text-xs text-ink-700/60 mb-1 block">Alamat</label>
-            <textarea
-              className="input w-full"
-              rows={2}
-              value={form.alamat}
-              onChange={(e) => setForm({ ...form, alamat: e.target.value })}
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 pt-2">
-          <button
-            type="submit"
-            disabled={saving}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brass-400 text-ink-950 text-sm font-medium disabled:opacity-50"
+          {/* Corak batik abstrak emas — sama seperti kartu guru, supaya konsisten secara visual */}
+          <svg
+            className="absolute inset-0 w-full h-full pointer-events-none"
+            preserveAspectRatio="xMidYMid slice"
+            aria-hidden="true"
           >
-            {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-            {saving ? 'Menyimpan...' : 'Simpan'}
-          </button>
-          {savedAt && <span className="text-xs text-sage-500">Tersimpan</span>}
-        </div>
-      </div>
+            <defs>
+              <pattern
+                id="batikEmasAdmin"
+                x="0"
+                y="0"
+                width="72"
+                height="72"
+                patternUnits="userSpaceOnUse"
+                patternTransform="rotate(8)"
+              >
+                <g fill="none" stroke="#d4af37" strokeWidth="1.1">
+                  <ellipse cx="36" cy="24" rx="9" ry="14" opacity="0.55" />
+                  <ellipse cx="36" cy="48" rx="9" ry="14" opacity="0.55" />
+                  <ellipse cx="24" cy="36" rx="14" ry="9" opacity="0.55" />
+                  <ellipse cx="48" cy="36" rx="14" ry="9" opacity="0.55" />
+                  <circle cx="36" cy="36" r="3" opacity="0.7" />
+                </g>
+                <path
+                  d="M0 72 L18 54 L36 72 L54 54 L72 72"
+                  fill="none"
+                  stroke="#d4af37"
+                  strokeWidth="0.8"
+                  opacity="0.35"
+                />
+                <path d="M0 0 L18 18 L0 36" fill="none" stroke="#d4af37" strokeWidth="0.8" opacity="0.3" />
+                <circle cx="8" cy="8" r="1.3" fill="#d4af37" opacity="0.4" />
+                <circle cx="64" cy="16" r="1.3" fill="#d4af37" opacity="0.4" />
+                <circle cx="16" cy="64" r="1.3" fill="#d4af37" opacity="0.4" />
+              </pattern>
+              <linearGradient id="batikFadeAdmin" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#000000" stopOpacity="0" />
+                <stop offset="100%" stopColor="#000000" stopOpacity="0.15" />
+              </linearGradient>
+            </defs>
+            <rect x="0" y="0" width="100%" height="100%" fill="url(#batikEmasAdmin)" />
+            <rect x="0" y="0" width="100%" height="100%" fill="url(#batikFadeAdmin)" />
+          </svg>
 
-      {/* Kode batang ID admin/kepsek — sama pola seperti barcode guru, tapi memakai userId
-          karena tidak ada baris di tabel `guru` untuk akun ini */}
-      <div className="flex flex-col items-center gap-2 py-4 border-t border-ink-900/[0.08]">
-        <div className="p-3 rounded-lg bg-white ring-1 ring-ink-900/[0.08] shadow-sm">
-          <Barcode
-            value={String(userId)}
-            width={1.6}
-            height={56}
-            fontSize={12}
-            background="#ffffff"
-            lineColor="#1e3a5f"
-          />
+          <div className="relative flex items-center gap-5 min-w-0">
+            <div className="relative shrink-0">
+              <div className="w-20 h-20 rounded-full bg-white/10 ring-2 ring-white/20 overflow-hidden flex items-center justify-center">
+                {fotoUrl() ? (
+                  <img src={fotoUrl()} alt="Foto profil" className="w-full h-full object-cover" />
+                ) : (
+                  <ShieldCheck size={28} className="text-white/80" />
+                )}
+              </div>
+              <label className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-brass-400 flex items-center justify-center cursor-pointer shadow-md">
+                {uploadingFoto ? (
+                  <Loader2 size={13} className="animate-spin text-ink-950" />
+                ) : (
+                  <Camera size={13} className="text-ink-950" />
+                )}
+                <input type="file" accept="image/*" className="hidden" onChange={handleFotoChange} disabled={uploadingFoto} />
+              </label>
+            </div>
+            <div className="min-w-0">
+              <p className="font-display font-semibold text-lg text-white truncate">
+                {form.nama_lengkap_pendaftar || 'Nama belum diisi'}
+              </p>
+              <p className="text-sm text-blue-200/70">{labelJabatan}</p>
+              <p className="text-xs text-brass-300/90 mt-0.5 truncate">
+                {isSuperadmin ? 'Akses Semua Sekolah' : namaSekolah || 'Memuat nama sekolah...'}
+              </p>
+            </div>
+          </div>
+
+          {/* QR code — berseberangan (sisi kanan) dengan foto profil di sisi kiri, sama seperti kartu guru */}
+          <div className="relative shrink-0 w-[88px] h-[88px] p-2 rounded-lg bg-white shadow-md flex items-center justify-center">
+            {qrDataUrl ? (
+              <img src={qrDataUrl} alt="QR Code identitas admin/kepsek" width={72} height={72} />
+            ) : (
+              <Loader2 size={18} className="animate-spin text-ink-700/30" />
+            )}
+          </div>
         </div>
-        <p className="text-xs text-ink-700/50">ID {labelJabatan}</p>
-      </div>
+
+        <div className="card relative overflow-hidden p-6 space-y-4">
+          <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-900 to-brass-400" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs text-ink-700/60 mb-1 block">Nama Lengkap</label>
+              <input
+                className="input w-full"
+                value={form.nama_lengkap_pendaftar}
+                onChange={(e) => setForm({ ...form, nama_lengkap_pendaftar: e.target.value })}
+                required
+              />
+            </div>
+            <div>
+              <label className="text-xs text-ink-700/60 mb-1 block">NIPA</label>
+              <input
+                className="input w-full"
+                placeholder="mis. 765368787875555"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={form.nuptk}
+                onChange={(e) => setForm({ ...form, nuptk: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-ink-700/60 mb-1 block">Pangkat / Golongan</label>
+              <input
+                className="input w-full"
+                placeholder="mis. Penata Muda / III-a"
+                value={form.pangkat_golongan}
+                onChange={(e) => setForm({ ...form, pangkat_golongan: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-ink-700/60 mb-1 block">Nomor HP</label>
+              <input
+                className="input w-full"
+                value={form.no_hp}
+                onChange={(e) => setForm({ ...form, no_hp: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-ink-700/60 mb-1 block">Email</label>
+              <input
+                className="input w-full"
+                type="email"
+                value={form.email_pendaftar}
+                onChange={(e) => setForm({ ...form, email_pendaftar: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-ink-700/60 mb-1 block">Tanggal Lahir</label>
+              <input
+                className="input w-full"
+                type="date"
+                value={form.tanggal_lahir || ''}
+                onChange={(e) => setForm({ ...form, tanggal_lahir: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-ink-700/60 mb-1 block">Pendidikan Terakhir</label>
+              <input
+                className="input w-full"
+                placeholder="mis. S1 Pendidikan Guru SD"
+                value={form.pendidikan_terakhir}
+                onChange={(e) => setForm({ ...form, pendidikan_terakhir: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-ink-700/60 mb-1 block">Jabatan</label>
+              <input className="input w-full" value={labelJabatan} disabled />
+            </div>
+            <div>
+              <label className="text-xs text-ink-700/60 mb-1 block">Sekolah</label>
+              <input
+                className="input w-full"
+                value={isSuperadmin ? 'Akses Semua Sekolah' : namaSekolah || 'Memuat...'}
+                disabled
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="text-xs text-ink-700/60 mb-1 block">Alamat</label>
+              <textarea
+                className="input w-full"
+                rows={2}
+                value={form.alamat}
+                onChange={(e) => setForm({ ...form, alamat: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 pt-2 flex-wrap">
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brass-400 text-ink-950 text-sm font-medium disabled:opacity-50"
+            >
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              {saving ? 'Menyimpan...' : 'Simpan'}
+            </button>
+            <TombolCetakDataDiri
+              fields={dataDiriFields}
+              judul={`Data Diri — ${labelJabatan}`}
+              namaOrang={form.nama_lengkap_pendaftar}
+              namaFile={namaFileDataDiri}
+            />
+            {savedAt && <span className="text-xs text-sage-500">Tersimpan</span>}
+          </div>
+        </div>
+
+        {/* Kode batang ID admin/kepsek — sama pola seperti barcode guru, tapi memakai userId
+            karena tidak ada baris di tabel `guru` untuk akun ini */}
+        <div className="flex flex-col items-center gap-2 py-4 border-t border-ink-900/[0.08]">
+          <div className="p-3 rounded-lg bg-white ring-1 ring-ink-900/[0.08] shadow-sm">
+            <Barcode
+              value={String(userId)}
+              width={1.6}
+              height={56}
+              fontSize={12}
+              background="#ffffff"
+              lineColor="#1e3a5f"
+            />
+          </div>
+          <p className="text-xs text-ink-700/50">ID {labelJabatan}</p>
+        </div>
     </form>
   )
 }
@@ -626,140 +721,162 @@ function ProfilOrangTuaCard({ profil, userId }) {
     ditolak: { label: 'Ditolak', className: 'bg-red-50 text-red-700', icon: XCircle },
   }
 
-  return (
-    <div className="max-w-2xl space-y-5">
-      <form onSubmit={handleSave} className="space-y-5">
-        <div className="relative overflow-hidden rounded-xl p-6 flex items-center justify-between gap-5 bg-gradient-to-br from-blue-900 to-blue-950">
-          <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/5 pointer-events-none" />
-          <div className="absolute -bottom-14 -left-6 w-32 h-32 rounded-full bg-white/5 pointer-events-none" />
+  // Data untuk tombol "Cetak PDF" / "Export Excel" — termasuk daftar anak
+  // terhubung, supaya lembar cetak juga berguna sebagai bukti tautan akun
+  // ke anak, bukan cuma identitas dasar orang tua.
+  const dataDiriFields = [
+    { label: 'Nama Lengkap', value: form.nama_lengkap_pendaftar },
+    { label: 'Status Akun', value: 'Orang Tua/Wali' },
+    { label: 'Email', value: form.email_pendaftar },
+    { label: 'Nomor HP', value: form.no_hp },
+    { label: 'Alamat', value: form.alamat },
+    ...anakList.map((a) => ({
+      label: `Anak: ${a.siswa?.nama_lengkap || '-'}`,
+      value: `${a.siswa?.kelas?.nama_kelas || '-'} · ${a.hubungan || '-'} · ${STATUS_BADGE[a.status]?.label || a.status || '-'}`,
+    })),
+  ]
+  const namaFileDataDiri = `Data-Diri-${(form.nama_lengkap_pendaftar || 'Orang-Tua').replace(/\s+/g, '-')}`
 
-          <div className="relative flex items-center gap-5 min-w-0">
-            <div className="relative shrink-0">
-              <div className="w-20 h-20 rounded-full bg-white/10 ring-2 ring-white/20 overflow-hidden flex items-center justify-center">
-                {fotoUrl() ? (
-                  <img src={fotoUrl()} alt="Foto profil" className="w-full h-full object-cover" />
-                ) : (
-                  <UserCircle2 size={32} className="text-white/80" />
-                )}
+  return (
+      <div className="max-w-2xl space-y-5">
+        <form onSubmit={handleSave} className="space-y-5">
+          <div className="relative overflow-hidden rounded-xl p-6 flex items-center justify-between gap-5 bg-gradient-to-br from-blue-900 to-blue-950">
+            <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/5 pointer-events-none" />
+            <div className="absolute -bottom-14 -left-6 w-32 h-32 rounded-full bg-white/5 pointer-events-none" />
+
+            <div className="relative flex items-center gap-5 min-w-0">
+              <div className="relative shrink-0">
+                <div className="w-20 h-20 rounded-full bg-white/10 ring-2 ring-white/20 overflow-hidden flex items-center justify-center">
+                  {fotoUrl() ? (
+                    <img src={fotoUrl()} alt="Foto profil" className="w-full h-full object-cover" />
+                  ) : (
+                    <UserCircle2 size={32} className="text-white/80" />
+                  )}
+                </div>
+                <label className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-brass-400 flex items-center justify-center cursor-pointer shadow-md">
+                  {uploadingFoto ? (
+                    <Loader2 size={13} className="animate-spin text-ink-950" />
+                  ) : (
+                    <Camera size={13} className="text-ink-950" />
+                  )}
+                  <input type="file" accept="image/*" className="hidden" onChange={handleFotoChange} disabled={uploadingFoto} />
+                </label>
               </div>
-              <label className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-brass-400 flex items-center justify-center cursor-pointer shadow-md">
-                {uploadingFoto ? (
-                  <Loader2 size={13} className="animate-spin text-ink-950" />
-                ) : (
-                  <Camera size={13} className="text-ink-950" />
-                )}
-                <input type="file" accept="image/*" className="hidden" onChange={handleFotoChange} disabled={uploadingFoto} />
-              </label>
-            </div>
-            <div className="min-w-0">
-              <p className="font-display font-semibold text-lg text-white truncate">
-                {form.nama_lengkap_pendaftar || 'Nama belum diisi'}
-              </p>
-              <p className="text-xs text-white/60 mt-0.5">Orang Tua/Wali</p>
+              <div className="min-w-0">
+                <p className="font-display font-semibold text-lg text-white truncate">
+                  {form.nama_lengkap_pendaftar || 'Nama belum diisi'}
+                </p>
+                <p className="text-xs text-white/60 mt-0.5">Orang Tua/Wali</p>
+              </div>
             </div>
           </div>
-        </div>
+
+          <div className="card p-5">
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div>
+                <label className="label-field">Nama Lengkap</label>
+                <input
+                  className="input-field"
+                  value={form.nama_lengkap_pendaftar}
+                  onChange={(e) => setForm((f) => ({ ...f, nama_lengkap_pendaftar: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="label-field">Email</label>
+                <input
+                  className="input-field"
+                  type="email"
+                  value={form.email_pendaftar}
+                  onChange={(e) => setForm((f) => ({ ...f, email_pendaftar: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="label-field">No. HP</label>
+                <input
+                  className="input-field"
+                  value={form.no_hp}
+                  onChange={(e) => setForm((f) => ({ ...f, no_hp: e.target.value }))}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="label-field">Alamat</label>
+                <textarea
+                  className="input-field min-h-[70px]"
+                  value={form.alamat}
+                  onChange={(e) => setForm((f) => ({ ...f, alamat: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="mt-4 flex items-center gap-3 flex-wrap">
+              <button className="btn-primary" type="submit" disabled={saving}>
+                {saving && <Loader2 size={16} className="animate-spin" />}
+                <Save size={16} /> Simpan
+              </button>
+              <TombolCetakDataDiri
+                fields={dataDiriFields}
+                judul="Data Diri — Orang Tua/Wali"
+                namaOrang={form.nama_lengkap_pendaftar}
+                namaFile={namaFileDataDiri}
+              />
+              {savedAt && <p className="text-xs text-sage-600">Tersimpan.</p>}
+            </div>
+          </div>
+        </form>
 
         <div className="card p-5">
-          <div className="grid sm:grid-cols-2 gap-3">
-            <div>
-              <label className="label-field">Nama Lengkap</label>
-              <input
-                className="input-field"
-                value={form.nama_lengkap_pendaftar}
-                onChange={(e) => setForm((f) => ({ ...f, nama_lengkap_pendaftar: e.target.value }))}
-              />
-            </div>
-            <div>
-              <label className="label-field">Email</label>
-              <input
-                className="input-field"
-                type="email"
-                value={form.email_pendaftar}
-                onChange={(e) => setForm((f) => ({ ...f, email_pendaftar: e.target.value }))}
-              />
-            </div>
-            <div>
-              <label className="label-field">No. HP</label>
-              <input
-                className="input-field"
-                value={form.no_hp}
-                onChange={(e) => setForm((f) => ({ ...f, no_hp: e.target.value }))}
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="label-field">Alamat</label>
-              <textarea
-                className="input-field min-h-[70px]"
-                value={form.alamat}
-                onChange={(e) => setForm((f) => ({ ...f, alamat: e.target.value }))}
-              />
-            </div>
-          </div>
-          <div className="mt-4 flex items-center gap-3">
-            <button className="btn-primary" type="submit" disabled={saving}>
-              {saving && <Loader2 size={16} className="animate-spin" />}
-              <Save size={16} /> Simpan
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="font-display font-semibold text-ink-950 flex items-center gap-2">
+              <Users size={16} /> Anak Terhubung
+            </h4>
+            <button
+              type="button"
+              onClick={() => setShowTambahAnak(true)}
+              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-brass-400/10 text-brass-600 hover:bg-brass-400/20"
+            >
+              <UserPlus size={14} /> Tambah Anak
             </button>
-            {savedAt && <p className="text-xs text-sage-600">Tersimpan.</p>}
           </div>
-        </div>
-      </form>
-
-      <div className="card p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h4 className="font-display font-semibold text-ink-950 flex items-center gap-2">
-            <Users size={16} /> Anak Terhubung
-          </h4>
-          <button
-            type="button"
-            onClick={() => setShowTambahAnak(true)}
-            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-brass-400/10 text-brass-600 hover:bg-brass-400/20"
-          >
-            <UserPlus size={14} /> Tambah Anak
-          </button>
-        </div>
-        {loadingAnak ? (
-          <p className="text-sm text-ink-700/50 flex items-center gap-2">
-            <Loader2 size={14} className="animate-spin" /> Memuat...
-          </p>
-        ) : anakList.length === 0 ? (
-          <p className="text-sm text-ink-700/50">Belum ada anak yang tertaut ke akun ini.</p>
-        ) : (
-          <div className="space-y-2">
-            {anakList.map((a) => {
-              const badge = STATUS_BADGE[a.status] || STATUS_BADGE.menunggu
-              const Icon = badge.icon
-              return (
-                <div key={a.id} className="flex items-center justify-between gap-3 border border-ink-950/10 rounded-lg p-3">
-                  <div className="min-w-0">
-                    <p className="font-medium text-ink-950 truncate">{a.siswa?.nama_lengkap}</p>
-                    <p className="text-xs text-ink-700/50">
-                      {a.siswa?.kelas?.nama_kelas || '-'} · {a.hubungan || '-'}
-                    </p>
+          {loadingAnak ? (
+            <p className="text-sm text-ink-700/50 flex items-center gap-2">
+              <Loader2 size={14} className="animate-spin" /> Memuat...
+            </p>
+          ) : anakList.length === 0 ? (
+            <p className="text-sm text-ink-700/50">Belum ada anak yang tertaut ke akun ini.</p>
+          ) : (
+            <div className="space-y-2">
+              {anakList.map((a) => {
+                const badge = STATUS_BADGE[a.status] || STATUS_BADGE.menunggu
+                const Icon = badge.icon
+                return (
+                  <div key={a.id} className="flex items-center justify-between gap-3 border border-ink-950/10 rounded-lg p-3">
+                    <div className="min-w-0">
+                      <p className="font-medium text-ink-950 truncate">{a.siswa?.nama_lengkap}</p>
+                      <p className="text-xs text-ink-700/50">
+                        {a.siswa?.kelas?.nama_kelas || '-'} · {a.hubungan || '-'}
+                      </p>
+                    </div>
+                    <span className={`shrink-0 text-xs font-semibold px-2 py-1 rounded-full flex items-center gap-1 ${badge.className}`}>
+                      <Icon size={12} /> {badge.label}
+                    </span>
                   </div>
-                  <span className={`shrink-0 text-xs font-semibold px-2 py-1 rounded-full flex items-center gap-1 ${badge.className}`}>
-                    <Icon size={12} /> {badge.label}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {showTambahAnak && (
+          <ModalTambahAnak
+            sekolahId={profil?.sekolah_id}
+            anakSudahTerhubung={anakList}
+            onClose={() => setShowTambahAnak(false)}
+            onBerhasil={() => {
+              setShowTambahAnak(false)
+              muatAnak()
+            }}
+          />
         )}
       </div>
-
-      {showTambahAnak && (
-        <ModalTambahAnak
-          sekolahId={profil?.sekolah_id}
-          anakSudahTerhubung={anakList}
-          onClose={() => setShowTambahAnak(false)}
-          onBerhasil={() => {
-            setShowTambahAnak(false)
-            muatAnak()
-          }}
-        />
-      )}
-    </div>
   )
 }
 
@@ -1129,6 +1246,72 @@ export default function ProfilSaya() {
   }
 
   const totalSiswaAsuh = kelasAsuh.reduce((sum, k) => sum + k.siswa.length, 0)
+
+  // Data untuk tombol "Cetak PDF" / "Export Excel" di kartu profil guru —
+  // mencakup seluruh field Formulir Dapodik, dikelompokkan sama seperti
+  // urutan seksi di form (Data Pribadi, Riwayat Pendidikan & Pelatihan,
+  // Kepegawaian, Alamat & Lokasi, Kontak, Lainnya).
+  const dataDiriFieldsGuru = [
+    { label: 'Nama Lengkap', value: data.nama_lengkap },
+    { label: 'NIP', value: data.nip },
+    { label: 'NUPTK', value: data.nuptk },
+    { label: 'NIK', value: data.nik },
+    { label: 'No. KK', value: data.no_kk },
+    { label: 'Jenis Kelamin', value: data.jenis_kelamin === 'P' ? 'Perempuan' : 'Laki-laki' },
+    { label: 'Agama', value: data.agama },
+    { label: 'Tempat Lahir', value: data.tempat_lahir },
+    { label: 'Tanggal Lahir', value: data.tanggal_lahir },
+    { label: 'Kewarganegaraan', value: data.kewarganegaraan },
+    { label: 'Pendidikan Terakhir', value: data.pendidikan_terakhir },
+    { label: 'Status Perkawinan', value: data.status_perkawinan },
+    { label: 'Nama Ibu Kandung', value: data.nama_ibu_kandung },
+    { label: 'Nama Suami/Istri', value: data.nama_pasangan },
+    { label: 'NIP Suami/Istri', value: data.nip_pasangan },
+    { label: 'Pekerjaan Suami/Istri', value: data.pekerjaan_pasangan },
+    { label: 'Jumlah Anak Tanggungan', value: data.jumlah_anak_tanggungan },
+    { label: 'Nama Lembaga Pendidikan', value: data.nama_lembaga_pendidikan },
+    { label: 'Fakultas', value: data.fakultas },
+    { label: 'Jurusan', value: data.jurusan },
+    { label: 'Tahun Lulus', value: data.tahun_lulus },
+    { label: 'Penataran/Diklat', value: data.penataran_diklat },
+    { label: 'Status Kepegawaian', value: data.status_kepegawaian },
+    { label: 'Jenis PTK', value: data.jenis_ptk },
+    { label: 'Mata Pelajaran', value: data.mata_pelajaran },
+    { label: 'Tugas Tambahan', value: data.tugas_tambahan },
+    { label: 'Pangkat / Golongan', value: data.pangkat_golongan },
+    { label: 'Sumber Gaji', value: data.sumber_gaji },
+    { label: 'SK CPNS', value: data.sk_cpns },
+    { label: 'Tanggal CPNS', value: data.tanggal_cpns },
+    { label: 'SK Pengangkatan', value: data.sk_pengangkatan },
+    { label: 'TMT Pengangkatan', value: data.tmt_pengangkatan },
+    { label: 'Lembaga Pengangkatan', value: data.lembaga_pengangkatan },
+    { label: 'TMT PNS', value: data.tmt_pns },
+    { label: 'Karpeg', value: data.karpeg },
+    { label: 'Karis/Karsu', value: data.karis_karsu },
+    { label: 'NUKS', value: data.nuks },
+    { label: 'Sudah Lisensi Kepsek', value: data.sudah_lisensi_kepsek },
+    { label: 'Pernah Diklat Pengawas', value: data.pernah_diklat_pengawas },
+    { label: 'Alamat Jalan', value: data.alamat_jalan },
+    { label: 'RT', value: data.rt },
+    { label: 'RW', value: data.rw },
+    { label: 'Nama Dusun', value: data.nama_dusun },
+    { label: 'Desa/Kelurahan', value: data.desa_kelurahan },
+    { label: 'Kecamatan', value: data.kecamatan },
+    { label: 'Kode Pos', value: data.kode_pos },
+    { label: 'Lintang', value: data.lintang },
+    { label: 'Bujur', value: data.bujur },
+    { label: 'Telepon', value: data.telepon },
+    { label: 'Nomor HP', value: data.no_hp },
+    { label: 'Email', value: data.email },
+    { label: 'Keahlian Braille', value: data.keahlian_braille },
+    { label: 'Keahlian Bahasa Isyarat', value: data.keahlian_bahasa_isyarat },
+    { label: 'NPWP', value: data.npwp },
+    { label: 'Nama Wajib Pajak', value: data.nama_wajib_pajak },
+    { label: 'Bank', value: data.bank },
+    { label: 'Nomor Rekening', value: data.no_rekening },
+    { label: 'Rekening Atas Nama', value: data.rekening_atas_nama },
+  ]
+  const namaFileDataDiriGuru = `Data-Diri-${(data.nama_lengkap || 'Guru').replace(/\s+/g, '-')}`
 
   return (
     <Layout title="Profil Saya" subtitle="Data diri dan foto profil Anda">
@@ -1629,7 +1812,7 @@ export default function ProfilSaya() {
             </Field>
           </SeksiForm>
 
-          <div className="flex items-center gap-3 pt-5">
+          <div className="flex items-center gap-3 pt-5 flex-wrap">
             <button
               type="submit"
               disabled={saving}
@@ -1638,6 +1821,12 @@ export default function ProfilSaya() {
               {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
               {saving ? 'Menyimpan...' : 'Simpan'}
             </button>
+            <TombolCetakDataDiri
+              fields={dataDiriFieldsGuru}
+              judul="Data Diri — Guru"
+              namaOrang={data.nama_lengkap}
+              namaFile={namaFileDataDiriGuru}
+            />
             {savedAt && <span className="text-xs text-sage-500">Tersimpan</span>}
           </div>
         </div>
