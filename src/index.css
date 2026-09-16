@@ -1,12 +1,30 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
 html, body, #root {
   height: 100%;
 }
+
+/* Perbaikan sensitivitas sentuh untuk HP —
+   touch-action: manipulation menghilangkan delay ~300ms sebelum tap
+   direspons di sebagian browser mobile (mis. Chrome Android), dan
+   -webkit-tap-highlight-color: transparent menghilangkan kotak highlight
+   abu-abu/biru bawaan saat elemen disentuh di Android.
+   Aturan ini HANYA menambahkan perilaku sentuh; tidak mengubah tampilan
+   maupun perilaku mouse/klik di versi laptop/desktop, jadi aman untuk
+   kedua platform. */
+html {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
   @apply bg-paper text-ink-900 antialiased;
   overflow-x: hidden;
+  /* Mencegah efek "bounce/rubber-band" saat scroll vertikal di HP.
+     Tidak berpengaruh pada scroll di desktop/laptop. */
+  overscroll-behavior-y: none;
 }
 ::selection {
   @apply bg-brass-400/40;
@@ -19,15 +37,22 @@ body {
 }
 .btn-primary {
   @apply inline-flex items-center justify-center gap-2 rounded-lg bg-ink-900 text-paper px-4 py-2.5 text-sm font-semibold hover:bg-ink-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  touch-action: manipulation;
 }
 .btn-secondary {
   @apply inline-flex items-center justify-center gap-2 rounded-lg bg-white border border-ink-900/15 text-ink-900 px-4 py-2.5 text-sm font-semibold hover:bg-ink-900/[0.04] transition-colors disabled:opacity-50;
+  touch-action: manipulation;
 }
 .btn-danger {
   @apply inline-flex items-center justify-center gap-2 rounded-lg bg-red-50 border border-red-200 text-red-700 px-4 py-2.5 text-sm font-semibold hover:bg-red-100 transition-colors;
+  touch-action: manipulation;
 }
 .input-field {
-  @apply w-full rounded-lg border border-ink-900/15 bg-white px-3.5 py-2.5 text-sm text-ink-900 placeholder:text-ink-700/40 focus:outline-none focus:ring-2 focus:ring-brass-400 focus:border-brass-400 transition-shadow;
+  /* text-base (16px) di HP mencegah Safari iOS otomatis melakukan zoom-in
+     saat input difokus (perilaku default Safari untuk font < 16px).
+     Di layar >= sm (laptop/tablet ke atas) tetap text-sm (14px) seperti
+     semula, jadi tampilan versi laptop TIDAK berubah. */
+  @apply w-full rounded-lg border border-ink-900/15 bg-white px-3.5 py-2.5 text-base sm:text-sm text-ink-900 placeholder:text-ink-700/40 focus:outline-none focus:ring-2 focus:ring-brass-400 focus:border-brass-400 transition-shadow;
 }
 .table-shell {
   @apply w-full text-sm border-collapse;
