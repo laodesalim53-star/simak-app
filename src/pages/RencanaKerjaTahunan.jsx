@@ -16,8 +16,7 @@ import {
   Award,
 } from 'lucide-react'
 import Layout from '../components/Layout'
-
-const LOGO_BUCKET = 'profil-kantor'
+import KopSurat from '../components/KopSurat'
 
 // === DAFTAR MATERI UNTUK REKOMENDASI OTOMATIS ===
 // Tambahkan entri baru di sini setiap kali ada materi/laporan baru yang
@@ -288,7 +287,6 @@ export default function RencanaKerjaTahunan() {
   const { user, profil } = useAuth()
   const userId = user?.id || profil?.id
 
-  const [profilKantor, setProfilKantor] = useState(null)
   const [tahun, setTahun] = useState(new Date().getFullYear())
   const [namaLengkap, setNamaLengkap] = useState('')
   const [nip, setNip] = useState('')
@@ -302,20 +300,6 @@ export default function RencanaKerjaTahunan() {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [pesanStatus, setPesanStatus] = useState('')
-
-  // Kop surat instansi (sama seperti halaman materi lain)
-  useEffect(() => {
-    supabase
-      .from('profil_kantor')
-      .select('nama_kantor, alamat, kabupaten, kecamatan, telepon, email, logo_path')
-      .eq('id', 1)
-      .maybeSingle()
-      .then(({ data }) => setProfilKantor(data))
-  }, [])
-
-  const logoUrl = profilKantor?.logo_path
-    ? supabase.storage.from(LOGO_BUCKET).getPublicUrl(profilKantor.logo_path).data.publicUrl
-    : null
 
   // Muat data RKT untuk tahun yang dipilih (kalau sudah pernah disimpan)
   const muatData = useCallback(async () => {
@@ -873,17 +857,7 @@ export default function RencanaKerjaTahunan() {
         className="lembar-cetak print-only bg-white rounded-2xl border border-slate-100 p-5 sm:p-8 mx-auto"
         style={{ width: '277mm' }}
       >
-        <div className="kop-surat flex items-center gap-4 border-b-2 border-slate-800 pb-3 mb-6">
-          {logoUrl && <img src={logoUrl} alt="Logo Instansi" className="w-16 h-16 object-contain shrink-0" />}
-          <div className="text-center flex-1">
-            <p className="font-display text-base font-bold uppercase text-slate-900 leading-tight">
-              {profilKantor?.nama_kantor || 'Nama Kantor Belum Diatur'}
-            </p>
-            <p className="text-xs text-slate-600 leading-tight">
-              {[profilKantor?.alamat, profilKantor?.kecamatan, profilKantor?.kabupaten].filter(Boolean).join(', ')}
-            </p>
-          </div>
-        </div>
+        <KopSurat />
 
         <div className="flex items-center gap-3 mb-4">
           <div className="w-11 h-11 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
@@ -942,17 +916,7 @@ export default function RencanaKerjaTahunan() {
         className="lembar-cetak lembar-cetak-ak print-only bg-white rounded-2xl border border-slate-100 p-5 sm:p-8 mx-auto mt-6"
         style={{ width: '277mm' }}
       >
-        <div className="kop-surat flex items-center gap-4 border-b-2 border-slate-800 pb-3 mb-6">
-          {logoUrl && <img src={logoUrl} alt="Logo Instansi" className="w-16 h-16 object-contain shrink-0" />}
-          <div className="text-center flex-1">
-            <p className="font-display text-base font-bold uppercase text-slate-900 leading-tight">
-              {profilKantor?.nama_kantor || 'Nama Kantor Belum Diatur'}
-            </p>
-            <p className="text-xs text-slate-600 leading-tight">
-              {[profilKantor?.alamat, profilKantor?.kecamatan, profilKantor?.kabupaten].filter(Boolean).join(', ')}
-            </p>
-          </div>
-        </div>
+        <KopSurat />
 
         <div className="flex items-center gap-3 mb-4">
           <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
