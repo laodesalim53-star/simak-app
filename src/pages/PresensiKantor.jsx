@@ -21,6 +21,10 @@ const STATUS_OPSI = [
   { value: 'alpa', label: 'Alpa' },
 ]
 
+// Rentang jam masuk & pulang otomatis (dalam menit sejak tengah malam)
+const RENTANG_MASUK = { mulai: 7 * 60 + 0, akhir: 7 * 60 + 30 }   // 07:00 - 07:30
+const RENTANG_PULANG = { mulai: 16 * 60 + 0, akhir: 16 * 60 + 30 } // 16:00 - 16:30
+
 function hariIni() {
   const d = new Date()
   const bulan = String(d.getMonth() + 1).padStart(2, '0')
@@ -34,9 +38,14 @@ function keFormatJam(nilai) {
   return String(nilai).slice(0, 5)
 }
 
-function jamSekarang() {
-  const d = new Date()
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+// Ambil satu waktu acak (format "HH:MM") di antara rentang { mulai, akhir }
+// yang dinyatakan dalam menit sejak tengah malam. Dipakai supaya jam masuk
+// tiap pegawai tidak selalu identik, tapi tetap wajar (misal 07:00-07:30).
+function jamAcak({ mulai, akhir }) {
+  const totalMenit = mulai + Math.floor(Math.random() * (akhir - mulai + 1))
+  const jam = Math.floor(totalMenit / 60)
+  const menit = totalMenit % 60
+  return `${String(jam).padStart(2, '0')}:${String(menit).padStart(2, '0')}`
 }
 
 export default function PresensiKantor() {
@@ -107,13 +116,14 @@ export default function PresensiKantor() {
   function ubahStatus(pegawaiId, status) {
     setStatusPerPegawai((prev) => ({ ...prev, [pegawaiId]: status }))
 
-    // Begitu ditandai Hadir, jam masuk otomatis terisi jam saat ini kalau
-    // belum ada isinya — admin masih bisa mengoreksinya secara manual.
+    // Begitu ditandai Hadir, jam masuk otomatis terisi waktu acak
+    // 07:00-07:30 kalau belum ada isinya — admin masih bisa
+    // mengoreksinya secara manual.
     if (status === 'hadir') {
       setJamPerPegawai((prev) => {
         const jamSaatIni = prev[pegawaiId] || { masuk: '', pulang: '' }
         if (jamSaatIni.masuk) return prev
-        return { ...prev, [pegawaiId]: { ...jamSaatIni, masuk: jamSekarang() } }
+        return { ...prev, [pegawaiId]: { ...jamSaatIni, masuk: jamAcak(RENTANG_MASUK) } }
       })
     }
   }
@@ -125,25 +135,24 @@ export default function PresensiKantor() {
     }))
   }
 
-  // Tombol cepat: catat jam pulang = jam sekarang
+  // Tombol cepat: catat jam pulang = waktu acak 16:00-16:30
   function catatPulangSekarang(pegawaiId) {
-    ubahJam(pegawaiId, 'pulang', jamSekarang())
+    ubahJam(pegawaiId, 'pulang', jamAcak(RENTANG_PULANG))
   }
 
   async function handleSimpan() {
     if (!sekolahId) return
     setSaving(true)
 
-    // Jaga-jaga: kalau status Hadir tapi jam masuk belum sempat terisi
-    // (misalnya statusnya memang sudah default Hadir tanpa pernah diklik
-    // ulang), isi otomatis jam masuk = jam saat Simpan ditekan.
-    const sekarang = jamSekarang()
+    // Jaga-jaga: kalau status Hadir tapi jam masuk/pulang belum sempat
+    // terisi (misalnya statusnya memang sudah default Hadir tanpa pernah
+    // diklik ulang), isi otomatis dengan waktu acak saat Simpan ditekan.
     const jamFinal = {}
     for (const p of pegawai) {
       const jam = jamPerPegawai[p.id] || { masuk: '', pulang: '' }
       const status = statusPerPegawai[p.id] || 'hadir'
       jamFinal[p.id] = {
-        masuk: jam.masuk || (status === 'hadir' ? sekarang : ''),
+        masuk: jam.masuk || (status === 'hadir' ? jamAcak(RENTANG_MASUK) : ''),
         pulang: jam.pulang,
       }
     }
@@ -263,7 +272,7 @@ export default function PresensiKantor() {
                       <button
                         type="button"
                         onClick={() => catatPulangSekarang(p.id)}
-                        title="Catat jam pulang = sekarang"
+                        title="Catat jam pulang = waktu acak 16:00-16:30"
                         className="text-ink-700/40 hover:text-blue-600 shrink-0"
                       >
                         <LogOut size={14} />
