@@ -262,6 +262,7 @@ function getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelum
   label: 'Keagamaan',
   links: [
     { to: '/pusat-materi-majelis', label: 'Materi Majelis', icon: BookOpenCheck },
+    { to: '/pusat-kelompok-binaan', label: 'Kelompok Binaan', icon: Users },
   ],
 },
     {
