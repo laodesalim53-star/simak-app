@@ -890,6 +890,8 @@ function ModalEditAkun({ akun, onClose, onSimpan }) {
               <option value="kepala_sekolah">Kepala Sekolah</option>
               <option value="admin_utama">Admin Utama</option>
               <option value="orang_tua">Orang Tua/Wali</option>
+              <option value="pegawai">Pegawai</option>
+              <option value="kepala_kantor">Kepala Kantor</option>
             </select>
           </div>
         </div>
@@ -1020,6 +1022,8 @@ function JabatanBadge({ jabatan, role }) {
     admin_utama: { label: 'Admin Utama', cls: 'bg-indigo-50 text-indigo-600' },
     orang_tua: { label: 'Orang Tua/Wali', cls: 'bg-emerald-50 text-emerald-600' },
     superadmin: { label: 'Superadmin', cls: 'bg-slate-800 text-white' },
+    pegawai: { label: 'Pegawai', cls: 'bg-cyan-50 text-cyan-600' },
+    kepala_kantor: { label: 'Kepala Kantor', cls: 'bg-amber-50 text-amber-600' },
   }
   const key = jabatan || role
   const item = map[key] || { label: key || '—', cls: 'bg-slate-100 text-slate-500' }
