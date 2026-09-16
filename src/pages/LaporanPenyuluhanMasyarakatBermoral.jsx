@@ -137,7 +137,9 @@ export default function LaporanPenyuluhanMasyarakatBermoral() {
         </div>
         <p className="text-xs text-slate-400 mt-3">
           Isi data di atas sebelum mencetak. Jumlah peserta akan otomatis menyesuaikan jumlah baris
-          pada daftar hadir.
+          pada daftar hadir. Nama Majelis, Tanggal, Tempat, dan Pemateri pada Daftar Hadir Peserta
+          di bawah akan terisi otomatis mengikuti Lokasi Penyuluhan, Waktu Kegiatan, Tempat Kegiatan,
+          dan Nama Penyuluh di atas.
         </p>
       </div>
 
@@ -338,7 +340,13 @@ export default function LaporanPenyuluhanMasyarakatBermoral() {
         </div>
 
         <div className="hadir-cetak">
-          <DaftarHadirCetak jumlahBaris={jumlahBarisHadir} />
+          <DaftarHadirCetak
+            jumlahBaris={jumlahBarisHadir}
+            namaMajelisAwal={lokasiPenyuluhan}
+            tanggalAwal={waktuKegiatan}
+            tempatAwal={tempatKegiatan}
+            pemateriAwal={namaPenyuluh}
+          />
 
           {/* === TANDA TANGAN OTOMATIS === */}
           <div className="ttd-block flex justify-between mt-10 text-sm text-slate-700">
