@@ -1,19 +1,66 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { Loader2 } from 'lucide-react'
+import { supabase } from '../lib/supabaseClient'
 
 // Komponen daftar hadir yang dipakai di semua halaman materi majelis
 // (Keluarga Sakinah, Pengelolaan Zakat, Wakaf, dst). Bagian form isian
 // (nama majelis/tanggal/tempat/pemateri) disembunyikan saat print lewat
 // class `print:hidden` — yang tercetak hanya ringkasan teks + tabel.
 //
+// BARU: ada dropdown "Kelompok Binaan". Begitu dipilih, nama & alamat
+// anggota ditarik otomatis dari tabel kelompok_binaan_anggota (dikelola
+// di /pusat-kelompok-binaan) — tidak perlu diketik manual tiap cetak.
+// Slug di daftar ini HARUS sama dengan kolom `kelompok` di Supabase.
+//
 // Cara pakai:
 //   <DaftarHadirCetak jumlahBaris={15} />
-export default function DaftarHadirCetak({ jumlahBaris = 15 }) {
+//   <DaftarHadirCetak jumlahBaris={15} kelompokAwal="majelis-taklim" />
+const OPSI_KELOMPOK = [
+  { slug: '', label: 'Isi manual (tanpa kelompok binaan)' },
+  { slug: 'majelis-taklim', label: 'Majelis Taklim' },
+  { slug: 'lapas', label: 'Lapas' },
+  { slug: 'rsu', label: 'RSU' },
+  { slug: 'masyarakat', label: 'Masyarakat' },
+]
+
+export default function DaftarHadirCetak({ jumlahBaris = 15, kelompokAwal = '' }) {
   const [namaMajelis, setNamaMajelis] = useState('')
   const [tanggal, setTanggal] = useState('')
   const [tempat, setTempat] = useState('')
   const [pemateri, setPemateri] = useState('')
 
-  const baris = Array.from({ length: jumlahBaris })
+  const [kelompokSlug, setKelompokSlug] = useState(kelompokAwal)
+  const [daftarAnggota, setDaftarAnggota] = useState([])
+  const [memuatAnggota, setMemuatAnggota] = useState(false)
+
+  useEffect(() => {
+    if (!kelompokSlug) {
+      setDaftarAnggota([])
+      return
+    }
+    let dibatalkan = false
+    setMemuatAnggota(true)
+    supabase
+      .from('kelompok_binaan_anggota')
+      .select('nama, alamat')
+      .eq('kelompok', kelompokSlug)
+      .order('urutan', { ascending: true })
+      .order('created_at', { ascending: true })
+      .then(({ data }) => {
+        if (!dibatalkan) {
+          setDaftarAnggota(data || [])
+          setMemuatAnggota(false)
+        }
+      })
+    return () => {
+      dibatalkan = true
+    }
+  }, [kelompokSlug])
+
+  // Kalau anggota kelompok lebih banyak dari jumlahBaris, tabel diperpanjang
+  // otomatis supaya semua nama tetap tercetak.
+  const totalBaris = Math.max(jumlahBaris, daftarAnggota.length)
+  const baris = Array.from({ length: totalBaris })
 
   const tanggalTampil = tanggal
     ? new Date(tanggal).toLocaleDateString('id-ID', {
@@ -65,6 +112,31 @@ export default function DaftarHadirCetak({ jumlahBaris = 15 }) {
             placeholder="Nama pemateri"
           />
         </div>
+        <div className="sm:col-span-2">
+          <label className="text-xs font-medium text-slate-600 block mb-1">
+            Kelompok Binaan (nama peserta terisi otomatis)
+          </label>
+          <select
+            value={kelompokSlug}
+            onChange={(e) => setKelompokSlug(e.target.value)}
+            className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white"
+          >
+            {OPSI_KELOMPOK.map((opsi) => (
+              <option key={opsi.slug} value={opsi.slug}>
+                {opsi.label}
+              </option>
+            ))}
+          </select>
+          {kelompokSlug && (
+            <p className="text-xs text-slate-500 mt-1">
+              {memuatAnggota
+                ? 'Memuat daftar nama...'
+                : daftarAnggota.length > 0
+                ? `${daftarAnggota.length} nama dimuat otomatis dari data kelompok ini. Kelola di Pusat Kelompok Binaan.`
+                : 'Belum ada nama tersimpan untuk kelompok ini. Tambahkan lewat Pusat Kelompok Binaan.'}
+            </p>
+          )}
+        </div>
       </div>
 
       <h2 className="font-display text-[15px] font-semibold text-slate-900 mb-2">
@@ -86,26 +158,35 @@ export default function DaftarHadirCetak({ jumlahBaris = 15 }) {
         </p>
       </div>
 
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="bg-slate-100">
-            <th className="border border-slate-300 px-2 py-2 w-10">No</th>
-            <th className="border border-slate-300 px-2 py-2 text-left">Nama</th>
-            <th className="border border-slate-300 px-2 py-2 text-left">Alamat</th>
-            <th className="border border-slate-300 px-2 py-2 w-32">Tanda Tangan</th>
-          </tr>
-        </thead>
-        <tbody>
-          {baris.map((_, i) => (
-            <tr key={i}>
-              <td className="border border-slate-300 px-2 py-3 text-center">{i + 1}</td>
-              <td className="border border-slate-300 px-2 py-3">&nbsp;</td>
-              <td className="border border-slate-300 px-2 py-3">&nbsp;</td>
-              <td className="border border-slate-300 px-2 py-3">&nbsp;</td>
+      {memuatAnggota ? (
+        <div className="flex items-center gap-2 text-sm text-slate-400 py-6 print:hidden">
+          <Loader2 size={16} className="animate-spin" /> Memuat daftar nama...
+        </div>
+      ) : (
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="bg-slate-100">
+              <th className="border border-slate-300 px-2 py-2 w-10">No</th>
+              <th className="border border-slate-300 px-2 py-2 text-left">Nama</th>
+              <th className="border border-slate-300 px-2 py-2 text-left">Alamat</th>
+              <th className="border border-slate-300 px-2 py-2 w-32">Tanda Tangan</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {baris.map((_, i) => {
+              const anggota = daftarAnggota[i]
+              return (
+                <tr key={i}>
+                  <td className="border border-slate-300 px-2 py-3 text-center">{i + 1}</td>
+                  <td className="border border-slate-300 px-2 py-3">{anggota?.nama || '\u00A0'}</td>
+                  <td className="border border-slate-300 px-2 py-3">{anggota?.alamat || '\u00A0'}</td>
+                  <td className="border border-slate-300 px-2 py-3">&nbsp;</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      )}
     </div>
   )
 }
