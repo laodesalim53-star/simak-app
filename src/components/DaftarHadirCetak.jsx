@@ -84,7 +84,7 @@ export default function DaftarHadirCetak({
     setMemuatAnggota(true)
     supabase
       .from('kelompok_binaan_anggota')
-      .select('nama, alamat')
+      .select('nama, alamat, desa')
       .eq('kelompok', kelompokSlug)
       .order('urutan', { ascending: true })
       .order('created_at', { ascending: true })
@@ -217,11 +217,14 @@ export default function DaftarHadirCetak({
           <tbody>
             {baris.map((_, i) => {
               const anggota = daftarAnggota[i]
+              // Kelompok Majelis Taklim/Masyarakat tidak mengisi alamat per-orang
+              // (hanya desa per-kelompok), jadi alamat fallback ke desa kalau kosong.
+              const alamatTampil = anggota?.alamat || anggota?.desa || ''
               return (
                 <tr key={i}>
                   <td className="border border-black px-2 py-3 text-center text-black">{i + 1}</td>
                   <td className="border border-black px-2 py-3 text-black">{anggota?.nama || '\u00A0'}</td>
-                  <td className="border border-black px-2 py-3 text-black">{anggota?.alamat || '\u00A0'}</td>
+                  <td className="border border-black px-2 py-3 text-black">{alamatTampil || '\u00A0'}</td>
                   <td className="border border-black px-2 py-3 text-black">&nbsp;</td>
                 </tr>
               )
