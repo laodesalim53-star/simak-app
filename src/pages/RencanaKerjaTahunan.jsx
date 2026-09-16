@@ -14,6 +14,7 @@ import {
   Loader2,
   ListChecks,
   Award,
+  RefreshCw,
 } from 'lucide-react'
 import Layout from '../components/Layout'
 import KopSurat from '../components/KopSurat'
@@ -315,8 +316,11 @@ export default function RencanaKerjaTahunan() {
 
     if (!error && data) {
       setRktId(data.id)
-      setNamaLengkap(data.nama_lengkap || profil?.nama_lengkap || '')
-      setNip(data.nip || profil?.nip || '')
+      // Nama & NIP selalu mengikuti akun yang sedang login (profil), bukan
+      // data lama yang pernah disimpan — supaya identitas di RKT selalu
+      // sesuai pemilik akun. Field lain tetap memakai data tersimpan.
+      setNamaLengkap(profil?.nama_lengkap || data.nama_lengkap || '')
+      setNip(profil?.nip || data.nip || '')
       setPangkatGolongan(data.pangkat_golongan || '')
       setJabatan(data.jabatan || '')
       setUnitKerja(data.unit_kerja || '')
@@ -349,6 +353,14 @@ export default function RencanaKerjaTahunan() {
   useEffect(() => {
     muatData()
   }, [muatData])
+
+  // Menarik ulang Nama Lengkap & NIP dari profil akun yang sedang login.
+  // Dipakai lewat tombol "Segarkan dari Profil" kalau data profil baru
+  // saja diperbarui di halaman lain.
+  function segarkanIdentitasDariProfil() {
+    setNamaLengkap(profil?.nama_lengkap || '')
+    setNip(profil?.nip || '')
+  }
 
   function ubahItem(id, field, value) {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, [field]: value } : it)))
@@ -521,22 +533,41 @@ export default function RencanaKerjaTahunan() {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Nama Lengkap</label>
+            <label className="flex items-center justify-between gap-2 text-xs font-medium text-slate-600 mb-1">
+              <span>Nama Lengkap <span className="text-slate-400 font-normal">(akun login)</span></span>
+            </label>
             <input
               type="text"
               value={namaLengkap}
-              onChange={(e) => setNamaLengkap(e.target.value)}
-              className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-500"
+              readOnly
+              placeholder="Belum diatur pada profil akun"
+              className="w-full text-sm border border-slate-200 bg-slate-50 text-slate-700 rounded-lg px-3 py-2 cursor-not-allowed"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">NIP</label>
+            <label className="flex items-center justify-between gap-2 text-xs font-medium text-slate-600 mb-1">
+              <span>NIP <span className="text-slate-400 font-normal">(akun login)</span></span>
+            </label>
             <input
               type="text"
               value={nip}
-              onChange={(e) => setNip(e.target.value)}
-              className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-500"
+              readOnly
+              placeholder="Belum diatur pada profil akun"
+              className="w-full text-sm border border-slate-200 bg-slate-50 text-slate-700 rounded-lg px-3 py-2 cursor-not-allowed"
             />
+          </div>
+          <div className="sm:col-span-2 lg:col-span-3 -mt-1">
+            <button
+              type="button"
+              onClick={segarkanIdentitasDariProfil}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-violet-700 hover:underline"
+            >
+              <RefreshCw size={12} /> Segarkan Nama &amp; NIP dari Profil Akun
+            </button>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Nama dan NIP diambil otomatis dari profil akun yang sedang login supaya selalu sesuai pemiliknya.
+              Untuk mengubahnya, perbarui profil akun terlebih dahulu.
+            </p>
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Pangkat / Golongan / TMT</label>
