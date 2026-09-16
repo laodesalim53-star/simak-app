@@ -3,7 +3,28 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- viewport-fit=cover ditambahkan supaya konten tidak terpotong oleh
+         notch/poni pada HP (mis. iPhone X ke atas). maximum-scale SENGAJA
+         tidak ditambahkan agar user tetap bisa pinch-zoom (aksesibilitas). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- Warna status bar / browser bar di HP (Android Chrome & iOS Safari)
+         agar menyatu dengan warna aplikasi, bukan putih/hitam default.
+         Sesuaikan kode warna dengan warna utama tema (mis. warna 'ink-900'
+         atau 'paper' pada tailwind.config.js) jika perlu. -->
+    <meta name="theme-color" content="#1c1917" />
+
+    <!-- Mendukung tampilan "seperti aplikasi" saat dibuka via Safari iOS
+         dan disimpan lewat "Add to Home Screen" (address bar disembunyikan). -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="SIMAK" />
+
+    <!-- Mencegah Android/iOS otomatis mengubah angka (NIP, no. telepon, dll)
+         menjadi link telepon yang bisa merusak styling teks di laporan. -->
+    <meta name="format-detection" content="telephone=no" />
+
     <title>SIMAK — Sistem Informasi Manajemen Sekolah</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
