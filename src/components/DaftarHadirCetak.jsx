@@ -26,6 +26,7 @@ import { supabase } from '../lib/supabaseClient'
 //   <DaftarHadirCetak jumlahBaris={15} kelompokAwal="majelis-taklim" />
 //   <DaftarHadirCetak
 //     jumlahBaris={15}
+//     kelompokAwal="masyarakat"
 //     namaMajelisAwal={lokasiPenyuluhan}
 //     tanggalAwal={waktuKegiatan}
 //     tempatAwal={tempatKegiatan}
@@ -207,10 +208,10 @@ export default function DaftarHadirCetak({
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="bg-slate-100">
-              <th className="border border-slate-300 px-2 py-2 w-10">No</th>
-              <th className="border border-slate-300 px-2 py-2 text-left">Nama</th>
-              <th className="border border-slate-300 px-2 py-2 text-left">Alamat</th>
-              <th className="border border-slate-300 px-2 py-2 w-32">Tanda Tangan</th>
+              <th className="border border-black px-2 py-2 w-10 text-black">No</th>
+              <th className="border border-black px-2 py-2 text-left text-black">Nama</th>
+              <th className="border border-black px-2 py-2 text-left text-black">Alamat</th>
+              <th className="border border-black px-2 py-2 w-32 text-black">Tanda Tangan</th>
             </tr>
           </thead>
           <tbody>
@@ -218,10 +219,10 @@ export default function DaftarHadirCetak({
               const anggota = daftarAnggota[i]
               return (
                 <tr key={i}>
-                  <td className="border border-slate-300 px-2 py-3 text-center">{i + 1}</td>
-                  <td className="border border-slate-300 px-2 py-3">{anggota?.nama || '\u00A0'}</td>
-                  <td className="border border-slate-300 px-2 py-3">{anggota?.alamat || '\u00A0'}</td>
-                  <td className="border border-slate-300 px-2 py-3">&nbsp;</td>
+                  <td className="border border-black px-2 py-3 text-center text-black">{i + 1}</td>
+                  <td className="border border-black px-2 py-3 text-black">{anggota?.nama || '\u00A0'}</td>
+                  <td className="border border-black px-2 py-3 text-black">{anggota?.alamat || '\u00A0'}</td>
+                  <td className="border border-black px-2 py-3 text-black">&nbsp;</td>
                 </tr>
               )
             })}
