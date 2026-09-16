@@ -17,11 +17,12 @@ const NAMA_BULAN = [
 const KOLOM_RELASI_PEGAWAI = 'pegawai_kantor_id' // FK ke pegawai_kantor.id
 const KOLOM_TANGGAL = 'tanggal'                  // date
 const KOLOM_STATUS = 'status'                    // text: hadir / izin / sakit / alpa
-const KOLOM_KETERANGAN = 'keterangan'            // text, opsional — dipakai di mode Perorangan
+const KOLOM_KETERANGAN = 'keterangan'            // text, opsional
+const KOLOM_JAM_MASUK = 'jam_masuk'              // time/text, opsional — kolom "Kedatangan"
+const KOLOM_JAM_PULANG = 'jam_pulang'            // time/text, opsional — kolom "Kepulangan"
 
 // Tabel hari libur — DIASUMSIKAN nama tabelnya `hari_libur` dengan kolom
 // `tanggal` (date), sama seperti yang dipakai menu "Hari Libur" di sidebar.
-// Kalau nama tabel/kolom aslinya beda, ganti dua konstanta ini saja.
 const TABEL_HARI_LIBUR = 'hari_libur'
 const KOLOM_TANGGAL_LIBUR = 'tanggal'
 
@@ -44,12 +45,21 @@ function kapital(teks) {
   return teks.charAt(0).toUpperCase() + teks.slice(1)
 }
 
+// "08:30:00" atau "2025-07-01T08:30:00" -> "08:30"
+function formatJam(nilai) {
+  if (!nilai) return ''
+  const teks = String(nilai)
+  const cocok = teks.match(/(\d{1,2}):(\d{2})/)
+  if (!cocok) return teks
+  return `${cocok[1].padStart(2, '0')}:${cocok[2]}`
+}
+
 export default function DaftarHadirPegawai() {
   const { profil, sekolahId } = useAuth()
   const [profilKantor, setProfilKantor] = useState(null)
   const [pegawaiList, setPegawaiList] = useState([])
   const [presensiMap, setPresensiMap] = useState({})
-  const [tanggalLibur, setTanggalLibur] = useState(new Set()) // Set berisi angka tanggal (1-31) yang libur bulan ini
+  const [tanggalLibur, setTanggalLibur] = useState(new Set()) // angka tanggal (1-31) yang libur bulan ini
   const [loading, setLoading] = useState(true)
 
   const now = new Date()
@@ -57,7 +67,7 @@ export default function DaftarHadirPegawai() {
   const [tahun, setTahun] = useState(now.getFullYear())
 
   // Mode cetak: 'kolektif' (semua pegawai, 1 tabel lebar) atau 'perorangan'
-  // (1 pegawai, tabel detail per hari — tanggal, hari, status, keterangan)
+  // (1 pegawai, format Daftar Hadir Manual: kedatangan & kepulangan + ttd)
   const [mode, setMode] = useState('kolektif')
   const [pegawaiTerpilihId, setPegawaiTerpilihId] = useState('')
 
@@ -67,12 +77,26 @@ export default function DaftarHadirPegawai() {
     [jumlahHari]
   )
 
-  function apakahMinggu(hari) {
-    return new Date(tahun, bulan - 1, hari).getDay() === 0
+  function hariKe(hari) {
+    return new Date(tahun, bulan - 1, hari).getDay() // 0 = Minggu, 6 = Sabtu
   }
 
+  function apakahMinggu(hari) {
+    return hariKe(hari) === 0
+  }
+
+  // Dipakai mode Kolektif (tetap seperti sebelumnya: Minggu + hari libur)
   function apakahLibur(hari) {
     return apakahMinggu(hari) || tanggalLibur.has(hari)
+  }
+
+  // Dipakai mode Perorangan (Sabtu ikut dianggap libur, sesuai format manual)
+  function labelLibur(hari) {
+    const h = hariKe(hari)
+    if (h === 0) return 'AHAD'
+    if (h === 6) return 'SABTU'
+    if (tanggalLibur.has(hari)) return 'LIBUR'
+    return null
   }
 
   useEffect(() => {
@@ -107,31 +131,37 @@ export default function DaftarHadirPegawai() {
       const tanggalAwal = `${tahun}-${String(bulan).padStart(2, '0')}-01`
       const tanggalAkhir = `${tahun}-${String(bulan).padStart(2, '0')}-${String(jumlahHari).padStart(2, '0')}`
 
-      let { data: presensi, error } = await supabase
-        .from('presensi_pegawai_kantor')
-        .select(`${KOLOM_RELASI_PEGAWAI}, ${KOLOM_TANGGAL}, ${KOLOM_STATUS}, ${KOLOM_KETERANGAN}`)
-        .eq('sekolah_id', sekolahId)
-        .gte(KOLOM_TANGGAL, tanggalAwal)
-        .lte(KOLOM_TANGGAL, tanggalAkhir)
-
-      // Kalau kolom `keterangan` ternyata tidak ada di tabel ini, ulangi
-      // query tanpa kolom itu supaya mode Kolektif tetap jalan normal
-      // (mode Perorangan akan tampil tanpa isi keterangan).
-      if (error) {
-        console.error('Gagal memuat presensi (dengan kolom keterangan) — mencoba tanpa kolom itu:', error)
-        const ulang = await supabase
+      // Coba ambil lengkap dengan jam masuk/pulang & keterangan. Kalau salah
+      // satu kolom tidak ada di tabel, query diulang bertahap supaya halaman
+      // tetap jalan (kolom yang hilang cuma tampil kosong).
+      const ambilPresensi = (kolom) =>
+        supabase
           .from('presensi_pegawai_kantor')
-          .select(`${KOLOM_RELASI_PEGAWAI}, ${KOLOM_TANGGAL}, ${KOLOM_STATUS}`)
+          .select(kolom)
           .eq('sekolah_id', sekolahId)
           .gte(KOLOM_TANGGAL, tanggalAwal)
           .lte(KOLOM_TANGGAL, tanggalAkhir)
-        presensi = ulang.data
-        if (ulang.error) {
-          console.error('Gagal memuat presensi — cek nama kolom di presensi_pegawai_kantor:', ulang.error)
+
+      const kolomDasar = `${KOLOM_RELASI_PEGAWAI}, ${KOLOM_TANGGAL}, ${KOLOM_STATUS}`
+      let { data: presensi, error } = await ambilPresensi(
+        `${kolomDasar}, ${KOLOM_KETERANGAN}, ${KOLOM_JAM_MASUK}, ${KOLOM_JAM_PULANG}`
+      )
+
+      if (error) {
+        console.warn('Kolom jam_masuk/jam_pulang tidak ada — mencoba tanpa kolom jam:', error.message)
+        const tanpaJam = await ambilPresensi(`${kolomDasar}, ${KOLOM_KETERANGAN}`)
+        presensi = tanpaJam.data
+        if (tanpaJam.error) {
+          console.warn('Kolom keterangan juga tidak ada — memakai kolom dasar saja:', tanpaJam.error.message)
+          const dasar = await ambilPresensi(kolomDasar)
+          presensi = dasar.data
+          if (dasar.error) {
+            console.error('Gagal memuat presensi — cek nama kolom di presensi_pegawai_kantor:', dasar.error)
+          }
         }
       }
 
-      // Susun jadi map: { [pegawai_id]: { [tanggal]: { singkatan, statusRaw, keterangan } } }
+      // Susun jadi map: { [pegawai_id]: { [tanggal]: { ... } } }
       const map = {}
       for (const baris of presensi || []) {
         const idPegawai = baris[KOLOM_RELASI_PEGAWAI]
@@ -144,14 +174,14 @@ export default function DaftarHadirPegawai() {
           singkatan,
           statusRaw: baris[KOLOM_STATUS] || '',
           keterangan: baris[KOLOM_KETERANGAN] || '',
+          jamMasuk: formatJam(baris[KOLOM_JAM_MASUK]),
+          jamPulang: formatJam(baris[KOLOM_JAM_PULANG]),
         }
       }
       setPresensiMap(map)
 
-      // Ambil daftar hari libur bulan ini (di luar hari Minggu, yang
-      // otomatis dihitung dari tanggal). Query dibungkus try/catch supaya
-      // kalau nama tabel/kolomnya ternyata beda, halaman tetap jalan —
-      // cuma hari Minggu saja yang tetap ditandai merah.
+      // Ambil daftar hari libur bulan ini (di luar Sabtu/Minggu yang
+      // otomatis dihitung dari tanggal).
       try {
         const { data: libur, error: errorLibur } = await supabase
           .from(TABEL_HARI_LIBUR)
@@ -178,9 +208,6 @@ export default function DaftarHadirPegawai() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bulan, tahun, jumlahHari, sekolahId])
 
-  // Set pegawai terpilih default (pertama di daftar) begitu data pegawai
-  // dimuat, kalau belum ada yang dipilih — supaya mode Perorangan langsung
-  // ada isinya tanpa harus pilih manual dulu.
   useEffect(() => {
     if (!pegawaiTerpilihId && pegawaiList.length > 0) {
       setPegawaiTerpilihId(String(pegawaiList[0].id))
@@ -193,8 +220,13 @@ export default function DaftarHadirPegawai() {
 
   const tempatTtd = profilKantor?.tempat_ttd || profilKantor?.kabupaten || ''
   const tanggalCetak = formatTanggalIndonesia(new Date())
+  // Daftar hadir manual ditandatangani per akhir bulan berjalan
+  const tanggalAkhirBulan = formatTanggalIndonesia(new Date(tahun, bulan - 1, jumlahHari))
 
-  // Hitung rekap per pegawai (total H/I/S/A dalam sebulan)
+  const unitKerja =
+    profilKantor?.nama_kantor ||
+    (profilKantor?.kecamatan ? `KUA Kec. ${profilKantor.kecamatan}` : '-')
+
   function hitungRekap(idPegawai) {
     const dataBulan = presensiMap[idPegawai] || {}
     const nilai = Object.values(dataBulan).map((v) => v.singkatan)
@@ -208,7 +240,6 @@ export default function DaftarHadirPegawai() {
 
   const pegawaiTerpilih = pegawaiList.find((p) => String(p.id) === String(pegawaiTerpilihId)) || null
   const dataBulanPegawaiTerpilih = pegawaiTerpilih ? presensiMap[pegawaiTerpilih.id] || {} : {}
-  const rekapPegawaiTerpilih = pegawaiTerpilih ? hitungRekap(pegawaiTerpilih.id) : null
 
   return (
     <Layout
@@ -236,7 +267,6 @@ export default function DaftarHadirPegawai() {
             ))}
           </select>
 
-          {/* Pemilih mode: Kolektif (semua pegawai) atau Perorangan (1 pegawai, detail per hari) */}
           <div className="flex items-center rounded-lg border border-slate-300 overflow-hidden">
             <button
               type="button"
@@ -351,7 +381,6 @@ export default function DaftarHadirPegawai() {
             <span className="text-red-600"> Angka tanggal merah</span> = hari Minggu/libur.
           </p>
 
-          {/* === TANDA TANGAN OTOMATIS DARI PROFIL KANTOR === */}
           <div className="ttd-block flex justify-between mt-10 text-sm text-slate-700">
             <div className="text-center w-48">
               <p>Mengetahui,</p>
@@ -382,7 +411,7 @@ export default function DaftarHadirPegawai() {
           </div>
         </div>
       ) : (
-        // === MODE PERORANGAN: kertas A4 potret, tabel detail per hari ===
+        // === MODE PERORANGAN: format Daftar Hadir Manual (A4 potret) ===
         <div
           className="lembar-cetak lembar-perorangan print-only bg-white rounded-2xl border border-slate-100 p-4 sm:p-6 mx-auto"
           style={{ width: '190mm' }}
@@ -390,68 +419,91 @@ export default function DaftarHadirPegawai() {
           <KopSurat />
 
           <div className="text-center mb-3">
-            <h1 className="font-display text-base font-bold uppercase text-slate-900 underline">
-              Daftar Hadir Perorangan
+            <h1 className="font-display text-sm font-bold uppercase text-slate-900 tracking-wide">
+              Daftar Hadir Manual
             </h1>
-            <p className="text-sm text-slate-700 mt-0.5">
-              Bulan {NAMA_BULAN[bulan - 1]} {tahun}
-            </p>
           </div>
 
           {pegawaiTerpilih ? (
             <>
-              {/* Info pegawai — dibuat sebagai tabel 3 baris supaya kolon (:)
-                  selalu sejajar rapi, tidak lagi grid 2 kolom yang bikin NIP
-                  meloncat posisi kalau angkanya panjang. */}
-              <table className="text-sm text-slate-700 mb-3">
+              <table className="text-[11px] text-slate-800 mb-2">
                 <tbody>
                   <tr>
-                    <td className="w-20 align-top pr-1 py-0.5">Nama</td>
-                    <td className="w-3 align-top pr-2 py-0.5">:</td>
-                    <td className="align-top py-0.5 font-medium">{pegawaiTerpilih.nama_lengkap}</td>
+                    <td className="w-24 align-top py-[1px] uppercase">Nama</td>
+                    <td className="w-3 align-top pr-2 py-[1px]">:</td>
+                    <td className="align-top py-[1px] font-medium">{pegawaiTerpilih.nama_lengkap}</td>
                   </tr>
                   <tr>
-                    <td className="w-20 align-top pr-1 py-0.5">NIP</td>
-                    <td className="w-3 align-top pr-2 py-0.5">:</td>
-                    <td className="align-top py-0.5">{pegawaiTerpilih.nip || '-'}</td>
+                    <td className="align-top py-[1px] uppercase">NIP</td>
+                    <td className="align-top pr-2 py-[1px]">:</td>
+                    <td className="align-top py-[1px]">{pegawaiTerpilih.nip || '-'}</td>
                   </tr>
                   <tr>
-                    <td className="w-20 align-top pr-1 py-0.5">Jabatan</td>
-                    <td className="w-3 align-top pr-2 py-0.5">:</td>
-                    <td className="align-top py-0.5">{pegawaiTerpilih.jabatan || '-'}</td>
+                    <td className="align-top py-[1px] uppercase">Unit Kerja</td>
+                    <td className="align-top pr-2 py-[1px]">:</td>
+                    <td className="align-top py-[1px]">{unitKerja}</td>
+                  </tr>
+                  <tr>
+                    <td className="align-top py-[1px] uppercase">Bulan</td>
+                    <td className="align-top pr-2 py-[1px]">:</td>
+                    <td className="align-top py-[1px]">
+                      {NAMA_BULAN[bulan - 1]} {tahun}
+                    </td>
                   </tr>
                 </tbody>
               </table>
 
-              <table className="w-full border-collapse text-[10px] sm:text-[11px] table-fixed">
+              <table className="w-full border-collapse text-[10px] table-fixed">
                 <thead>
-                  <tr className="bg-slate-100">
-                    <th className="border border-slate-400 px-1 py-1 w-7">No</th>
-                    <th className="border border-slate-400 px-1 py-1 w-24">Tanggal</th>
-                    <th className="border border-slate-400 px-1 py-1 w-16">Hari</th>
-                    <th className="border border-slate-400 px-1 py-1 w-16">Status</th>
-                    <th className="border border-slate-400 px-1 py-1 text-left w-28">Keterangan</th>
+                  <tr className="bg-slate-100 text-center">
+                    <th rowSpan={2} className="border border-slate-500 px-1 py-1 w-7 align-middle">No</th>
+                    <th rowSpan={2} className="border border-slate-500 px-1 py-1 w-[70px] align-middle">
+                      Tanggal
+                    </th>
+                    <th colSpan={2} className="border border-slate-500 px-1 py-1">Kedatangan</th>
+                    <th colSpan={2} className="border border-slate-500 px-1 py-1">Kepulangan</th>
+                    <th rowSpan={2} className="border border-slate-500 px-1 py-1 w-14 align-middle">Ket</th>
+                  </tr>
+                  <tr className="bg-slate-100 text-center">
+                    <th className="border border-slate-500 px-1 py-0.5 w-12">Jam</th>
+                    <th className="border border-slate-500 px-1 py-0.5">Tanda Tangan</th>
+                    <th className="border border-slate-500 px-1 py-0.5 w-12">Jam</th>
+                    <th className="border border-slate-500 px-1 py-0.5">Tanda Tangan</th>
                   </tr>
                 </thead>
                 <tbody>
                   {daftarHari.map((hari) => {
-                    const tanggalObj = new Date(tahun, bulan - 1, hari)
-                    const namaHari = tanggalObj.toLocaleDateString('id-ID', { weekday: 'long' })
-                    const tanggalStr = `${String(hari).padStart(2, '0')}/${String(bulan).padStart(2, '0')}/${tahun}`
+                    const tanggalStr = `${String(hari).padStart(2, '0')}-${String(bulan).padStart(2, '0')}-${tahun}`
+                    const libur = labelLibur(hari)
                     const dataHari = dataBulanPegawaiTerpilih[hari]
-                    const libur = apakahLibur(hari)
+
+                    if (libur) {
+                      return (
+                        <tr key={hari} className="text-red-600 font-semibold">
+                          <td className="border border-slate-400 text-center h-[19px]">{hari}</td>
+                          <td className="border border-slate-400 text-center whitespace-nowrap">
+                            {tanggalStr}
+                          </td>
+                          <td colSpan={5} className="border border-slate-400 text-center tracking-wide">
+                            {libur}
+                          </td>
+                        </tr>
+                      )
+                    }
+
                     return (
-                      <tr key={hari} className={libur ? 'text-red-600' : ''}>
-                        <td className="border border-slate-300 text-center py-0.5">{hari}</td>
-                        <td className="border border-slate-300 text-center whitespace-nowrap py-0.5">
+                      <tr key={hari}>
+                        <td className="border border-slate-400 text-center h-[19px]">{hari}</td>
+                        <td className="border border-slate-400 text-center whitespace-nowrap">
                           {tanggalStr}
                         </td>
-                        <td className="border border-slate-300 text-center py-0.5">{namaHari}</td>
-                        <td className="border border-slate-300 text-center py-0.5">
-                          {dataHari ? kapital(dataHari.statusRaw) : '-'}
-                        </td>
-                        <td className="border border-slate-300 px-1 py-0.5 truncate">
-                          {dataHari?.keterangan || ''}
+                        <td className="border border-slate-400 text-center">{dataHari?.jamMasuk || ''}</td>
+                        <td className="border border-slate-400" />
+                        <td className="border border-slate-400 text-center">{dataHari?.jamPulang || ''}</td>
+                        <td className="border border-slate-400" />
+                        <td className="border border-slate-400 text-center text-[9px] truncate">
+                          {dataHari?.keterangan ||
+                            (dataHari && dataHari.singkatan !== 'H' ? kapital(dataHari.statusRaw) : '')}
                         </td>
                       </tr>
                     )
@@ -459,39 +511,22 @@ export default function DaftarHadirPegawai() {
                 </tbody>
               </table>
 
-              {rekapPegawaiTerpilih && (
-                <p className="text-[10px] text-slate-600 mt-1.5">
-                  Rekap bulan ini: Hadir {rekapPegawaiTerpilih.hadir}, Izin {rekapPegawaiTerpilih.izin}, Sakit {rekapPegawaiTerpilih.sakit}, Alpa {rekapPegawaiTerpilih.alpa}.
-                  <span className="text-red-600"> Baris merah</span> = hari Minggu/libur.
-                </p>
-              )}
-
-              {/* === TANDA TANGAN OTOMATIS DARI PROFIL KANTOR === */}
-              <div className="ttd-block flex justify-between mt-5 text-sm text-slate-700">
-                <div className="text-center w-44">
-                  <p>Mengetahui,</p>
-                  <p>Kepala KUA</p>
-                  <div className="h-14 flex items-end justify-center">
+              {/* Tanda tangan Kepala KUA di sisi kanan, seperti contoh manual */}
+              <div className="ttd-block flex justify-end mt-4 text-[11px] text-slate-800">
+                <div className="w-64 text-left">
+                  <p>{tempatTtd ? `${tempatTtd}, ${tanggalAkhirBulan}` : tanggalAkhirBulan}</p>
+                  <p>Kepala Kantor Urusan Agama</p>
+                  <p>Kecamatan {profilKantor?.kecamatan || '..............................'}</p>
+                  <div className="h-14 flex items-end">
                     {ttdKepalaKuaUrl && (
                       <img src={ttdKepalaKuaUrl} alt="Tanda Tangan Kepala KUA" className="max-h-14 object-contain" />
                     )}
                   </div>
-                  <p className="font-semibold border-t border-slate-400 pt-1">
-                    ({profilKantor?.kepala_kua || '..............................'})
+                  <p className="font-semibold">
+                    {profilKantor?.kepala_kua || '..............................'}
                   </p>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-[10px] text-slate-600">
                     NIP. {profilKantor?.nip_kepala_kua || '..............................'}
-                  </p>
-                </div>
-                <div className="text-center w-44">
-                  <p>{tempatTtd ? `${tempatTtd}, ${tanggalCetak}` : '\u00A0'}</p>
-                  <p>Pegawai Bersangkutan</p>
-                  <div className="h-14" />
-                  <p className="font-semibold border-t border-slate-400 pt-1">
-                    ({pegawaiTerpilih.nama_lengkap})
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    NIP. {pegawaiTerpilih.nip || '..............................'}
                   </p>
                 </div>
               </div>
@@ -528,16 +563,16 @@ export default function DaftarHadirPegawai() {
             margin-left: auto !important;
             margin-right: auto !important;
           }
-          /* Mode Perorangan pakai kertas A4 potret (lebih pas untuk tabel
-             5 kolom ini) — halaman Kolektif tetap A4 lanskap dari aturan
-             @page default di bawah. Padding & margin dipangkas supaya
-             seluruh isi (tabel 1 bulan + tanda tangan) muat di 1 lembar. */
+          /* Mode Perorangan pakai kertas A4 potret. Padding & margin
+             dipangkas supaya tabel 1 bulan + tanda tangan muat 1 lembar. */
           .lembar-perorangan {
             page: perorangan;
             width: 190mm !important;
             padding: 4mm 6mm !important;
             border-radius: 0 !important;
           }
+          .lembar-perorangan table { page-break-inside: auto; }
+          .lembar-perorangan tr { page-break-inside: avoid; }
           .ttd-block {
             page-break-inside: avoid;
             break-inside: avoid;
