@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle2, XCircle, Clock3, X, Eye } from 'lucide-react'
+import { CheckCircle2, XCircle, Clock3, X, Eye, Printer, Trash2 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import Layout from '../components/Layout'
@@ -86,6 +86,24 @@ export default function VerifikasiNikah() {
     muatData()
   }
 
+  // Hapus permanen data pendaftaran. Minta konfirmasi dua kali secara implisit
+  // lewat teks peringatan karena aksi ini tidak bisa dibatalkan.
+  async function hapus(id) {
+    if (!window.confirm('Hapus pendaftaran nikah ini secara permanen? Tindakan ini tidak bisa dibatalkan.')) return
+    setProsesId(id)
+    const { error } = await supabase
+      .from('pendaftaran_nikah')
+      .delete()
+      .eq('id', id)
+    setProsesId(null)
+    if (error) {
+      window.alert('Gagal menghapus: ' + error.message)
+      return
+    }
+    setDetail(null)
+    muatData()
+  }
+
   // Ambil detail lengkap (termasuk data_n4, data_n5 yang tidak diambil
   // di listing supaya query ringan) saat modal detail dibuka.
   async function bukaDetail(id) {
@@ -99,6 +117,21 @@ export default function VerifikasiNikah() {
       return
     }
     setDetail(data)
+  }
+
+  // Cetak dokumen: ambil data lengkap lalu buka jendela baru berisi
+  // ringkasan N1/N2/N4/N5 yang siap di-print oleh browser.
+  async function cetak(id) {
+    const { data, error } = await supabase
+      .from('pendaftaran_nikah')
+      .select('*, profil:profil_id(nama_lengkap_pendaftar, email_pendaftar)')
+      .eq('id', id)
+      .single()
+    if (error) {
+      window.alert('Gagal memuat data untuk dicetak: ' + error.message)
+      return
+    }
+    bukaJendelaCetak(data)
   }
 
   return (
@@ -150,6 +183,12 @@ export default function VerifikasiNikah() {
                       >
                         <Eye size={14} /> Detail
                       </button>
+                      <button
+                        onClick={() => cetak(p.id)}
+                        className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100"
+                      >
+                        <Printer size={14} /> Cetak
+                      </button>
                       {tab === 'menunggu' && (
                         <>
                           <button
@@ -168,6 +207,13 @@ export default function VerifikasiNikah() {
                           </button>
                         </>
                       )}
+                      <button
+                        onClick={() => hapus(p.id)}
+                        disabled={prosesId === p.id}
+                        className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-60"
+                      >
+                        <Trash2 size={14} /> Hapus
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -177,7 +223,17 @@ export default function VerifikasiNikah() {
         )}
       </div>
 
-      {detail && <ModalDetail detail={detail} prosesId={prosesId} onClose={() => setDetail(null)} onSetujui={setujui} onTolak={tolak} />}
+      {detail && (
+        <ModalDetail
+          detail={detail}
+          prosesId={prosesId}
+          onClose={() => setDetail(null)}
+          onSetujui={setujui}
+          onTolak={tolak}
+          onHapus={hapus}
+          onCetak={() => bukaJendelaCetak(detail)}
+        />
+      )}
     </Layout>
   )
 }
@@ -191,7 +247,7 @@ function Baris({ label, value }) {
   )
 }
 
-function ModalDetail({ detail, prosesId, onClose, onSetujui, onTolak }) {
+function ModalDetail({ detail, prosesId, onClose, onSetujui, onTolak, onHapus, onCetak }) {
   const n1 = detail.data_n1 || {}
   const n2 = detail.data_n2 || {}
   const n4 = detail.data_n4 || {}
@@ -202,9 +258,17 @@ function ModalDetail({ detail, prosesId, onClose, onSetujui, onTolak }) {
       <div className="bg-white rounded-2xl max-w-2xl w-full p-5 max-h-[85vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-slate-800">Detail Pendaftaran Nikah</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onCetak}
+              className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+            >
+              <Printer size={14} /> Cetak
+            </button>
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4 mb-4">
@@ -287,7 +351,201 @@ function ModalDetail({ detail, prosesId, onClose, onSetujui, onTolak }) {
             <p className="text-xs text-slate-500">Catatan admin: "{detail.catatan_admin}"</p>
           </div>
         )}
+
+        <div className="pt-3 border-t border-slate-100 mt-3">
+          <button
+            onClick={() => onHapus(detail.id)}
+            disabled={prosesId === detail.id}
+            className="w-full flex items-center justify-center gap-1.5 text-red-600 text-sm font-medium py-2 rounded-lg hover:bg-red-50 disabled:opacity-50"
+          >
+            <Trash2 size={16} /> Hapus Pendaftaran
+          </button>
+        </div>
       </div>
     </div>
   )
+}
+
+// Membuka jendela baru berisi formulir cetak resmi (N1/N2/N4/N5) lalu
+// memanggil dialog print browser. Ditata seperti formulir instansi:
+// kop, nomor pendaftaran, tiap model sebagai blok terpisah, dan kolom
+// tanda tangan di bagian akhir.
+function bukaJendelaCetak(d) {
+  const n1 = d.data_n1 || {}
+  const n2 = d.data_n2 || {}
+  const n4 = d.data_n4 || {}
+  const n5 = d.data_n5 || {}
+  const esc = (v) => (v === undefined || v === null || v === '' ? '—' : String(v))
+  const nomor = String(d.id || '').slice(0, 8).toUpperCase()
+  const tanggalCetak = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
+
+  const baris = (label, value) => `
+    <tr>
+      <td class="label">${esc(label)}</td>
+      <td class="titik">:</td>
+      <td class="value">${esc(value)}</td>
+    </tr>`
+
+  const blokOrangTua = (judul, p) => `
+    <div class="sub-blok">
+      <p class="sub-judul">${judul}</p>
+      <table>
+        ${baris('Nama Ayah', p?.ayah?.nama_lengkap)}
+        ${baris('Nama Ibu', p?.ibu?.nama_lengkap)}
+        ${baris('Status Persetujuan', p?.persetujuan ? 'Menyetujui' : 'Belum Menyetujui')}
+      </table>
+    </div>`
+
+  const html = `
+    <html>
+      <head>
+        <title>Formulir Pendaftaran Nikah — ${nomor}</title>
+        <meta charset="utf-8" />
+        <style>
+          @page { size: A4; margin: 18mm 16mm; }
+          * { box-sizing: border-box; }
+          body { font-family: 'Times New Roman', Georgia, serif; color: #111; font-size: 13px; line-height: 1.5; }
+
+          .kop { text-align: center; border-bottom: 2.5px solid #111; padding-bottom: 10px; margin-bottom: 4px; }
+          .kop .instansi { font-size: 16px; font-weight: bold; letter-spacing: 0.5px; text-transform: uppercase; }
+          .kop .sub { font-size: 11px; color: #444; }
+
+          .judul-form { text-align: center; margin: 16px 0 4px; }
+          .judul-form h1 { font-size: 14px; text-decoration: underline; text-transform: uppercase; margin: 0; }
+          .judul-form .nomor { font-size: 11px; color: #444; margin-top: 2px; }
+
+          .status-bar { display: flex; justify-content: space-between; font-size: 11px; margin: 10px 0 16px; padding: 6px 10px; background: #f3f4f6; border-radius: 3px; }
+
+          .blok { margin-bottom: 18px; page-break-inside: avoid; }
+          .blok-judul { font-size: 12.5px; font-weight: bold; text-transform: uppercase; background: #111; color: #fff; padding: 4px 8px; margin-bottom: 6px; }
+
+          .dua-kolom { display: flex; gap: 20px; }
+          .dua-kolom > div { flex: 1; }
+
+          table { width: 100%; border-collapse: collapse; }
+          td.label { width: 38%; padding: 2.5px 0; vertical-align: top; color: #222; }
+          td.titik { width: 3%; padding: 2.5px 0; vertical-align: top; }
+          td.value { padding: 2.5px 0; vertical-align: top; font-weight: 500; }
+
+          .sub-blok { margin-bottom: 10px; }
+          .sub-judul { font-size: 11.5px; font-weight: bold; color: #444; margin: 0 0 3px; }
+
+          .ttd-area { display: flex; justify-content: space-between; margin-top: 40px; page-break-inside: avoid; }
+          .ttd-box { text-align: center; width: 30%; font-size: 12px; }
+          .ttd-box .ruang { height: 60px; }
+          .ttd-box .garis { border-top: 1px solid #111; padding-top: 3px; }
+
+          .catatan-admin { margin-top: 16px; font-size: 11.5px; border: 1px solid #ddd; padding: 8px; border-radius: 3px; }
+
+          @media print {
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="kop">
+          <div class="instansi">Formulir Pendaftaran Nikah</div>
+          <div class="sub">Dicetak dari sistem — bukan pengganti dokumen resmi KUA</div>
+        </div>
+
+        <div class="judul-form">
+          <h1>Rekap Data N1, N2, N4, N5</h1>
+          <div class="nomor">No. Pendaftaran: ${nomor} &nbsp;•&nbsp; Dicetak: ${tanggalCetak}</div>
+        </div>
+
+        <div class="status-bar">
+          <span>Status: <strong>${esc(d.status).toUpperCase()}</strong></span>
+          <span>Diajukan oleh: <strong>${esc(d.profil?.nama_lengkap_pendaftar)}</strong></span>
+        </div>
+
+        <div class="blok">
+          <div class="blok-judul">Model N1 — Data Calon Mempelai</div>
+          <div class="dua-kolom">
+            <div>
+              <p class="sub-judul">Calon Suami</p>
+              <table>
+                ${baris('Nama Lengkap', n1.calon_suami?.nama_lengkap)}
+                ${baris('NIK', n1.calon_suami?.nik)}
+                ${baris('Tempat, Tgl Lahir', `${n1.calon_suami?.tempat_lahir || ''}, ${n1.calon_suami?.tanggal_lahir || ''}`)}
+                ${baris('Agama', n1.calon_suami?.agama)}
+                ${baris('Pekerjaan', n1.calon_suami?.pekerjaan)}
+                ${baris('Alamat', n1.calon_suami?.alamat)}
+              </table>
+            </div>
+            <div>
+              <p class="sub-judul">Calon Istri</p>
+              <table>
+                ${baris('Nama Lengkap', n1.calon_istri?.nama_lengkap)}
+                ${baris('NIK', n1.calon_istri?.nik)}
+                ${baris('Tempat, Tgl Lahir', `${n1.calon_istri?.tempat_lahir || ''}, ${n1.calon_istri?.tanggal_lahir || ''}`)}
+                ${baris('Agama', n1.calon_istri?.agama)}
+                ${baris('Pekerjaan', n1.calon_istri?.pekerjaan)}
+                ${baris('Alamat', n1.calon_istri?.alamat)}
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="blok">
+          <div class="blok-judul">Model N2 — Rencana Pelaksanaan Akad</div>
+          <table>
+            ${baris('Tanggal Akad', n2.rencana_tanggal_akad)}
+            ${baris('Waktu Akad', n2.rencana_waktu_akad)}
+            ${baris('Tempat Akad', n2.tempat_akad)}
+            ${baris('KUA Tujuan', n2.kua_tujuan)}
+            ${baris('Catatan', n2.catatan)}
+          </table>
+        </div>
+
+        <div class="blok">
+          <div class="blok-judul">Model N4 — Persetujuan Mempelai</div>
+          <table>
+            ${baris('Persetujuan Calon Suami', n4.persetujuan_calon_suami ? 'Menyetujui' : 'Belum Menyetujui')}
+            ${baris('Persetujuan Calon Istri', n4.persetujuan_calon_istri ? 'Menyetujui' : 'Belum Menyetujui')}
+          </table>
+        </div>
+
+        <div class="blok">
+          <div class="blok-judul">Model N5 — Persetujuan Orang Tua</div>
+          <div class="dua-kolom">
+            ${blokOrangTua('Pihak Calon Suami', n5.suami)}
+            ${blokOrangTua('Pihak Calon Istri', n5.istri)}
+          </div>
+        </div>
+
+        ${
+          d.catatan_admin
+            ? `<div class="catatan-admin"><strong>Catatan Admin:</strong> ${esc(d.catatan_admin)}</div>`
+            : ''
+        }
+
+        <div class="ttd-area">
+          <div class="ttd-box">
+            <p>Calon Suami</p>
+            <div class="ruang"></div>
+            <p class="garis">${esc(n1.calon_suami?.nama_lengkap)}</p>
+          </div>
+          <div class="ttd-box">
+            <p>Calon Istri</p>
+            <div class="ruang"></div>
+            <p class="garis">${esc(n1.calon_istri?.nama_lengkap)}</p>
+          </div>
+          <div class="ttd-box">
+            <p>Petugas Verifikasi</p>
+            <div class="ruang"></div>
+            <p class="garis">&nbsp;</p>
+          </div>
+        </div>
+      </body>
+    </html>`
+
+  const w = window.open('', '_blank', 'width=900,height=1000')
+  if (!w) {
+    window.alert('Gagal membuka jendela cetak. Pastikan pop-up tidak diblokir browser.')
+    return
+  }
+  w.document.write(html)
+  w.document.close()
+  w.focus()
+  setTimeout(() => w.print(), 300)
 }
