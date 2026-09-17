@@ -333,13 +333,15 @@ function getLinksKantorPegawai(jumlahPesanBelumDibaca = 0) {
   return [
     { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
     { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
-    { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
+    { to: '/pusat-materi-majelis', label: 'Materi Majelis', icon: BookOpenCheck },
+    { to: '/pusat-kelompok-binaan', label: 'Kelompok Binaan', icon: Users },
     { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
     { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
     { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
     { to: '/presensi', label: 'Presensi', icon: ClipboardCheck },
     { to: '/agenda', label: 'Agenda Kantor', icon: CalendarDays },
     { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
+    { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
   ]
 }
 
