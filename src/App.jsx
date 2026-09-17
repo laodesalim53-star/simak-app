@@ -281,7 +281,7 @@ export default function App() {
           <Route path="/pusat-kelompok-binaan" element={<ProtectedRoute><PusatKelompokBinaan /></ProtectedRoute>} />
           <Route path="/materi-majelis-taklim" element={<ProtectedRoute adminOnly><MateriMajelisTaklim /></ProtectedRoute>} />
           <Route path="/pusat-kelompok-binaan" element={<ProtectedRoute><PusatKelompokBinaan /></ProtectedRoute>} />
-          <Route path="/kelompok-binaan/:slug" element={<ProtectedRoute adminOnly><KelolaKelompokBinaan /></ProtectedRoute>} />
+          <Route path="/kelompok-binaan/:slug" element={<ProtectedRoute><KelolaKelompokBinaan /></ProtectedRoute>} />
           <Route path="/kelas" element={<ProtectedRoute adminOnly><Kelas /></ProtectedRoute>} />
           <Route path="/profil-kantor" element={<ProtectedRoute adminOnly><ProfilKantor /></ProtectedRoute>} />
 
