@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Plus, Trash2, Loader2, Users, Save, FolderPlus, Check } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
 import { daftarKelompokBinaan } from './PusatKelompokBinaan'
 
@@ -13,6 +14,12 @@ const kunciGrup = (desa, namaKelompok) => `${(desa || '').trim()}||${(namaKelomp
 
 export default function KelolaKelompokBinaan() {
   const { slug } = useParams()
+  // PERBAIKAN: halaman ini sekarang boleh dibuka pegawai kantor non-admin
+  // (lihat perbaikan adminOnly di App.jsx & menu Sidebar), tapi cuma untuk
+  // MELIHAT data. Semua form tambah, tombol simpan/hapus, dan input yang
+  // bisa diedit langsung (nama/alamat/desa/nama kelompok) sekarang dibungkus
+  // isAdmin — untuk non-admin, data yang sama ditampilkan sebagai teks biasa.
+  const { isAdmin } = useAuth()
   const info = daftarKelompokBinaan.find((k) => k.slug === slug)
   const Icon = info?.icon || Users
   const pakaiDesaKelompok = SLUG_PAKAI_DESA_KELOMPOK.includes(slug)
@@ -87,6 +94,7 @@ export default function KelolaKelompokBinaan() {
 
   function buatKelompok(e) {
     e.preventDefault()
+    if (!isAdmin) return
     if (!desaBaru.trim() && !kelompokBaru.trim()) return
     const key = kunciGrup(desaBaru, kelompokBaru)
     if (daftarGrup.some((g) => g.key === key)) return
@@ -99,6 +107,7 @@ export default function KelolaKelompokBinaan() {
   }
 
   async function tambahPeserta(grup) {
+    if (!isAdmin) return
     const nama = (pesertaBaru[grup.key] || '').trim()
     if (!nama) return
     setGrupMenyimpan(grup.key)
@@ -119,6 +128,7 @@ export default function KelolaKelompokBinaan() {
 
   // Simpan seluruh isi satu kelompok: Desa, Nama Kelompok, dan semua nama peserta
   async function simpanKelompok(grup) {
+    if (!isAdmin) return
     const desa = (nilaiGrup(grup, 'desa') || '').trim()
     const namaKelompok = (nilaiGrup(grup, 'nama_kelompok') || '').trim()
 
@@ -162,6 +172,7 @@ export default function KelolaKelompokBinaan() {
   }
 
   async function hapusKelompok(grup) {
+    if (!isAdmin) return
     if (grup.anggota.length > 0) {
       const konfirmasi = window.confirm(
         `Hapus kelompok "${grup.nama_kelompok || 'tanpa nama'}" beserta ${grup.anggota.length} peserta di dalamnya?`,
@@ -177,6 +188,7 @@ export default function KelolaKelompokBinaan() {
 
   async function tambahAnggotaSederhana(e) {
     e.preventDefault()
+    if (!isAdmin) return
     if (!namaBaru.trim()) return
     setMenyimpan(true)
     const { error } = await supabase.from('kelompok_binaan_anggota').insert({
@@ -194,15 +206,18 @@ export default function KelolaKelompokBinaan() {
   }
 
   async function hapusAnggota(id) {
+    if (!isAdmin) return
     setAnggota((prev) => prev.filter((a) => a.id !== id))
     await supabase.from('kelompok_binaan_anggota').delete().eq('id', id)
   }
 
   function perbaruiField(id, field, value) {
+    if (!isAdmin) return
     setAnggota((prev) => prev.map((a) => (a.id === id ? { ...a, [field]: value } : a)))
   }
 
   async function simpanField(id, field, value) {
+    if (!isAdmin) return
     await supabase
       .from('kelompok_binaan_anggota')
       .update({ [field]: value || null })
@@ -215,7 +230,11 @@ export default function KelolaKelompokBinaan() {
   return (
     <Layout
       title={info ? `Kelompok Binaan: ${info.judul}` : 'Kelompok Binaan'}
-      subtitle="Data yang disimpan di sini permanen — tetap ada meskipun kamu mengelola kelompok lain, tinggal diedit kapan saja."
+      subtitle={
+        isAdmin
+          ? 'Data yang disimpan di sini permanen — tetap ada meskipun kamu mengelola kelompok lain, tinggal diedit kapan saja.'
+          : 'Daftar anggota kelompok binaan (tampilan lihat saja).'
+      }
     >
       <div className="flex items-center justify-between mb-5">
         <Link
@@ -227,94 +246,118 @@ export default function KelolaKelompokBinaan() {
       </div>
 
       <div className="max-w-4xl mx-auto space-y-5">
-        <div className="bg-white rounded-2xl border border-slate-100 p-5 sm:p-6">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-              <Icon size={20} />
+        {/* Form "buat kelompok" / "tambah anggota sederhana" — khusus admin */}
+        {isAdmin && (
+          <div className="bg-white rounded-2xl border border-slate-100 p-5 sm:p-6">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                <Icon size={20} />
+              </div>
+              <div>
+                <h1 className="font-display text-lg font-semibold text-slate-900">
+                  {info ? info.judul : slug}
+                </h1>
+                <p className="text-xs text-slate-500">
+                  {pakaiDesaKelompok
+                    ? `${daftarGrup.length} kelompok · ${anggota.length} peserta tersimpan`
+                    : `${anggota.length} peserta tersimpan`}
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="font-display text-lg font-semibold text-slate-900">
-                {info ? info.judul : slug}
-              </h1>
-              <p className="text-xs text-slate-500">
-                {pakaiDesaKelompok
-                  ? `${daftarGrup.length} kelompok · ${anggota.length} peserta tersimpan`
-                  : `${anggota.length} peserta tersimpan`}
-              </p>
+
+            {pakaiDesaKelompok ? (
+              <form
+                onSubmit={buatKelompok}
+                className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 mt-6 bg-slate-50 border border-slate-200 rounded-xl p-4"
+              >
+                <div>
+                  <label className="text-xs font-medium text-slate-600 block mb-1">Nama Desa</label>
+                  <input
+                    value={desaBaru}
+                    onChange={(e) => setDesaBaru(e.target.value)}
+                    className={kelasInput}
+                    placeholder="Contoh: Desa Sukamaju"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600 block mb-1">Nama Kelompok</label>
+                  <input
+                    value={kelompokBaru}
+                    onChange={(e) => setKelompokBaru(e.target.value)}
+                    className={kelasInput}
+                    placeholder="Contoh: Majelis Al-Ikhlas"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <button
+                    type="submit"
+                    disabled={!desaBaru.trim() && !kelompokBaru.trim()}
+                    className="inline-flex items-center justify-center gap-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors w-full sm:w-auto"
+                  >
+                    <FolderPlus size={16} /> Buat kelompok
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form
+                onSubmit={tambahAnggotaSederhana}
+                className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 mt-6 bg-slate-50 border border-slate-200 rounded-xl p-4"
+              >
+                <div>
+                  <label className="text-xs font-medium text-slate-600 block mb-1">Nama</label>
+                  <input
+                    value={namaBaru}
+                    onChange={(e) => setNamaBaru(e.target.value)}
+                    className={kelasInput}
+                    placeholder="Nama lengkap"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600 block mb-1">
+                    Alamat (opsional)
+                  </label>
+                  <input
+                    value={alamatBaru}
+                    onChange={(e) => setAlamatBaru(e.target.value)}
+                    className={kelasInput}
+                    placeholder="Alamat"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <button
+                    type="submit"
+                    disabled={menyimpan || !namaBaru.trim()}
+                    className="inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors w-full sm:w-auto"
+                  >
+                    {menyimpan ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                    Simpan
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
+
+        {/* Header ringkas untuk non-admin (pegawai) — tanpa form tambah */}
+        {!isAdmin && (
+          <div className="bg-white rounded-2xl border border-slate-100 p-5 sm:p-6">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                <Icon size={20} />
+              </div>
+              <div>
+                <h1 className="font-display text-lg font-semibold text-slate-900">
+                  {info ? info.judul : slug}
+                </h1>
+                <p className="text-xs text-slate-500">
+                  {pakaiDesaKelompok
+                    ? `${daftarGrup.length} kelompok · ${anggota.length} peserta tersimpan`
+                    : `${anggota.length} peserta tersimpan`}
+                </p>
+              </div>
             </div>
           </div>
-
-          {pakaiDesaKelompok ? (
-            <form
-              onSubmit={buatKelompok}
-              className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 mt-6 bg-slate-50 border border-slate-200 rounded-xl p-4"
-            >
-              <div>
-                <label className="text-xs font-medium text-slate-600 block mb-1">Nama Desa</label>
-                <input
-                  value={desaBaru}
-                  onChange={(e) => setDesaBaru(e.target.value)}
-                  className={kelasInput}
-                  placeholder="Contoh: Desa Sukamaju"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-slate-600 block mb-1">Nama Kelompok</label>
-                <input
-                  value={kelompokBaru}
-                  onChange={(e) => setKelompokBaru(e.target.value)}
-                  className={kelasInput}
-                  placeholder="Contoh: Majelis Al-Ikhlas"
-                />
-              </div>
-              <div className="flex items-end">
-                <button
-                  type="submit"
-                  disabled={!desaBaru.trim() && !kelompokBaru.trim()}
-                  className="inline-flex items-center justify-center gap-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors w-full sm:w-auto"
-                >
-                  <FolderPlus size={16} /> Buat kelompok
-                </button>
-              </div>
-            </form>
-          ) : (
-            <form
-              onSubmit={tambahAnggotaSederhana}
-              className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 mt-6 bg-slate-50 border border-slate-200 rounded-xl p-4"
-            >
-              <div>
-                <label className="text-xs font-medium text-slate-600 block mb-1">Nama</label>
-                <input
-                  value={namaBaru}
-                  onChange={(e) => setNamaBaru(e.target.value)}
-                  className={kelasInput}
-                  placeholder="Nama lengkap"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-slate-600 block mb-1">
-                  Alamat (opsional)
-                </label>
-                <input
-                  value={alamatBaru}
-                  onChange={(e) => setAlamatBaru(e.target.value)}
-                  className={kelasInput}
-                  placeholder="Alamat"
-                />
-              </div>
-              <div className="flex items-end">
-                <button
-                  type="submit"
-                  disabled={menyimpan || !namaBaru.trim()}
-                  className="inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors w-full sm:w-auto"
-                >
-                  {menyimpan ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-                  Simpan
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
+        )}
 
         {memuat ? (
           <div className="flex items-center justify-center py-10 text-slate-400">
@@ -323,74 +366,84 @@ export default function KelolaKelompokBinaan() {
         ) : pakaiDesaKelompok ? (
           daftarGrup.length === 0 ? (
             <p className="text-sm text-slate-500 text-center py-10 bg-white rounded-2xl border border-slate-100">
-              Belum ada kelompok. Isi nama desa dan nama kelompok di atas untuk memulai.
+              Belum ada kelompok{isAdmin ? '. Isi nama desa dan nama kelompok di atas untuk memulai.' : '.'}
             </p>
           ) : (
             daftarGrup.map((grup) => (
               <div key={grup.key} className="bg-white rounded-2xl border border-slate-100 p-4 sm:p-6">
-                <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 sm:items-end">
+                {isAdmin ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 sm:items-end">
+                    <div>
+                      <label className="text-xs font-medium text-slate-600 block mb-1">Nama Desa</label>
+                      <input
+                        value={nilaiGrup(grup, 'desa')}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          setEditGrup((prev) => ({
+                            ...prev,
+                            [grup.key]: { ...prev[grup.key], desa: v },
+                          }))
+                          setBelumTersimpan((prev) => ({ ...prev, [grup.key]: true }))
+                        }}
+                        className={kelasInput}
+                        placeholder="Nama desa"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-600 block mb-1">
+                        Nama Kelompok
+                      </label>
+                      <input
+                        value={nilaiGrup(grup, 'nama_kelompok')}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          setEditGrup((prev) => ({
+                            ...prev,
+                            [grup.key]: { ...prev[grup.key], nama_kelompok: v },
+                          }))
+                          setBelumTersimpan((prev) => ({ ...prev, [grup.key]: true }))
+                        }}
+                        className={kelasInput}
+                        placeholder="Nama kelompok"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => simpanKelompok(grup)}
+                        disabled={grupMenyimpan === grup.key}
+                        className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                      >
+                        {grupMenyimpan === grup.key ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : grupTersimpan === grup.key ? (
+                          <Check size={16} />
+                        ) : (
+                          <Save size={16} />
+                        )}
+                        {grupTersimpan === grup.key ? 'Tersimpan' : 'Simpan'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => hapusKelompok(grup)}
+                        className="text-rose-500 hover:text-rose-700 p-2 shrink-0"
+                        title="Hapus kelompok"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  // Non-admin: tampilkan Desa & Nama Kelompok sebagai teks, tanpa input/tombol
                   <div>
-                    <label className="text-xs font-medium text-slate-600 block mb-1">Nama Desa</label>
-                    <input
-                      value={nilaiGrup(grup, 'desa')}
-                      onChange={(e) => {
-                        const v = e.target.value
-                        setEditGrup((prev) => ({
-                          ...prev,
-                          [grup.key]: { ...prev[grup.key], desa: v },
-                        }))
-                        setBelumTersimpan((prev) => ({ ...prev, [grup.key]: true }))
-                      }}
-                      className={kelasInput}
-                      placeholder="Nama desa"
-                    />
+                    <p className="text-xs font-medium text-slate-500">Nama Desa</p>
+                    <p className="text-sm text-slate-900 mb-2">{grup.desa || '—'}</p>
+                    <p className="text-xs font-medium text-slate-500">Nama Kelompok</p>
+                    <p className="text-sm text-slate-900">{grup.nama_kelompok || '—'}</p>
                   </div>
-                  <div>
-                    <label className="text-xs font-medium text-slate-600 block mb-1">
-                      Nama Kelompok
-                    </label>
-                    <input
-                      value={nilaiGrup(grup, 'nama_kelompok')}
-                      onChange={(e) => {
-                        const v = e.target.value
-                        setEditGrup((prev) => ({
-                          ...prev,
-                          [grup.key]: { ...prev[grup.key], nama_kelompok: v },
-                        }))
-                        setBelumTersimpan((prev) => ({ ...prev, [grup.key]: true }))
-                      }}
-                      className={kelasInput}
-                      placeholder="Nama kelompok"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => simpanKelompok(grup)}
-                      disabled={grupMenyimpan === grup.key}
-                      className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-                    >
-                      {grupMenyimpan === grup.key ? (
-                        <Loader2 size={16} className="animate-spin" />
-                      ) : grupTersimpan === grup.key ? (
-                        <Check size={16} />
-                      ) : (
-                        <Save size={16} />
-                      )}
-                      {grupTersimpan === grup.key ? 'Tersimpan' : 'Simpan'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => hapusKelompok(grup)}
-                      className="text-rose-500 hover:text-rose-700 p-2 shrink-0"
-                      title="Hapus kelompok"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
+                )}
 
-                {belumTersimpan[grup.key] && grupMenyimpan !== grup.key && (
+                {isAdmin && belumTersimpan[grup.key] && grupMenyimpan !== grup.key && (
                   <p className="text-xs text-amber-600 mt-2">
                     Ada perubahan yang belum disimpan. Tekan Simpan.
                   </p>
@@ -399,7 +452,7 @@ export default function KelolaKelompokBinaan() {
                 <div className="mt-5">
                   {grup.anggota.length === 0 ? (
                     <p className="text-sm text-slate-500 py-4">
-                      Belum ada peserta di kelompok ini. Tambahkan lewat kolom di bawah.
+                      Belum ada peserta di kelompok ini{isAdmin ? '. Tambahkan lewat kolom di bawah.' : '.'}
                     </p>
                   ) : (
                     <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
@@ -410,7 +463,7 @@ export default function KelolaKelompokBinaan() {
                             <th className="border border-slate-200 px-2 py-2 text-left">
                               Nama Peserta
                             </th>
-                            <th className="border border-slate-200 px-2 py-2 w-12"></th>
+                            {isAdmin && <th className="border border-slate-200 px-2 py-2 w-12"></th>}
                           </tr>
                         </thead>
                         <tbody>
@@ -420,24 +473,30 @@ export default function KelolaKelompokBinaan() {
                                 {i + 1}
                               </td>
                               <td className="border border-slate-200 px-1 py-1">
-                                <input
-                                  value={a.nama || ''}
-                                  onChange={(e) => {
-                                    perbaruiField(a.id, 'nama', e.target.value)
-                                    setBelumTersimpan((prev) => ({ ...prev, [grup.key]: true }))
-                                  }}
-                                  className="w-full text-sm px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-slate-300"
-                                />
+                                {isAdmin ? (
+                                  <input
+                                    value={a.nama || ''}
+                                    onChange={(e) => {
+                                      perbaruiField(a.id, 'nama', e.target.value)
+                                      setBelumTersimpan((prev) => ({ ...prev, [grup.key]: true }))
+                                    }}
+                                    className="w-full text-sm px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-slate-300"
+                                  />
+                                ) : (
+                                  <span className="block px-2 py-1 text-sm text-slate-900">{a.nama}</span>
+                                )}
                               </td>
-                              <td className="border border-slate-200 px-2 py-1.5 text-center">
-                                <button
-                                  onClick={() => hapusAnggota(a.id)}
-                                  className="text-rose-500 hover:text-rose-700"
-                                  title="Hapus peserta"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              </td>
+                              {isAdmin && (
+                                <td className="border border-slate-200 px-2 py-1.5 text-center">
+                                  <button
+                                    onClick={() => hapusAnggota(a.id)}
+                                    className="text-rose-500 hover:text-rose-700"
+                                    title="Hapus peserta"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </td>
+                              )}
                             </tr>
                           ))}
                         </tbody>
@@ -445,37 +504,41 @@ export default function KelolaKelompokBinaan() {
                     </div>
                   )}
 
-                  <div className="flex flex-col sm:flex-row gap-2 mt-3">
-                    <input
-                      value={pesertaBaru[grup.key] || ''}
-                      onChange={(e) =>
-                        setPesertaBaru((prev) => ({ ...prev, [grup.key]: e.target.value }))
-                      }
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault()
-                          tambahPeserta(grup)
+                  {isAdmin && (
+                    <div className="flex flex-col sm:flex-row gap-2 mt-3">
+                      <input
+                        value={pesertaBaru[grup.key] || ''}
+                        onChange={(e) =>
+                          setPesertaBaru((prev) => ({ ...prev, [grup.key]: e.target.value }))
                         }
-                      }}
-                      className={kelasInput}
-                      placeholder="Nama peserta baru"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => tambahPeserta(grup)}
-                      disabled={!(pesertaBaru[grup.key] || '').trim() || grupMenyimpan === grup.key}
-                      className="inline-flex items-center justify-center gap-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors w-full sm:w-auto shrink-0"
-                    >
-                      <Plus size={16} /> Tambah
-                    </button>
-                  </div>
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            tambahPeserta(grup)
+                          }
+                        }}
+                        className={kelasInput}
+                        placeholder="Nama peserta baru"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => tambahPeserta(grup)}
+                        disabled={!(pesertaBaru[grup.key] || '').trim() || grupMenyimpan === grup.key}
+                        className="inline-flex items-center justify-center gap-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors w-full sm:w-auto shrink-0"
+                      >
+                        <Plus size={16} /> Tambah
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))
           )
         ) : anggota.length === 0 ? (
           <p className="text-sm text-slate-500 text-center py-10 bg-white rounded-2xl border border-slate-100">
-            Belum ada peserta. Tambahkan lewat form di atas — data akan tersimpan permanen.
+            {isAdmin
+              ? 'Belum ada peserta. Tambahkan lewat form di atas — data akan tersimpan permanen.'
+              : 'Belum ada peserta.'}
           </p>
         ) : (
           <div className="bg-white rounded-2xl border border-slate-100 p-4 sm:p-6">
@@ -486,7 +549,7 @@ export default function KelolaKelompokBinaan() {
                     <th className="border border-slate-200 px-2 py-2 w-10">No</th>
                     <th className="border border-slate-200 px-2 py-2 text-left">Nama</th>
                     <th className="border border-slate-200 px-2 py-2 text-left">Alamat</th>
-                    <th className="border border-slate-200 px-2 py-2 w-12"></th>
+                    {isAdmin && <th className="border border-slate-200 px-2 py-2 w-12"></th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -496,30 +559,40 @@ export default function KelolaKelompokBinaan() {
                         {i + 1}
                       </td>
                       <td className="border border-slate-200 px-1 py-1">
-                        <input
-                          value={a.nama || ''}
-                          onChange={(e) => perbaruiField(a.id, 'nama', e.target.value)}
-                          onBlur={(e) => simpanField(a.id, 'nama', e.target.value)}
-                          className="w-full text-sm px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-slate-300"
-                        />
+                        {isAdmin ? (
+                          <input
+                            value={a.nama || ''}
+                            onChange={(e) => perbaruiField(a.id, 'nama', e.target.value)}
+                            onBlur={(e) => simpanField(a.id, 'nama', e.target.value)}
+                            className="w-full text-sm px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-slate-300"
+                          />
+                        ) : (
+                          <span className="block px-2 py-1 text-sm text-slate-900">{a.nama}</span>
+                        )}
                       </td>
                       <td className="border border-slate-200 px-1 py-1">
-                        <input
-                          value={a.alamat || ''}
-                          onChange={(e) => perbaruiField(a.id, 'alamat', e.target.value)}
-                          onBlur={(e) => simpanField(a.id, 'alamat', e.target.value)}
-                          className="w-full text-sm px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-slate-300"
-                        />
+                        {isAdmin ? (
+                          <input
+                            value={a.alamat || ''}
+                            onChange={(e) => perbaruiField(a.id, 'alamat', e.target.value)}
+                            onBlur={(e) => simpanField(a.id, 'alamat', e.target.value)}
+                            className="w-full text-sm px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-slate-300"
+                          />
+                        ) : (
+                          <span className="block px-2 py-1 text-sm text-slate-900">{a.alamat || '—'}</span>
+                        )}
                       </td>
-                      <td className="border border-slate-200 px-2 py-1.5 text-center">
-                        <button
-                          onClick={() => hapusAnggota(a.id)}
-                          className="text-rose-500 hover:text-rose-700"
-                          title="Hapus"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </td>
+                      {isAdmin && (
+                        <td className="border border-slate-200 px-2 py-1.5 text-center">
+                          <button
+                            onClick={() => hapusAnggota(a.id)}
+                            className="text-rose-500 hover:text-rose-700"
+                            title="Hapus"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
