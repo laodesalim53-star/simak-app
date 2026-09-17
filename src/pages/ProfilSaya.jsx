@@ -476,6 +476,341 @@ function ProfilAdminCard({ profil, userId, adminData }) {
   )
 }
 
+// Kartu profil untuk akun PEGAWAI KANTOR (jabatan/role 'pegawai' atau
+// 'kepala_kantor') yang sudah dihubungkan ke tabel `pegawai_kantor` lewat
+// profil.pegawai_id (dihubungkan lewat ModalHubungkanPegawai di
+// PersetujuanAkun.jsx). Mengikuti pola persis ProfilAdminCard di atas
+// (kartu identitas navy + batik, QR code, form data diri, barcode), tapi
+// datanya diambil/disimpan langsung ke tabel `pegawai_kantor`, bukan
+// `profil` — karena data pegawai memang tinggal di tabel itu.
+//
+// ASUMSI kolom tabel pegawai_kantor (kalau belum ada, tambahkan dulu):
+// alter table pegawai_kantor add column if not exists no_hp text;
+// alter table pegawai_kantor add column if not exists tanggal_lahir date;
+// alter table pegawai_kantor add column if not exists pendidikan_terakhir text;
+// alter table pegawai_kantor add column if not exists alamat text;
+// alter table pegawai_kantor add column if not exists foto_profil_path text;
+function ProfilPegawaiCard({ pegawaiData, onDataBerubah }) {
+  const [form, setForm] = useState({
+    nama_lengkap: pegawaiData?.nama_lengkap || '',
+    email: pegawaiData?.email || '',
+    nip: pegawaiData?.nip || '',
+    jabatan: pegawaiData?.jabatan || '',
+    no_hp: pegawaiData?.no_hp || '',
+    tanggal_lahir: pegawaiData?.tanggal_lahir || '',
+    pendidikan_terakhir: pegawaiData?.pendidikan_terakhir || '',
+    alamat: pegawaiData?.alamat || '',
+  })
+  const [fotoPath, setFotoPath] = useState(pegawaiData?.foto_profil_path || '')
+  const [uploadingFoto, setUploadingFoto] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [savedAt, setSavedAt] = useState(null)
+  const [qrDataUrl, setQrDataUrl] = useState('')
+
+  // Sinkronkan form/foto kalau pegawaiData datang belakangan atau berubah
+  // setelah simpan (lewat onDataBerubah -> reload dari komponen induk).
+  useEffect(() => {
+    setForm({
+      nama_lengkap: pegawaiData?.nama_lengkap || '',
+      email: pegawaiData?.email || '',
+      nip: pegawaiData?.nip || '',
+      jabatan: pegawaiData?.jabatan || '',
+      no_hp: pegawaiData?.no_hp || '',
+      tanggal_lahir: pegawaiData?.tanggal_lahir || '',
+      pendidikan_terakhir: pegawaiData?.pendidikan_terakhir || '',
+      alamat: pegawaiData?.alamat || '',
+    })
+    setFotoPath(pegawaiData?.foto_profil_path || '')
+  }, [pegawaiData])
+
+  useEffect(() => {
+    if (!pegawaiData?.id) {
+      setQrDataUrl('')
+      return
+    }
+    QRCode.toDataURL(String(pegawaiData.id), {
+      width: 144,
+      margin: 1,
+      color: { dark: '#1e3a5f', light: '#ffffff' },
+    })
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(''))
+  }, [pegawaiData?.id])
+
+  function fotoUrl() {
+    if (!fotoPath) return null
+    return supabase.storage.from('foto-profil').getPublicUrl(fotoPath).data.publicUrl
+  }
+
+  async function handleFotoChange(e) {
+    const file = e.target.files?.[0]
+    if (!file || !pegawaiData?.id) return
+    setUploadingFoto(true)
+
+    const ext = file.name.split('.').pop()
+    const path = `${pegawaiData.id}/foto.${ext}`
+
+    const { error: uploadError } = await supabase.storage
+      .from('foto-profil')
+      .upload(path, file, { upsert: true })
+
+    if (uploadError) {
+      alert('Gagal upload foto: ' + uploadError.message)
+      setUploadingFoto(false)
+      return
+    }
+
+    const { error: updateError } = await supabase
+      .from('pegawai_kantor')
+      .update({ foto_profil_path: path })
+      .eq('id', pegawaiData.id)
+
+    if (updateError) {
+      alert('Gagal simpan foto: ' + updateError.message)
+    } else {
+      setFotoPath(path)
+      // Sinkronkan data pegawai di komponen induk (ProfilSaya) supaya foto
+      // tidak balik kosong lagi saat halaman ini re-render.
+      onDataBerubah?.()
+    }
+    setUploadingFoto(false)
+  }
+
+  async function handleSave(e) {
+    e.preventDefault()
+    setSaving(true)
+    const { error } = await supabase
+      .from('pegawai_kantor')
+      .update({
+        nama_lengkap: form.nama_lengkap,
+        email: form.email,
+        nip: form.nip,
+        jabatan: form.jabatan,
+        no_hp: form.no_hp,
+        tanggal_lahir: form.tanggal_lahir || null,
+        pendidikan_terakhir: form.pendidikan_terakhir,
+        alamat: form.alamat,
+      })
+      .eq('id', pegawaiData.id)
+
+    if (error) {
+      alert('Gagal menyimpan: ' + error.message)
+    } else {
+      setSavedAt(new Date())
+      onDataBerubah?.()
+    }
+    setSaving(false)
+  }
+
+  const namaFileDataDiri = `Data-Diri-${(form.nama_lengkap || 'Pegawai').replace(/\s+/g, '-')}`
+  const dataDiriFields = [
+    { label: 'Nama Lengkap', value: form.nama_lengkap },
+    { label: 'Jabatan', value: form.jabatan },
+    { label: 'NIP', value: form.nip },
+    { label: 'Nomor HP', value: form.no_hp },
+    { label: 'Email', value: form.email },
+    { label: 'Tanggal Lahir', value: form.tanggal_lahir },
+    { label: 'Pendidikan Terakhir', value: form.pendidikan_terakhir },
+    { label: 'Alamat', value: form.alamat },
+  ]
+
+  return (
+    <form onSubmit={handleSave} className="max-w-2xl space-y-5">
+      {/* Kartu identitas — gaya & tata letak sama seperti ProfilAdminCard, supaya
+            konsisten secara visual antar jenis akun */}
+      <div className="relative overflow-hidden rounded-xl p-6 flex items-center justify-between gap-5 bg-gradient-to-br from-blue-900 to-blue-950">
+        <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/5 pointer-events-none" />
+        <div className="absolute -bottom-14 -left-6 w-32 h-32 rounded-full bg-white/5 pointer-events-none" />
+
+        <svg
+          className="absolute inset-0 w-full h-full pointer-events-none"
+          preserveAspectRatio="xMidYMid slice"
+          aria-hidden="true"
+        >
+          <defs>
+            <pattern
+              id="batikEmasPegawai"
+              x="0"
+              y="0"
+              width="72"
+              height="72"
+              patternUnits="userSpaceOnUse"
+              patternTransform="rotate(8)"
+            >
+              <g fill="none" stroke="#d4af37" strokeWidth="1.1">
+                <ellipse cx="36" cy="24" rx="9" ry="14" opacity="0.55" />
+                <ellipse cx="36" cy="48" rx="9" ry="14" opacity="0.55" />
+                <ellipse cx="24" cy="36" rx="14" ry="9" opacity="0.55" />
+                <ellipse cx="48" cy="36" rx="14" ry="9" opacity="0.55" />
+                <circle cx="36" cy="36" r="3" opacity="0.7" />
+              </g>
+              <path
+                d="M0 72 L18 54 L36 72 L54 54 L72 72"
+                fill="none"
+                stroke="#d4af37"
+                strokeWidth="0.8"
+                opacity="0.35"
+              />
+              <path d="M0 0 L18 18 L0 36" fill="none" stroke="#d4af37" strokeWidth="0.8" opacity="0.3" />
+              <circle cx="8" cy="8" r="1.3" fill="#d4af37" opacity="0.4" />
+              <circle cx="64" cy="16" r="1.3" fill="#d4af37" opacity="0.4" />
+              <circle cx="16" cy="64" r="1.3" fill="#d4af37" opacity="0.4" />
+            </pattern>
+            <linearGradient id="batikFadePegawai" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#000000" stopOpacity="0" />
+              <stop offset="100%" stopColor="#000000" stopOpacity="0.15" />
+            </linearGradient>
+          </defs>
+          <rect x="0" y="0" width="100%" height="100%" fill="url(#batikEmasPegawai)" />
+          <rect x="0" y="0" width="100%" height="100%" fill="url(#batikFadePegawai)" />
+        </svg>
+
+        <div className="relative flex items-center gap-5 min-w-0">
+          <div className="relative shrink-0">
+            <div className="w-20 h-20 rounded-full bg-white/10 ring-2 ring-white/20 overflow-hidden flex items-center justify-center">
+              {fotoUrl() ? (
+                <img src={fotoUrl()} alt="Foto profil" className="w-full h-full object-cover" />
+              ) : (
+                <ShieldCheck size={28} className="text-white/80" />
+              )}
+            </div>
+            <label className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-brass-400 flex items-center justify-center cursor-pointer shadow-md">
+              {uploadingFoto ? (
+                <Loader2 size={13} className="animate-spin text-ink-950" />
+              ) : (
+                <Camera size={13} className="text-ink-950" />
+              )}
+              <input type="file" accept="image/*" className="hidden" onChange={handleFotoChange} disabled={uploadingFoto} />
+            </label>
+          </div>
+          <div className="min-w-0">
+            <p className="font-display font-semibold text-lg text-white truncate">
+              {form.nama_lengkap || 'Nama belum diisi'}
+            </p>
+            <p className="text-sm text-blue-200/70">{form.jabatan || 'Pegawai Kantor'}</p>
+          </div>
+        </div>
+
+        <div className="relative shrink-0 w-[88px] h-[88px] p-2 rounded-lg bg-white shadow-md flex items-center justify-center">
+          {qrDataUrl ? (
+            <img src={qrDataUrl} alt="QR Code identitas pegawai" width={72} height={72} />
+          ) : (
+            <Loader2 size={18} className="animate-spin text-ink-700/30" />
+          )}
+        </div>
+      </div>
+
+      <div className="card relative overflow-hidden p-6 space-y-4">
+        <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-900 to-brass-400" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs text-ink-700/60 mb-1 block">Nama Lengkap</label>
+            <input
+              className="input w-full"
+              value={form.nama_lengkap}
+              onChange={(e) => setForm({ ...form, nama_lengkap: e.target.value })}
+              required
+            />
+          </div>
+          <div>
+            <label className="text-xs text-ink-700/60 mb-1 block">Jabatan</label>
+            <input
+              className="input w-full"
+              placeholder="mis. Staf Tata Usaha"
+              value={form.jabatan}
+              onChange={(e) => setForm({ ...form, jabatan: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-ink-700/60 mb-1 block">NIP</label>
+            <input
+              className="input w-full"
+              value={form.nip}
+              onChange={(e) => setForm({ ...form, nip: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-ink-700/60 mb-1 block">Nomor HP</label>
+            <input
+              className="input w-full"
+              value={form.no_hp}
+              onChange={(e) => setForm({ ...form, no_hp: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-ink-700/60 mb-1 block">Email</label>
+            <input
+              className="input w-full"
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-ink-700/60 mb-1 block">Tanggal Lahir</label>
+            <input
+              className="input w-full"
+              type="date"
+              value={form.tanggal_lahir || ''}
+              onChange={(e) => setForm({ ...form, tanggal_lahir: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-ink-700/60 mb-1 block">Pendidikan Terakhir</label>
+            <input
+              className="input w-full"
+              value={form.pendidikan_terakhir}
+              onChange={(e) => setForm({ ...form, pendidikan_terakhir: e.target.value })}
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="text-xs text-ink-700/60 mb-1 block">Alamat</label>
+            <textarea
+              className="input w-full"
+              rows={2}
+              value={form.alamat}
+              onChange={(e) => setForm({ ...form, alamat: e.target.value })}
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 pt-2 flex-wrap">
+          <button
+            type="submit"
+            disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brass-400 text-ink-950 text-sm font-medium disabled:opacity-50"
+          >
+            {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+            {saving ? 'Menyimpan...' : 'Simpan'}
+          </button>
+          <TombolCetakDataDiri
+            fields={dataDiriFields}
+            judul="Data Diri — Pegawai Kantor"
+            namaOrang={form.nama_lengkap}
+            namaFile={namaFileDataDiri}
+          />
+          {savedAt && <span className="text-xs text-sage-500">Tersimpan</span>}
+        </div>
+      </div>
+
+      {/* Kode batang ID pegawai — sama pola seperti barcode admin/guru */}
+      <div className="flex flex-col items-center gap-2 py-4 border-t border-ink-900/[0.08]">
+        <div className="p-3 rounded-lg bg-white ring-1 ring-ink-900/[0.08] shadow-sm">
+          <Barcode
+            value={String(pegawaiData?.id || '')}
+            width={1.6}
+            height={56}
+            fontSize={12}
+            background="#ffffff"
+            lineColor="#1e3a5f"
+          />
+        </div>
+        <p className="text-xs text-ink-700/50">ID Pegawai</p>
+      </div>
+    </form>
+  )
+}
+
 // Modal untuk menghubungkan anak tambahan (ke-2, ke-3, dst) ke akun orang
 // tua yang sudah login. Sengaja dibuat terpisah dari alur pendaftaran
 // (Register.jsx) — di sini siswa difilter dari sekolah_id akun yang sudah
@@ -933,6 +1268,13 @@ export default function ProfilSaya() {
   const [adminData, setAdminData] = useState(null)
   const [loadingAdminData, setLoadingAdminData] = useState(true)
 
+  // Data pegawai kantor (tabel pegawai_kantor) untuk akun berjabatan
+  // 'pegawai'/'kepala_kantor' yang sudah dihubungkan lewat profil.pegawai_id
+  // (dihubungkan lewat ModalHubungkanPegawai di halaman admin PersetujuanAkun.jsx).
+  const isPegawaiKantor = ['pegawai', 'kepala_kantor'].includes(profil?.jabatan || profil?.role)
+  const [pegawaiData, setPegawaiData] = useState(null)
+  const [loadingPegawaiData, setLoadingPegawaiData] = useState(true)
+
   useEffect(() => {
     async function load() {
       if (!profil?.guru_id) {
@@ -1008,6 +1350,31 @@ export default function ProfilSaya() {
     }
     loadAdminData()
   }, [profil, isAdmin, session])
+
+  // Muat data pegawai kantor kalau akun ini berjabatan pegawai/kepala kantor
+  // dan sudah dihubungkan (profil.pegawai_id terisi). Dipisah jadi fungsi
+  // (bukan langsung di dalam useEffect) supaya bisa dipanggil ulang lewat
+  // prop onDataBerubah dari ProfilPegawaiCard setelah simpan/upload foto —
+  // pola yang sama seperti refreshProfil() di AuthContext untuk kartu lain.
+  async function muatPegawaiData() {
+    if (!profil?.pegawai_id) {
+      setLoadingPegawaiData(false)
+      return
+    }
+    setLoadingPegawaiData(true)
+    const { data: row } = await supabase
+      .from('pegawai_kantor')
+      .select('*')
+      .eq('id', profil.pegawai_id)
+      .maybeSingle()
+    setPegawaiData(row)
+    setLoadingPegawaiData(false)
+  }
+
+  useEffect(() => {
+    muatPegawaiData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profil])
 
   useEffect(() => {
     async function loadSiswaAsuh() {
@@ -1189,7 +1556,10 @@ export default function ProfilSaya() {
     setSaving(false)
   }
 
-  const sedangMemuat = loading || (!profil?.guru_id && isAdmin && loadingAdminData)
+  const sedangMemuat =
+    loading ||
+    (!profil?.guru_id && isAdmin && loadingAdminData) ||
+    (!profil?.guru_id && isPegawaiKantor && loadingPegawaiData)
 
   if (sedangMemuat) {
     return (
@@ -1219,6 +1589,32 @@ export default function ProfilSaya() {
       return (
         <Layout title="Profil Saya" subtitle="Data diri dan foto profil Anda">
           <ProfilOrangTuaCard profil={profil} userId={session?.user?.id} />
+        </Layout>
+      )
+    }
+    // Pegawai kantor (jabatan/role 'pegawai' atau 'kepala_kantor') juga
+    // WAJAR tidak punya guru_id — mereka tertaut lewat pegawai_id ke tabel
+    // pegawai_kantor, bukan ke tabel guru. Kalau pegawai_id sudah terisi
+    // DAN datanya berhasil dimuat, tampilkan kartu profil pegawai. Kalau
+    // pegawai_id masih kosong (akun sempat disetujui langsung sebelum
+    // modal hubungkan-pegawai ada), baru tampilkan pesan minta admin
+    // menautkan — dengan kalimat yang benar (data pegawai, bukan data guru).
+    if (isPegawaiKantor) {
+      if (profil?.pegawai_id && pegawaiData) {
+        return (
+          <Layout title="Profil Saya" subtitle="Data diri dan foto profil Anda">
+            <ProfilPegawaiCard pegawaiData={pegawaiData} onDataBerubah={muatPegawaiData} />
+          </Layout>
+        )
+      }
+      return (
+        <Layout title="Profil Saya" subtitle="Data diri dan foto profil Anda">
+          <div className="card p-6">
+            <p className="text-sm text-ink-700/60">
+              Akun Anda belum terhubung ke data pegawai. Hubungi admin untuk menautkan akun ini ke
+              salah satu data pegawai kantor.
+            </p>
+          </div>
         </Layout>
       )
     }
