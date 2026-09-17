@@ -13,6 +13,7 @@ import {
   Upload,
   ImagePlus,
   Trash2,
+  Printer,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
@@ -34,6 +35,12 @@ const LANGKAH = [
   { id: 'n5', label: 'Izin Orang Tua/Wali', model: 'N5' },
   { id: 'ringkasan', label: 'Ringkasan & Ajukan', model: null },
 ]
+
+const LABEL_STATUS_PERKAWINAN = {
+  belum_kawin: 'Belum Kawin',
+  cerai_hidup: 'Duda/Janda Cerai Hidup',
+  cerai_mati: 'Duda/Janda Cerai Mati',
+}
 
 const DATA_KOSONG = {
   calon_suami: {
@@ -265,6 +272,14 @@ export default function PendaftaranNikah() {
     setStatusPendaftaran('menunggu')
   }
 
+  // Membuka dialog cetak browser. Halaman cetak (LembarCetak) memakai
+  // Tailwind print: variant sehingga hanya bagian itu yang tampil di
+  // hasil cetak/PDF — sisa UI (sidebar, tombol, dsb) otomatis disembunyikan
+  // lewat pembungkus className="print:hidden" di bawah.
+  function cetakFormulir() {
+    window.print()
+  }
+
   if (loading) {
     return (
       <Layout title="Pendaftaran Nikah" subtitle="Isi data pendaftaran nikah secara bertahap.">
@@ -277,28 +292,39 @@ export default function PendaftaranNikah() {
   // saja — tidak bisa diedit lagi (kecuali admin menolak, ditangani di atas).
   if (statusPendaftaran === 'menunggu' || statusPendaftaran === 'diverifikasi') {
     return (
-      <Layout title="Pendaftaran Nikah" subtitle="Status pendaftaran nikah Anda.">
-        <div className="bg-white rounded-xl border border-slate-200 p-8 text-center max-w-lg mx-auto shadow-sm">
-          {statusPendaftaran === 'menunggu' ? (
-            <>
-              <Clock3 className="mx-auto text-amber-500 mb-3" size={40} />
-              <h2 className="font-semibold text-slate-800 mb-1">Menunggu Verifikasi</h2>
-              <p className="text-sm text-slate-500">
-                Pendaftaran nikah Anda sudah diajukan dan sedang menunggu verifikasi dari admin kantor.
-              </p>
-            </>
-          ) : (
-            <>
-              <CheckCircle2 className="mx-auto text-emerald-600 mb-3" size={40} />
-              <h2 className="font-semibold text-slate-800 mb-1">Sudah Diverifikasi</h2>
-              <p className="text-sm text-slate-500">
-                Pendaftaran nikah Anda sudah diverifikasi admin.
-                {catatanAdmin ? ` Catatan: "${catatanAdmin}"` : ''}
-              </p>
-            </>
-          )}
+      <>
+        <div className="print:hidden">
+          <Layout title="Pendaftaran Nikah" subtitle="Status pendaftaran nikah Anda.">
+            <div className="bg-white rounded-xl border border-slate-200 p-8 text-center max-w-lg mx-auto shadow-sm">
+              {statusPendaftaran === 'menunggu' ? (
+                <>
+                  <Clock3 className="mx-auto text-amber-500 mb-3" size={40} />
+                  <h2 className="font-semibold text-slate-800 mb-1">Menunggu Verifikasi</h2>
+                  <p className="text-sm text-slate-500">
+                    Pendaftaran nikah Anda sudah diajukan dan sedang menunggu verifikasi dari admin kantor.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="mx-auto text-emerald-600 mb-3" size={40} />
+                  <h2 className="font-semibold text-slate-800 mb-1">Sudah Diverifikasi</h2>
+                  <p className="text-sm text-slate-500">
+                    Pendaftaran nikah Anda sudah diverifikasi admin.
+                    {catatanAdmin ? ` Catatan: "${catatanAdmin}"` : ''}
+                  </p>
+                </>
+              )}
+              <button
+                onClick={cetakFormulir}
+                className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 border border-emerald-200 rounded-lg px-4 py-2 hover:bg-emerald-50"
+              >
+                <Printer size={15} /> Cetak Formulir
+              </button>
+            </div>
+          </Layout>
         </div>
-      </Layout>
+        <LembarCetak data={data} />
+      </>
     )
   }
 
@@ -306,151 +332,166 @@ export default function PendaftaranNikah() {
   const indeksLangkah = LANGKAH.findIndex((l) => l.id === langkah.id)
 
   return (
-    <Layout title="Pendaftaran Nikah" subtitle="Isi data pendaftaran nikah secara bertahap.">
-      {/* Breadcrumb ala SIMKAH */}
-      <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-4">
-        <Home size={13} className="text-emerald-700" />
-        <ChevronRight size={12} className="text-slate-300" />
-        <span className="px-2 py-0.5 rounded bg-slate-100 font-medium text-slate-500">
-          Pendaftaran Nikah
-        </span>
-        <ChevronRight size={12} className="text-slate-300" />
-        <span className="px-2 py-0.5 rounded bg-emerald-50 font-semibold text-emerald-800">
-          {langkah.model ? `Model ${langkah.model} — ` : ''}
-          {langkah.label}
-        </span>
-      </div>
-
-      {statusPendaftaran === 'ditolak' && (
-        <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-4 flex items-start gap-2">
-          <XCircle size={16} className="text-red-500 mt-0.5 shrink-0" />
-          <p className="text-xs text-red-600">
-            Pengajuan sebelumnya ditolak admin{catatanAdmin ? `: "${catatanAdmin}"` : '.'} Silakan
-            perbaiki data di bawah lalu ajukan ulang.
-          </p>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-5 items-start">
-        {/* Sidebar navigasi tahap, vertikal dengan panah — meniru pola SIMKAH */}
-        <nav className="bg-white rounded-xl border border-slate-200 p-3 shadow-sm">
-          {LANGKAH.map((l, i) => {
-            const selesai = i < langkahAktif
-            const aktif = i === langkahAktif
-            const terkunci = i > langkahAktif
-            return (
-              <div key={l.id}>
-                <button
-                  onClick={() => !terkunci && lanjutKeLangkah(i)}
-                  disabled={terkunci}
-                  className={`w-full text-left text-xs font-semibold uppercase tracking-wide rounded-lg px-3 py-2.5 flex items-center gap-2 transition-colors ${
-                    aktif
-                      ? 'bg-emerald-700 text-white'
-                      : selesai
-                        ? 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
-                        : 'text-slate-300 cursor-not-allowed'
-                  }`}
-                >
-                  {selesai ? (
-                    <Check size={13} className="shrink-0" />
-                  ) : (
-                    <span className={`w-4 text-center shrink-0 ${aktif ? 'text-white' : ''}`}>{i + 1}</span>
-                  )}
-                  {l.label}
-                </button>
-                {i < LANGKAH.length - 1 && (
-                  <div className="flex justify-center py-0.5">
-                    <ChevronDown size={13} className="text-slate-300" />
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </nav>
-
-        {/* Kartu konten tahap aktif */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-emerald-700 px-5 py-3">
-            <h2 className="text-sm font-semibold text-white uppercase tracking-wide">
+    <>
+      <div className="print:hidden">
+        <Layout title="Pendaftaran Nikah" subtitle="Isi data pendaftaran nikah secara bertahap.">
+          {/* Breadcrumb ala SIMKAH */}
+          <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-4">
+            <Home size={13} className="text-emerald-700" />
+            <ChevronRight size={12} className="text-slate-300" />
+            <span className="px-2 py-0.5 rounded bg-slate-100 font-medium text-slate-500">
+              Pendaftaran Nikah
+            </span>
+            <ChevronRight size={12} className="text-slate-300" />
+            <span className="px-2 py-0.5 rounded bg-emerald-50 font-semibold text-emerald-800">
               {langkah.model ? `Model ${langkah.model} — ` : ''}
               {langkah.label}
-            </h2>
+            </span>
           </div>
 
-          <div className="p-5">
-            {langkah.id === 'n1_suami' && (
-              <FormDataCalon
-                nilai={data.calon_suami}
-                onUbah={(f, v) => ubahField('calon_suami', f, v)}
-                sedangUpload={sedangUnggah.calon_suami}
-                onUploadFoto={(file) => unggahFoto('calon_suami', file)}
-                onHapusFoto={() => hapusFoto('calon_suami')}
-              />
-            )}
-            {langkah.id === 'n1_istri' && (
-              <FormDataCalon
-                nilai={data.calon_istri}
-                onUbah={(f, v) => ubahField('calon_istri', f, v)}
-                sedangUpload={sedangUnggah.calon_istri}
-                onUploadFoto={(file) => unggahFoto('calon_istri', file)}
-                onHapusFoto={() => hapusFoto('calon_istri')}
-              />
-            )}
-            {langkah.id === 'n2' && <FormRencanaAkad nilai={data.n2} onUbah={(f, v) => ubahField('n2', f, v)} />}
-            {langkah.id === 'n4' && (
-              <FormPersetujuanMempelai
-                nilai={data.n4}
-                namaSuami={data.calon_suami.nama_lengkap}
-                namaIstri={data.calon_istri.nama_lengkap}
-                onUbah={(f, v) => ubahField('n4', f, v)}
-              />
-            )}
-            {langkah.id === 'n5' && (
-              <FormIzinOrangTua
-                nilai={data.n5}
-                namaSuami={data.calon_suami.nama_lengkap}
-                namaIstri={data.calon_istri.nama_lengkap}
-                onUbah={ubahFieldN5}
-                onUbahPersetujuan={(pihak, v) =>
-                  setData((d) => ({ ...d, n5: { ...d.n5, [pihak]: { ...d.n5[pihak], persetujuan: v } } }))
-                }
-              />
-            )}
-            {langkah.id === 'ringkasan' && <Ringkasan data={data} />}
+          {statusPendaftaran === 'ditolak' && (
+            <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-4 flex items-start gap-2">
+              <XCircle size={16} className="text-red-500 mt-0.5 shrink-0" />
+              <p className="text-xs text-red-600">
+                Pengajuan sebelumnya ditolak admin{catatanAdmin ? `: "${catatanAdmin}"` : '.'} Silakan
+                perbaiki data di bawah lalu ajukan ulang.
+              </p>
+            </div>
+          )}
 
-            <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-100">
-              <button
-                onClick={() => lanjutKeLangkah(Math.max(indeksLangkah - 1, 0))}
-                disabled={langkahAktif === 0 || menyimpan}
-                className="text-sm font-medium text-slate-500 hover:text-slate-700 disabled:opacity-40"
-              >
-                Sebelumnya
-              </button>
+          <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-5 items-start">
+            {/* Sidebar navigasi tahap, vertikal dengan panah — meniru pola SIMKAH */}
+            <nav className="bg-white rounded-xl border border-slate-200 p-3 shadow-sm">
+              {LANGKAH.map((l, i) => {
+                const selesai = i < langkahAktif
+                const aktif = i === langkahAktif
+                const terkunci = i > langkahAktif
+                return (
+                  <div key={l.id}>
+                    <button
+                      onClick={() => !terkunci && lanjutKeLangkah(i)}
+                      disabled={terkunci}
+                      className={`w-full text-left text-xs font-semibold uppercase tracking-wide rounded-lg px-3 py-2.5 flex items-center gap-2 transition-colors ${
+                        aktif
+                          ? 'bg-emerald-700 text-white'
+                          : selesai
+                            ? 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                            : 'text-slate-300 cursor-not-allowed'
+                      }`}
+                    >
+                      {selesai ? (
+                        <Check size={13} className="shrink-0" />
+                      ) : (
+                        <span className={`w-4 text-center shrink-0 ${aktif ? 'text-white' : ''}`}>{i + 1}</span>
+                      )}
+                      {l.label}
+                    </button>
+                    {i < LANGKAH.length - 1 && (
+                      <div className="flex justify-center py-0.5">
+                        <ChevronDown size={13} className="text-slate-300" />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </nav>
 
-              {langkah.id !== 'ringkasan' ? (
-                <button
-                  onClick={() => lanjutKeLangkah(Math.min(langkahAktif + 1, LANGKAH.length - 1))}
-                  disabled={menyimpan}
-                  className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-60"
-                >
-                  {menyimpan ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-                  Simpan & Lanjut
-                </button>
-              ) : (
-                <button
-                  onClick={ajukanPendaftaran}
-                  disabled={mengajukan}
-                  className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-60"
-                >
-                  {mengajukan ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-                  Ajukan Pendaftaran
-                </button>
-              )}
+            {/* Kartu konten tahap aktif */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="bg-emerald-700 px-5 py-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-white uppercase tracking-wide">
+                  {langkah.model ? `Model ${langkah.model} — ` : ''}
+                  {langkah.label}
+                </h2>
+                {langkah.id === 'ringkasan' && (
+                  <button
+                    onClick={cetakFormulir}
+                    className="flex items-center gap-1.5 text-xs font-medium text-white/90 border border-white/30 rounded-lg px-2.5 py-1 hover:bg-white/10"
+                  >
+                    <Printer size={13} /> Cetak
+                  </button>
+                )}
+              </div>
+
+              <div className="p-5">
+                {langkah.id === 'n1_suami' && (
+                  <FormDataCalon
+                    nilai={data.calon_suami}
+                    onUbah={(f, v) => ubahField('calon_suami', f, v)}
+                    sedangUpload={sedangUnggah.calon_suami}
+                    onUploadFoto={(file) => unggahFoto('calon_suami', file)}
+                    onHapusFoto={() => hapusFoto('calon_suami')}
+                  />
+                )}
+                {langkah.id === 'n1_istri' && (
+                  <FormDataCalon
+                    nilai={data.calon_istri}
+                    onUbah={(f, v) => ubahField('calon_istri', f, v)}
+                    sedangUpload={sedangUnggah.calon_istri}
+                    onUploadFoto={(file) => unggahFoto('calon_istri', file)}
+                    onHapusFoto={() => hapusFoto('calon_istri')}
+                  />
+                )}
+                {langkah.id === 'n2' && <FormRencanaAkad nilai={data.n2} onUbah={(f, v) => ubahField('n2', f, v)} />}
+                {langkah.id === 'n4' && (
+                  <FormPersetujuanMempelai
+                    nilai={data.n4}
+                    namaSuami={data.calon_suami.nama_lengkap}
+                    namaIstri={data.calon_istri.nama_lengkap}
+                    onUbah={(f, v) => ubahField('n4', f, v)}
+                  />
+                )}
+                {langkah.id === 'n5' && (
+                  <FormIzinOrangTua
+                    nilai={data.n5}
+                    namaSuami={data.calon_suami.nama_lengkap}
+                    namaIstri={data.calon_istri.nama_lengkap}
+                    onUbah={ubahFieldN5}
+                    onUbahPersetujuan={(pihak, v) =>
+                      setData((d) => ({ ...d, n5: { ...d.n5, [pihak]: { ...d.n5[pihak], persetujuan: v } } }))
+                    }
+                  />
+                )}
+                {langkah.id === 'ringkasan' && <Ringkasan data={data} />}
+
+                <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-100">
+                  <button
+                    onClick={() => lanjutKeLangkah(Math.max(indeksLangkah - 1, 0))}
+                    disabled={langkahAktif === 0 || menyimpan}
+                    className="text-sm font-medium text-slate-500 hover:text-slate-700 disabled:opacity-40"
+                  >
+                    Sebelumnya
+                  </button>
+
+                  {langkah.id !== 'ringkasan' ? (
+                    <button
+                      onClick={() => lanjutKeLangkah(Math.min(langkahAktif + 1, LANGKAH.length - 1))}
+                      disabled={menyimpan}
+                      className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-60"
+                    >
+                      {menyimpan ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+                      Simpan & Lanjut
+                    </button>
+                  ) : (
+                    <button
+                      onClick={ajukanPendaftaran}
+                      disabled={mengajukan}
+                      className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-60"
+                    >
+                      {mengajukan ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+                      Ajukan Pendaftaran
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        </Layout>
       </div>
-    </Layout>
+
+      {/* Lembar cetak — hanya tampil saat window.print() dipanggil */}
+      <LembarCetak data={data} />
+    </>
   )
 }
 
@@ -781,6 +822,124 @@ function Ringkasan({ data }) {
         Pastikan semua data di atas benar. Setelah diajukan, data akan diverifikasi admin kantor dan
         tidak bisa diubah sampai ada keputusan.
       </p>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------
+// Lembar cetak — dirender selalu di DOM tapi disembunyikan di layar
+// (className "hidden print:block"). Saat window.print() dipanggil,
+// browser hanya menampilkan bagian ini karena sisa halaman dibungkus
+// "print:hidden". Layout formal meniru berkas N1–N5 resmi KUA.
+// ---------------------------------------------------------------------
+function SeksiCetak({ judul, children }) {
+  return (
+    <div className="mb-4 break-inside-avoid">
+      <p className="text-xs font-bold uppercase border-b border-black pb-1 mb-1.5">{judul}</p>
+      <div className="space-y-0.5">{children}</div>
+    </div>
+  )
+}
+
+function BarisCetak({ label, value }) {
+  return (
+    <div className="flex text-xs gap-2">
+      <span className="w-40 shrink-0 text-black">{label}</span>
+      <span className="shrink-0">:</span>
+      <span className="flex-1 text-black">{value || '-'}</span>
+    </div>
+  )
+}
+
+function DataCalonCetak({ judul, nilai }) {
+  return (
+    <SeksiCetak judul={judul}>
+      <BarisCetak label="Nama Lengkap & Alias" value={nilai.nama_lengkap} />
+      <BarisCetak label="NIK" value={nilai.nik} />
+      <BarisCetak label="Tempat, Tanggal Lahir" value={`${nilai.tempat_lahir || '-'}, ${nilai.tanggal_lahir || '-'}`} />
+      <BarisCetak label="Kewarganegaraan" value={nilai.kewarganegaraan} />
+      <BarisCetak label="Agama" value={nilai.agama} />
+      <BarisCetak label="Pekerjaan" value={nilai.pekerjaan} />
+      <BarisCetak label="Status Perkawinan" value={LABEL_STATUS_PERKAWINAN[nilai.status_perkawinan]} />
+      <BarisCetak label="Alamat" value={nilai.alamat} />
+    </SeksiCetak>
+  )
+}
+
+function OrangTuaCetak({ judul, nilai }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold mb-1">{judul}</p>
+      <BarisCetak label="Nama Ayah" value={nilai.ayah.nama_lengkap} />
+      <BarisCetak label="NIK Ayah" value={nilai.ayah.nik} />
+      <BarisCetak label="Nama Ibu" value={nilai.ibu.nama_lengkap} />
+      <BarisCetak label="NIK Ibu" value={nilai.ibu.nik} />
+      <p className="text-[10px] mt-1">
+        {nilai.persetujuan ? '☑' : '☐'} Orang tua/wali menyetujui pernikahan ini.
+      </p>
+    </div>
+  )
+}
+
+function LembarCetak({ data }) {
+  return (
+    <div className="hidden print:block p-8 text-black">
+      <style>{`@media print { @page { margin: 1.5cm; } }`}</style>
+
+      <div className="text-center mb-6">
+        <p className="font-bold text-sm uppercase">Formulir Pendaftaran Nikah</p>
+        <p className="text-xs">
+          Kantor Urusan Agama {data.n2.kua_tujuan || '.....................'}
+        </p>
+      </div>
+
+      <DataCalonCetak judul="Model N1 — Data Calon Suami" nilai={data.calon_suami} />
+      <DataCalonCetak judul="Model N1 — Data Calon Istri" nilai={data.calon_istri} />
+
+      <SeksiCetak judul="Model N2 — Rencana Akad">
+        <BarisCetak label="Tanggal Akad" value={data.n2.rencana_tanggal_akad} />
+        <BarisCetak label="Waktu Akad" value={data.n2.rencana_waktu_akad} />
+        <BarisCetak label="Tempat Akad" value={data.n2.tempat_akad} />
+        <BarisCetak label="KUA Tujuan" value={data.n2.kua_tujuan} />
+        {data.n2.catatan && <BarisCetak label="Catatan" value={data.n2.catatan} />}
+      </SeksiCetak>
+
+      <SeksiCetak judul="Model N4 — Persetujuan Mempelai">
+        <p className="text-xs">
+          {data.n4.persetujuan_calon_suami ? '☑' : '☐'} {data.calon_suami.nama_lengkap || 'Calon suami'}{' '}
+          menyatakan setuju menikah tanpa paksaan.
+        </p>
+        <p className="text-xs">
+          {data.n4.persetujuan_calon_istri ? '☑' : '☐'} {data.calon_istri.nama_lengkap || 'Calon istri'}{' '}
+          menyatakan setuju menikah tanpa paksaan.
+        </p>
+      </SeksiCetak>
+
+      <SeksiCetak judul="Model N5 — Izin Orang Tua/Wali">
+        <div className="grid grid-cols-2 gap-4">
+          <OrangTuaCetak
+            judul={`Orang Tua Calon Suami${data.calon_suami.nama_lengkap ? ` (${data.calon_suami.nama_lengkap})` : ''}`}
+            nilai={data.n5.suami}
+          />
+          <OrangTuaCetak
+            judul={`Orang Tua Calon Istri${data.calon_istri.nama_lengkap ? ` (${data.calon_istri.nama_lengkap})` : ''}`}
+            nilai={data.n5.istri}
+          />
+        </div>
+      </SeksiCetak>
+
+      <div className="grid grid-cols-2 gap-8 mt-10 text-center text-xs break-inside-avoid">
+        <div>
+          <p>Calon Suami,</p>
+          <div className="h-16" />
+          <p className="border-t border-black pt-1">{data.calon_suami.nama_lengkap || '.....................'}</p>
+        </div>
+        <div>
+          <p>Calon Istri,</p>
+          <div className="h-16" />
+          <p className="border-t border-black pt-1">{data.calon_istri.nama_lengkap || '.....................'}</p>
+        </div>
+      </div>
     </div>
   )
 }
