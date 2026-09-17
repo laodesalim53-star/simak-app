@@ -29,6 +29,8 @@ const DaftarHadirKantor = lazy(() => import('./pages/DaftarHadirKantor'))
 const DataPegawaiKantor = lazy(() => import('./pages/DataPegawaiKantor'))
 const DaftarHadirPegawai = lazy(() => import('./pages/DaftarHadirPegawai'))
 const ProfilKantor = lazy(() => import('./pages/ProfilKantor'))
+const PendaftaranNikah = lazy(() => import('./pages/PendaftaranNikah'))   // BARU
+const VerifikasiNikah = lazy(() => import('./pages/VerifikasiNikah'))     // BARU
 const Kelas = lazy(() => import('./pages/Kelas'))
 
 const LaporanNominatifGuru = lazy(() => import('./pages/LaporanNominatifGuru'))
@@ -256,6 +258,9 @@ export default function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/menunggu-persetujuan" element={<RouteMenunggu><MenungguPersetujuan /></RouteMenunggu>} />
           <Route path="/persetujuan-akun" element={<ProtectedRoute adminUtamaOnly><PersetujuanAkun /></ProtectedRoute>} />
+          {/* Verifikasi Nikah: khusus admin_utama, sama seperti persetujuan akun —
+              admin_utama yang memverifikasi pengajuan nikah dari jamaah/pegawai. */}
+          <Route path="/verifikasi-nikah" element={<ProtectedRoute adminUtamaOnly><VerifikasiNikah /></ProtectedRoute>} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
 
           {/* ============================================================
@@ -283,6 +288,11 @@ export default function App() {
           <Route path="/materi-majelis-taklim" element={<ProtectedRoute adminOnly><MateriMajelisTaklim /></ProtectedRoute>} />
           <Route path="/pusat-kelompok-binaan" element={<ProtectedRoute><PusatKelompokBinaan /></ProtectedRoute>} />
           <Route path="/kelompok-binaan/:slug" element={<ProtectedRoute><KelolaKelompokBinaan /></ProtectedRoute>} />
+          {/* Pendaftaran Nikah: bisa diakses semua pengguna kantor yang login
+              (jamaah/pegawai), bukan hanya admin — sesuai link di Sidebar.jsx
+              (getLinksKantorPegawai). Verifikasinya ada di /verifikasi-nikah
+              (adminUtamaOnly, didaftarkan di blok 1 dekat /persetujuan-akun). */}
+          <Route path="/pendaftaran-nikah" element={<ProtectedRoute><PendaftaranNikah /></ProtectedRoute>} />
           <Route path="/kelas" element={<ProtectedRoute adminOnly><Kelas /></ProtectedRoute>} />
           <Route path="/profil-kantor" element={<ProtectedRoute adminOnly><ProfilKantor /></ProtectedRoute>} />
 
