@@ -490,7 +490,7 @@ function ProfilAdminCard({ profil, userId, adminData }) {
 // alter table pegawai_kantor add column if not exists pendidikan_terakhir text;
 // alter table pegawai_kantor add column if not exists alamat text;
 // alter table pegawai_kantor add column if not exists foto_profil_path text;
-function ProfilPegawaiCard({ pegawaiData, onDataBerubah }) {
+function ProfilPegawaiCard({ pegawaiData, userId, onDataBerubah }) {
   const [form, setForm] = useState({
     nama_lengkap: pegawaiData?.nama_lengkap || '',
     email: pegawaiData?.email || '',
@@ -544,11 +544,15 @@ function ProfilPegawaiCard({ pegawaiData, onDataBerubah }) {
 
   async function handleFotoChange(e) {
     const file = e.target.files?.[0]
-    if (!file || !pegawaiData?.id) return
+    // PENTING: path storage HARUS pakai userId (auth.uid()), bukan
+    // pegawaiData.id — policy RLS bucket foto-profil ("User boleh
+    // upload/update foto sendiri ke folder user id") mengizinkan folder
+    // = auth.uid(), sama seperti pola yang dipakai ProfilAdminCard.
+    if (!file || !userId) return
     setUploadingFoto(true)
 
     const ext = file.name.split('.').pop()
-    const path = `${pegawaiData.id}/foto.${ext}`
+    const path = `${userId}/foto.${ext}`
 
     const { error: uploadError } = await supabase.storage
       .from('foto-profil')
@@ -560,6 +564,8 @@ function ProfilPegawaiCard({ pegawaiData, onDataBerubah }) {
       return
     }
 
+    // Update baris pegawai_kantor tetap pakai pegawaiData.id (primary key
+    // baris di tabel ini) — beda dari path storage di atas.
     const { error: updateError } = await supabase
       .from('pegawai_kantor')
       .update({ foto_profil_path: path })
@@ -1603,7 +1609,11 @@ export default function ProfilSaya() {
       if (profil?.pegawai_id && pegawaiData) {
         return (
           <Layout title="Profil Saya" subtitle="Data diri dan foto profil Anda">
-            <ProfilPegawaiCard pegawaiData={pegawaiData} onDataBerubah={muatPegawaiData} />
+            <ProfilPegawaiCard
+              pegawaiData={pegawaiData}
+              userId={session?.user?.id}
+              onDataBerubah={muatPegawaiData}
+            />
           </Layout>
         )
       }
