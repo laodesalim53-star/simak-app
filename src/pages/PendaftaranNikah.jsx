@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import {
-  ChevronLeft,
+  Home,
   ChevronRight,
+  ChevronDown,
   Check,
   Loader2,
   Send,
@@ -277,7 +278,7 @@ export default function PendaftaranNikah() {
   if (statusPendaftaran === 'menunggu' || statusPendaftaran === 'diverifikasi') {
     return (
       <Layout title="Pendaftaran Nikah" subtitle="Status pendaftaran nikah Anda.">
-        <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center max-w-lg mx-auto">
+        <div className="bg-white rounded-xl border border-slate-200 p-8 text-center max-w-lg mx-auto shadow-sm">
           {statusPendaftaran === 'menunggu' ? (
             <>
               <Clock3 className="mx-auto text-amber-500 mb-3" size={40} />
@@ -288,7 +289,7 @@ export default function PendaftaranNikah() {
             </>
           ) : (
             <>
-              <CheckCircle2 className="mx-auto text-green-500 mb-3" size={40} />
+              <CheckCircle2 className="mx-auto text-emerald-600 mb-3" size={40} />
               <h2 className="font-semibold text-slate-800 mb-1">Sudah Diverifikasi</h2>
               <p className="text-sm text-slate-500">
                 Pendaftaran nikah Anda sudah diverifikasi admin.
@@ -302,11 +303,26 @@ export default function PendaftaranNikah() {
   }
 
   const langkah = LANGKAH[langkahAktif]
+  const indeksLangkah = LANGKAH.findIndex((l) => l.id === langkah.id)
 
   return (
     <Layout title="Pendaftaran Nikah" subtitle="Isi data pendaftaran nikah secara bertahap.">
+      {/* Breadcrumb ala SIMKAH */}
+      <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-4">
+        <Home size={13} className="text-emerald-700" />
+        <ChevronRight size={12} className="text-slate-300" />
+        <span className="px-2 py-0.5 rounded bg-slate-100 font-medium text-slate-500">
+          Pendaftaran Nikah
+        </span>
+        <ChevronRight size={12} className="text-slate-300" />
+        <span className="px-2 py-0.5 rounded bg-emerald-50 font-semibold text-emerald-800">
+          {langkah.model ? `Model ${langkah.model} — ` : ''}
+          {langkah.label}
+        </span>
+      </div>
+
       {statusPendaftaran === 'ditolak' && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4 flex items-start gap-2">
+        <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-4 flex items-start gap-2">
           <XCircle size={16} className="text-red-500 mt-0.5 shrink-0" />
           <p className="text-xs text-red-600">
             Pengajuan sebelumnya ditolak admin{catatanAdmin ? `: "${catatanAdmin}"` : '.'} Silakan
@@ -315,102 +331,123 @@ export default function PendaftaranNikah() {
         </div>
       )}
 
-      {/* Indikator langkah */}
-      <div className="flex items-center gap-1 mb-5 flex-wrap">
-        {LANGKAH.map((l, i) => (
-          <div key={l.id} className="flex items-center gap-1">
-            <button
-              onClick={() => i <= langkahAktif && lanjutKeLangkah(i)}
-              disabled={i > langkahAktif}
-              className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold transition-colors ${
-                i < langkahAktif
-                  ? 'bg-blue-600 text-white'
-                  : i === langkahAktif
-                    ? 'bg-blue-600 text-white ring-4 ring-blue-100'
-                    : 'bg-slate-100 text-slate-400'
-              }`}
-            >
-              {i < langkahAktif ? <Check size={14} /> : i + 1}
-            </button>
-            {i < LANGKAH.length - 1 && <div className="w-4 h-px bg-slate-200" />}
+      <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-5 items-start">
+        {/* Sidebar navigasi tahap, vertikal dengan panah — meniru pola SIMKAH */}
+        <nav className="bg-white rounded-xl border border-slate-200 p-3 shadow-sm">
+          {LANGKAH.map((l, i) => {
+            const selesai = i < langkahAktif
+            const aktif = i === langkahAktif
+            const terkunci = i > langkahAktif
+            return (
+              <div key={l.id}>
+                <button
+                  onClick={() => !terkunci && lanjutKeLangkah(i)}
+                  disabled={terkunci}
+                  className={`w-full text-left text-xs font-semibold uppercase tracking-wide rounded-lg px-3 py-2.5 flex items-center gap-2 transition-colors ${
+                    aktif
+                      ? 'bg-emerald-700 text-white'
+                      : selesai
+                        ? 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                        : 'text-slate-300 cursor-not-allowed'
+                  }`}
+                >
+                  {selesai ? (
+                    <Check size={13} className="shrink-0" />
+                  ) : (
+                    <span className={`w-4 text-center shrink-0 ${aktif ? 'text-white' : ''}`}>{i + 1}</span>
+                  )}
+                  {l.label}
+                </button>
+                {i < LANGKAH.length - 1 && (
+                  <div className="flex justify-center py-0.5">
+                    <ChevronDown size={13} className="text-slate-300" />
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </nav>
+
+        {/* Kartu konten tahap aktif */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-emerald-700 px-5 py-3">
+            <h2 className="text-sm font-semibold text-white uppercase tracking-wide">
+              {langkah.model ? `Model ${langkah.model} — ` : ''}
+              {langkah.label}
+            </h2>
           </div>
-        ))}
-      </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 max-w-2xl">
-        <h2 className="font-semibold text-slate-800 mb-4">
-          {langkah.model ? `Model ${langkah.model} — ` : ''}
-          {langkah.label}
-        </h2>
+          <div className="p-5">
+            {langkah.id === 'n1_suami' && (
+              <FormDataCalon
+                nilai={data.calon_suami}
+                onUbah={(f, v) => ubahField('calon_suami', f, v)}
+                sedangUpload={sedangUnggah.calon_suami}
+                onUploadFoto={(file) => unggahFoto('calon_suami', file)}
+                onHapusFoto={() => hapusFoto('calon_suami')}
+              />
+            )}
+            {langkah.id === 'n1_istri' && (
+              <FormDataCalon
+                nilai={data.calon_istri}
+                onUbah={(f, v) => ubahField('calon_istri', f, v)}
+                sedangUpload={sedangUnggah.calon_istri}
+                onUploadFoto={(file) => unggahFoto('calon_istri', file)}
+                onHapusFoto={() => hapusFoto('calon_istri')}
+              />
+            )}
+            {langkah.id === 'n2' && <FormRencanaAkad nilai={data.n2} onUbah={(f, v) => ubahField('n2', f, v)} />}
+            {langkah.id === 'n4' && (
+              <FormPersetujuanMempelai
+                nilai={data.n4}
+                namaSuami={data.calon_suami.nama_lengkap}
+                namaIstri={data.calon_istri.nama_lengkap}
+                onUbah={(f, v) => ubahField('n4', f, v)}
+              />
+            )}
+            {langkah.id === 'n5' && (
+              <FormIzinOrangTua
+                nilai={data.n5}
+                namaSuami={data.calon_suami.nama_lengkap}
+                namaIstri={data.calon_istri.nama_lengkap}
+                onUbah={ubahFieldN5}
+                onUbahPersetujuan={(pihak, v) =>
+                  setData((d) => ({ ...d, n5: { ...d.n5, [pihak]: { ...d.n5[pihak], persetujuan: v } } }))
+                }
+              />
+            )}
+            {langkah.id === 'ringkasan' && <Ringkasan data={data} />}
 
-        {langkah.id === 'n1_suami' && (
-          <FormDataCalon
-            nilai={data.calon_suami}
-            onUbah={(f, v) => ubahField('calon_suami', f, v)}
-            sedangUpload={sedangUnggah.calon_suami}
-            onUploadFoto={(file) => unggahFoto('calon_suami', file)}
-            onHapusFoto={() => hapusFoto('calon_suami')}
-          />
-        )}
-        {langkah.id === 'n1_istri' && (
-          <FormDataCalon
-            nilai={data.calon_istri}
-            onUbah={(f, v) => ubahField('calon_istri', f, v)}
-            sedangUpload={sedangUnggah.calon_istri}
-            onUploadFoto={(file) => unggahFoto('calon_istri', file)}
-            onHapusFoto={() => hapusFoto('calon_istri')}
-          />
-        )}
-        {langkah.id === 'n2' && <FormRencanaAkad nilai={data.n2} onUbah={(f, v) => ubahField('n2', f, v)} />}
-        {langkah.id === 'n4' && (
-          <FormPersetujuanMempelai
-            nilai={data.n4}
-            namaSuami={data.calon_suami.nama_lengkap}
-            namaIstri={data.calon_istri.nama_lengkap}
-            onUbah={(f, v) => ubahField('n4', f, v)}
-          />
-        )}
-        {langkah.id === 'n5' && (
-          <FormIzinOrangTua
-            nilai={data.n5}
-            namaSuami={data.calon_suami.nama_lengkap}
-            namaIstri={data.calon_istri.nama_lengkap}
-            onUbah={ubahFieldN5}
-            onUbahPersetujuan={(pihak, v) =>
-              setData((d) => ({ ...d, n5: { ...d.n5, [pihak]: { ...d.n5[pihak], persetujuan: v } } }))
-            }
-          />
-        )}
-        {langkah.id === 'ringkasan' && <Ringkasan data={data} />}
+            <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-100">
+              <button
+                onClick={() => lanjutKeLangkah(Math.max(indeksLangkah - 1, 0))}
+                disabled={langkahAktif === 0 || menyimpan}
+                className="text-sm font-medium text-slate-500 hover:text-slate-700 disabled:opacity-40"
+              >
+                Sebelumnya
+              </button>
 
-        <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-100">
-          <button
-            onClick={() => lanjutKeLangkah(Math.max(langkahAktif - 1, 0))}
-            disabled={langkahAktif === 0 || menyimpan}
-            className="flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-700 disabled:opacity-40"
-          >
-            <ChevronLeft size={16} /> Sebelumnya
-          </button>
-
-          {langkah.id !== 'ringkasan' ? (
-            <button
-              onClick={() => lanjutKeLangkah(Math.min(langkahAktif + 1, LANGKAH.length - 1))}
-              disabled={menyimpan}
-              className="flex items-center gap-1.5 bg-blue-600 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-60"
-            >
-              {menyimpan ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-              Simpan & Lanjut <ChevronRight size={16} />
-            </button>
-          ) : (
-            <button
-              onClick={ajukanPendaftaran}
-              disabled={mengajukan}
-              className="flex items-center gap-1.5 bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-60"
-            >
-              {mengajukan ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-              Ajukan Pendaftaran
-            </button>
-          )}
+              {langkah.id !== 'ringkasan' ? (
+                <button
+                  onClick={() => lanjutKeLangkah(Math.min(langkahAktif + 1, LANGKAH.length - 1))}
+                  disabled={menyimpan}
+                  className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-60"
+                >
+                  {menyimpan ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+                  Simpan & Lanjut
+                </button>
+              ) : (
+                <button
+                  onClick={ajukanPendaftaran}
+                  disabled={mengajukan}
+                  className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-60"
+                >
+                  {mengajukan ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+                  Ajukan Pendaftaran
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </Layout>
@@ -429,7 +466,7 @@ function Input({ label, value, onChange, required, type = 'text', placeholder, c
       </label>
       <input
         type={type}
-        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-100 focus:border-emerald-400"
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
@@ -447,7 +484,7 @@ function Textarea({ label, value, onChange, required, className = '' }) {
       </label>
       <textarea
         rows={2}
-        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm resize-none"
+        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-100 focus:border-emerald-400"
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
       />
@@ -460,7 +497,7 @@ function Select({ label, value, onChange, options, className = '' }) {
     <div className={className}>
       <label className="text-xs font-medium text-slate-500 mb-1 block">{label}</label>
       <select
-        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-100 focus:border-emerald-400"
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
       >
@@ -495,7 +532,7 @@ function UploadFoto({ label, fotoUrl, sedangUpload, onUpload, onHapus }) {
           </div>
         )}
         <div className="flex flex-col gap-1.5">
-          <label className="flex items-center gap-1.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg px-3 py-1.5 cursor-pointer hover:bg-blue-50 w-fit">
+          <label className="flex items-center gap-1.5 text-xs font-medium text-emerald-700 border border-emerald-200 rounded-lg px-3 py-1.5 cursor-pointer hover:bg-emerald-50 w-fit">
             {sedangUpload ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
             {fotoUrl ? 'Ganti Foto' : 'Unggah Foto'}
             <input
@@ -587,10 +624,10 @@ function FormPersetujuanMempelai({ nilai, namaSuami, namaIstri, onUbah }) {
         kesadaran sendiri, tanpa ada paksaan dari siapapun juga, setuju untuk melangsungkan
         perkawinan.
       </p>
-      <label className="flex items-start gap-2.5 p-3 rounded-lg border border-slate-200 cursor-pointer">
+      <label className="flex items-start gap-2.5 p-3 rounded-lg border border-slate-200 cursor-pointer hover:border-emerald-200">
         <input
           type="checkbox"
-          className="mt-0.5"
+          className="mt-0.5 accent-emerald-700"
           checked={nilai.persetujuan_calon_suami}
           onChange={(e) => onUbah('persetujuan_calon_suami', e.target.checked)}
         />
@@ -599,10 +636,10 @@ function FormPersetujuanMempelai({ nilai, namaSuami, namaIstri, onUbah }) {
           paksaan.
         </span>
       </label>
-      <label className="flex items-start gap-2.5 p-3 rounded-lg border border-slate-200 cursor-pointer">
+      <label className="flex items-start gap-2.5 p-3 rounded-lg border border-slate-200 cursor-pointer hover:border-emerald-200">
         <input
           type="checkbox"
-          className="mt-0.5"
+          className="mt-0.5 accent-emerald-700"
           checked={nilai.persetujuan_calon_istri}
           onChange={(e) => onUbah('persetujuan_calon_istri', e.target.checked)}
         />
@@ -644,10 +681,10 @@ function FormIzinOrangTua({ nilai, namaSuami, namaIstri, onUbah, onUbahPersetuju
           nilai={nilai.suami}
           onUbah={(siapa, f, v) => onUbah('suami', siapa, f, v)}
         />
-        <label className="flex items-start gap-2 p-2.5 rounded-lg border border-slate-200 cursor-pointer">
+        <label className="flex items-start gap-2 p-2.5 rounded-lg border border-slate-200 cursor-pointer hover:border-emerald-200">
           <input
             type="checkbox"
-            className="mt-0.5"
+            className="mt-0.5 accent-emerald-700"
             checked={nilai.suami.persetujuan}
             onChange={(e) => onUbahPersetujuan('suami', e.target.checked)}
           />
@@ -660,10 +697,10 @@ function FormIzinOrangTua({ nilai, namaSuami, namaIstri, onUbah, onUbahPersetuju
           nilai={nilai.istri}
           onUbah={(siapa, f, v) => onUbah('istri', siapa, f, v)}
         />
-        <label className="flex items-start gap-2 p-2.5 rounded-lg border border-slate-200 cursor-pointer">
+        <label className="flex items-start gap-2 p-2.5 rounded-lg border border-slate-200 cursor-pointer hover:border-emerald-200">
           <input
             type="checkbox"
-            className="mt-0.5"
+            className="mt-0.5 accent-emerald-700"
             checked={nilai.istri.persetujuan}
             onChange={(e) => onUbahPersetujuan('istri', e.target.checked)}
           />
@@ -690,7 +727,7 @@ function Ringkasan({ data }) {
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-xs font-semibold text-blue-600 mb-1">Calon Suami</p>
+        <p className="text-xs font-semibold text-emerald-700 mb-1">Calon Suami</p>
         <div className="flex gap-3">
           {data.calon_suami.foto_url ? (
             <img
@@ -710,7 +747,7 @@ function Ringkasan({ data }) {
         </div>
       </div>
       <div>
-        <p className="text-xs font-semibold text-blue-600 mb-1">Calon Istri</p>
+        <p className="text-xs font-semibold text-emerald-700 mb-1">Calon Istri</p>
         <div className="flex gap-3">
           {data.calon_istri.foto_url ? (
             <img
@@ -730,13 +767,13 @@ function Ringkasan({ data }) {
         </div>
       </div>
       <div>
-        <p className="text-xs font-semibold text-blue-600 mb-1">Rencana Akad</p>
+        <p className="text-xs font-semibold text-emerald-700 mb-1">Rencana Akad</p>
         <Baris label="Tanggal" value={data.n2.rencana_tanggal_akad} />
         <Baris label="Tempat" value={data.n2.tempat_akad} />
         <Baris label="KUA Tujuan" value={data.n2.kua_tujuan} />
       </div>
       <div>
-        <p className="text-xs font-semibold text-blue-600 mb-1">Persetujuan</p>
+        <p className="text-xs font-semibold text-emerald-700 mb-1">Persetujuan</p>
         <Baris label="Persetujuan mempelai" value={data.n4.persetujuan_calon_suami && data.n4.persetujuan_calon_istri ? 'Lengkap' : 'Belum lengkap'} />
         <Baris label="Persetujuan orang tua" value={data.n5.suami.persetujuan && data.n5.istri.persetujuan ? 'Lengkap' : 'Belum lengkap'} />
       </div>
