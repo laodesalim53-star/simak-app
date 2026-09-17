@@ -263,6 +263,7 @@ function getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelum
   links: [
     { to: '/pusat-materi-majelis', label: 'Materi Majelis', icon: BookOpenCheck },
     { to: '/pusat-kelompok-binaan', label: 'Kelompok Binaan', icon: Users },
+    { to: '/pendaftaran-nikah', label: 'Pendaftaran Nikah', icon: FileSignature },
   ],
 },
     {
@@ -275,6 +276,7 @@ function getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelum
         ...(isAdminUtama
           ? [
               { to: '/persetujuan-akun', label: 'Persetujuan Akun', icon: ShieldCheck, badge: jumlahMenunggu },
+              { to: '/verifikasi-nikah', label: 'Verifikasi Nikah', icon: FileSignature }, 
             ]
           : []),
       ],
@@ -335,6 +337,7 @@ function getLinksKantorPegawai(jumlahPesanBelumDibaca = 0) {
     { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
     { to: '/pusat-materi-majelis', label: 'Materi Majelis', icon: BookOpenCheck },
     { to: '/pusat-kelompok-binaan', label: 'Kelompok Binaan', icon: Users },
+    { to: '/pendaftaran-nikah', label: 'Pendaftaran Nikah', icon: FileSignature },
     { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
     { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
     { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
