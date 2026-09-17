@@ -426,14 +426,18 @@ function getInisial(nama) {
 // sempat menampilkan "Guru" padahal orangnya tamu / bukan guru sama
 // sekali. Sekarang: tanpa sesi -> 'Tamu', dan 'Guru' hanya dipakai kalau
 // memang jabatan/role di profil benar-benar 'guru'.
+// PERBAIKAN 2: tambahan untuk tenant kantor — 'kepala_kantor' & 'pegawai'
+// sebelumnya tidak dikenali sama sekali sehingga macet di 'Memuat...'.
 function getLabelPeran(profil, isSuperAdmin, isAdminUtama, isAdmin, isOrangTua, hasSession) {
   if (!hasSession) return 'Tamu'
   if (isSuperAdmin) return 'Superadmin'
   if (profil?.jabatan === 'kepala_sekolah') return 'Kepala Sekolah'
+  if (profil?.jabatan === 'kepala_kantor') return 'Kepala Kantor'
   if (isAdminUtama) return 'Admin Utama'
   if (isAdmin) return 'Admin'
   if (isOrangTua) return 'Orang Tua/Wali'
   if (profil?.jabatan === 'guru' || profil?.role === 'guru') return 'Guru'
+  if (profil?.jabatan === 'pegawai' || profil?.role === 'pegawai') return 'Pegawai'
   // Sesi ada tapi profil belum selesai dimuat / tidak dikenali perannya.
   return 'Memuat...'
 }
