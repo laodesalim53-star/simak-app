@@ -9,10 +9,18 @@ import {
   Clock3,
   CheckCircle2,
   XCircle,
+  Upload,
+  ImagePlus,
+  Trash2,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import Layout from '../components/Layout'
+
+// Nama bucket Supabase Storage untuk pas foto. Pastikan bucket ini sudah
+// dibuat (public) dengan policy upload untuk role 'authenticated'.
+const BUCKET_FOTO = 'pas-foto-nikah'
+const MAKS_UKURAN_FOTO = 2 * 1024 * 1024 // 2MB
 
 // Urutan langkah wizard. Model N1/N3/N6 (surat keterangan dari desa/
 // kelurahan) sengaja tidak ada di sini — di luar cakupan yang diisi
@@ -30,12 +38,12 @@ const DATA_KOSONG = {
   calon_suami: {
     nama_lengkap: '', nik: '', tempat_lahir: '', tanggal_lahir: '',
     kewarganegaraan: 'WNI', agama: '', pekerjaan: '', alamat: '',
-    status_perkawinan: 'belum_kawin',
+    status_perkawinan: 'belum_kawin', foto_url: '',
   },
   calon_istri: {
     nama_lengkap: '', nik: '', tempat_lahir: '', tanggal_lahir: '',
     kewarganegaraan: 'WNI', agama: '', pekerjaan: '', alamat: '',
-    status_perkawinan: 'belum_kawin',
+    status_perkawinan: 'belum_kawin', foto_url: '',
   },
   n2: {
     rencana_tanggal_akad: '', rencana_waktu_akad: '', tempat_akad: '',
@@ -69,6 +77,7 @@ export default function PendaftaranNikah() {
   const [loading, setLoading] = useState(true)
   const [menyimpan, setMenyimpan] = useState(false)
   const [mengajukan, setMengajukan] = useState(false)
+  const [sedangUnggah, setSedangUnggah] = useState({ calon_suami: false, calon_istri: false })
 
   // Muat draft/pengajuan terakhir milik jamaah ini (kalau ada). Satu
   // jamaah bisa punya banyak baris riwayat (mis. sudah pernah menikah
@@ -129,6 +138,43 @@ export default function PendaftaranNikah() {
     }))
   }
 
+  // Unggah pas foto calon pengantin (suami/istri) ke Supabase Storage,
+  // lalu simpan URL publiknya ke field foto_url masing-masing.
+  async function unggahFoto(bagian, file) {
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      window.alert('File harus berupa gambar (JPG/PNG).')
+      return
+    }
+    if (file.size > MAKS_UKURAN_FOTO) {
+      window.alert('Ukuran foto maksimal 2MB.')
+      return
+    }
+
+    setSedangUnggah((s) => ({ ...s, [bagian]: true }))
+
+    const ekstensi = file.name.split('.').pop()
+    const namaFile = `${session.user.id}/${bagian}-${Date.now()}.${ekstensi}`
+
+    const { error: errorUpload } = await supabase.storage
+      .from(BUCKET_FOTO)
+      .upload(namaFile, file, { upsert: true })
+
+    if (errorUpload) {
+      window.alert('Gagal mengunggah foto: ' + errorUpload.message)
+      setSedangUnggah((s) => ({ ...s, [bagian]: false }))
+      return
+    }
+
+    const { data: publik } = supabase.storage.from(BUCKET_FOTO).getPublicUrl(namaFile)
+    ubahField(bagian, 'foto_url', publik.publicUrl)
+    setSedangUnggah((s) => ({ ...s, [bagian]: false }))
+  }
+
+  function hapusFoto(bagian) {
+    ubahField(bagian, 'foto_url', '')
+  }
+
   // Simpan progres saat ini sebagai draft (upsert). Dipanggil tiap kali
   // jamaah pindah langkah supaya tidak kehilangan data kalau menutup
   // aplikasi di tengah jalan.
@@ -174,6 +220,10 @@ export default function PendaftaranNikah() {
   }
 
   async function ajukanPendaftaran() {
+    if (!data.calon_suami.foto_url || !data.calon_istri.foto_url) {
+      window.alert('Pas foto calon suami dan calon istri wajib diunggah (lihat langkah Data Calon Suami/Istri).')
+      return
+    }
     if (!data.n4.persetujuan_calon_suami || !data.n4.persetujuan_calon_istri) {
       window.alert('Persetujuan kedua calon pengantin (langkah Persetujuan Mempelai) wajib dicentang.')
       return
@@ -294,10 +344,22 @@ export default function PendaftaranNikah() {
         </h2>
 
         {langkah.id === 'n1_suami' && (
-          <FormDataCalon nilai={data.calon_suami} onUbah={(f, v) => ubahField('calon_suami', f, v)} />
+          <FormDataCalon
+            nilai={data.calon_suami}
+            onUbah={(f, v) => ubahField('calon_suami', f, v)}
+            sedangUpload={sedangUnggah.calon_suami}
+            onUploadFoto={(file) => unggahFoto('calon_suami', file)}
+            onHapusFoto={() => hapusFoto('calon_suami')}
+          />
         )}
         {langkah.id === 'n1_istri' && (
-          <FormDataCalon nilai={data.calon_istri} onUbah={(f, v) => ubahField('calon_istri', f, v)} />
+          <FormDataCalon
+            nilai={data.calon_istri}
+            onUbah={(f, v) => ubahField('calon_istri', f, v)}
+            sedangUpload={sedangUnggah.calon_istri}
+            onUploadFoto={(file) => unggahFoto('calon_istri', file)}
+            onHapusFoto={() => hapusFoto('calon_istri')}
+          />
         )}
         {langkah.id === 'n2' && <FormRencanaAkad nilai={data.n2} onUbah={(f, v) => ubahField('n2', f, v)} />}
         {langkah.id === 'n4' && (
@@ -412,12 +474,71 @@ function Select({ label, value, onChange, options, className = '' }) {
   )
 }
 
+// Upload pas foto dengan preview, tombol ganti & hapus. Dipakai di
+// FormDataCalon untuk calon suami maupun calon istri.
+function UploadFoto({ label, fotoUrl, sedangUpload, onUpload, onHapus }) {
+  return (
+    <div className="col-span-2">
+      <label className="text-xs font-medium text-slate-500 mb-1 block">
+        {label} <span className="text-red-500">*</span>
+      </label>
+      <div className="flex items-center gap-3">
+        {fotoUrl ? (
+          <img
+            src={fotoUrl}
+            alt={label}
+            className="w-20 h-24 object-cover rounded-lg border border-slate-200"
+          />
+        ) : (
+          <div className="w-20 h-24 rounded-lg border border-dashed border-slate-300 flex items-center justify-center bg-slate-50">
+            <ImagePlus size={20} className="text-slate-300" />
+          </div>
+        )}
+        <div className="flex flex-col gap-1.5">
+          <label className="flex items-center gap-1.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg px-3 py-1.5 cursor-pointer hover:bg-blue-50 w-fit">
+            {sedangUpload ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+            {fotoUrl ? 'Ganti Foto' : 'Unggah Foto'}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              disabled={sedangUpload}
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) onUpload(file)
+                e.target.value = ''
+              }}
+            />
+          </label>
+          {fotoUrl && !sedangUpload && (
+            <button
+              type="button"
+              onClick={onHapus}
+              className="flex items-center gap-1.5 text-xs font-medium text-red-500 px-3 py-1.5 w-fit hover:underline"
+            >
+              <Trash2 size={13} /> Hapus
+            </button>
+          )}
+          <p className="text-[10px] text-slate-400">Pas foto terbaru, format JPG/PNG, maks 2MB.</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------------
 // Model N1 — Data satu calon pengantin (dipakai 2x: suami & istri)
 // ---------------------------------------------------------------------
-function FormDataCalon({ nilai, onUbah }) {
+function FormDataCalon({ nilai, onUbah, sedangUpload, onUploadFoto, onHapusFoto }) {
   return (
     <div className="grid grid-cols-2 gap-3">
+      <UploadFoto
+        label="Pas Foto"
+        fotoUrl={nilai.foto_url}
+        sedangUpload={sedangUpload}
+        onUpload={onUploadFoto}
+        onHapus={onHapusFoto}
+      />
       <Input label="Nama Lengkap & Alias" required value={nilai.nama_lengkap} onChange={(v) => onUbah('nama_lengkap', v)} className="col-span-2" />
       <Input label="NIK" required value={nilai.nik} onChange={(v) => onUbah('nik', v)} />
       <Select
@@ -570,13 +691,43 @@ function Ringkasan({ data }) {
     <div className="space-y-4">
       <div>
         <p className="text-xs font-semibold text-blue-600 mb-1">Calon Suami</p>
-        <Baris label="Nama" value={data.calon_suami.nama_lengkap} />
-        <Baris label="NIK" value={data.calon_suami.nik} />
+        <div className="flex gap-3">
+          {data.calon_suami.foto_url ? (
+            <img
+              src={data.calon_suami.foto_url}
+              alt="Foto calon suami"
+              className="w-16 h-20 object-cover rounded-lg border border-slate-200 shrink-0"
+            />
+          ) : (
+            <div className="w-16 h-20 rounded-lg border border-dashed border-red-200 bg-red-50 flex items-center justify-center text-[10px] text-red-400 text-center px-1 shrink-0">
+              Foto belum ada
+            </div>
+          )}
+          <div className="flex-1">
+            <Baris label="Nama" value={data.calon_suami.nama_lengkap} />
+            <Baris label="NIK" value={data.calon_suami.nik} />
+          </div>
+        </div>
       </div>
       <div>
         <p className="text-xs font-semibold text-blue-600 mb-1">Calon Istri</p>
-        <Baris label="Nama" value={data.calon_istri.nama_lengkap} />
-        <Baris label="NIK" value={data.calon_istri.nik} />
+        <div className="flex gap-3">
+          {data.calon_istri.foto_url ? (
+            <img
+              src={data.calon_istri.foto_url}
+              alt="Foto calon istri"
+              className="w-16 h-20 object-cover rounded-lg border border-slate-200 shrink-0"
+            />
+          ) : (
+            <div className="w-16 h-20 rounded-lg border border-dashed border-red-200 bg-red-50 flex items-center justify-center text-[10px] text-red-400 text-center px-1 shrink-0">
+              Foto belum ada
+            </div>
+          )}
+          <div className="flex-1">
+            <Baris label="Nama" value={data.calon_istri.nama_lengkap} />
+            <Baris label="NIK" value={data.calon_istri.nik} />
+          </div>
+        </div>
       </div>
       <div>
         <p className="text-xs font-semibold text-blue-600 mb-1">Rencana Akad</p>
