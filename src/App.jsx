@@ -264,12 +264,12 @@ export default function App() {
           <Route path="/siswa" element={<ProtectedRoute><Siswa /></ProtectedRoute>} />
           <Route path="/hasil-ujian" element={<ProtectedRoute><HasilUjian /></ProtectedRoute>} />
           <Route path="/guru" element={<ProtectedRoute adminOnly><Guru /></ProtectedRoute>} />
-          {/* Data Pegawai (tenant kantor) — route BARU & TERPISAH dari /guru,
-              supaya "Data Guru" milik sekolah tidak tersentuh sama sekali.
+          {/* Data Pegawai (tenant kantor) — route TERPISAH dari /guru, supaya
+              "Data Guru" milik sekolah tidak tersentuh sama sekali.
               Menulis ke tabel `pegawai_kantor` (lihat DataPegawaiKantor.jsx). */}
           <Route path="/presensi-kantor" element={<ProtectedRoute adminOnly><PresensiKantor /></ProtectedRoute>} />
           <Route path="/daftar-hadir-kantor" element={<ProtectedRoute adminOnly><DaftarHadirKantor /></ProtectedRoute>} />
-          <Route path="/daftar-hadir-kantor" element={<ProtectedRoute adminOnly><DaftarHadirKantor /></ProtectedRoute>} />
+          <Route path="/daftar-hadir-pegawai" element={<ProtectedRoute adminOnly><DaftarHadirPegawai /></ProtectedRoute>} />
           <Route path="/data-pegawai-kantor" element={<ProtectedRoute adminOnly><DataPegawaiKantor /></ProtectedRoute>} />
           <Route path="/pusat-materi-majelis" element={<ProtectedRoute><PusatMateriMajelis /></ProtectedRoute>} />
           <Route path="/materi-keluarga-sakinah" element={<ProtectedRoute><MateriKeluargaSakinah /></ProtectedRoute>} />
@@ -279,8 +279,7 @@ export default function App() {
           <Route path="/rencana-kerja-tahunan" element={<ProtectedRoute adminOnly><RencanaKerjaTahunan /></ProtectedRoute>} />
           <Route path="/materi-moderasi-beragama" element={<ProtectedRoute><MateriModerasiBeragama /></ProtectedRoute>} />
           <Route path="/laporan-masyarakat-bermoral-harmonis" element={<ProtectedRoute><LaporanPenyuluhanMasyarakatBermoral /></ProtectedRoute>} />
-          <Route path="/materi-majelis-taklim" element={<ProtectedRoute><MateriMajelisTaklim /></ProtectedRoute>} />
-          <Route path="/pusat-kelompok-binaan" element={<ProtectedRoute><PusatKelompokBinaan /></ProtectedRoute>} />
+          {/* Materi Majelis Taklim: khusus pengguna kantor — jangan buka ke ProtectedRoute biasa. */}
           <Route path="/materi-majelis-taklim" element={<ProtectedRoute adminOnly><MateriMajelisTaklim /></ProtectedRoute>} />
           <Route path="/pusat-kelompok-binaan" element={<ProtectedRoute><PusatKelompokBinaan /></ProtectedRoute>} />
           <Route path="/kelompok-binaan/:slug" element={<ProtectedRoute><KelolaKelompokBinaan /></ProtectedRoute>} />
@@ -308,7 +307,9 @@ export default function App() {
           <Route path="/laporan-daftar-hadir-guru" element={<ProtectedRoute adminOnly><LaporanDaftarHadirGuru /></ProtectedRoute>} />
           <Route path="/laporan-guru" element={<ProtectedRoute adminOnly><PusatLaporanGuru /></ProtectedRoute>} />
           {/* Cetak Sampul Laporan — satu halaman dengan sidebar menu berisi
-              semua jenis laporan (Bulanan, Semester, 8355, LPJ BOS, dst). */}
+              semua jenis laporan (Bulanan, Semester, 8355, LPJ BOS, dst).
+              Dikunci adminOnly — dulu ada versi kedua tanpa adminOnly di bagian
+              Akademik yang bikin bentrok, sudah dihapus. */}
           <Route path="/cetak-sampul" element={<ProtectedRoute adminOnly><CetakSampulHub /></ProtectedRoute>} />
           {/* Link lama dipertahankan (redirect) supaya bookmark/tautan yang
               sudah pernah dibagikan tidak mati. */}
@@ -329,7 +330,6 @@ export default function App() {
           <Route path="/rapor/cetak" element={<ProtectedRoute><RaporCetak /></ProtectedRoute>} />
           <Route path="/ijazah" element={<ProtectedRoute><Ijazah /></ProtectedRoute>} />
           <Route path="/skl" element={<ProtectedRoute><SuratKeteranganLulus /></ProtectedRoute>} />
-          <Route path="/cetak-sampul" element={<ProtectedRoute><CetakSampulHub /></ProtectedRoute>} />
           <Route path="/rpp" element={<ProtectedRoute><RPP /></ProtectedRoute>} />
           <Route path="/arsip-rpp" element={<ProtectedRoute><ArsipRPP /></ProtectedRoute>} />
           <Route path="/bank-soal" element={<ProtectedRoute><BankSoal /></ProtectedRoute>} />
