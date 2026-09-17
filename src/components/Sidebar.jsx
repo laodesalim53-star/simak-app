@@ -472,7 +472,7 @@ function getLinksOrangTua(jumlahPesanBelumDibaca = 0, sekolahId = null) {
 }
 
 export default function Sidebar({ open = false, onClose = () => {} }) {
-const { signOut, session, profil, isAdmin, isAdminUtama, isSuperAdmin, isOrangTua, isKantor, sekolahId } = useAuth()
+const {
     signOut,
     session,
     profil,
