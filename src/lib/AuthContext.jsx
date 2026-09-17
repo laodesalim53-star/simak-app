@@ -35,10 +35,7 @@ export function AuthProvider({ children }) {
         no_hp,
         tanggal_lahir,
         pendidikan_terakhir,
-        alamat,
-        paket,
-        paket_berlaku_sampai,
-        sekolah:sekolah_id ( nama_sekolah, jenis_organisasi )
+        alamat
       `)
       .eq('id', userId)
       .maybeSingle()
