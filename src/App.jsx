@@ -269,6 +269,7 @@ export default function App() {
               Menulis ke tabel `pegawai_kantor` (lihat DataPegawaiKantor.jsx). */}
           <Route path="/presensi-kantor" element={<ProtectedRoute adminOnly><PresensiKantor /></ProtectedRoute>} />
           <Route path="/daftar-hadir-kantor" element={<ProtectedRoute adminOnly><DaftarHadirKantor /></ProtectedRoute>} />
+          <Route path="/daftar-hadir-kantor" element={<ProtectedRoute adminOnly><DaftarHadirKantor /></ProtectedRoute>} />
           <Route path="/data-pegawai-kantor" element={<ProtectedRoute adminOnly><DataPegawaiKantor /></ProtectedRoute>} />
           <Route path="/pusat-materi-majelis" element={<ProtectedRoute><PusatMateriMajelis /></ProtectedRoute>} />
           <Route path="/materi-keluarga-sakinah" element={<ProtectedRoute><MateriKeluargaSakinah /></ProtectedRoute>} />
