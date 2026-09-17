@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
-import { Printer } from 'lucide-react'
+import { Printer, Pencil } from 'lucide-react'
 import Layout from '../components/Layout'
 import KopSurat from '../components/KopSurat'
 
@@ -35,6 +35,18 @@ const SINGKATAN_STATUS = {
   cuti: 'C',
   dinas: 'D',
 }
+
+// Daftar opsi status untuk form edit
+const OPSI_STATUS = [
+  { value: 'hadir', label: 'Hadir' },
+  { value: 'izin', label: 'Izin' },
+  { value: 'sakit', label: 'Sakit' },
+  { value: 'alpa', label: 'Alpa' },
+  { value: 'cuti', label: 'Cuti' },
+  { value: 'dinas', label: 'Dinas' },
+]
+
+const FORM_EDIT_KOSONG = { status: 'hadir', keterangan: '', jamMasuk: '', jamPulang: '' }
 
 function formatTanggalIndonesia(date) {
   return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -70,6 +82,12 @@ export default function DaftarHadirPegawai() {
   // (1 pegawai, format Daftar Hadir Manual: kedatangan & kepulangan + ttd)
   const [mode, setMode] = useState('kolektif')
   const [pegawaiTerpilihId, setPegawaiTerpilihId] = useState('')
+
+  // ==== State untuk fitur edit presensi ====
+  // modalEdit: { pegawaiId, hari } saat form edit terbuka, null saat tertutup
+  const [modalEdit, setModalEdit] = useState(null)
+  const [formEdit, setFormEdit] = useState(FORM_EDIT_KOSONG)
+  const [menyimpan, setMenyimpan] = useState(false)
 
   const jumlahHari = useMemo(() => new Date(tahun, bulan, 0).getDate(), [tahun, bulan])
   const daftarHari = useMemo(
@@ -241,6 +259,132 @@ export default function DaftarHadirPegawai() {
   const pegawaiTerpilih = pegawaiList.find((p) => String(p.id) === String(pegawaiTerpilihId)) || null
   const dataBulanPegawaiTerpilih = pegawaiTerpilih ? presensiMap[pegawaiTerpilih.id] || {} : {}
 
+  // ==== Fungsi-fungsi fitur edit presensi ====
+
+  function bukaEditPresensi(pegawaiId, hari) {
+    const data = presensiMap[pegawaiId]?.[hari]
+    setFormEdit({
+      status: data?.statusRaw || 'hadir',
+      keterangan: data?.keterangan || '',
+      jamMasuk: data?.jamMasuk || '',
+      jamPulang: data?.jamPulang || '',
+    })
+    setModalEdit({ pegawaiId, hari })
+  }
+
+  function tutupEditPresensi() {
+    if (menyimpan) return
+    setModalEdit(null)
+    setFormEdit(FORM_EDIT_KOSONG)
+  }
+
+  function perbaruiPresensiLokal(pegawaiId, hari, dataBaru) {
+    setPresensiMap((prev) => {
+      const salinan = { ...prev }
+      const dataPegawai = { ...(salinan[pegawaiId] || {}) }
+      if (dataBaru === null) {
+        delete dataPegawai[hari]
+      } else {
+        dataPegawai[hari] = dataBaru
+      }
+      salinan[pegawaiId] = dataPegawai
+      return salinan
+    })
+  }
+
+  async function simpanPresensi(e) {
+    e.preventDefault()
+    if (!modalEdit) return
+    setMenyimpan(true)
+    try {
+      const { pegawaiId, hari } = modalEdit
+      const tanggalStr = `${tahun}-${String(bulan).padStart(2, '0')}-${String(hari).padStart(2, '0')}`
+
+      // Cek dulu apakah baris presensi untuk pegawai+tanggal ini sudah ada,
+      // supaya kita tahu harus update atau insert (tanpa bergantung pada
+      // constraint unique yang mungkin belum ada di tabel).
+      const { data: existing, error: errorCek } = await supabase
+        .from('presensi_pegawai_kantor')
+        .select('id')
+        .eq(KOLOM_RELASI_PEGAWAI, pegawaiId)
+        .eq(KOLOM_TANGGAL, tanggalStr)
+        .maybeSingle()
+
+      if (errorCek) throw errorCek
+
+      const payload = {
+        [KOLOM_STATUS]: formEdit.status,
+        [KOLOM_KETERANGAN]: formEdit.keterangan || null,
+        [KOLOM_JAM_MASUK]: formEdit.jamMasuk || null,
+        [KOLOM_JAM_PULANG]: formEdit.jamPulang || null,
+      }
+
+      let error
+      if (existing) {
+        ;({ error } = await supabase
+          .from('presensi_pegawai_kantor')
+          .update(payload)
+          .eq('id', existing.id))
+      } else {
+        ;({ error } = await supabase
+          .from('presensi_pegawai_kantor')
+          .insert({
+            [KOLOM_RELASI_PEGAWAI]: pegawaiId,
+            [KOLOM_TANGGAL]: tanggalStr,
+            sekolah_id: sekolahId,
+            ...payload,
+          }))
+      }
+
+      if (error) throw error
+
+      perbaruiPresensiLokal(pegawaiId, hari, {
+        singkatan: SINGKATAN_STATUS[formEdit.status] || formEdit.status.charAt(0).toUpperCase(),
+        statusRaw: formEdit.status,
+        keterangan: formEdit.keterangan || '',
+        jamMasuk: formEdit.jamMasuk || '',
+        jamPulang: formEdit.jamPulang || '',
+      })
+
+      tutupEditPresensi()
+    } catch (err) {
+      console.error('Gagal menyimpan presensi:', err)
+      alert('Gagal menyimpan presensi: ' + (err.message || 'terjadi kesalahan'))
+    } finally {
+      setMenyimpan(false)
+    }
+  }
+
+  async function hapusPresensi() {
+    if (!modalEdit) return
+    if (!window.confirm('Hapus data presensi tanggal ini?')) return
+    setMenyimpan(true)
+    try {
+      const { pegawaiId, hari } = modalEdit
+      const tanggalStr = `${tahun}-${String(bulan).padStart(2, '0')}-${String(hari).padStart(2, '0')}`
+
+      const { error } = await supabase
+        .from('presensi_pegawai_kantor')
+        .delete()
+        .eq(KOLOM_RELASI_PEGAWAI, pegawaiId)
+        .eq(KOLOM_TANGGAL, tanggalStr)
+
+      if (error) throw error
+
+      perbaruiPresensiLokal(pegawaiId, hari, null)
+      tutupEditPresensi()
+    } catch (err) {
+      console.error('Gagal menghapus presensi:', err)
+      alert('Gagal menghapus presensi: ' + (err.message || 'terjadi kesalahan'))
+    } finally {
+      setMenyimpan(false)
+    }
+  }
+
+  const pegawaiModalEdit = modalEdit
+    ? pegawaiList.find((p) => p.id === modalEdit.pegawaiId)
+    : null
+
   return (
     <Layout
       title="Daftar Hadir Pegawai"
@@ -299,6 +443,8 @@ export default function DaftarHadirPegawai() {
               ))}
             </select>
           )}
+
+          <span className="text-xs text-slate-400 hidden sm:inline">Klik sel tanggal untuk edit presensi</span>
         </div>
         <button
           onClick={() => window.print()}
@@ -361,7 +507,9 @@ export default function DaftarHadirPegawai() {
                     {daftarHari.map((hari) => (
                       <td
                         key={hari}
-                        className={`border border-slate-300 text-center ${apakahLibur(hari) ? 'text-red-600' : ''}`}
+                        onClick={() => bukaEditPresensi(pegawai.id, hari)}
+                        title="Klik untuk edit presensi"
+                        className={`no-print-cursor border border-slate-300 text-center cursor-pointer hover:bg-teal-50 ${apakahLibur(hari) ? 'text-red-600' : ''}`}
                       >
                         {dataBulanIni[hari]?.singkatan || ''}
                       </td>
@@ -479,7 +627,12 @@ export default function DaftarHadirPegawai() {
 
                     if (libur) {
                       return (
-                        <tr key={hari} className="text-red-600 font-semibold">
+                        <tr
+                          key={hari}
+                          onClick={() => bukaEditPresensi(pegawaiTerpilih.id, hari)}
+                          title="Klik untuk edit presensi"
+                          className="no-print-cursor text-red-600 font-semibold cursor-pointer hover:bg-teal-50"
+                        >
                           <td className="border border-slate-400 text-center h-[19px]">{hari}</td>
                           <td className="border border-slate-400 text-center whitespace-nowrap">
                             {tanggalStr}
@@ -492,7 +645,12 @@ export default function DaftarHadirPegawai() {
                     }
 
                     return (
-                      <tr key={hari}>
+                      <tr
+                        key={hari}
+                        onClick={() => bukaEditPresensi(pegawaiTerpilih.id, hari)}
+                        title="Klik untuk edit presensi"
+                        className="no-print-cursor cursor-pointer hover:bg-teal-50"
+                      >
                         <td className="border border-slate-400 text-center h-[19px]">{hari}</td>
                         <td className="border border-slate-400 text-center whitespace-nowrap">
                           {tanggalStr}
@@ -537,6 +695,96 @@ export default function DaftarHadirPegawai() {
         </div>
       )}
 
+      {/* ==== Modal Edit Presensi ==== */}
+      {modalEdit && (
+        <div className="no-print fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5">
+            <div className="flex items-center gap-2 mb-1">
+              <Pencil size={16} className="text-teal-600" />
+              <h2 className="font-semibold text-slate-800">Edit Presensi</h2>
+            </div>
+            <p className="text-sm text-slate-500 mb-4">
+              {pegawaiModalEdit?.nama_lengkap} — {modalEdit.hari} {NAMA_BULAN[bulan - 1]} {tahun}
+            </p>
+
+            <form onSubmit={simpanPresensi} className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
+                <select
+                  value={formEdit.status}
+                  onChange={(e) => setFormEdit((f) => ({ ...f, status: e.target.value }))}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                >
+                  {OPSI_STATUS.map((opsi) => (
+                    <option key={opsi.value} value={opsi.value}>{opsi.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Jam Masuk</label>
+                  <input
+                    type="time"
+                    value={formEdit.jamMasuk}
+                    onChange={(e) => setFormEdit((f) => ({ ...f, jamMasuk: e.target.value }))}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Jam Pulang</label>
+                  <input
+                    type="time"
+                    value={formEdit.jamPulang}
+                    onChange={(e) => setFormEdit((f) => ({ ...f, jamPulang: e.target.value }))}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Keterangan</label>
+                <input
+                  type="text"
+                  value={formEdit.keterangan}
+                  onChange={(e) => setFormEdit((f) => ({ ...f, keterangan: e.target.value }))}
+                  placeholder="opsional"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div className="flex items-center justify-between pt-2">
+                <button
+                  type="button"
+                  onClick={hapusPresensi}
+                  disabled={menyimpan}
+                  className="text-sm text-red-600 hover:text-red-700 disabled:opacity-50"
+                >
+                  Hapus
+                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={tutupEditPresensi}
+                    disabled={menyimpan}
+                    className="px-4 py-2 text-sm rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={menyimpan}
+                    className="px-4 py-2 text-sm rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50"
+                  >
+                    {menyimpan ? 'Menyimpan...' : 'Simpan'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <style>{`
         .lembar-cetak.print-only {
           position: static !important;
@@ -576,6 +824,9 @@ export default function DaftarHadirPegawai() {
           .ttd-block {
             page-break-inside: avoid;
             break-inside: avoid;
+          }
+          .no-print-cursor {
+            cursor: default !important;
           }
         }
         @page {
