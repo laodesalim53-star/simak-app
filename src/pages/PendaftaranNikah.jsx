@@ -851,17 +851,35 @@ function BarisCetak({ label, value }) {
   )
 }
 
+// Data calon pengantin di lembar cetak — kini menampilkan pas foto
+// (bila sudah diunggah) di samping kiri data teks, meniru layout
+// formulir N1 resmi yang punya kotak foto di pojok.
 function DataCalonCetak({ judul, nilai }) {
   return (
     <SeksiCetak judul={judul}>
-      <BarisCetak label="Nama Lengkap & Alias" value={nilai.nama_lengkap} />
-      <BarisCetak label="NIK" value={nilai.nik} />
-      <BarisCetak label="Tempat, Tanggal Lahir" value={`${nilai.tempat_lahir || '-'}, ${nilai.tanggal_lahir || '-'}`} />
-      <BarisCetak label="Kewarganegaraan" value={nilai.kewarganegaraan} />
-      <BarisCetak label="Agama" value={nilai.agama} />
-      <BarisCetak label="Pekerjaan" value={nilai.pekerjaan} />
-      <BarisCetak label="Status Perkawinan" value={LABEL_STATUS_PERKAWINAN[nilai.status_perkawinan]} />
-      <BarisCetak label="Alamat" value={nilai.alamat} />
+      <div className="flex gap-3">
+        {nilai.foto_url ? (
+          <img
+            src={nilai.foto_url}
+            alt={judul}
+            className="w-20 h-24 object-cover border border-black shrink-0"
+          />
+        ) : (
+          <div className="w-20 h-24 border border-dashed border-black flex items-center justify-center text-[9px] text-center shrink-0 px-1">
+            Foto belum ada
+          </div>
+        )}
+        <div className="flex-1 space-y-0.5">
+          <BarisCetak label="Nama Lengkap & Alias" value={nilai.nama_lengkap} />
+          <BarisCetak label="NIK" value={nilai.nik} />
+          <BarisCetak label="Tempat, Tanggal Lahir" value={`${nilai.tempat_lahir || '-'}, ${nilai.tanggal_lahir || '-'}`} />
+          <BarisCetak label="Kewarganegaraan" value={nilai.kewarganegaraan} />
+          <BarisCetak label="Agama" value={nilai.agama} />
+          <BarisCetak label="Pekerjaan" value={nilai.pekerjaan} />
+          <BarisCetak label="Status Perkawinan" value={LABEL_STATUS_PERKAWINAN[nilai.status_perkawinan]} />
+          <BarisCetak label="Alamat" value={nilai.alamat} />
+        </div>
+      </div>
     </SeksiCetak>
   )
 }
@@ -884,7 +902,15 @@ function OrangTuaCetak({ judul, nilai }) {
 function LembarCetak({ data }) {
   return (
     <div className="hidden print:block p-8 text-black">
-      <style>{`@media print { @page { margin: 1.5cm; } }`}</style>
+      <style>{`
+        @media print {
+          @page { margin: 1.5cm; }
+          img {
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+          }
+        }
+      `}</style>
 
       <div className="text-center mb-6">
         <p className="font-bold text-sm uppercase">Formulir Pendaftaran Nikah</p>
