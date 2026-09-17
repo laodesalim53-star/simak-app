@@ -19,7 +19,7 @@ import { supabase } from '../lib/supabaseClient'
 import Layout from '../components/Layout'
 
 export default function PersetujuanAkun() {
-  const { isSuperAdmin, sekolahId } = useAuth()
+  const { isSuperAdmin, sekolahId, isKantor } = useAuth()
   const [tab, setTab] = useState('menunggu')
   const [filterJabatan, setFilterJabatan] = useState('semua')
   const [daftarAkun, setDaftarAkun] = useState([])
@@ -35,6 +35,8 @@ export default function PersetujuanAkun() {
   // pendaftaran) dan masih menunggu persetujuan. Ditampilkan di tab
   // terpisah karena tab "Menunggu" di atas hanya memfilter dari
   // profil.status_akun, tidak akan pernah menangkap baris ini.
+  // TIDAK RELEVAN untuk tenant "kantor" — kantor tidak punya konsep
+  // orang tua/siswa sama sekali, jadi seluruh alur ini dilewati.
   const [anakMenunggu, setAnakMenunggu] = useState([])
   const [loadingAnakMenunggu, setLoadingAnakMenunggu] = useState(true)
 
@@ -53,14 +55,26 @@ export default function PersetujuanAkun() {
       query = query.eq('sekolah_id', sekolahId)
     }
 
-    if (filterJabatan === 'guru') {
-      query = query.or('jabatan.eq.guru,and(jabatan.is.null,role.eq.guru)')
-    } else if (filterJabatan === 'admin_kepsek') {
-      query = query.or(
-        'jabatan.in.(admin,kepala_sekolah),and(jabatan.is.null,role.in.(admin,kepala_sekolah,admin_utama))'
-      )
-    } else if (filterJabatan === 'orang_tua') {
-      query = query.eq('jabatan', 'orang_tua')
+    if (isKantor) {
+      // Tenant kantor: hanya ada Admin/Kepala Kantor dan Pegawai —
+      // tidak ada Guru maupun Orang Tua/Wali.
+      if (filterJabatan === 'admin_kepala') {
+        query = query.or(
+          'jabatan.in.(admin,kepala_kantor),and(jabatan.is.null,role.in.(admin,kepala_kantor,admin_utama))'
+        )
+      } else if (filterJabatan === 'pegawai') {
+        query = query.or('jabatan.eq.pegawai,and(jabatan.is.null,role.eq.pegawai)')
+      }
+    } else {
+      if (filterJabatan === 'guru') {
+        query = query.or('jabatan.eq.guru,and(jabatan.is.null,role.eq.guru)')
+      } else if (filterJabatan === 'admin_kepsek') {
+        query = query.or(
+          'jabatan.in.(admin,kepala_sekolah),and(jabatan.is.null,role.in.(admin,kepala_sekolah,admin_utama))'
+        )
+      } else if (filterJabatan === 'orang_tua') {
+        query = query.eq('jabatan', 'orang_tua')
+      }
     }
 
     const { data } = await query
@@ -70,21 +84,25 @@ export default function PersetujuanAkun() {
     // langsung lewat FK karena profil.id dan orang_tua_siswa.orang_tua_id
     // sama-sama mengacu ke auth.users, bukan saling berelasi satu sama
     // lain — jadi diambil terpisah lalu digabung di sisi klien.
-    const idOrangTua = akunList
-      .filter((a) => (a.jabatan || a.role) === 'orang_tua')
-      .map((a) => a.id)
+    // Dilewati sepenuhnya untuk tenant kantor karena jabatan 'orang_tua'
+    // tidak pernah ada di sana.
+    if (!isKantor) {
+      const idOrangTua = akunList
+        .filter((a) => (a.jabatan || a.role) === 'orang_tua')
+        .map((a) => a.id)
 
-    if (idOrangTua.length > 0) {
-      const { data: relasi } = await supabase
-        .from('orang_tua_siswa')
-        .select('id, orang_tua_id, siswa_id, hubungan, status, siswa:siswa_id(nama_lengkap, nis)')
-        .in('orang_tua_id', idOrangTua)
+      if (idOrangTua.length > 0) {
+        const { data: relasi } = await supabase
+          .from('orang_tua_siswa')
+          .select('id, orang_tua_id, siswa_id, hubungan, status, siswa:siswa_id(nama_lengkap, nis)')
+          .in('orang_tua_id', idOrangTua)
 
-      akunList = akunList.map((a) =>
-        (a.jabatan || a.role) === 'orang_tua'
-          ? { ...a, relasiAnak: (relasi || []).filter((r) => r.orang_tua_id === a.id) }
-          : a
-      )
+        akunList = akunList.map((a) =>
+          (a.jabatan || a.role) === 'orang_tua'
+            ? { ...a, relasiAnak: (relasi || []).filter((r) => r.orang_tua_id === a.id) }
+            : a
+        )
+      }
     }
 
     setDaftarAkun(akunList)
@@ -95,6 +113,7 @@ export default function PersetujuanAkun() {
   // orang tua yang AKUNNYA sudah 'aktif' — ini yang menandakan baris
   // tersebut hasil "Tambah Anak" belakangan, bukan anak pertama saat
   // pendaftaran (yang sudah tertangani lewat tab "Menunggu" di atas).
+  // Khusus tenant sekolah — untuk kantor fungsi ini tidak pernah dipanggil.
   async function muatAnakMenunggu() {
     setLoadingAnakMenunggu(true)
 
@@ -146,12 +165,18 @@ export default function PersetujuanAkun() {
   useEffect(() => {
     muatData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, filterJabatan])
+  }, [tab, filterJabatan, isKantor])
 
   useEffect(() => {
+    // Tenant kantor tidak punya konsep orang tua/anak — jangan query sama sekali.
+    if (isKantor) {
+      setAnakMenunggu([])
+      setLoadingAnakMenunggu(false)
+      return
+    }
     muatAnakMenunggu()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [isKantor])
 
   async function ubahStatus(id, statusBaru, catatan = '', guruId = null, pegawaiId = null) {
     setProsesId(id)
@@ -165,9 +190,10 @@ export default function PersetujuanAkun() {
     // di status menunggu walau akunnya sudah disetujui/ditolak.
     // Dibatasi hanya baris yang MASIH 'menunggu' (anak pertama saat
     // pendaftaran) — supaya tidak menimpa status anak lain yang sudah
-    // diproses terpisah lewat tab "Anak Menunggu".
+    // diproses terpisah lewat tab "Anak Menunggu". Tidak berlaku untuk
+    // tenant kantor.
     const akun = daftarAkun.find((a) => a.id === id)
-    if ((akun?.jabatan || akun?.role) === 'orang_tua') {
+    if (!isKantor && (akun?.jabatan || akun?.role) === 'orang_tua') {
       const statusRelasi =
         statusBaru === 'aktif' ? 'aktif' : statusBaru === 'ditolak' ? 'ditolak' : 'menunggu'
       await supabase
@@ -181,7 +207,7 @@ export default function PersetujuanAkun() {
     setModalGuru(null)
     setModalPegawai(null)
     muatData()
-    muatAnakMenunggu()
+    if (!isKantor) muatAnakMenunggu()
   }
 
   function handleTolak(id) {
@@ -190,7 +216,8 @@ export default function PersetujuanAkun() {
   }
 
   function isJabatanGuru(akun) {
-    return (akun.jabatan || akun.role) === 'guru'
+    // Tenant kantor tidak punya jabatan 'guru' sama sekali.
+    return !isKantor && (akun.jabatan || akun.role) === 'guru'
   }
 
   function isJabatanPegawai(akun) {
@@ -279,8 +306,9 @@ export default function PersetujuanAkun() {
     // Sama seperti di ubahStatus(): hanya reset baris orang_tua_siswa yang
     // statusnya masih cerminan dari status akun SEBELUM direset ini (aktif
     // atau ditolak), supaya anak lain yang sudah diproses terpisah lewat
-    // tab "Anak Menunggu" tidak ikut ter-reset tanpa sengaja.
-    if (!error && (akun.jabatan || akun.role) === 'orang_tua') {
+    // tab "Anak Menunggu" tidak ikut ter-reset tanpa sengaja. Tidak berlaku
+    // untuk tenant kantor.
+    if (!error && !isKantor && (akun.jabatan || akun.role) === 'orang_tua') {
       await supabase
         .from('orang_tua_siswa')
         .update({ status: 'menunggu' })
@@ -294,7 +322,7 @@ export default function PersetujuanAkun() {
       return
     }
     muatData()
-    muatAnakMenunggu()
+    if (!isKantor) muatAnakMenunggu()
   }
 
   // Simpan perubahan data akun dari modal Edit
@@ -382,6 +410,7 @@ export default function PersetujuanAkun() {
 
   // Setujui satu baris anak (tab "Anak Menunggu") — hanya menyentuh baris
   // ini, tidak menyentuh baris anak lain atau status akun orang tuanya.
+  // Khusus tenant sekolah.
   async function setujuiAnak(relasiId) {
     setProsesId(relasiId)
     const { error } = await supabase
@@ -415,7 +444,9 @@ export default function PersetujuanAkun() {
   return (
     <Layout
       title="Persetujuan Akun"
-      subtitle={`Kelola pendaftaran akun admin baru${isSuperAdmin ? ' di seluruh sekolah' : ' di sekolah Anda'}.`}
+      subtitle={`Kelola pendaftaran akun admin baru${
+        isSuperAdmin ? ' di seluruh sekolah' : isKantor ? ' di kantor Anda' : ' di sekolah Anda'
+      }.`}
     >
       <div className="flex gap-2 mb-4">
         <button
@@ -434,23 +465,27 @@ export default function PersetujuanAkun() {
         >
           Riwayat
         </button>
-        <button
-          onClick={() => setTab('anak_menunggu')}
-          className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5 ${
-            tab === 'anak_menunggu' ? 'bg-emerald-600 text-white' : 'bg-white text-slate-600 border border-slate-200'
-          }`}
-        >
-          Anak Menunggu
-          {anakMenunggu.length > 0 && (
-            <span
-              className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                tab === 'anak_menunggu' ? 'bg-white/20' : 'bg-emerald-100 text-emerald-700'
-              }`}
-            >
-              {anakMenunggu.length}
-            </span>
-          )}
-        </button>
+        {/* Tab "Anak Menunggu" murni konsep orang tua/siswa sekolah — tidak
+            relevan sama sekali untuk tenant kantor, jadi disembunyikan. */}
+        {!isKantor && (
+          <button
+            onClick={() => setTab('anak_menunggu')}
+            className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5 ${
+              tab === 'anak_menunggu' ? 'bg-emerald-600 text-white' : 'bg-white text-slate-600 border border-slate-200'
+            }`}
+          >
+            Anak Menunggu
+            {anakMenunggu.length > 0 && (
+              <span
+                className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                  tab === 'anak_menunggu' ? 'bg-white/20' : 'bg-emerald-100 text-emerald-700'
+                }`}
+              >
+                {anakMenunggu.length}
+              </span>
+            )}
+          </button>
+        )}
       </div>
 
       {tab !== 'anak_menunggu' && (
@@ -463,30 +498,54 @@ export default function PersetujuanAkun() {
           >
             Semua Jabatan
           </button>
-          <button
-            onClick={() => setFilterJabatan('admin_kepsek')}
-            className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
-              filterJabatan === 'admin_kepsek' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-600'
-            }`}
-          >
-            Admin & Kepala Sekolah
-          </button>
-          <button
-            onClick={() => setFilterJabatan('guru')}
-            className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
-              filterJabatan === 'guru' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600'
-            }`}
-          >
-            Guru
-          </button>
-          <button
-            onClick={() => setFilterJabatan('orang_tua')}
-            className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
-              filterJabatan === 'orang_tua' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-600'
-            }`}
-          >
-            Orang Tua/Wali
-          </button>
+
+          {isKantor ? (
+            <>
+              <button
+                onClick={() => setFilterJabatan('admin_kepala')}
+                className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+                  filterJabatan === 'admin_kepala' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-600'
+                }`}
+              >
+                Admin & Kepala Kantor
+              </button>
+              <button
+                onClick={() => setFilterJabatan('pegawai')}
+                className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+                  filterJabatan === 'pegawai' ? 'bg-cyan-600 text-white' : 'bg-cyan-50 text-cyan-600'
+                }`}
+              >
+                Pegawai
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => setFilterJabatan('admin_kepsek')}
+                className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+                  filterJabatan === 'admin_kepsek' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-600'
+                }`}
+              >
+                Admin & Kepala Sekolah
+              </button>
+              <button
+                onClick={() => setFilterJabatan('guru')}
+                className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+                  filterJabatan === 'guru' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600'
+                }`}
+              >
+                Guru
+              </button>
+              <button
+                onClick={() => setFilterJabatan('orang_tua')}
+                className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+                  filterJabatan === 'orang_tua' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-600'
+                }`}
+              >
+                Orang Tua/Wali
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -507,7 +566,11 @@ export default function PersetujuanAkun() {
                   <th className="text-left px-4 py-3 font-medium">Nama</th>
                   <th className="text-left px-4 py-3 font-medium">Email</th>
                   <th className="text-left px-4 py-3 font-medium">Jabatan</th>
-                  {isSuperAdmin && <th className="text-left px-4 py-3 font-medium">Sekolah</th>}
+                  {isSuperAdmin && (
+                    <th className="text-left px-4 py-3 font-medium">
+                      {isKantor ? 'Kantor' : 'Sekolah'}
+                    </th>
+                  )}
                   <th className="text-left px-4 py-3 font-medium">Status</th>
                   <th className="text-right px-4 py-3 font-medium">Aksi</th>
                 </tr>
@@ -517,7 +580,7 @@ export default function PersetujuanAkun() {
                   <tr key={akun.id}>
                     <td className="px-4 py-3 text-slate-700">
                       {akun.nama_lengkap_pendaftar || '—'}
-                      {(akun.jabatan || akun.role) === 'orang_tua' && akun.relasiAnak?.length > 0 && (
+                      {!isKantor && (akun.jabatan || akun.role) === 'orang_tua' && akun.relasiAnak?.length > 0 && (
                         <p className="text-[11px] text-slate-400 mt-0.5">
                           Anak:{' '}
                           {akun.relasiAnak
@@ -527,7 +590,7 @@ export default function PersetujuanAkun() {
                           {akun.relasiAnak[0]?.hubungan ? ` (${akun.relasiAnak[0].hubungan})` : ''}
                         </p>
                       )}
-                      {(akun.jabatan || akun.role) === 'orang_tua' && akun.relasiAnak?.length === 0 && (
+                      {!isKantor && (akun.jabatan || akun.role) === 'orang_tua' && akun.relasiAnak?.length === 0 && (
                         <p className="text-[11px] text-red-400 mt-0.5">
                           Belum ada data anak terhubung
                         </p>
@@ -722,6 +785,7 @@ export default function PersetujuanAkun() {
       {modalEdit && (
         <ModalEditAkun
           akun={modalEdit}
+          isKantor={isKantor}
           onClose={() => setModalEdit(null)}
           onSimpan={handleSimpanEdit}
         />
@@ -1026,10 +1090,12 @@ function ModalHubungkanPegawai({ akun, onClose, onSelesai }) {
   )
 }
 
-function ModalEditAkun({ akun, onClose, onSimpan }) {
+function ModalEditAkun({ akun, isKantor, onClose, onSimpan }) {
   const [nama, setNama] = useState(akun.nama_lengkap_pendaftar || '')
   const [email, setEmail] = useState(akun.email_pendaftar || '')
-  const [jabatan, setJabatan] = useState(akun.jabatan || akun.role || 'guru')
+  const [jabatan, setJabatan] = useState(
+    akun.jabatan || akun.role || (isKantor ? 'pegawai' : 'guru')
+  )
   const [menyimpan, setMenyimpan] = useState(false)
 
   async function handleSimpan() {
@@ -1080,13 +1146,24 @@ function ModalEditAkun({ akun, onClose, onSimpan }) {
               value={jabatan}
               onChange={(e) => setJabatan(e.target.value)}
             >
-              <option value="guru">Guru</option>
-              <option value="admin">Admin</option>
-              <option value="kepala_sekolah">Kepala Sekolah</option>
-              <option value="admin_utama">Admin Utama</option>
-              <option value="orang_tua">Orang Tua/Wali</option>
-              <option value="pegawai">Pegawai</option>
-              <option value="kepala_kantor">Kepala Kantor</option>
+              {isKantor ? (
+                <>
+                  <option value="pegawai">Pegawai</option>
+                  <option value="kepala_kantor">Kepala Kantor</option>
+                  <option value="admin">Admin</option>
+                  <option value="admin_utama">Admin Utama</option>
+                </>
+              ) : (
+                <>
+                  <option value="guru">Guru</option>
+                  <option value="admin">Admin</option>
+                  <option value="kepala_sekolah">Kepala Sekolah</option>
+                  <option value="admin_utama">Admin Utama</option>
+                  <option value="orang_tua">Orang Tua/Wali</option>
+                  <option value="pegawai">Pegawai</option>
+                  <option value="kepala_kantor">Kepala Kantor</option>
+                </>
+              )}
             </select>
           </div>
         </div>
