@@ -275,6 +275,7 @@ export default function App() {
           <Route path="/materi-pengelolaan-zakat" element={<ProtectedRoute><MateriPengelolaanZakat /></ProtectedRoute>} />
           <Route path="/materi-wakaf" element={<ProtectedRoute><MateriWakaf /></ProtectedRoute>} />
           <Route path="/materi-akhlak" element={<ProtectedRoute><MateriAkhlak /></ProtectedRoute>} />
+          <Route path="/rencana-kerja-tahunan" element={<ProtectedRoute adminOnly><RencanaKerjaTahunan /></ProtectedRoute>} />
           <Route path="/materi-moderasi-beragama" element={<ProtectedRoute><MateriModerasiBeragama /></ProtectedRoute>} />
           <Route path="/laporan-masyarakat-bermoral-harmonis" element={<ProtectedRoute><LaporanPenyuluhanMasyarakatBermoral /></ProtectedRoute>} />
           <Route path="/materi-majelis-taklim" element={<ProtectedRoute><MateriMajelisTaklim /></ProtectedRoute>} />
