@@ -325,21 +325,24 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   ]
 }
 
-// Menu PEGAWAI (non-admin) untuk tenant "kantor" — versi ringkas dari
-// getLinksGuru() di atas, dipakai kalau isKantor true. Sama seperti
-// getGroupsKantorAdmin(), rute tetap sama, cuma item akademik/toko
-// dihilangkan dan labelnya disesuaikan.
-function getLinksKantorPegawai(jumlahPesanBelumDibaca = 0) {
+// Menu PEGAWAI KANTOR (bukan admin) — terpisah total dari getLinksGuru(),
+// supaya pegawai kantor tidak melihat menu akademik sekolah (Data Siswa,
+// PPDB, Bank Soal, dsb) yang tidak relevan untuk tenant kantor.
+function getLinksPegawaiKantor(jumlahPesanBelumDibaca = 0) {
   return [
-    { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
+    { to: '/', label: 'Dasbor', icon: LayoutDashboard, end: true },
     { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
-    { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
+    { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Award },
     { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
+    { to: '/rapat', label: 'Rapat Video', icon: Video },
+    { to: '/galeri', label: 'Galeri Kegiatan', icon: Images },
     { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
     { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
-    { to: '/presensi', label: 'Presensi', icon: ClipboardCheck },
+    { to: '/presensi-kantor', label: 'Presensi', icon: ClipboardCheck },
     { to: '/agenda', label: 'Agenda Kantor', icon: CalendarDays },
     { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
+    { to: '/pusat-materi-majelis', label: 'Materi Majelis', icon: BookOpenCheck },
+    { to: '/pusat-kelompok-binaan', label: 'Kelompok Binaan', icon: Users },
   ]
 }
 
@@ -469,7 +472,7 @@ function getLinksOrangTua(jumlahPesanBelumDibaca = 0, sekolahId = null) {
 }
 
 export default function Sidebar({ open = false, onClose = () => {} }) {
-  const {
+const { signOut, session, profil, isAdmin, isAdminUtama, isSuperAdmin, isOrangTua, isKantor, sekolahId } = useAuth()
     signOut,
     session,
     profil,
