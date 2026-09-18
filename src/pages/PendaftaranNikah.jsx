@@ -21,7 +21,7 @@ import Layout from '../components/Layout'
 // Sesuaikan path import ini dengan lokasi file LembarCetakNikah.jsx di
 // proyek Anda (mis. '../components/LembarCetakNikah' kalau diletakkan
 // di folder components).
-import LembarCetakNikah from './LembarCetakNikah'
+import LembarCetakNikah from '../components/LembarCetakNikah'
 
 // Nama bucket Supabase Storage untuk pas foto. Pastikan bucket ini sudah
 // dibuat (public) dengan policy upload untuk role 'authenticated'.
