@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../lib/AuthContext'
 
 // Ganti 'logo' di bawah ini kalau nama bucket storage-mu berbeda
 const LOGO_BUCKET = 'profil-kantor'
@@ -11,25 +12,34 @@ const LOGO_BUCKET = 'profil-kantor'
 //
 // Pakai di halaman cetak manapun cukup dengan: <KopSurat />
 //
-// PERBAIKAN: sebelumnya logo dan blok teks diletakkan berdampingan dalam
+// PERBAIKAN 1: sebelumnya logo dan blok teks diletakkan berdampingan dalam
 // satu flex row, sehingga teks (termasuk baris email/telepon) ter-center
 // hanya terhadap sisa ruang setelah logo — bukan terhadap lebar kop surat
-// secara keseluruhan. Akibatnya semua baris teks, termasuk baris kontak,
-// terlihat bergeser ke kanan. Sekarang dipakai grid 3 kolom yang seimbang
+// secara keseluruhan. Sekarang dipakai grid 3 kolom yang seimbang
 // (logo | teks tengah | spacer sebesar logo) supaya benar-benar center
-// terhadap lebar kop surat. Baris kontak juga dibuat lebih kecil dan tidak
-// bold, supaya proporsional terhadap 3 baris judul di atasnya.
+// terhadap lebar kop surat.
+//
+// PERBAIKAN 2: query profil_kantor sebelumnya hardcode ke id=1 (baris
+// kantor pertama), sehingga kantor kedua/ketiga dst selalu menampilkan
+// data kantor pertama atau "Nama Kantor Belum Diatur". Sekarang di-scope
+// lewat sekolah_id milik kantor yang sedang login, sama seperti
+// ProfilKantor.jsx dan DaftarHadirPegawai.jsx.
 export default function KopSurat() {
+  const { sekolahId } = useAuth()
   const [profilKantor, setProfilKantor] = useState(null)
 
   useEffect(() => {
+    if (!sekolahId) {
+      setProfilKantor(null)
+      return
+    }
     supabase
       .from('profil_kantor')
       .select('nama_kementerian, nama_kantor_kabupaten, nama_kantor, alamat, kode_pos, kecamatan, kabupaten, telepon, email, logo_path')
-      .eq('id', 1)
+      .eq('sekolah_id', sekolahId)
       .maybeSingle()
       .then(({ data }) => setProfilKantor(data))
-  }, [])
+  }, [sekolahId])
 
   const logoUrl = profilKantor?.logo_path
     ? supabase.storage.from(LOGO_BUCKET).getPublicUrl(profilKantor.logo_path).data.publicUrl
