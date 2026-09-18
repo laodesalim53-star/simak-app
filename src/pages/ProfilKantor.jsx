@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
 import { Save, Loader2, CheckCircle2, ImagePlus } from 'lucide-react'
 
@@ -16,9 +17,10 @@ const emptyForm = {
   logo_path: '',
 }
 
-// Satu kantor = satu baris (id tetap = 1), jadi halaman ini jauh lebih
-// sederhana dari ProfilSekolah.jsx yang harus di-scope per sekolah_id.
+// Satu kantor = satu baris, di-scope lewat sekolah_id (bukan lagi id=1
+// yang di-hardcode). sekolah_id didapat dari profil user yang login.
 export default function ProfilKantor() {
+  const { sekolahId } = useAuth()
   const [form, setForm] = useState(emptyForm)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -27,11 +29,12 @@ export default function ProfilKantor() {
   const [logoUrl, setLogoUrl] = useState('')
 
   async function muatData() {
+    if (!sekolahId) return
     setLoading(true)
     const { data } = await supabase
       .from('profil_kantor')
       .select('*')
-      .eq('id', 1)
+      .eq('sekolah_id', sekolahId)
       .maybeSingle()
 
     if (data) {
@@ -39,24 +42,33 @@ export default function ProfilKantor() {
       if (data.logo_path) {
         const { data: pub } = supabase.storage.from('profil-kantor').getPublicUrl(data.logo_path)
         setLogoUrl(pub.publicUrl)
+      } else {
+        setLogoUrl('')
       }
+    } else {
+      // Kantor ini belum punya baris profil_kantor sama sekali — normal untuk kantor baru
+      setForm(emptyForm)
+      setLogoUrl('')
     }
     setLoading(false)
   }
 
   useEffect(() => {
     muatData()
-  }, [])
+  }, [sekolahId])
 
   async function handleSubmit(e) {
     e.preventDefault()
+    if (!sekolahId) return
     setSaving(true)
     setTersimpan(false)
-    const { id, diperbarui_pada, ...payload } = form
+    const { id, diperbarui_pada, sekolah_id, ...payload } = form
     const { error } = await supabase
       .from('profil_kantor')
-      .update({ ...payload, diperbarui_pada: new Date().toISOString() })
-      .eq('id', 1)
+      .upsert(
+        { sekolah_id: sekolahId, ...payload, diperbarui_pada: new Date().toISOString() },
+        { onConflict: 'sekolah_id' }
+      )
     setSaving(false)
     if (!error) {
       setTersimpan(true)
@@ -68,11 +80,11 @@ export default function ProfilKantor() {
 
   async function handleLogoChange(e) {
     const file = e.target.files?.[0]
-    if (!file) return
+    if (!file || !sekolahId) return
     setUploadingLogo(true)
 
     const ext = file.name.split('.').pop()
-    const path = `logo-${Date.now()}.${ext}`
+    const path = `${sekolahId}/logo-${Date.now()}.${ext}`
 
     const { error: uploadError } = await supabase.storage.from('profil-kantor').upload(path, file, {
       upsert: true,
@@ -87,6 +99,19 @@ export default function ProfilKantor() {
     const { data: pub } = supabase.storage.from('profil-kantor').getPublicUrl(path)
     setLogoUrl(pub.publicUrl)
     setForm((f) => ({ ...f, logo_path: path }))
+
+    // Langsung simpan ke DB supaya logo tidak hilang kalau lupa klik "Simpan Perubahan"
+    const { error: saveError } = await supabase
+      .from('profil_kantor')
+      .upsert(
+        { sekolah_id: sekolahId, logo_path: path, diperbarui_pada: new Date().toISOString() },
+        { onConflict: 'sekolah_id' }
+      )
+
+    if (saveError) {
+      alert('Logo terunggah tapi gagal disimpan ke profil: ' + saveError.message)
+    }
+
     setUploadingLogo(false)
   }
 
