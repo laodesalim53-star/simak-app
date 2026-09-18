@@ -23,6 +23,12 @@ import { useState } from 'react'
 //     hidden), lalu subtree #lembar-cetak-nikah dan semua isinya
 //     dikembalikan visible, lalu diposisikan absolute supaya jadi satu
 //     halaman penuh.
+//
+// Kolom tanda tangan di bagian bawah lembar ada TIGA: Calon Suami,
+// Calon Istri, dan Tim Verifikasi. Kolom Tim Verifikasi mengambil nama
+// dari `data.petugasVerifikasi.nama` (opsional) — kalau kosong, garis
+// tanda tangan dibiarkan tanpa nama supaya bisa ditulis/ditandatangani
+// manual di atas kertas.
 // ---------------------------------------------------------------------
 
 const LABEL_STATUS_PERKAWINAN = {
@@ -111,6 +117,8 @@ function OrangTuaCetak({ judul, nilai }) {
 }
 
 export default function LembarCetakNikah({ data }) {
+  const petugas = data.petugasVerifikasi || {}
+
   return (
     <div id="lembar-cetak-nikah" className="p-8 text-black bg-white">
       <style>{`
@@ -198,7 +206,14 @@ export default function LembarCetakNikah({ data }) {
         </div>
       </SeksiCetak>
 
-      <div className="grid grid-cols-2 gap-8 mt-10 text-center text-xs break-inside-avoid">
+      {/* Blok verifikasi — status hasil pemeriksaan berkas oleh tim
+          verifikasi, ditampilkan tepat sebelum kolom tanda tangan. */}
+      <SeksiCetak judul="Verifikasi Berkas">
+        <BarisCetak label="Status" value={petugas.statusLabel} />
+        {petugas.catatan && <BarisCetak label="Catatan Verifikator" value={petugas.catatan} />}
+      </SeksiCetak>
+
+      <div className="grid grid-cols-3 gap-6 mt-10 text-center text-xs break-inside-avoid">
         <div>
           <p>Calon Suami,</p>
           <div className="h-16" />
@@ -208,6 +223,12 @@ export default function LembarCetakNikah({ data }) {
           <p>Calon Istri,</p>
           <div className="h-16" />
           <p className="border-t border-black pt-1">{data.calon_istri.nama_lengkap || '.....................'}</p>
+        </div>
+        <div>
+          <p>Tim Verifikasi,</p>
+          <div className="h-16" />
+          <p className="border-t border-black pt-1">{petugas.nama || '.....................'}</p>
+          {petugas.tanggal && <p className="text-[10px] mt-0.5">{petugas.tanggal}</p>}
         </div>
       </div>
     </div>
