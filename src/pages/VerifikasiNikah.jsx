@@ -1,14 +1,31 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CheckCircle2, XCircle, Clock3, X, Eye, Printer, Trash2 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import Layout from '../components/Layout'
+// Sesuaikan path import ini dengan lokasi sebenarnya file LembarCetakNikah
+// di project Anda (mis. '../components/LembarCetakNikah').
+import LembarCetakNikah from '../components/LembarCetakNikah'
 
 const TAB = [
   { id: 'menunggu', label: 'Menunggu' },
   { id: 'diverifikasi', label: 'Diverifikasi' },
   { id: 'ditolak', label: 'Ditolak' },
 ]
+
+// Mengubah bentuk data dari tabel (data_n1/data_n2/data_n4/data_n5)
+// menjadi bentuk yang diharapkan oleh <LembarCetakNikah data={...} />:
+// { calon_suami, calon_istri, n2, n4, n5 }
+function keDataCetak(d) {
+  const n1 = d?.data_n1 || {}
+  return {
+    calon_suami: n1.calon_suami || {},
+    calon_istri: n1.calon_istri || {},
+    n2: d?.data_n2 || {},
+    n4: d?.data_n4 || {},
+    n5: d?.data_n5 || {},
+  }
+}
 
 export default function VerifikasiNikah() {
   const { isSuperAdmin, sekolahId, session } = useAuth()
@@ -17,6 +34,13 @@ export default function VerifikasiNikah() {
   const [loading, setLoading] = useState(true)
   const [detail, setDetail] = useState(null)
   const [prosesId, setProsesId] = useState(null)
+
+  // Data yang sedang disiapkan untuk dicetak lewat <LembarCetakNikah />.
+  // null artinya tidak ada yang sedang dicetak (lembar cetak tidak perlu
+  // dirender). Sengaja dipisah dari `detail` supaya cetak bisa dipicu
+  // langsung dari baris tabel tanpa harus membuka modal detail dulu.
+  const [dataCetak, setDataCetak] = useState(null)
+  const timeoutCetakRef = useRef(null)
 
   async function muatData() {
     setLoading(true)
@@ -39,6 +63,28 @@ export default function VerifikasiNikah() {
     muatData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab])
+
+  // Begitu dataCetak terisi, tunggu sebentar supaya <LembarCetakNikah />
+  // sempat ter-render (termasuk foto) baru panggil dialog print browser.
+  // Setelah print selesai/dibatalkan, dataCetak dikosongkan lagi supaya
+  // lembar cetak tidak terus nangkring di DOM.
+  useEffect(() => {
+    if (!dataCetak) return
+
+    timeoutCetakRef.current = setTimeout(() => {
+      window.print()
+    }, 300)
+
+    function bersihkanSetelahPrint() {
+      setDataCetak(null)
+    }
+    window.addEventListener('afterprint', bersihkanSetelahPrint)
+
+    return () => {
+      clearTimeout(timeoutCetakRef.current)
+      window.removeEventListener('afterprint', bersihkanSetelahPrint)
+    }
+  }, [dataCetak])
 
   async function setujui(id) {
     if (!window.confirm('Setujui pendaftaran nikah ini?')) return
@@ -119,8 +165,9 @@ export default function VerifikasiNikah() {
     setDetail(data)
   }
 
-  // Cetak dokumen: ambil data lengkap lalu buka jendela baru berisi
-  // ringkasan N1/N2/N4/N5 yang siap di-print oleh browser.
+  // Cetak dokumen: ambil data lengkap (kalau belum ada), ubah ke bentuk
+  // yang dipakai <LembarCetakNikah />, lalu biarkan efek di atas yang
+  // memicu window.print() begitu lembar cetak selesai dirender.
   async function cetak(id) {
     const { data, error } = await supabase
       .from('pendaftaran_nikah')
@@ -131,7 +178,14 @@ export default function VerifikasiNikah() {
       window.alert('Gagal memuat data untuk dicetak: ' + error.message)
       return
     }
-    bukaJendelaCetak(data)
+    setDataCetak(keDataCetak(data))
+  }
+
+  // Dipanggil dari tombol Cetak di dalam modal detail — detail sudah
+  // berisi data lengkap, jadi tidak perlu fetch ulang.
+  function cetakDariDetail() {
+    if (!detail) return
+    setDataCetak(keDataCetak(detail))
   }
 
   return (
@@ -231,9 +285,15 @@ export default function VerifikasiNikah() {
           onSetujui={setujui}
           onTolak={tolak}
           onHapus={hapus}
-          onCetak={() => bukaJendelaCetak(detail)}
+          onCetak={cetakDariDetail}
         />
       )}
+
+      {/* Lembar cetak sesungguhnya. Di layar komponen ini menyembunyikan
+          dirinya sendiri (lihat CSS di LembarCetakNikah); hanya muncul
+          saat dialog print browser aktif, dan hanya subtree ini yang
+          ikut tercetak berkat aturan visibility di dalamnya. */}
+      {dataCetak && <LembarCetakNikah data={dataCetak} />}
     </Layout>
   )
 }
@@ -364,188 +424,4 @@ function ModalDetail({ detail, prosesId, onClose, onSetujui, onTolak, onHapus, o
       </div>
     </div>
   )
-}
-
-// Membuka jendela baru berisi formulir cetak resmi (N1/N2/N4/N5) lalu
-// memanggil dialog print browser. Ditata seperti formulir instansi:
-// kop, nomor pendaftaran, tiap model sebagai blok terpisah, dan kolom
-// tanda tangan di bagian akhir.
-function bukaJendelaCetak(d) {
-  const n1 = d.data_n1 || {}
-  const n2 = d.data_n2 || {}
-  const n4 = d.data_n4 || {}
-  const n5 = d.data_n5 || {}
-  const esc = (v) => (v === undefined || v === null || v === '' ? '—' : String(v))
-  const nomor = String(d.id || '').slice(0, 8).toUpperCase()
-  const tanggalCetak = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
-
-  const baris = (label, value) => `
-    <tr>
-      <td class="label">${esc(label)}</td>
-      <td class="titik">:</td>
-      <td class="value">${esc(value)}</td>
-    </tr>`
-
-  const blokOrangTua = (judul, p) => `
-    <div class="sub-blok">
-      <p class="sub-judul">${judul}</p>
-      <table>
-        ${baris('Nama Ayah', p?.ayah?.nama_lengkap)}
-        ${baris('Nama Ibu', p?.ibu?.nama_lengkap)}
-        ${baris('Status Persetujuan', p?.persetujuan ? 'Menyetujui' : 'Belum Menyetujui')}
-      </table>
-    </div>`
-
-  const html = `
-    <html>
-      <head>
-        <title>Formulir Pendaftaran Nikah — ${nomor}</title>
-        <meta charset="utf-8" />
-        <style>
-          @page { size: A4; margin: 18mm 16mm; }
-          * { box-sizing: border-box; }
-          body { font-family: 'Times New Roman', Georgia, serif; color: #111; font-size: 13px; line-height: 1.5; }
-
-          .kop { text-align: center; border-bottom: 2.5px solid #111; padding-bottom: 10px; margin-bottom: 4px; }
-          .kop .instansi { font-size: 16px; font-weight: bold; letter-spacing: 0.5px; text-transform: uppercase; }
-          .kop .sub { font-size: 11px; color: #444; }
-
-          .judul-form { text-align: center; margin: 16px 0 4px; }
-          .judul-form h1 { font-size: 14px; text-decoration: underline; text-transform: uppercase; margin: 0; }
-          .judul-form .nomor { font-size: 11px; color: #444; margin-top: 2px; }
-
-          .status-bar { display: flex; justify-content: space-between; font-size: 11px; margin: 10px 0 16px; padding: 6px 10px; background: #f3f4f6; border-radius: 3px; }
-
-          .blok { margin-bottom: 18px; page-break-inside: avoid; }
-          .blok-judul { font-size: 12.5px; font-weight: bold; text-transform: uppercase; background: #111; color: #fff; padding: 4px 8px; margin-bottom: 6px; }
-
-          .dua-kolom { display: flex; gap: 20px; }
-          .dua-kolom > div { flex: 1; }
-
-          table { width: 100%; border-collapse: collapse; }
-          td.label { width: 38%; padding: 2.5px 0; vertical-align: top; color: #222; }
-          td.titik { width: 3%; padding: 2.5px 0; vertical-align: top; }
-          td.value { padding: 2.5px 0; vertical-align: top; font-weight: 500; }
-
-          .sub-blok { margin-bottom: 10px; }
-          .sub-judul { font-size: 11.5px; font-weight: bold; color: #444; margin: 0 0 3px; }
-
-          .ttd-area { display: flex; justify-content: space-between; margin-top: 40px; page-break-inside: avoid; }
-          .ttd-box { text-align: center; width: 30%; font-size: 12px; }
-          .ttd-box .ruang { height: 60px; }
-          .ttd-box .garis { border-top: 1px solid #111; padding-top: 3px; }
-
-          .catatan-admin { margin-top: 16px; font-size: 11.5px; border: 1px solid #ddd; padding: 8px; border-radius: 3px; }
-
-          @media print {
-            .no-print { display: none; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="kop">
-          <div class="instansi">Formulir Pendaftaran Nikah</div>
-          <div class="sub">Dicetak dari sistem — bukan pengganti dokumen resmi KUA</div>
-        </div>
-
-        <div class="judul-form">
-          <h1>Rekap Data N1, N2, N4, N5</h1>
-          <div class="nomor">No. Pendaftaran: ${nomor} &nbsp;•&nbsp; Dicetak: ${tanggalCetak}</div>
-        </div>
-
-        <div class="status-bar">
-          <span>Status: <strong>${esc(d.status).toUpperCase()}</strong></span>
-          <span>Diajukan oleh: <strong>${esc(d.profil?.nama_lengkap_pendaftar)}</strong></span>
-        </div>
-
-        <div class="blok">
-          <div class="blok-judul">Model N1 — Data Calon Mempelai</div>
-          <div class="dua-kolom">
-            <div>
-              <p class="sub-judul">Calon Suami</p>
-              <table>
-                ${baris('Nama Lengkap', n1.calon_suami?.nama_lengkap)}
-                ${baris('NIK', n1.calon_suami?.nik)}
-                ${baris('Tempat, Tgl Lahir', `${n1.calon_suami?.tempat_lahir || ''}, ${n1.calon_suami?.tanggal_lahir || ''}`)}
-                ${baris('Agama', n1.calon_suami?.agama)}
-                ${baris('Pekerjaan', n1.calon_suami?.pekerjaan)}
-                ${baris('Alamat', n1.calon_suami?.alamat)}
-              </table>
-            </div>
-            <div>
-              <p class="sub-judul">Calon Istri</p>
-              <table>
-                ${baris('Nama Lengkap', n1.calon_istri?.nama_lengkap)}
-                ${baris('NIK', n1.calon_istri?.nik)}
-                ${baris('Tempat, Tgl Lahir', `${n1.calon_istri?.tempat_lahir || ''}, ${n1.calon_istri?.tanggal_lahir || ''}`)}
-                ${baris('Agama', n1.calon_istri?.agama)}
-                ${baris('Pekerjaan', n1.calon_istri?.pekerjaan)}
-                ${baris('Alamat', n1.calon_istri?.alamat)}
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div class="blok">
-          <div class="blok-judul">Model N2 — Rencana Pelaksanaan Akad</div>
-          <table>
-            ${baris('Tanggal Akad', n2.rencana_tanggal_akad)}
-            ${baris('Waktu Akad', n2.rencana_waktu_akad)}
-            ${baris('Tempat Akad', n2.tempat_akad)}
-            ${baris('KUA Tujuan', n2.kua_tujuan)}
-            ${baris('Catatan', n2.catatan)}
-          </table>
-        </div>
-
-        <div class="blok">
-          <div class="blok-judul">Model N4 — Persetujuan Mempelai</div>
-          <table>
-            ${baris('Persetujuan Calon Suami', n4.persetujuan_calon_suami ? 'Menyetujui' : 'Belum Menyetujui')}
-            ${baris('Persetujuan Calon Istri', n4.persetujuan_calon_istri ? 'Menyetujui' : 'Belum Menyetujui')}
-          </table>
-        </div>
-
-        <div class="blok">
-          <div class="blok-judul">Model N5 — Persetujuan Orang Tua</div>
-          <div class="dua-kolom">
-            ${blokOrangTua('Pihak Calon Suami', n5.suami)}
-            ${blokOrangTua('Pihak Calon Istri', n5.istri)}
-          </div>
-        </div>
-
-        ${
-          d.catatan_admin
-            ? `<div class="catatan-admin"><strong>Catatan Admin:</strong> ${esc(d.catatan_admin)}</div>`
-            : ''
-        }
-
-        <div class="ttd-area">
-          <div class="ttd-box">
-            <p>Calon Suami</p>
-            <div class="ruang"></div>
-            <p class="garis">${esc(n1.calon_suami?.nama_lengkap)}</p>
-          </div>
-          <div class="ttd-box">
-            <p>Calon Istri</p>
-            <div class="ruang"></div>
-            <p class="garis">${esc(n1.calon_istri?.nama_lengkap)}</p>
-          </div>
-          <div class="ttd-box">
-            <p>Petugas Verifikasi</p>
-            <div class="ruang"></div>
-            <p class="garis">&nbsp;</p>
-          </div>
-        </div>
-      </body>
-    </html>`
-
-  const w = window.open('', '_blank', 'width=900,height=1000')
-  if (!w) {
-    window.alert('Gagal membuka jendela cetak. Pastikan pop-up tidak diblokir browser.')
-    return
-  }
-  w.document.write(html)
-  w.document.close()
-  w.focus()
-  setTimeout(() => w.print(), 300)
 }
