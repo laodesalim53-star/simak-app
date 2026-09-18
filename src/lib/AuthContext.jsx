@@ -160,209 +160,61 @@ if (jenisOrganisasi === 'kantor' && data.pegawai_id) {
   // REGISTRASI
   // =========================================================
 
-  async function daftar({
-    mode,
-    email,
-    password,
-    namaLengkap,
-    namaSekolah,
-    sekolahId,
-    jabatan,
-    siswaId,
-    hubungan,
-    jenisOrganisasi = 'sekolah',
-    nip,
-  }) {
-    if (jenisOrganisasi === 'kantor' && jabatan === 'orang_tua') {
-      return {
-        error: {
-          message: 'Jabatan Orang Tua/Wali tidak berlaku untuk akun Kantor.',
-        },
-      }
-    }
-
-    if (jenisOrganisasi === 'kantor' && !nip) {
-      return {
-        error: {
-          message: 'NIP wajib diisi untuk akun Kantor.',
-        },
-      }
-    }
-
-    if (jabatan === 'orang_tua' && mode !== 'gabung') {
-      return {
-        error: {
-          message: 'Akun orang tua/wali hanya dapat bergabung ke sekolah yang sudah terdaftar.',
-        },
-      }
-    }
-
-    if (jabatan === 'orang_tua' && !sekolahId) {
-      return {
-        error: {
-          message: 'Silakan pilih sekolah terlebih dahulu.',
-        },
-      }
-    }
-
-    if (jabatan === 'orang_tua' && !siswaId) {
-      return {
-        error: {
-          message: 'Silakan pilih siswa yang merupakan anak/wali Anda.',
-        },
-      }
-    }
-
-    if (jabatan === 'orang_tua' && !hubungan) {
-      return {
-        error: {
-          message: 'Silakan pilih hubungan dengan siswa.',
-        },
-      }
-    }
-
-    const { data: signUpData, error: signUpError } =
-      await supabase.auth.signUp({
-        email,
-        password,
-      })
-
-    if (signUpError) {
-      return { error: signUpError }
-    }
-
-    const userId = signUpData?.user?.id
-
-    if (!userId) {
-      return {
-        error: {
-          message: 'Pendaftaran gagal, silakan coba lagi.',
-        },
-      }
-    }
-
-    let targetSekolahId = sekolahId
-
-    const jabatanDipilih = jabatan || (jenisOrganisasi === 'kantor' ? 'pegawai' : 'guru')
-
-    let role = jabatanDipilih
-    let statusAkunBaru = 'menunggu'
-
-    if (mode === 'baru') {
-      const { data: institusiBaru, error: institusiError } =
-        await supabase
-          .from('sekolah')
-          .insert({
-            nama_sekolah: namaSekolah,
-            jenis_organisasi: jenisOrganisasi,
-          })
-          .select('id')
-          .single()
-
-      if (institusiError) {
-        return { error: institusiError }
-      }
-
-      targetSekolahId = institusiBaru.id
-
-      role = 'admin_utama'
-      statusAkunBaru = 'menunggu'
-    }
-
-    if (jabatanDipilih === 'orang_tua') {
-      role = 'orang_tua'
-      statusAkunBaru = 'menunggu'
-    }
-
-    // Untuk akun Kantor: buat baris pegawai_kantor dulu (menyimpan NIP,
-    // nama, jabatan), lalu hubungkan lewat profil.pegawai_id — kolom
-    // profil.nip TIDAK dipakai aplikasi untuk kantor, sumber aslinya
-    // adalah tabel pegawai_kantor.
-    let pegawaiId = null
-
-    if (jenisOrganisasi === 'kantor') {
-      const { data: pegawaiBaru, error: pegawaiError } = await supabase
-        .from('pegawai_kantor')
-        .insert({
-          sekolah_id: targetSekolahId,
-          nama_lengkap: namaLengkap,
-          jabatan: jabatanDipilih,
-          nip,
-          email,
-          status: statusAkunBaru,
-        })
-        .select('id')
-        .single()
-
-      if (pegawaiError) {
-        return { error: pegawaiError }
-      }
-
-      pegawaiId = pegawaiBaru.id
-    }
-
-    const { error: profilError } = await supabase
-      .from('profil')
-      .insert({
-        id: userId,
-        role,
-        jabatan: jabatanDipilih,
-        sekolah_id: targetSekolahId,
-        status_akun: statusAkunBaru,
-        nama_lengkap_pendaftar: namaLengkap,
-        email_pendaftar: email,
-        pegawai_id: pegawaiId,
-      })
-
-    if (profilError) {
-      return { error: profilError }
-    }
-
-    if (jabatanDipilih === 'orang_tua') {
-      const { data: siswa, error: siswaError } = await supabase
-        .from('siswa')
-        .select('id, sekolah_id')
-        .eq('id', siswaId)
-        .maybeSingle()
-
-      if (siswaError) {
-        return { error: siswaError }
-      }
-
-      if (!siswa) {
-        return {
-          error: {
-            message: 'Siswa tidak ditemukan.',
-          },
-        }
-      }
-
-      if (siswa.sekolah_id !== targetSekolahId) {
-        return {
-          error: {
-            message: 'Siswa tersebut bukan bagian dari sekolah yang dipilih.',
-          },
-        }
-      }
-
-      const { error: hubunganError } = await supabase
-        .from('orang_tua_siswa')
-        .insert({
-          orang_tua_id: userId,
-          siswa_id: siswaId,
-          hubungan,
-          status: 'menunggu',
-        })
-
-      if (hubunganError) {
-        return { error: hubunganError }
-      }
-    }
-
-    return {
-      error: null,
-    }
+ async function daftar({
+  mode,
+  email,
+  password,
+  namaLengkap,
+  namaSekolah,
+  sekolahId,
+  jabatan,
+  siswaId,
+  hubungan,
+  jenisOrganisasi = 'sekolah',
+  nip,
+}) {
+  // Semua validasi sebenarnya dijalankan ulang di server (daftar-akun).
+  // Pemeriksaan di sini hanya supaya pengguna dapat umpan balik lebih cepat.
+  if (jenisOrganisasi === 'kantor' && jabatan === 'orang_tua') {
+    return { error: { message: 'Jabatan Orang Tua/Wali tidak berlaku untuk akun Kantor.' } }
   }
+  if (jenisOrganisasi === 'kantor' && !nip) {
+    return { error: { message: 'NIP wajib diisi untuk akun Kantor.' } }
+  }
+
+  const { data, error } = await supabase.functions.invoke('daftar-akun', {
+    body: {
+      mode,
+      email,
+      password,
+      namaLengkap,
+      namaSekolah,
+      sekolahId,
+      jabatan,
+      siswaId,
+      hubungan,
+      jenisOrganisasi,
+      nip,
+    },
+  })
+
+  if (error) {
+    // Untuk status non-2xx, error.message hanya pesan generik.
+    // Pesan asli dari server ada di body response.
+    let pesan = 'Pendaftaran gagal, silakan coba lagi.'
+    try {
+      const body = await error.context.json()
+      if (body?.error) pesan = body.error
+    } catch (_) { /* pakai pesan default */ }
+    return { error: { message: pesan } }
+  }
+  if (data?.error) return { error: { message: data.error } }
+
+  // Akun sudah dibuat & terkonfirmasi di server, langsung login
+  // supaya pengguna melihat status "menunggu".
+  const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+  return { error: signInError ?? null }
+}
 
   // =========================================================
   // TAMBAH ANAK UNTUK AKUN ORANG TUA YANG SUDAH LOGIN
