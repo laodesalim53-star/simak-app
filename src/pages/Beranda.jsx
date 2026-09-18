@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, LogIn, GraduationCap, Video, Download, Monitor, Apple, Share, SquarePlus, X, BookOpen, IdCard, Wallet, MessageCircle, Settings, Users, ShoppingBag, Phone, Send, Fish, Shell, Shirt, Pencil } from 'lucide-react'
+import { ArrowRight, LogIn, GraduationCap, Video, Download, Monitor, Apple, Share, SquarePlus, X, BookOpen, IdCard, Wallet, MessageCircle, Settings, Users, ShoppingBag, Phone, Send, Fish, Shell, Shirt, Pencil, Building2 } from 'lucide-react'
 // PENTING: sesuaikan path import ini dengan lokasi client Supabase Anda
 // yang sudah ada di project (biasanya di src/lib/ atau src/services/).
 import { supabase } from '../lib/supabaseClient'
@@ -20,7 +20,14 @@ import TanyaAI from '../components/TanyaAI'
 // bersahaja (bukan gradasi terang) supaya tetap mudah dipindai tanpa terasa
 // seperti pelangi. Gerakan dibatasi pada satu momen saja (ring di tombol
 // kontak mengambang) — bukan berkedip/berputar/berjalan di banyak tempat
-// sekaligus, supaya situs terasa tepercaya untuk sistem resmi sekolah.
+// sekaligus, supaya situs terasa tepercaya untuk sistem resmi sekolah & kantor.
+//
+// PLATFORM UMUM: halaman ini melayani DUA jenis pendaftar — sekolah dan
+// kantor/instansi — yang masing-masing daftar akun sendiri-sendiri. Karena
+// itu semua copy di bawah SENGAJA menyebut "sekolah & kantor" secara
+// eksplisit (bukan istilah netral seperti "instansi"), dan modul yang
+// sifatnya khusus pendidikan diberi badge "Khusus sekolah" supaya calon
+// pendaftar dari kantor tidak salah ekspektasi.
 
 const NOMOR_WA_SEKOLAH = '6282197574897'
 
@@ -215,12 +222,19 @@ export default function Beranda() {
               <div className="brand-logo">
                 <div className="brand-logo-icon"><GraduationCap size={22} strokeWidth={2.5} /></div>
                 <span className="brand-logo-text">SIMAK</span>
+                {/* Badge kecil di samping logo menandaskan bahwa platform ini
+                    sekarang melayani dua jenis pendaftar: sekolah & kantor. */}
+                <span className="brand-logo-badge">
+                  <Building2 size={11} strokeWidth={2.6} />
+                  Sekolah &amp; Kantor
+                </span>
               </div>
-              <h1 className="beranda-title">Satu aplikasi, seluruh sekolah</h1>
+              <h1 className="beranda-title">Satu aplikasi, untuk sekolah &amp; kantor Anda</h1>
               <p className="beranda-sub">
-                Sistem informasi sekolah terpadu dengan tujuh area utama dan puluhan modul siap
-                pakai — akademik, administrasi, keuangan, komunikasi, hingga toko sekolah, dalam
-                satu sistem yang sama.
+                Sistem informasi terpadu untuk sekolah maupun kantor/instansi, dengan tujuh area
+                utama dan puluhan modul siap pakai — akademik, administrasi, keuangan, komunikasi,
+                hingga toko sekolah, dalam satu sistem yang sama. Modul yang tampil akan
+                menyesuaikan dengan jenis instansi yang Anda daftarkan.
               </p>
               <div className="header-actions">
                 <Link to="/register" className="btn-primary">
@@ -268,8 +282,9 @@ export default function Beranda() {
           <div className="aru-banner">
             <div className="aru-icon"><GraduationCap size={20} /></div>
             <p className="aru-text">
-              Salam hangat untuk Bapak/Ibu Guru di Kabupaten Kepulauan Aru — SIMAK dibuat untuk
-              membantu sekolah Anda mengelola data lebih ringan, dari kelas hingga kantor.
+              Salam hangat untuk Bapak/Ibu Guru dan staf kantor/instansi di Kabupaten Kepulauan
+              Aru — SIMAK dibuat untuk membantu sekolah maupun kantor Anda mengelola data lebih
+              ringan, dari ruang kelas hingga meja kerja.
             </p>
           </div>
 
@@ -304,13 +319,22 @@ export default function Beranda() {
               className="area-bg-image"
             />
 
+            <div className="area-showcase-heading">
+              <h2 className="area-showcase-title">Tujuh area, untuk sekolah &amp; kantor</h2>
+              <p className="area-showcase-sub">
+                Modul dengan badge <span className="badge-sekolah-inline">Khusus sekolah</span> hanya tampil untuk akun sekolah — akun kantor/instansi otomatis mendapat modul yang relevan.
+              </p>
+            </div>
+
             <div className="tile-strip">
             <div className="tile" style={{ background: '#2E5AAC' }}>
+              <span className="tile-badge-sekolah">Khusus sekolah</span>
               <div className="tile-icon"><BookOpen size={15} strokeWidth={2.4} /></div>
               <p className="tile-label">Area 1</p>
               <p className="tile-name">Akademik &amp; Ujian</p>
             </div>
             <div className="tile" style={{ background: '#1F7A5C' }}>
+              <span className="tile-badge-sekolah">Khusus sekolah</span>
               <div className="tile-icon"><IdCard size={15} strokeWidth={2.4} /></div>
               <p className="tile-label">Area 2</p>
               <p className="tile-name">Administrasi Siswa</p>
@@ -318,7 +342,7 @@ export default function Beranda() {
             <div className="tile" style={{ background: '#B15A17' }}>
               <div className="tile-icon"><Wallet size={15} strokeWidth={2.4} /></div>
               <p className="tile-label">Area 3</p>
-              <p className="tile-name">Keuangan Sekolah</p>
+              <p className="tile-name">Keuangan Sekolah &amp; Kantor</p>
             </div>
             <div className="tile" style={{ background: '#6B4FA0' }}>
               <div className="tile-icon"><MessageCircle size={15} strokeWidth={2.4} /></div>
@@ -328,9 +352,10 @@ export default function Beranda() {
             <div className="tile" style={{ background: '#146B71' }}>
               <div className="tile-icon"><Settings size={15} strokeWidth={2.4} /></div>
               <p className="tile-label">Area 5</p>
-              <p className="tile-name">Manajemen Sekolah</p>
+              <p className="tile-name">Manajemen Sekolah &amp; Kantor</p>
             </div>
             <div className="tile" style={{ background: '#A23E56' }}>
+              <span className="tile-badge-sekolah">Khusus sekolah</span>
               <div className="tile-icon"><Users size={15} strokeWidth={2.4} /></div>
               <p className="tile-label">Area 6</p>
               <p className="tile-name">Portal Orang Tua</p>
@@ -356,6 +381,7 @@ export default function Beranda() {
 
             <div className="cat-card">
               <span className="cat-tag" style={{ background: '#2E5AAC' }}>Area 1</span>
+              <span className="cat-card-badge-sekolah">Khusus sekolah</span>
               <h2 className="cat-title"><BookOpen size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#2E5AAC' }} />Akademik &amp; ujian</h2>
               <ul className="cat-list" style={{ '--accent': '#2E5AAC' }}>
                 <li>Ujian online &amp; bank soal</li>
@@ -369,6 +395,7 @@ export default function Beranda() {
 
             <div className="cat-card">
               <span className="cat-tag" style={{ background: '#1F7A5C' }}>Area 2</span>
+              <span className="cat-card-badge-sekolah">Khusus sekolah</span>
               <h2 className="cat-title"><IdCard size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#1F7A5C' }} />Administrasi siswa</h2>
               <ul className="cat-list" style={{ '--accent': '#1F7A5C' }}>
                 <li>Data siswa, kelas &amp; jadwal</li>
@@ -381,9 +408,9 @@ export default function Beranda() {
 
             <div className="cat-card">
               <span className="cat-tag" style={{ background: '#B15A17' }}>Area 3</span>
-              <h2 className="cat-title"><Wallet size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#B15A17' }} />Keuangan sekolah</h2>
+              <h2 className="cat-title"><Wallet size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#B15A17' }} />Keuangan sekolah &amp; kantor</h2>
               <ul className="cat-list" style={{ '--accent': '#B15A17' }}>
-                <li>Keuangan sekolah &amp; kas kelas</li>
+                <li>Keuangan sekolah, kas kelas &amp; anggaran kantor</li>
                 <li>Kuitansi &amp; nota otomatis</li>
                 <li>Laporan bulanan</li>
                 <li>Backup data terjadwal</li>
@@ -394,8 +421,8 @@ export default function Beranda() {
               <span className="cat-tag" style={{ background: '#6B4FA0' }}>Area 4</span>
               <h2 className="cat-title"><MessageCircle size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#6B4FA0' }} />Komunikasi &amp; publikasi</h2>
               <ul className="cat-list" style={{ '--accent': '#6B4FA0' }}>
-                <li>Pengumuman &amp; agenda sekolah</li>
-                <li>Pesan langsung antar warga sekolah</li>
+                <li>Pengumuman &amp; agenda sekolah/kantor</li>
+                <li>Pesan langsung antar warga sekolah/pegawai</li>
                 <li>Rapat online lewat video</li>
                 <li>Galeri foto kegiatan</li>
                 <li>Scan dokumen jadi Word</li>
@@ -405,17 +432,18 @@ export default function Beranda() {
 
             <div className="cat-card">
               <span className="cat-tag" style={{ background: '#146B71' }}>Area 5</span>
-              <h2 className="cat-title"><Settings size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#146B71' }} />Manajemen sekolah</h2>
+              <h2 className="cat-title"><Settings size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#146B71' }} />Manajemen sekolah &amp; kantor</h2>
               <ul className="cat-list" style={{ '--accent': '#146B71' }}>
-                <li>Data guru &amp; inventaris</li>
-                <li>Profil &amp; identitas sekolah</li>
-                <li>Kalender pendidikan &amp; hari libur</li>
+                <li>Data guru/pegawai &amp; inventaris</li>
+                <li>Profil &amp; identitas sekolah/instansi</li>
+                <li>Kalender kerja &amp; hari libur</li>
                 <li>Persetujuan akun pengguna baru</li>
               </ul>
             </div>
 
             <div className="cat-card">
               <span className="cat-tag" style={{ background: '#A23E56' }}>Area 6</span>
+              <span className="cat-card-badge-sekolah">Khusus sekolah</span>
               <h2 className="cat-title"><Users size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#A23E56' }} />Portal orang tua</h2>
               <ul className="cat-list" style={{ '--accent': '#A23E56' }}>
                 <li>Pantau rapor &amp; nilai anak</li>
@@ -459,8 +487,8 @@ export default function Beranda() {
             <BatikOverlay patternId="batikFooter" strokeColor="#d4af37" opacity={0.7} size={56} />
             <div className="footer-content">
               <div>
-                <p className="beranda-footer-title">Tertarik menerapkannya di sekolah Anda?</p>
-                <p className="beranda-footer-sub">Gratis selama masa promo berlaku. Daftar akun untuk sekolah Anda sekarang.</p>
+                <p className="beranda-footer-title">Tertarik menerapkannya di sekolah atau kantor Anda?</p>
+                <p className="beranda-footer-sub">Gratis selama masa promo berlaku. Daftar akun untuk sekolah maupun kantor/instansi Anda sekarang.</p>
               </div>
               <Link to="/register" className="beranda-cta">
                 Daftar sekarang
@@ -712,6 +740,7 @@ export default function Beranda() {
           align-items: center;
           gap: 9px;
           margin-bottom: 22px;
+          flex-wrap: wrap;
         }
         .brand-logo-icon {
           width: 36px; height: 36px;
@@ -726,6 +755,19 @@ export default function Beranda() {
           font-weight: 800;
           color: #fff;
           letter-spacing: 1px;
+        }
+        .brand-logo-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          font-size: 10.5px;
+          font-weight: 700;
+          color: #C9F0FF;
+          background: rgba(125, 211, 252, 0.14);
+          border: 1px solid rgba(125, 211, 252, 0.35);
+          padding: 4px 10px 4px 8px;
+          border-radius: 999px;
+          white-space: nowrap;
         }
         .beranda-title {
           font-size: 32px;
@@ -1250,6 +1292,34 @@ export default function Beranda() {
           .area-bg-image { width: 55%; opacity: 0.06; }
         }
 
+        .area-showcase-heading {
+          position: relative;
+          z-index: 1;
+          padding: 22px 36px 0;
+        }
+        .area-showcase-title {
+          font-size: 17px;
+          font-weight: 800;
+          color: #171A2E;
+          margin: 0 0 4px;
+        }
+        .area-showcase-sub {
+          font-size: 12.5px;
+          color: #7A8094;
+          margin: 0;
+          line-height: 1.6;
+        }
+        .badge-sekolah-inline {
+          display: inline-block;
+          background: #FBBF24;
+          color: #78350F;
+          font-size: 10.5px;
+          font-weight: 800;
+          padding: 2px 8px;
+          border-radius: 999px;
+          vertical-align: 1px;
+        }
+
         .tile-strip {
           position: relative;
           z-index: 1;
@@ -1285,6 +1355,21 @@ export default function Beranda() {
         .tile-label { font-size: 11.5px; opacity: 0.85; margin: 0 0 20px; }
         .tile-name { font-size: 15px; font-weight: 700; line-height: 1.25; margin: 0; }
 
+        .tile-badge-sekolah {
+          position: absolute;
+          top: -8px;
+          left: -6px;
+          background: #FBBF24;
+          color: #78350F;
+          font-size: 9.5px;
+          font-weight: 800;
+          padding: 3px 8px;
+          border-radius: 999px;
+          box-shadow: 0 4px 10px rgba(0,0,0,0.18);
+          z-index: 2;
+          white-space: nowrap;
+        }
+
         .tile-toko { overflow: visible; }
         .tile-toko-badge {
           position: absolute;
@@ -1309,12 +1394,26 @@ export default function Beranda() {
           gap: 16px;
         }
         .cat-card {
+          position: relative;
           background: #fff;
           border-radius: 18px;
           padding: 16px 18px;
           box-shadow: 0 6px 18px rgba(23, 26, 46, 0.06);
         }
         .cat-card.wide { grid-column: span 2; }
+        .cat-card-badge-sekolah {
+          position: absolute;
+          top: -9px;
+          right: 14px;
+          background: #FBBF24;
+          color: #78350F;
+          font-size: 10px;
+          font-weight: 800;
+          padding: 3px 9px;
+          border-radius: 999px;
+          box-shadow: 0 4px 10px rgba(0,0,0,0.18);
+          white-space: nowrap;
+        }
         .cat-card-link {
           display: block;
           text-decoration: none;
@@ -1456,6 +1555,7 @@ export default function Beranda() {
           .aru-banner { margin: 16px 20px 0; padding: 12px 14px; }
           .meet-join { margin: 14px 20px 0; padding: 12px 14px; }
           .tile-strip { padding: 16px 20px 4px; }
+          .area-showcase-heading { padding: 20px 20px 0; }
           .beranda-footer { padding: 20px; }
         }
 
@@ -1477,6 +1577,7 @@ export default function Beranda() {
           .meet-btn { width: 100%; }
           .tile-strip { padding: 14px 16px 4px; gap: 10px; }
           .tile { min-width: 130px; padding: 12px 14px; }
+          .area-showcase-heading { padding: 16px 16px 0; }
           .footer-content { flex-direction: column; align-items: stretch; text-align: center; }
           .beranda-cta { width: 100%; }
           .ios-modal { padding: 20px; border-radius: 16px; }
