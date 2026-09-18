@@ -38,6 +38,7 @@ export default function Register() {
     namaSekolahBaru: '',
     siswaId: '',
     hubungan: '',
+    nip: '',
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -159,6 +160,7 @@ export default function Register() {
       namaSekolahBaru: '',
       siswaId: '',
       hubungan: '',
+      nip: '',
     }))
   }
 
@@ -193,6 +195,10 @@ export default function Register() {
       setError(`Isi nama ${isKantor ? 'kantor' : 'sekolah'} yang akan didaftarkan.`)
       return
     }
+    if (isKantor && !form.nip.trim()) {
+      setError('NIP wajib diisi untuk pegawai kantor.')
+      return
+    }
     if (isOrangTua && !form.siswaId) {
       setError('Pilih anak Anda dari daftar siswa.')
       return
@@ -215,6 +221,7 @@ export default function Register() {
       namaSekolah: form.namaSekolahBaru.trim(),
       siswaId: form.siswaId || undefined,
       hubungan: form.hubungan || undefined,
+      nip: isKantor ? form.nip.trim() : undefined,
     })
 
     setLoading(false)
@@ -267,6 +274,9 @@ export default function Register() {
             'Pilih jenis institusi: Sekolah atau Kantor.',
             'Isi nama lengkap sesuai identitas resmi.',
             isKantor
+              ? 'Isi NIP (Nomor Induk Pegawai) Anda.'
+              : null,
+            isKantor
               ? 'Pilih jabatan Anda: Pegawai, Admin, atau Kepala Kantor.'
               : 'Pilih jabatan Anda: Guru, Admin, Kepala Sekolah, atau Orang Tua/Wali Murid.',
             isKantor
@@ -274,7 +284,7 @@ export default function Register() {
               : 'Guru/Admin/Kepala Sekolah: pilih sekolah yang sudah terdaftar, atau daftarkan sekolah baru. Orang Tua/Wali: pilih sekolah anak Anda, lalu pilih nama anak dari daftar siswa.',
             'Gunakan email aktif — dipakai untuk login.',
             'Buat kata sandi minimal 6 karakter.',
-          ]}
+          ].filter(Boolean)}
         />
 
         <form
@@ -340,6 +350,17 @@ export default function Register() {
             <input required className={inputClass}
               value={form.nama} onChange={(e) => ubah('nama', e.target.value)} />
           </div>
+
+          {/* Khusus institusi Kantor: setiap pegawai wajib mengisi NIP
+              (Nomor Induk Pegawai) sebagai identitas kepegawaian. */}
+          {isKantor && (
+            <div>
+              <label className={labelClass}>NIP</label>
+              <input required className={inputClass}
+                placeholder="Nomor Induk Pegawai"
+                value={form.nip} onChange={(e) => ubah('nip', e.target.value)} />
+            </div>
+          )}
 
           {/* Toggle mode: Gabung institusi yang sudah ada / Daftar institusi
               baru. Disembunyikan untuk Orang Tua/Wali — mereka wajib gabung
@@ -480,6 +501,7 @@ export default function Register() {
           items={[
             `Akun baru berstatus "menunggu" sampai disetujui admin ${isKantor ? 'kantor' : 'sekolah'}.`,
             `Mode "Daftar ${isKantor ? 'Kantor' : 'Sekolah'} Baru" menjadikan Anda Admin Utama otomatis.`,
+            isKantor && 'NIP digunakan sebagai identitas kepegawaian dan wajib diisi.',
             !isKantor && 'Akun Orang Tua/Wali akan dihubungkan ke data anak yang dipilih, menunggu persetujuan admin.',
             'Anda baru bisa login setelah akun disetujui.',
             `Ada kendala? Hubungi admin ${isKantor ? 'kantor' : 'sekolah'} Anda secara langsung.`,
