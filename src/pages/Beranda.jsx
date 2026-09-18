@@ -22,12 +22,12 @@ import TanyaAI from '../components/TanyaAI'
 // kontak mengambang) — bukan berkedip/berputar/berjalan di banyak tempat
 // sekaligus, supaya situs terasa tepercaya untuk sistem resmi sekolah & kantor.
 //
-// PLATFORM UMUM: halaman ini melayani DUA jenis pendaftar — sekolah dan
-// kantor/instansi — yang masing-masing daftar akun sendiri-sendiri. Karena
-// itu semua copy di bawah SENGAJA menyebut "sekolah & kantor" secara
-// eksplisit (bukan istilah netral seperti "instansi"), dan modul yang
-// sifatnya khusus pendidikan diberi badge "Khusus sekolah" supaya calon
-// pendaftar dari kantor tidak salah ekspektasi.
+// DUA INSTANSI: halaman ini melayani dua mitra tetap — Sekolah dan KUA
+// (Kantor Urusan Agama) — bukan platform pendaftaran terbuka untuk banyak
+// instansi sembarang. Karena itu semua copy di bawah SENGAJA menyebut
+// "Sekolah & KUA" secara eksplisit, dan modul yang sifatnya khusus
+// pendidikan diberi badge "Khusus sekolah" supaya pengguna dari KUA tidak
+// salah ekspektasi.
 
 const NOMOR_WA_SEKOLAH = '6282197574897'
 
@@ -226,15 +226,14 @@ export default function Beranda() {
                     sekarang melayani dua jenis pendaftar: sekolah & kantor. */}
                 <span className="brand-logo-badge">
                   <Building2 size={11} strokeWidth={2.6} />
-                  Sekolah &amp; Kantor
+                  Sekolah &amp; KUA
                 </span>
               </div>
-              <h1 className="beranda-title">Satu aplikasi, untuk sekolah &amp; kantor Anda</h1>
+              <h1 className="beranda-title">Satu aplikasi, untuk Sekolah &amp; KUA</h1>
               <p className="beranda-sub">
-                Sistem informasi terpadu untuk sekolah maupun kantor/instansi, dengan tujuh area
-                utama dan puluhan modul siap pakai — akademik, administrasi, keuangan, komunikasi,
-                hingga toko sekolah, dalam satu sistem yang sama. Modul yang tampil akan
-                menyesuaikan dengan jenis instansi yang Anda daftarkan.
+                Sistem informasi terpadu untuk Sekolah dan Kantor Urusan Agama (KUA), dengan tujuh
+                area utama dan puluhan modul siap pakai — akademik, administrasi, keuangan,
+                komunikasi, hingga toko sekolah, dalam satu sistem yang sama.
               </p>
               <div className="header-actions">
                 <Link to="/register" className="btn-primary">
@@ -282,9 +281,9 @@ export default function Beranda() {
           <div className="aru-banner">
             <div className="aru-icon"><GraduationCap size={20} /></div>
             <p className="aru-text">
-              Salam hangat untuk Bapak/Ibu Guru dan staf kantor/instansi di Kabupaten Kepulauan
-              Aru — SIMAK dibuat untuk membantu sekolah maupun kantor Anda mengelola data lebih
-              ringan, dari ruang kelas hingga meja kerja.
+              Salam hangat untuk Bapak/Ibu Guru dan staf KUA (Kantor Urusan Agama) di Kabupaten
+              Kepulauan Aru — SIMAK dibuat untuk membantu sekolah maupun KUA Anda mengelola data
+              lebih ringan, dari ruang kelas hingga meja kerja.
             </p>
           </div>
 
@@ -320,9 +319,9 @@ export default function Beranda() {
             />
 
             <div className="area-showcase-heading">
-              <h2 className="area-showcase-title">Tujuh area, untuk sekolah &amp; kantor</h2>
+              <h2 className="area-showcase-title">Tujuh area, untuk Sekolah &amp; KUA</h2>
               <p className="area-showcase-sub">
-                Modul dengan badge <span className="badge-sekolah-inline">Khusus sekolah</span> hanya tampil untuk akun sekolah — akun kantor/instansi otomatis mendapat modul yang relevan.
+                Modul dengan badge <span className="badge-sekolah-inline">Khusus sekolah</span> hanya tampil untuk akun sekolah — akun KUA otomatis mendapat modul yang relevan.
               </p>
             </div>
 
@@ -342,7 +341,7 @@ export default function Beranda() {
             <div className="tile" style={{ background: '#B15A17' }}>
               <div className="tile-icon"><Wallet size={15} strokeWidth={2.4} /></div>
               <p className="tile-label">Area 3</p>
-              <p className="tile-name">Keuangan Sekolah &amp; Kantor</p>
+              <p className="tile-name">Keuangan Sekolah &amp; KUA</p>
             </div>
             <div className="tile" style={{ background: '#6B4FA0' }}>
               <div className="tile-icon"><MessageCircle size={15} strokeWidth={2.4} /></div>
@@ -352,7 +351,7 @@ export default function Beranda() {
             <div className="tile" style={{ background: '#146B71' }}>
               <div className="tile-icon"><Settings size={15} strokeWidth={2.4} /></div>
               <p className="tile-label">Area 5</p>
-              <p className="tile-name">Manajemen Sekolah &amp; Kantor</p>
+              <p className="tile-name">Manajemen Sekolah &amp; KUA</p>
             </div>
             <div className="tile" style={{ background: '#A23E56' }}>
               <span className="tile-badge-sekolah">Khusus sekolah</span>
@@ -408,9 +407,9 @@ export default function Beranda() {
 
             <div className="cat-card">
               <span className="cat-tag" style={{ background: '#B15A17' }}>Area 3</span>
-              <h2 className="cat-title"><Wallet size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#B15A17' }} />Keuangan sekolah &amp; kantor</h2>
+              <h2 className="cat-title"><Wallet size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#B15A17' }} />Keuangan sekolah &amp; KUA</h2>
               <ul className="cat-list" style={{ '--accent': '#B15A17' }}>
-                <li>Keuangan sekolah, kas kelas &amp; anggaran kantor</li>
+                <li>Keuangan sekolah, kas kelas &amp; anggaran KUA</li>
                 <li>Kuitansi &amp; nota otomatis</li>
                 <li>Laporan bulanan</li>
                 <li>Backup data terjadwal</li>
@@ -421,8 +420,8 @@ export default function Beranda() {
               <span className="cat-tag" style={{ background: '#6B4FA0' }}>Area 4</span>
               <h2 className="cat-title"><MessageCircle size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#6B4FA0' }} />Komunikasi &amp; publikasi</h2>
               <ul className="cat-list" style={{ '--accent': '#6B4FA0' }}>
-                <li>Pengumuman &amp; agenda sekolah/kantor</li>
-                <li>Pesan langsung antar warga sekolah/pegawai</li>
+                <li>Pengumuman &amp; agenda sekolah/KUA</li>
+                <li>Pesan langsung antar warga sekolah &amp; staf KUA</li>
                 <li>Rapat online lewat video</li>
                 <li>Galeri foto kegiatan</li>
                 <li>Scan dokumen jadi Word</li>
@@ -432,10 +431,10 @@ export default function Beranda() {
 
             <div className="cat-card">
               <span className="cat-tag" style={{ background: '#146B71' }}>Area 5</span>
-              <h2 className="cat-title"><Settings size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#146B71' }} />Manajemen sekolah &amp; kantor</h2>
+              <h2 className="cat-title"><Settings size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#146B71' }} />Manajemen sekolah &amp; KUA</h2>
               <ul className="cat-list" style={{ '--accent': '#146B71' }}>
-                <li>Data guru/pegawai &amp; inventaris</li>
-                <li>Profil &amp; identitas sekolah/instansi</li>
+                <li>Data guru/staf KUA &amp; inventaris</li>
+                <li>Profil &amp; identitas sekolah/KUA</li>
                 <li>Kalender kerja &amp; hari libur</li>
                 <li>Persetujuan akun pengguna baru</li>
               </ul>
@@ -487,8 +486,8 @@ export default function Beranda() {
             <BatikOverlay patternId="batikFooter" strokeColor="#d4af37" opacity={0.7} size={56} />
             <div className="footer-content">
               <div>
-                <p className="beranda-footer-title">Tertarik menerapkannya di sekolah atau kantor Anda?</p>
-                <p className="beranda-footer-sub">Gratis selama masa promo berlaku. Daftar akun untuk sekolah maupun kantor/instansi Anda sekarang.</p>
+                <p className="beranda-footer-title">Tertarik menerapkannya di sekolah atau KUA Anda?</p>
+                <p className="beranda-footer-sub">Gratis selama masa promo berlaku. Daftar akun untuk sekolah maupun KUA Anda sekarang.</p>
               </div>
               <Link to="/register" className="beranda-cta">
                 Daftar sekarang
