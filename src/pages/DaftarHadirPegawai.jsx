@@ -117,14 +117,20 @@ export default function DaftarHadirPegawai() {
     return null
   }
 
+  // Query profil_kantor kini di-scope per kantor lewat sekolah_id (bukan
+  // lagi id=1 yang hardcode), sama seperti ProfilKantor.jsx.
   useEffect(() => {
+    if (!sekolahId) {
+      setProfilKantor(null)
+      return
+    }
     supabase
       .from('profil_kantor')
       .select('nama_kantor, alamat, kabupaten, kecamatan, telepon, email, kepala_kua, nip_kepala_kua, tempat_ttd, logo_path, ttd_kepala_kua_path')
-      .eq('id', 1)
+      .eq('sekolah_id', sekolahId)
       .maybeSingle()
       .then(({ data }) => setProfilKantor(data))
-  }, [])
+  }, [sekolahId])
 
   useEffect(() => {
     async function muatData() {
