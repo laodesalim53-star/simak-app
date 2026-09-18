@@ -18,6 +18,21 @@ import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import Layout from '../components/Layout'
 
+// PERBAIKAN: role yang diberikan SAAT admin menyetujui pendaftaran, berdasarkan
+// jabatan yang dipilih pendaftar sendiri saat daftar (jabatan hanya label
+// sampai titik ini — lihat komentar di Edge Function daftar-akun). Sebelumnya
+// ubahStatus() hanya mengubah status_akun, tidak pernah menaikkan role, jadi
+// akun seperti Kepala Kantor / Kepala Sekolah / Admin yang gabung tetap
+// ber-role dasar (guru/pegawai) walau sudah disetujui.
+const ROLE_DARI_JABATAN = {
+  admin: 'admin',
+  kepala_sekolah: 'kepala_sekolah',
+  kepala_kantor: 'kepala_kantor',
+  guru: 'guru',
+  pegawai: 'pegawai',
+  orang_tua: 'orang_tua',
+}
+
 export default function PersetujuanAkun() {
   const { isSuperAdmin, sekolahId, isKantor } = useAuth()
   const [tab, setTab] = useState('menunggu')
@@ -183,6 +198,23 @@ export default function PersetujuanAkun() {
     const payload = { status_akun: statusBaru, catatan_admin: catatan || null }
     if (guruId) payload.guru_id = guruId
     if (pegawaiId) payload.pegawai_id = pegawaiId
+
+    const akunTarget = daftarAkun.find((a) => a.id === id)
+
+    // PERBAIKAN: saat disetujui, naikkan role sesuai jabatan yang dipilih
+    // pendaftar (mis. kepala_kantor, kepala_sekolah, admin). Sebelumnya role
+    // tidak pernah berubah di sini, jadi akun tetap ber-role dasar
+    // (guru/pegawai) walau jabatannya sudah "Kepala Kantor" dsb. Jangan
+    // pernah menurunkan admin_utama/superadmin (pembuat organisasi).
+    if (
+      statusBaru === 'aktif' &&
+      akunTarget?.role !== 'admin_utama' &&
+      akunTarget?.role !== 'superadmin'
+    ) {
+      const roleBaru = ROLE_DARI_JABATAN[akunTarget?.jabatan]
+      if (roleBaru) payload.role = roleBaru
+    }
+
     await supabase.from('profil').update(payload).eq('id', id)
 
     // Kalau akun ini orang tua/wali, ikut sinkronkan status hubungan
@@ -192,7 +224,7 @@ export default function PersetujuanAkun() {
     // pendaftaran) — supaya tidak menimpa status anak lain yang sudah
     // diproses terpisah lewat tab "Anak Menunggu". Tidak berlaku untuk
     // tenant kantor.
-    const akun = daftarAkun.find((a) => a.id === id)
+    const akun = akunTarget
     if (!isKantor && (akun?.jabatan || akun?.role) === 'orang_tua') {
       const statusRelasi =
         statusBaru === 'aktif' ? 'aktif' : statusBaru === 'ditolak' ? 'ditolak' : 'menunggu'
@@ -227,7 +259,7 @@ export default function PersetujuanAkun() {
   function handleSetujui(akun) {
     if (isJabatanGuru(akun)) {
       setModalGuru(akun) // buka modal, jangan langsung ubah status
-    } else if (isJabatanPegawai(akun)) {
+    } else if (isJabatanPegawai(akun) && !akun.pegawai_id) {
       setModalPegawai(akun) // buka modal, jangan langsung ubah status
     } else {
       ubahStatus(akun.id, 'aktif')
@@ -961,7 +993,15 @@ function ModalHubungkanPegawai({ akun, onClose, onSelesai }) {
         .select('pegawai_id')
         .not('pegawai_id', 'is', null)
 
-      const idTerpakai = (sudahTerhubung || []).map((p) => p.pegawai_id)
+      // PERBAIKAN: jangan kecualikan baris pegawai_kantor milik akun ini
+      // SENDIRI. Kalau akun kantor sudah membuat baris pegawai_kantor sejak
+      // pendaftaran (lihat Edge Function daftar-akun), baris itu otomatis
+      // ikut daftar "sudah terhubung" (karena profil.pegawai_id-nya sudah
+      // terisi), sehingga hilang dari dropdown dan admin terpaksa klik
+      // "Buat Baru" — menghasilkan data pegawai dobel.
+      const idTerpakai = (sudahTerhubung || [])
+        .map((p) => p.pegawai_id)
+        .filter((id) => id !== akun.pegawai_id)
 
       const { data } = await supabase
         .from('pegawai_kantor')
@@ -974,7 +1014,7 @@ function ModalHubungkanPegawai({ akun, onClose, onSelesai }) {
       setLoading(false)
     }
     muat()
-  }, [akun.sekolah_id])
+  }, [akun.sekolah_id, akun.pegawai_id])
 
   async function handleHubungkan() {
     if (!pegawaiIdTerpilih) return
@@ -990,6 +1030,7 @@ function ModalHubungkanPegawai({ akun, onClose, onSelesai }) {
         nama_lengkap: akun.nama_lengkap_pendaftar,
         email: akun.email_pendaftar,
         sekolah_id: akun.sekolah_id,
+        jabatan: akun.jabatan || 'pegawai',
         status: 'aktif',
       })
       .select('id')
