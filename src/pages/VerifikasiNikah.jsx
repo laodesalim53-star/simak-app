@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { CheckCircle2, XCircle, Clock3, X, Eye, Printer, Trash2 } from 'lucide-react'
+import { CheckCircle2, XCircle, Clock3, X, Eye, Printer, Trash2, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import Layout from '../components/Layout'
 // Sesuaikan path import ini dengan lokasi sebenarnya file LembarCetakNikah
 // di project Anda (mis. '../components/LembarCetakNikah').
 import LembarCetakNikah from '../components/LembarCetakNikah'
+import { verifikasiNik } from '../lib/dukcapil'
 
 const TAB = [
   { id: 'menunggu', label: 'Menunggu' },
@@ -329,6 +330,64 @@ function Baris({ label, value }) {
   )
 }
 
+// Tombol + status verifikasi NIK ke Dukcapil, ditempel di sebelah
+// baris NIK. Mandiri (state sendiri) supaya bisa dipasang berkali-kali
+// (calon suami & calon istri) tanpa saling mengganggu.
+// Status yang mungkin: 'idle' | 'memuat' | 'ok' | 'tidak_valid' |
+// 'belum_dikonfigurasi' | 'format_salah' | 'error'.
+function VerifikasiNikBadge({ nik, namaLengkap }) {
+  const [status, setStatus] = useState('idle')
+  const [hasil, setHasil] = useState(null)
+
+  async function jalankan() {
+    if (!nik) {
+      window.alert('NIK belum diisi, tidak bisa diverifikasi.')
+      return
+    }
+    setStatus('memuat')
+    setHasil(null)
+    try {
+      const res = await verifikasiNik(nik, namaLengkap)
+      setHasil(res)
+      setStatus(res?.status || 'error')
+    } catch (err) {
+      setHasil({ pesan: err.message })
+      setStatus('error')
+    }
+  }
+
+  return (
+    <div className="flex items-center justify-end gap-2 -mt-0.5 mb-1">
+      <button
+        onClick={jalankan}
+        disabled={status === 'memuat'}
+        className="flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:text-blue-700 disabled:opacity-50"
+      >
+        <ShieldCheck size={12} />
+        {status === 'memuat' ? 'Memverifikasi...' : 'Verifikasi ke Dukcapil'}
+      </button>
+
+      {status === 'ok' && (
+        <span className="text-[11px] font-medium text-green-600">
+          ✓ Ditemukan{hasil?.cocok_nama === false ? ' (nama beda!)' : ''}
+        </span>
+      )}
+      {status === 'tidak_valid' && (
+        <span className="text-[11px] font-medium text-red-600">✕ Tidak ditemukan/tidak valid</span>
+      )}
+      {status === 'format_salah' && (
+        <span className="text-[11px] font-medium text-red-600">Format NIK salah (harus 16 digit)</span>
+      )}
+      {status === 'belum_dikonfigurasi' && (
+        <span className="text-[11px] text-amber-600">Integrasi Dukcapil belum aktif</span>
+      )}
+      {status === 'error' && (
+        <span className="text-[11px] text-red-600">Gagal: {hasil?.pesan || 'terjadi kesalahan'}</span>
+      )}
+    </div>
+  )
+}
+
 function ModalDetail({ detail, prosesId, onClose, onSetujui, onTolak, onHapus, onCetak }) {
   const n1 = detail.data_n1 || {}
   const n2 = detail.data_n2 || {}
@@ -358,6 +417,7 @@ function ModalDetail({ detail, prosesId, onClose, onSetujui, onTolak, onHapus, o
             <p className="text-xs font-semibold text-blue-600 mb-1">Model N1 — Calon Suami</p>
             <Baris label="Nama" value={n1.calon_suami?.nama_lengkap} />
             <Baris label="NIK" value={n1.calon_suami?.nik} />
+            <VerifikasiNikBadge nik={n1.calon_suami?.nik} namaLengkap={n1.calon_suami?.nama_lengkap} />
             <Baris label="TTL" value={`${n1.calon_suami?.tempat_lahir || ''}, ${n1.calon_suami?.tanggal_lahir || ''}`} />
             <Baris label="Agama" value={n1.calon_suami?.agama} />
             <Baris label="Pekerjaan" value={n1.calon_suami?.pekerjaan} />
@@ -367,6 +427,7 @@ function ModalDetail({ detail, prosesId, onClose, onSetujui, onTolak, onHapus, o
             <p className="text-xs font-semibold text-blue-600 mb-1">Model N1 — Calon Istri</p>
             <Baris label="Nama" value={n1.calon_istri?.nama_lengkap} />
             <Baris label="NIK" value={n1.calon_istri?.nik} />
+            <VerifikasiNikBadge nik={n1.calon_istri?.nik} namaLengkap={n1.calon_istri?.nama_lengkap} />
             <Baris label="TTL" value={`${n1.calon_istri?.tempat_lahir || ''}, ${n1.calon_istri?.tanggal_lahir || ''}`} />
             <Baris label="Agama" value={n1.calon_istri?.agama} />
             <Baris label="Pekerjaan" value={n1.calon_istri?.pekerjaan} />
