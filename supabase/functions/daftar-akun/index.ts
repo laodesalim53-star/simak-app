@@ -19,8 +19,8 @@ function json(body: unknown, status: number) {
 // Jabatan yang BOLEH dipilih lewat pendaftaran mandiri.
 // Sesuaikan dengan daftar jabatan di aplikasi Anda. Sengaja TIDAK memuat
 // admin, admin_utama, superadmin, kepala_sekolah.
-const JABATAN_SEKOLAH = ['guru', 'orang_tua']
-const JABATAN_KANTOR = ['pegawai']
+const JABATAN_SEKOLAH = ['guru', 'orang_tua', 'admin', 'kepala_sekolah']
+const JABATAN_KANTOR = ['pegawai', 'kepala_kantor', 'admin']
 const HUBUNGAN_VALID = ['ayah', 'ibu', 'wali']  // sesuaikan dengan pilihan di form
 
 class HttpError extends Error {
@@ -138,8 +138,16 @@ Deno.serve(async (req) => {
     }
 
     // ---------- 3. Role & status: ditentukan SERVER ----------
-    const role = mode === 'baru' ? 'admin_utama' : jabatan
-    const statusAkun = 'menunggu'
+// mode 'baru' → admin_utama. mode 'gabung' → role biasa; jabatan hanya label,
+// admin yang menaikkan role saat persetujuan.
+const role =
+  mode === 'baru'
+    ? 'admin_utama'
+    : isOrangTua
+      ? 'orang_tua'
+      : jenisOrganisasi === 'kantor'
+        ? 'pegawai'
+        : 'guru'
 
     // ---------- 4. pegawai_kantor (khusus kantor) ----------
     if (jenisOrganisasi === 'kantor') {
