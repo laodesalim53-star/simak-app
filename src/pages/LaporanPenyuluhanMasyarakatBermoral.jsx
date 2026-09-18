@@ -19,7 +19,7 @@ const TEMA_KEGIATAN =
   'Menjadikan Masyarakat yang Bermoral dan Harmonis dalam Konteks Kehidupan Bermasyarakat'
 
 export default function LaporanPenyuluhanMasyarakatBermoral() {
-  const { profil } = useAuth()
+  const { profil, sekolahId } = useAuth()
   const [profilKantor, setProfilKantor] = useState(null)
 
   // === DATA KEGIATAN — DAPAT DIISI ULANG SETIAP KALI DIPAKAI ===
@@ -30,14 +30,20 @@ export default function LaporanPenyuluhanMasyarakatBermoral() {
   const [tempatKegiatan, setTempatKegiatan] = useState('Desa Tabarfane')
   const [jumlahPeserta, setJumlahPeserta] = useState(15)
 
+  // Query profil_kantor kini di-scope per kantor lewat sekolah_id (bukan
+  // lagi id=1 yang hardcode), sama seperti ProfilKantor.jsx dan KopSurat.jsx.
   useEffect(() => {
+    if (!sekolahId) {
+      setProfilKantor(null)
+      return
+    }
     supabase
       .from('profil_kantor')
       .select('nama_kantor, alamat, kabupaten, kecamatan, telepon, email, kepala_kua, nip_kepala_kua, tempat_ttd, logo_path, ttd_kepala_kua_path')
-      .eq('id', 1)
+      .eq('sekolah_id', sekolahId)
       .maybeSingle()
       .then(({ data }) => setProfilKantor(data))
-  }, [])
+  }, [sekolahId])
 
   const logoUrl = profilKantor?.logo_path
     ? supabase.storage.from(LOGO_BUCKET).getPublicUrl(profilKantor.logo_path).data.publicUrl
