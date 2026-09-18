@@ -16,7 +16,9 @@ import { supabase } from '../lib/supabaseClient'
 // manual di komponen ini, karena field ini memang ditujukan sebagai
 // cerminan data induk.
 //
-// BARU: ada dropdown "Kelompok Binaan". Begitu dipilih, nama & alamat
+// Kelompok Binaan sekarang bisa dipilih LEBIH DARI SATU (checkbox), plus
+// ada checkbox "Pilih Semua" untuk mencentang/melepas semua kelompok
+// sekaligus. Begitu satu atau lebih kelompok dicentang, nama & alamat
 // anggota ditarik otomatis dari tabel kelompok_binaan_anggota (dikelola
 // di /pusat-kelompok-binaan) — tidak perlu diketik manual tiap cetak.
 // Slug di daftar ini HARUS sama dengan kolom `kelompok` di Supabase.
@@ -24,6 +26,7 @@ import { supabase } from '../lib/supabaseClient'
 // Cara pakai:
 //   <DaftarHadirCetak jumlahBaris={15} />
 //   <DaftarHadirCetak jumlahBaris={15} kelompokAwal="majelis-taklim" />
+//   <DaftarHadirCetak jumlahBaris={15} kelompokAwal={['majelis-taklim', 'masyarakat']} />
 //   <DaftarHadirCetak
 //     jumlahBaris={15}
 //     kelompokAwal="masyarakat"
@@ -33,12 +36,19 @@ import { supabase } from '../lib/supabaseClient'
 //     pemateriAwal={namaPenyuluh}
 //   />
 const OPSI_KELOMPOK = [
-  { slug: '', label: 'Isi manual (tanpa kelompok binaan)' },
   { slug: 'majelis-taklim', label: 'Majelis Taklim' },
   { slug: 'lapas', label: 'Lapas' },
   { slug: 'rsu', label: 'RSU' },
   { slug: 'masyarakat', label: 'Masyarakat' },
 ]
+
+// kelompokAwal bisa dikirim sebagai string tunggal (cara lama, tetap
+// didukung) atau array of string (cara baru, multi-kelompok).
+function normalisasiKelompokAwal(kelompokAwal) {
+  if (Array.isArray(kelompokAwal)) return kelompokAwal.filter(Boolean)
+  if (typeof kelompokAwal === 'string' && kelompokAwal) return [kelompokAwal]
+  return []
+}
 
 export default function DaftarHadirCetak({
   jumlahBaris = 15,
@@ -71,12 +81,34 @@ export default function DaftarHadirCetak({
     setPemateri(pemateriAwal)
   }, [pemateriAwal])
 
-  const [kelompokSlug, setKelompokSlug] = useState(kelompokAwal)
+  const [kelompokTerpilih, setKelompokTerpilih] = useState(() =>
+    normalisasiKelompokAwal(kelompokAwal)
+  )
   const [daftarAnggota, setDaftarAnggota] = useState([])
   const [memuatAnggota, setMemuatAnggota] = useState(false)
 
   useEffect(() => {
-    if (!kelompokSlug) {
+    setKelompokTerpilih(normalisasiKelompokAwal(kelompokAwal))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Array.isArray(kelompokAwal) ? kelompokAwal.join(',') : kelompokAwal])
+
+  const semuaSlugKelompok = OPSI_KELOMPOK.map((opsi) => opsi.slug)
+  const semuaTerpilih =
+    semuaSlugKelompok.length > 0 &&
+    semuaSlugKelompok.every((slug) => kelompokTerpilih.includes(slug))
+
+  function toggleKelompok(slug) {
+    setKelompokTerpilih((prev) =>
+      prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug]
+    )
+  }
+
+  function togglePilihSemuaKelompok() {
+    setKelompokTerpilih(semuaTerpilih ? [] : semuaSlugKelompok)
+  }
+
+  useEffect(() => {
+    if (kelompokTerpilih.length === 0) {
       setDaftarAnggota([])
       return
     }
@@ -84,8 +116,9 @@ export default function DaftarHadirCetak({
     setMemuatAnggota(true)
     supabase
       .from('kelompok_binaan_anggota')
-      .select('nama, alamat, desa')
-      .eq('kelompok', kelompokSlug)
+      .select('nama, alamat, desa, kelompok')
+      .in('kelompok', kelompokTerpilih)
+      .order('kelompok', { ascending: true })
       .order('urutan', { ascending: true })
       .order('created_at', { ascending: true })
       .then(({ data }) => {
@@ -97,7 +130,8 @@ export default function DaftarHadirCetak({
     return () => {
       dibatalkan = true
     }
-  }, [kelompokSlug])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kelompokTerpilih.join(',')])
 
   // Kalau anggota kelompok lebih banyak dari jumlahBaris, tabel diperpanjang
   // otomatis supaya semua nama tetap tercetak.
@@ -156,26 +190,41 @@ export default function DaftarHadirCetak({
         </div>
         <div className="sm:col-span-2">
           <label className="text-xs font-medium text-slate-600 block mb-1">
-            Kelompok Binaan (nama peserta terisi otomatis)
+            Kelompok Binaan (bisa pilih lebih dari satu — nama peserta terisi otomatis)
           </label>
-          <select
-            value={kelompokSlug}
-            onChange={(e) => setKelompokSlug(e.target.value)}
-            className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-300 bg-white"
-          >
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 bg-white border border-slate-300 rounded-lg px-3 py-2.5">
+            <label className="flex items-center gap-1.5 text-sm font-semibold text-slate-800 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={semuaTerpilih}
+                onChange={togglePilihSemuaKelompok}
+                className="rounded border-slate-300 text-slate-700 focus:ring-slate-400"
+              />
+              Pilih Semua
+            </label>
+            <span className="hidden sm:block w-px h-4 bg-slate-200" />
             {OPSI_KELOMPOK.map((opsi) => (
-              <option key={opsi.slug} value={opsi.slug}>
+              <label
+                key={opsi.slug}
+                className="flex items-center gap-1.5 text-sm text-slate-700 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={kelompokTerpilih.includes(opsi.slug)}
+                  onChange={() => toggleKelompok(opsi.slug)}
+                  className="rounded border-slate-300 text-slate-700 focus:ring-slate-400"
+                />
                 {opsi.label}
-              </option>
+              </label>
             ))}
-          </select>
-          {kelompokSlug && (
+          </div>
+          {kelompokTerpilih.length > 0 && (
             <p className="text-xs text-slate-500 mt-1">
               {memuatAnggota
                 ? 'Memuat daftar nama...'
                 : daftarAnggota.length > 0
-                ? `${daftarAnggota.length} nama dimuat otomatis dari data kelompok ini. Kelola di Pusat Kelompok Binaan.`
-                : 'Belum ada nama tersimpan untuk kelompok ini. Tambahkan lewat Pusat Kelompok Binaan.'}
+                ? `${daftarAnggota.length} nama dimuat otomatis dari ${kelompokTerpilih.length} kelompok terpilih. Kelola di Pusat Kelompok Binaan.`
+                : 'Belum ada nama tersimpan untuk kelompok yang dipilih. Tambahkan lewat Pusat Kelompok Binaan.'}
             </p>
           )}
         </div>
@@ -205,13 +254,17 @@ export default function DaftarHadirCetak({
           <Loader2 size={16} className="animate-spin" /> Memuat daftar nama...
         </div>
       ) : (
-        <table className="w-full border-collapse text-sm">
+        // Padding & tinggi baris dipersempit (dibanding versi sebelumnya)
+        // supaya tabel tidak terlalu tinggi saat dicetak — tujuannya agar
+        // blok tanda tangan Kepala KUA/Penyuluh di bawahnya tetap muat di
+        // lembar yang sama, tidak terdorong ke halaman/baris sendiri.
+        <table className="w-full border-collapse text-sm print:text-xs print:leading-tight">
           <thead>
             <tr className="bg-slate-100">
-              <th className="border border-black px-2 py-2 w-10 text-black">No</th>
-              <th className="border border-black px-2 py-2 text-left text-black">Nama</th>
-              <th className="border border-black px-2 py-2 text-left text-black">Alamat</th>
-              <th className="border border-black px-2 py-2 w-32 text-black">Tanda Tangan</th>
+              <th className="border border-black px-1.5 py-1.5 w-8 text-black">No</th>
+              <th className="border border-black px-2 py-1.5 text-left text-black">Nama</th>
+              <th className="border border-black px-2 py-1.5 text-left text-black">Alamat</th>
+              <th className="border border-black px-1.5 py-1.5 w-24 text-black">Tanda Tangan</th>
             </tr>
           </thead>
           <tbody>
@@ -222,10 +275,10 @@ export default function DaftarHadirCetak({
               const alamatTampil = anggota?.alamat || anggota?.desa || ''
               return (
                 <tr key={i}>
-                  <td className="border border-black px-2 py-3 text-center text-black">{i + 1}</td>
-                  <td className="border border-black px-2 py-3 text-black">{anggota?.nama || '\u00A0'}</td>
-                  <td className="border border-black px-2 py-3 text-black">{alamatTampil || '\u00A0'}</td>
-                  <td className="border border-black px-2 py-3 text-black">&nbsp;</td>
+                  <td className="border border-black px-1.5 py-1 text-center text-black">{i + 1}</td>
+                  <td className="border border-black px-2 py-1 text-black">{anggota?.nama || '\u00A0'}</td>
+                  <td className="border border-black px-2 py-1 text-black">{alamatTampil || '\u00A0'}</td>
+                  <td className="border border-black px-1.5 py-1 text-black">&nbsp;</td>
                 </tr>
               )
             })}
