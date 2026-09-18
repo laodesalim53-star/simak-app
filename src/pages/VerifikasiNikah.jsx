@@ -13,10 +13,26 @@ const TAB = [
   { id: 'ditolak', label: 'Ditolak' },
 ]
 
+const LABEL_STATUS = {
+  menunggu: 'Menunggu Verifikasi',
+  diverifikasi: 'Sudah Diverifikasi',
+  ditolak: 'Ditolak',
+}
+
+// Nama petugas yang tampil di kolom tanda tangan "Tim Verifikasi".
+// Diambil dari akun admin yang sedang login (session), karena dialah
+// yang mencetak/menandatangani dokumen ini. Kalau metadata nama tidak
+// tersedia, jatuh ke email, lalu ke string kosong (garis tanda tangan
+// dibiarkan kosong untuk ditulis manual).
+function namaPetugasDariSesi(session) {
+  const meta = session?.user?.user_metadata || {}
+  return meta.full_name || meta.nama || meta.name || session?.user?.email || ''
+}
+
 // Mengubah bentuk data dari tabel (data_n1/data_n2/data_n4/data_n5)
 // menjadi bentuk yang diharapkan oleh <LembarCetakNikah data={...} />:
-// { calon_suami, calon_istri, n2, n4, n5 }
-function keDataCetak(d) {
+// { calon_suami, calon_istri, n2, n4, n5, petugasVerifikasi }
+function keDataCetak(d, namaPetugas) {
   const n1 = d?.data_n1 || {}
   return {
     calon_suami: n1.calon_suami || {},
@@ -24,6 +40,12 @@ function keDataCetak(d) {
     n2: d?.data_n2 || {},
     n4: d?.data_n4 || {},
     n5: d?.data_n5 || {},
+    petugasVerifikasi: {
+      nama: namaPetugas || '',
+      statusLabel: LABEL_STATUS[d?.status] || d?.status || '-',
+      catatan: d?.catatan_admin || '',
+      tanggal: new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }),
+    },
   }
 }
 
@@ -178,14 +200,14 @@ export default function VerifikasiNikah() {
       window.alert('Gagal memuat data untuk dicetak: ' + error.message)
       return
     }
-    setDataCetak(keDataCetak(data))
+    setDataCetak(keDataCetak(data, namaPetugasDariSesi(session)))
   }
 
   // Dipanggil dari tombol Cetak di dalam modal detail — detail sudah
   // berisi data lengkap, jadi tidak perlu fetch ulang.
   function cetakDariDetail() {
     if (!detail) return
-    setDataCetak(keDataCetak(detail))
+    setDataCetak(keDataCetak(detail, namaPetugasDariSesi(session)))
   }
 
   return (
