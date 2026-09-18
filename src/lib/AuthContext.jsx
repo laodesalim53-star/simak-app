@@ -346,16 +346,22 @@ if (jenisOrganisasi === 'kantor' && data.pegawai_id) {
   // ROLE
   // =========================================================
 
+  // PERBAIKAN: 'kepala_kantor' ditambahkan ke isAdmin & isAdminUtama supaya
+  // akun Kepala Kantor mendapat menu admin (getGroupsKantorAdmin di
+  // Sidebar.jsx) dan akses fitur admin-utama (Persetujuan Akun, Verifikasi
+  // Nikah), setara dengan Admin Utama/superadmin di tenant kantor.
   const isAdmin = [
     'admin',
     'admin_utama',
     'superadmin',
     'kepala_sekolah',
+    'kepala_kantor',
   ].includes(profil?.role)
 
   const isAdminUtama =
     profil?.role === 'admin_utama' ||
-    profil?.role === 'superadmin'
+    profil?.role === 'superadmin' ||
+    profil?.role === 'kepala_kantor'
 
   const isSuperAdmin =
     profil?.role === 'superadmin'
