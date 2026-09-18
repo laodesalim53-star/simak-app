@@ -171,11 +171,20 @@ if (jenisOrganisasi === 'kantor' && data.pegawai_id) {
     siswaId,
     hubungan,
     jenisOrganisasi = 'sekolah',
+    nip,
   }) {
     if (jenisOrganisasi === 'kantor' && jabatan === 'orang_tua') {
       return {
         error: {
           message: 'Jabatan Orang Tua/Wali tidak berlaku untuk akun Kantor.',
+        },
+      }
+    }
+
+    if (jenisOrganisasi === 'kantor' && !nip) {
+      return {
+        error: {
+          message: 'NIP wajib diisi untuk akun Kantor.',
         },
       }
     }
@@ -265,6 +274,33 @@ if (jenisOrganisasi === 'kantor' && data.pegawai_id) {
       statusAkunBaru = 'menunggu'
     }
 
+    // Untuk akun Kantor: buat baris pegawai_kantor dulu (menyimpan NIP,
+    // nama, jabatan), lalu hubungkan lewat profil.pegawai_id — kolom
+    // profil.nip TIDAK dipakai aplikasi untuk kantor, sumber aslinya
+    // adalah tabel pegawai_kantor.
+    let pegawaiId = null
+
+    if (jenisOrganisasi === 'kantor') {
+      const { data: pegawaiBaru, error: pegawaiError } = await supabase
+        .from('pegawai_kantor')
+        .insert({
+          sekolah_id: targetSekolahId,
+          nama_lengkap: namaLengkap,
+          jabatan: jabatanDipilih,
+          nip,
+          email,
+          status: statusAkunBaru,
+        })
+        .select('id')
+        .single()
+
+      if (pegawaiError) {
+        return { error: pegawaiError }
+      }
+
+      pegawaiId = pegawaiBaru.id
+    }
+
     const { error: profilError } = await supabase
       .from('profil')
       .insert({
@@ -275,6 +311,7 @@ if (jenisOrganisasi === 'kantor' && data.pegawai_id) {
         status_akun: statusAkunBaru,
         nama_lengkap_pendaftar: namaLengkap,
         email_pendaftar: email,
+        pegawai_id: pegawaiId,
       })
 
     if (profilError) {
