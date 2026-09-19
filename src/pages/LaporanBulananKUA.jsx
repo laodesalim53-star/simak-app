@@ -356,11 +356,11 @@ function TabelCetak({ header, baris, kosong = '-', footer }) {
 /* ------------------------------------------------------------------ */
 
 export default function LaporanBulananKUA() {
-  // AuthContext masih memakai nama lama `sekolahId` (warisan aplikasi
-  // sekolah). Di halaman ini dipakai sebagai `sekolahId`. Kalau nanti
-  // AuthContext sudah di-rename, cukup ubah jadi: const { sekolahId } = useAuth()
-  const { sekolahId: sekolahId } = useAuth()
+  // AuthContext memakai nama field `sekolahId` (warisan aplikasi sekolah).
+  // Di aplikasi KUA nilainya adalah id kantor yang sedang login.
+  const { sekolahId } = useAuth()
   const [profilKantor, setProfilKantor] = useState(null)
+  const [errorProfil, setErrorProfil] = useState('')
 
   // Data pendaftaran nikah milik kantor ini (tabel yang sama dengan halaman
   // Pendaftaran Nikah, Verifikasi Nikah, dan Laporan Kepala KUA) — dipakai
@@ -376,7 +376,9 @@ export default function LaporanBulananKUA() {
   const [nipKepala, setNipKepala] = useState('')
   const [jabatan, setJabatan] = useState('')
   const [provinsi, setProvinsi] = useState('')
-  const [modeTtd, setModeTtd] = useState('kepala_kua')
+  // 'otomatis': dikenali dari nama/NIP pembuat. Kalau kosong, pembuat dianggap
+  // Kepala KUA (nama diambil dari Profil Kantor) sehingga "Mengetahui" = Kepala Kemenag.
+  const [modeTtd, setModeTtd] = useState('otomatis')
 
   /* ---------------------------------------------------------------- */
   /*  SUMBER DATA OTOMATIS — ditarik dari halaman lain yang sudah ada  */
@@ -396,7 +398,10 @@ export default function LaporanBulananKUA() {
       .eq('sekolah_id', sekolahId)
       .eq('status', 'aktif')
       .order('nama_lengkap')
-      .then(({ data }) => setPegawaiKantor(data || []))
+      .then(({ data, error }) => {
+        if (error) console.error('pegawai_kantor:', error)
+        setPegawaiKantor(data || [])
+      })
   }, [sekolahId])
 
   // Bab III: presensi pegawai kantor pada bulan terpilih (halaman "Presensi
@@ -415,7 +420,10 @@ export default function LaporanBulananKUA() {
       .eq('sekolah_id', sekolahId)
       .gte('tanggal', `${bulan}-01`)
       .lt('tanggal', batasAtas)
-      .then(({ data }) => setPresensiBulan(data || []))
+      .then(({ data, error }) => {
+        if (error) console.error('presensi_pegawai_kantor:', error)
+        setPresensiBulan(data || [])
+      })
   }, [sekolahId, bulan])
 
   // Bab IX: anggota kelompok binaan "Majelis Taklim" (halaman Pusat Kelompok
@@ -430,26 +438,39 @@ export default function LaporanBulananKUA() {
       .from('kelompok_binaan_anggota')
       .select('desa, nama_kelompok')
       .eq('kelompok', 'majelis-taklim')
-      .then(({ data }) => setMajelisData(data || []))
+      .then(({ data, error }) => {
+        if (error) console.error('kelompok_binaan_anggota:', error)
+        setMajelisData(data || [])
+      })
   }, [])
 
   // Bab X: surat masuk & keluar pada bulan terpilih (halaman "Surat Masuk &
   // Keluar"). Tabel ini cuma membedakan masuk/keluar — jenis surat lain
   // (surat tugas, surat keterangan, rekomendasi) tidak dibedakan di sana,
   // jadi tetap diisi manual.
+  // Batas atas memakai awal bulan berikutnya (exclusive) — JANGAN pakai
+  // `${bulan}-31`, karena bulan 30 hari (mis. September) membuat query gagal.
   const [suratBulan, setSuratBulan] = useState([])
+  const [errorSurat, setErrorSurat] = useState('')
   useEffect(() => {
-    if (!bulan) {
+    const batasAtas = bulanBerikutnyaISO(bulan)
+    if (!sekolahId || !bulan || !batasAtas) {
       setSuratBulan([])
+      setErrorSurat('')
       return
     }
     supabase
       .from('surat')
       .select('jenis, tanggal')
+      .eq('sekolah_id', sekolahId)
       .gte('tanggal', `${bulan}-01`)
-      .lte('tanggal', `${bulan}-31`)
-      .then(({ data }) => setSuratBulan(data || []))
-  }, [bulan])
+      .lt('tanggal', batasAtas)
+      .then(({ data, error }) => {
+        if (error) console.error('surat:', error)
+        setErrorSurat(error ? error.message : '')
+        setSuratBulan(data || [])
+      })
+  }, [sekolahId, bulan])
 
   // Bab XIV: kegiatan pada bulan terpilih (halaman "Agenda Kantor").
   const [agendaBulan, setAgendaBulan] = useState([])
@@ -466,7 +487,10 @@ export default function LaporanBulananKUA() {
       .gte('tanggal_mulai', `${bulan}-01`)
       .lt('tanggal_mulai', batasAtas)
       .order('tanggal_mulai')
-      .then(({ data }) => setAgendaBulan(data || []))
+      .then(({ data, error }) => {
+        if (error) console.error('agenda:', error)
+        setAgendaBulan(data || [])
+      })
   }, [sekolahId, bulan])
 
   // Rekap Bab II (jumlah L/P per kategori ASN/PPPK/Non-ASN) dihitung dari
@@ -482,13 +506,14 @@ export default function LaporanBulananKUA() {
     return hitung
   }, [pegawaiKantor])
 
-  // Bab X: surat masuk & keluar bulan terpilih.
+  // Bab X: surat masuk & keluar bulan terpilih. Pencocokan dibuat longgar
+  // supaya tetap terbaca kalau isi kolom `jenis` ditulis "Surat Masuk"/"MASUK".
   const jumlahSuratMasukOtomatis = useMemo(
-    () => suratBulan.filter((s) => s.jenis === 'masuk').length,
+    () => suratBulan.filter((s) => (s.jenis || '').toLowerCase().includes('masuk')).length,
     [suratBulan]
   )
   const jumlahSuratKeluarOtomatis = useMemo(
-    () => suratBulan.filter((s) => s.jenis === 'keluar').length,
+    () => suratBulan.filter((s) => (s.jenis || '').toLowerCase().includes('keluar')).length,
     [suratBulan]
   )
 
@@ -699,8 +724,8 @@ export default function LaporanBulananKUA() {
   }, [agendaBulan])
 
   // Profil kantor — di-scope per kantor lewat sekolah_id.
-  // Catatan: kalau tabel profil_kantor belum punya kolom `provinsi`, hapus
-  // kolom itu dari .select() di bawah (kolom yang tidak ada bikin query gagal).
+  // Memakai select('*') supaya satu kolom yang belum ada di tabel tidak membuat
+  // seluruh query gagal (dan seluruh kop/tanda tangan jadi titik-titik).
   useEffect(() => {
     if (!sekolahId) {
       setProfilKantor(null)
@@ -708,10 +733,14 @@ export default function LaporanBulananKUA() {
     }
     supabase
       .from('profil_kantor')
-      .select('nama_kantor, alamat, provinsi, kabupaten, kecamatan, telepon, email, kepala_kua, nip_kepala_kua, kepala_kemenag, nip_kepala_kemenag, tempat_ttd, logo_path, ttd_kepala_kua_path')
+      .select('*')
       .eq('sekolah_id', sekolahId)
       .maybeSingle()
-      .then(({ data }) => setProfilKantor(data))
+      .then(({ data, error }) => {
+        if (error) console.error('profil_kantor:', error)
+        setErrorProfil(error ? error.message : '')
+        setProfilKantor(data)
+      })
   }, [sekolahId])
 
   // Pendaftaran nikah — diambil sekali, disaring per bulan di sisi klien.
@@ -1104,6 +1133,12 @@ export default function LaporanBulananKUA() {
         </div>
 
         <div className="mt-3 text-xs text-slate-500 space-y-1">
+          {errorProfil && (
+            <p className="text-red-600">Gagal memuat Profil Kantor: {errorProfil}</p>
+          )}
+          {errorSurat && (
+            <p className="text-red-600">Gagal memuat data surat: {errorSurat}</p>
+          )}
           {loadingNikah && <p>Memuat data pendaftaran nikah…</p>}
           {!loadingNikah && errorNikah && (
             <p className="text-red-600">Gagal memuat data pendaftaran nikah: {errorNikah}</p>
