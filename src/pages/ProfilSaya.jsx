@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
 import GrafikAktivitas from '../components/GrafikAktivitas'
-import { Camera, Loader2, Save, Users, School, ShieldCheck, UserCircle2, Clock, CheckCircle2, XCircle, UserPlus, X, Printer, FileSpreadsheet } from 'lucide-react'
+import { Camera, Loader2, Save, Users, School, ShieldCheck, UserCircle2, Clock, CheckCircle2, XCircle, UserPlus, X, Printer, FileSpreadsheet, MapPin, Crosshair, Maximize2, Minimize2 } from 'lucide-react'
 // ASUMSI: menggunakan library `react-barcode` untuk membuat kode batang (linear barcode) di sisi klien.
 // Install dulu kalau belum ada: npm install react-barcode
 import Barcode from 'react-barcode'
@@ -15,6 +15,12 @@ import QRCode from 'qrcode'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+// FITUR BARU (GPS & peta): peta interaktif memakai Leaflet + tile OpenStreetMap.
+// Install dulu: npm install leaflet
+// (tidak perlu react-leaflet — peta dikendalikan langsung lewat ref supaya
+// aman di versi React berapa pun).
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
 
 const LABEL_JABATAN = {
   admin: 'Admin',
@@ -90,6 +96,287 @@ function TombolCetakDataDiri({ fields, judul, namaOrang, namaFile }) {
   )
 }
 
+// ============================================================================
+// FITUR BARU: Deteksi lokasi GPS (saat online) + peta interaktif
+// ----------------------------------------------------------------------------
+// - Tombol "Deteksi Lokasi GPS" mengisi lintang/bujur dari GPS perangkat.
+//   Hanya aktif saat perangkat online, dan aktif lagi otomatis begitu koneksi
+//   kembali. Tidak jalan otomatis saat halaman dibuka (supaya izin lokasi
+//   tidak muncul tiba-tiba) — hanya saat tombol diklik.
+// - Peta (Leaflet + OpenStreetMap) bisa di-zoom (tombol +/-, scroll setelah
+//   peta diklik, atau pinch di HP), digeser, dan diperbesar. Klik peta untuk
+//   menaruh penanda, geser penanda untuk mengoreksi posisi.
+// - Komponen ini "controlled": koordinat disimpan di state induk (form), jadi
+//   perubahan dari GPS/peta/ketik manual selalu sinkron. Belum tersimpan ke
+//   database sampai user klik "Simpan" di form.
+// - Geolocation API hanya jalan di HTTPS (atau localhost).
+// ============================================================================
+
+// Status koneksi online/offline perangkat, diperbarui otomatis lewat event
+// browser 'online' / 'offline'.
+function useOnline() {
+  const [online, setOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine)
+  useEffect(() => {
+    const on = () => setOnline(true)
+    const off = () => setOnline(false)
+    window.addEventListener('online', on)
+    window.addEventListener('offline', off)
+    return () => {
+      window.removeEventListener('online', on)
+      window.removeEventListener('offline', off)
+    }
+  }, [])
+  return online
+}
+
+// Nilai dari database (angka/null) -> string untuk <input>. Sengaja tidak
+// pakai `|| ''` supaya koordinat bernilai 0 tidak ikut terhapus.
+function keString(v) {
+  return v === null || v === undefined ? '' : String(v)
+}
+
+// String di form -> angka untuk database. Kosong/tidak valid -> null.
+// Koma desimal ("-0,87") ikut dikenali.
+function keAngkaAtauNull(v) {
+  if (v === '' || v === null || v === undefined) return null
+  const n = parseFloat(String(v).replace(',', '.'))
+  return Number.isFinite(n) ? n : null
+}
+
+// Pasangan lintang/bujur -> { lat, lng } kalau keduanya valid, selain itu null.
+function parseKoordinat(lintang, bujur) {
+  const lat = parseFloat(String(lintang ?? '').replace(',', '.'))
+  const lng = parseFloat(String(bujur ?? '').replace(',', '.'))
+  const valid = Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180
+  return valid ? { lat, lng } : null
+}
+
+// Ikon penanda dibuat sendiri (SVG) — ikon bawaan Leaflet sering hilang di
+// bundler seperti Vite/Webpack karena path gambarnya salah.
+const IKON_PENANDA = L.divIcon({
+  className: '',
+  html: '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="42" viewBox="0 0 32 42"><path d="M16 0C7.2 0 0 7 0 15.7 0 27.5 16 42 16 42s16-14.5 16-26.3C32 7 24.8 0 16 0z" fill="#1e3a5f"/><circle cx="16" cy="15.5" r="6" fill="#d4af37"/></svg>',
+  iconSize: [32, 42],
+  iconAnchor: [16, 42],
+})
+
+// Pusat awal peta kalau belum ada koordinat (seluruh Indonesia).
+const PUSAT_AWAL = [-2.5, 118]
+const ZOOM_AWAL = 4
+const ZOOM_LOKASI = 17
+
+function LokasiGPSPeta({ lintang, bujur, onChange }) {
+  const online = useOnline()
+  const wadahRef = useRef(null)
+  const petaRef = useRef(null)
+  const penandaRef = useRef(null)
+  const onChangeRef = useRef(onChange)
+  const [mendeteksi, setMendeteksi] = useState(false)
+  const [error, setError] = useState('')
+  const [akurasi, setAkurasi] = useState(null) // meter, hanya diisi setelah deteksi GPS
+  const [besar, setBesar] = useState(false)
+
+  // Simpan onChange terbaru di ref supaya handler Leaflet (yang dipasang sekali
+  // saja) selalu memanggil versi terbaru, bukan versi render pertama.
+  useEffect(() => {
+    onChangeRef.current = onChange
+  })
+
+  const koordinat = parseKoordinat(lintang, bujur)
+  const lat = koordinat?.lat
+  const lng = koordinat?.lng
+
+  // Taruh (atau pindahkan) penanda ke posisi tertentu.
+  function pasangPenanda(la, ln) {
+    const peta = petaRef.current
+    if (!peta) return
+    if (penandaRef.current) {
+      penandaRef.current.setLatLng([la, ln])
+      return
+    }
+    const penanda = L.marker([la, ln], {
+      draggable: true,
+      icon: IKON_PENANDA,
+      title: 'Geser untuk mengoreksi posisi',
+    }).addTo(peta)
+    penanda.on('dragend', () => {
+      const p = penanda.getLatLng()
+      kirimKoordinat(p.lat, p.lng)
+    })
+    penandaRef.current = penanda
+  }
+
+  // Kirim koordinat ke induk. Bujur dinormalkan ke -180..180 karena peta bisa
+  // di-scroll melewati batas dunia (mis. bujur 190 -> -170).
+  function kirimKoordinat(la, ln) {
+    const bujurNormal = ((((ln + 180) % 360) + 360) % 360) - 180
+    setAkurasi(null)
+    onChangeRef.current({ lintang: la.toFixed(6), bujur: bujurNormal.toFixed(6) })
+  }
+
+  // Buat peta sekali saja saat komponen muncul, bersihkan saat hilang.
+  useEffect(() => {
+    if (!wadahRef.current || petaRef.current) return undefined
+
+    const peta = L.map(wadahRef.current, {
+      center: PUSAT_AWAL,
+      zoom: ZOOM_AWAL,
+      scrollWheelZoom: false, // aktif setelah peta diklik, supaya scroll halaman tidak "nyangkut" di peta
+      worldCopyJump: true,
+    })
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>',
+    }).addTo(peta)
+
+    peta.on('focus', () => peta.scrollWheelZoom.enable())
+    peta.on('blur', () => peta.scrollWheelZoom.disable())
+    peta.on('click', (e) => {
+      pasangPenanda(e.latlng.lat, e.latlng.lng)
+      kirimKoordinat(e.latlng.lat, e.latlng.lng)
+    })
+
+    petaRef.current = peta
+    return () => {
+      peta.remove()
+      petaRef.current = null
+      penandaRef.current = null
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Peta menyesuaikan diri kalau ukuran wadahnya berubah (mis. tombol Perbesar,
+  // atau layout berubah) — tanpa ini Leaflet menampilkan tile yang terpotong.
+  useEffect(() => {
+    const wadah = wadahRef.current
+    if (!wadah || typeof ResizeObserver === 'undefined') return undefined
+    const pengamat = new ResizeObserver(() => petaRef.current?.invalidateSize())
+    pengamat.observe(wadah)
+    return () => pengamat.disconnect()
+  }, [])
+
+  // Sinkronkan penanda + posisi peta dengan koordinat dari induk (hasil GPS
+  // atau ketikan manual di kolom Lintang/Bujur). Kalau penanda sudah di posisi
+  // itu (mis. karena user baru saja klik/geser di peta), peta tidak digeser lagi.
+  useEffect(() => {
+    const peta = petaRef.current
+    if (!peta) return
+    if (lat === undefined || lng === undefined) {
+      if (penandaRef.current) {
+        penandaRef.current.remove()
+        penandaRef.current = null
+      }
+      return
+    }
+    const p = penandaRef.current?.getLatLng()
+    const sudahDiSana = p && Math.abs(p.lat - lat) < 1e-6 && Math.abs(p.lng - lng) < 1e-6
+    if (sudahDiSana) return
+    pasangPenanda(lat, lng)
+    peta.setView([lat, lng], Math.max(peta.getZoom(), ZOOM_LOKASI))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lat, lng])
+
+  function deteksi() {
+    setError('')
+    if (!online) {
+      setError('Perangkat sedang offline. Sambungkan ke internet lalu coba lagi.')
+      return
+    }
+    if (!('geolocation' in navigator)) {
+      setError('Browser ini tidak mendukung deteksi lokasi.')
+      return
+    }
+    setMendeteksi(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude, accuracy } = pos.coords
+        onChangeRef.current({ lintang: latitude.toFixed(6), bujur: longitude.toFixed(6) })
+        setAkurasi(Math.round(accuracy))
+        setMendeteksi(false)
+      },
+      (err) => {
+        const pesan = {
+          1: 'Izin lokasi ditolak. Aktifkan izin lokasi untuk situs ini di pengaturan browser.',
+          2: 'Lokasi tidak tersedia. Pastikan GPS/Location perangkat aktif.',
+          3: 'Waktu pencarian lokasi habis. Coba lagi, sebaiknya di tempat terbuka.',
+        }
+        setError(pesan[err.code] || 'Gagal mendeteksi lokasi.')
+        setMendeteksi(false)
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    )
+  }
+
+  function pusatkan() {
+    const peta = petaRef.current
+    if (!peta || !koordinat) return
+    peta.setView([lat, lng], Math.max(peta.getZoom(), ZOOM_LOKASI))
+  }
+
+  const tombolKelas =
+    'flex items-center gap-2 px-4 py-2 rounded-lg border border-ink-900/10 text-ink-700 text-sm font-medium hover:bg-ink-900/[0.04] disabled:opacity-50'
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        <button type="button" onClick={deteksi} disabled={mendeteksi || !online} className={tombolKelas}>
+          {mendeteksi ? <Loader2 size={16} className="animate-spin" /> : <MapPin size={16} />}
+          {mendeteksi ? 'Mendeteksi lokasi...' : 'Deteksi Lokasi GPS'}
+        </button>
+        {koordinat && (
+          <button type="button" onClick={pusatkan} className={tombolKelas}>
+            <Crosshair size={16} /> Ke penanda
+          </button>
+        )}
+        <button type="button" onClick={() => setBesar((b) => !b)} className={tombolKelas}>
+          {besar ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          {besar ? 'Perkecil peta' : 'Perbesar peta'}
+        </button>
+        {!online && <span className="text-xs text-amber-600">Offline — GPS dan peta butuh koneksi internet</span>}
+      </div>
+
+      {/* `isolate` mengurung z-index internal Leaflet (sampai 1000) supaya peta
+          tidak menimpa header/menu/modal di atasnya */}
+      <div className="relative isolate rounded-lg overflow-hidden ring-1 ring-ink-900/[0.08] shadow-sm">
+        <div ref={wadahRef} className={`w-full ${besar ? 'h-[70vh]' : 'h-64 sm:h-80'}`} />
+      </div>
+
+      {koordinat ? (
+        <div className="flex items-center gap-x-4 gap-y-1 flex-wrap text-xs text-ink-700/70">
+          <span>
+            Koordinat: {lat.toFixed(6)}, {lng.toFixed(6)}
+          </span>
+          <a
+            href={`https://www.google.com/maps?q=${lat},${lng}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-700 underline"
+          >
+            Buka di Google Maps
+          </a>
+        </div>
+      ) : (
+        <p className="text-xs text-ink-700/50">
+          Belum ada lokasi. Klik "Deteksi Lokasi GPS", atau klik langsung di peta untuk menaruh penanda.
+        </p>
+      )}
+
+      {akurasi !== null && (
+        <p className={`text-xs ${akurasi > 100 ? 'text-amber-600' : 'text-sage-600'}`}>
+          Lokasi terdeteksi (akurasi ±{akurasi} m).
+          {akurasi > 100 && ' Akurasi rendah — geser penanda ke posisi yang benar, atau coba lagi di tempat terbuka.'}
+        </p>
+      )}
+      {error && <p className="text-xs text-red-600">{error}</p>}
+
+      <p className="text-[11px] text-ink-700/40">
+        Klik peta untuk menaruh penanda dan geser penanda untuk koreksi. Untuk zoom dengan scroll, klik peta dulu (di HP:
+        cubit dua jari). Perubahan baru tersimpan setelah klik "Simpan".
+      </p>
+    </div>
+  )
+}
+
 // Kartu profil untuk akun yang tidak tertaut ke tabel `guru` (admin / admin_utama /
 // superadmin / kepala sekolah). Dibuat setara dengan kartu guru: foto profil, QR code,
 // barcode identitas, dan field data diri yang sama (NIPA, pangkat/golongan, no HP,
@@ -102,6 +389,9 @@ function TombolCetakDataDiri({ fields, judul, namaOrang, namaFile }) {
 // migrasi SQL yang dijalankan) — hanya label & placeholder di UI yang diubah dari
 // "NUPTK" menjadi "NIPA", karena field ini dipakai lintas tenant kantor & sekolah dan
 // tidak semua akun admin/kepsek adalah tenaga pendidik pemegang NUPTK.
+//
+// LOKASI GPS & PETA: kolom `lintang` & `bujur` di tabel `profil` (lihat SQL di
+// file gps_lokasi.sql / balasan chat).
 function ProfilAdminCard({ profil, userId, adminData }) {
   const { refreshProfil } = useAuth()
   const [form, setForm] = useState({
@@ -113,6 +403,8 @@ function ProfilAdminCard({ profil, userId, adminData }) {
     tanggal_lahir: adminData?.tanggal_lahir || '',
     pendidikan_terakhir: adminData?.pendidikan_terakhir || '',
     alamat: adminData?.alamat || '',
+    lintang: keString(adminData?.lintang),
+    bujur: keString(adminData?.bujur),
   })
   const [fotoPath, setFotoPath] = useState(adminData?.foto_profil_path || '')
   const [uploadingFoto, setUploadingFoto] = useState(false)
@@ -135,6 +427,8 @@ function ProfilAdminCard({ profil, userId, adminData }) {
       tanggal_lahir: adminData?.tanggal_lahir || '',
       pendidikan_terakhir: adminData?.pendidikan_terakhir || '',
       alamat: adminData?.alamat || '',
+      lintang: keString(adminData?.lintang),
+      bujur: keString(adminData?.bujur),
     })
     setFotoPath(adminData?.foto_profil_path || '')
   }, [adminData])
@@ -206,6 +500,8 @@ function ProfilAdminCard({ profil, userId, adminData }) {
     // alter table profil add column tanggal_lahir date;
     // alter table profil add column pendidikan_terakhir text;
     // alter table profil add column alamat text;
+    // alter table profil add column lintang double precision;
+    // alter table profil add column bujur double precision;
     const { error } = await supabase
       .from('profil')
       .update({
@@ -217,6 +513,8 @@ function ProfilAdminCard({ profil, userId, adminData }) {
         tanggal_lahir: form.tanggal_lahir || null,
         pendidikan_terakhir: form.pendidikan_terakhir,
         alamat: form.alamat,
+        lintang: keAngkaAtauNull(form.lintang),
+        bujur: keAngkaAtauNull(form.bujur),
       })
       .eq('id', userId)
 
@@ -254,6 +552,8 @@ function ProfilAdminCard({ profil, userId, adminData }) {
     { label: 'Tanggal Lahir', value: form.tanggal_lahir },
     { label: 'Pendidikan Terakhir', value: form.pendidikan_terakhir },
     { label: 'Alamat', value: form.alamat },
+    { label: 'Lintang', value: form.lintang },
+    { label: 'Bujur', value: form.bujur },
   ]
 
   return (
@@ -436,6 +736,34 @@ function ProfilAdminCard({ profil, userId, adminData }) {
                 onChange={(e) => setForm({ ...form, alamat: e.target.value })}
               />
             </div>
+
+            <div>
+              <label className="text-xs text-ink-700/60 mb-1 block">Lintang</label>
+              <input
+                className="input w-full"
+                placeholder="mis. -0.876543"
+                inputMode="decimal"
+                value={form.lintang}
+                onChange={(e) => setForm({ ...form, lintang: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-ink-700/60 mb-1 block">Bujur</label>
+              <input
+                className="input w-full"
+                placeholder="mis. 131.261234"
+                inputMode="decimal"
+                value={form.bujur}
+                onChange={(e) => setForm({ ...form, bujur: e.target.value })}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <LokasiGPSPeta
+                lintang={form.lintang}
+                bujur={form.bujur}
+                onChange={({ lintang, bujur }) => setForm((f) => ({ ...f, lintang, bujur }))}
+              />
+            </div>
           </div>
 
           <div className="flex items-center gap-3 pt-2 flex-wrap">
@@ -490,6 +818,8 @@ function ProfilAdminCard({ profil, userId, adminData }) {
 // alter table pegawai_kantor add column if not exists pendidikan_terakhir text;
 // alter table pegawai_kantor add column if not exists alamat text;
 // alter table pegawai_kantor add column if not exists foto_profil_path text;
+// alter table pegawai_kantor add column if not exists lintang double precision;
+// alter table pegawai_kantor add column if not exists bujur double precision;
 function ProfilPegawaiCard({ pegawaiData, userId, onDataBerubah }) {
   const [form, setForm] = useState({
     nama_lengkap: pegawaiData?.nama_lengkap || '',
@@ -500,6 +830,8 @@ function ProfilPegawaiCard({ pegawaiData, userId, onDataBerubah }) {
     tanggal_lahir: pegawaiData?.tanggal_lahir || '',
     pendidikan_terakhir: pegawaiData?.pendidikan_terakhir || '',
     alamat: pegawaiData?.alamat || '',
+    lintang: keString(pegawaiData?.lintang),
+    bujur: keString(pegawaiData?.bujur),
   })
   const [fotoPath, setFotoPath] = useState(pegawaiData?.foto_profil_path || '')
   const [uploadingFoto, setUploadingFoto] = useState(false)
@@ -519,6 +851,8 @@ function ProfilPegawaiCard({ pegawaiData, userId, onDataBerubah }) {
       tanggal_lahir: pegawaiData?.tanggal_lahir || '',
       pendidikan_terakhir: pegawaiData?.pendidikan_terakhir || '',
       alamat: pegawaiData?.alamat || '',
+      lintang: keString(pegawaiData?.lintang),
+      bujur: keString(pegawaiData?.bujur),
     })
     setFotoPath(pegawaiData?.foto_profil_path || '')
   }, [pegawaiData])
@@ -596,6 +930,8 @@ function ProfilPegawaiCard({ pegawaiData, userId, onDataBerubah }) {
         tanggal_lahir: form.tanggal_lahir || null,
         pendidikan_terakhir: form.pendidikan_terakhir,
         alamat: form.alamat,
+        lintang: keAngkaAtauNull(form.lintang),
+        bujur: keAngkaAtauNull(form.bujur),
       })
       .eq('id', pegawaiData.id)
 
@@ -618,6 +954,8 @@ function ProfilPegawaiCard({ pegawaiData, userId, onDataBerubah }) {
     { label: 'Tanggal Lahir', value: form.tanggal_lahir },
     { label: 'Pendidikan Terakhir', value: form.pendidikan_terakhir },
     { label: 'Alamat', value: form.alamat },
+    { label: 'Lintang', value: form.lintang },
+    { label: 'Bujur', value: form.bujur },
   ]
 
   return (
@@ -776,6 +1114,34 @@ function ProfilPegawaiCard({ pegawaiData, userId, onDataBerubah }) {
               rows={2}
               value={form.alamat}
               onChange={(e) => setForm({ ...form, alamat: e.target.value })}
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-ink-700/60 mb-1 block">Lintang</label>
+            <input
+              className="input w-full"
+              placeholder="mis. -0.876543"
+              inputMode="decimal"
+              value={form.lintang}
+              onChange={(e) => setForm({ ...form, lintang: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-ink-700/60 mb-1 block">Bujur</label>
+            <input
+              className="input w-full"
+              placeholder="mis. 131.261234"
+              inputMode="decimal"
+              value={form.bujur}
+              onChange={(e) => setForm({ ...form, bujur: e.target.value })}
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <LokasiGPSPeta
+              lintang={form.lintang}
+              bujur={form.bujur}
+              onChange={({ lintang, bujur }) => setForm((f) => ({ ...f, lintang, bujur }))}
             />
           </div>
         </div>
@@ -1331,7 +1697,7 @@ export default function ProfilSaya() {
       const { data: row } = await supabase
         .from('profil')
         .select(
-          'nama_lengkap_pendaftar, email_pendaftar, foto_profil_path, nuptk, pangkat_golongan, no_hp, tanggal_lahir, pendidikan_terakhir, alamat'
+          'nama_lengkap_pendaftar, email_pendaftar, foto_profil_path, nuptk, pangkat_golongan, no_hp, tanggal_lahir, pendidikan_terakhir, alamat, lintang, bujur'
         )
         .eq('id', userId)
         .maybeSingle()
@@ -1528,7 +1894,8 @@ export default function ProfilSaya() {
       karpeg: data.karpeg,
       karis_karsu: data.karis_karsu,
       nuks: data.nuks,
-      // Alamat & Lokasi
+      // Alamat & Lokasi (lintang/bujur bisa diisi dari GPS/peta — koma desimal
+      // dan nilai tidak valid ditangani keAngkaAtauNull)
       alamat_jalan: data.alamat_jalan,
       rt: data.rt,
       rw: data.rw,
@@ -1536,8 +1903,8 @@ export default function ProfilSaya() {
       desa_kelurahan: data.desa_kelurahan,
       kecamatan: data.kecamatan,
       kode_pos: data.kode_pos,
-      lintang: data.lintang === '' || data.lintang === null || data.lintang === undefined ? null : Number(data.lintang),
-      bujur: data.bujur === '' || data.bujur === null || data.bujur === undefined ? null : Number(data.bujur),
+      lintang: keAngkaAtauNull(data.lintang),
+      bujur: keAngkaAtauNull(data.bujur),
       // Kontak
       telepon: data.telepon,
       no_hp: data.no_hp,
@@ -2134,6 +2501,8 @@ export default function ProfilSaya() {
             <Field label="Lintang">
               <input
                 className="input w-full"
+                placeholder="mis. -0.876543"
+                inputMode="decimal"
                 value={data.lintang ?? ''}
                 onChange={(e) => setData({ ...data, lintang: e.target.value })}
               />
@@ -2141,10 +2510,19 @@ export default function ProfilSaya() {
             <Field label="Bujur">
               <input
                 className="input w-full"
+                placeholder="mis. 131.261234"
+                inputMode="decimal"
                 value={data.bujur ?? ''}
                 onChange={(e) => setData({ ...data, bujur: e.target.value })}
               />
             </Field>
+            <div className="sm:col-span-2">
+              <LokasiGPSPeta
+                lintang={data.lintang}
+                bujur={data.bujur}
+                onChange={({ lintang, bujur }) => setData((d) => ({ ...d, lintang, bujur }))}
+              />
+            </div>
           </SeksiForm>
 
           <SeksiForm judul="Kontak">
