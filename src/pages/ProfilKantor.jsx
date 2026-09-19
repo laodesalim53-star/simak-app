@@ -13,6 +13,8 @@ const emptyForm = {
   kecamatan: '',
   kepala_kua: '',
   nip_kepala_kua: '',
+  kepala_kemenag: '',
+  nip_kepala_kemenag: '',
   tempat_ttd: '',
   logo_path: '',
 }
@@ -121,7 +123,7 @@ export default function ProfilKantor() {
 
   if (loading) {
     return (
-      <Layout title="Profil Kantor" subtitle="Data kantor & Kepala KUA">
+      <Layout title="Profil Kantor" subtitle="Data kantor, Kepala KUA & Kepala Kemenag">
         <p className="text-center py-8 text-ink-700/50 text-sm">Memuat data...</p>
       </Layout>
     )
@@ -152,7 +154,7 @@ export default function ProfilKantor() {
         </div>
 
         <div className="card p-6">
-          <h3 className="font-display font-semibold text-ink-950 mb-4">Data Kantor & Kepala KUA</h3>
+          <h3 className="font-display font-semibold text-ink-950 mb-4">Data Kantor, Kepala KUA & Kepala Kemenag</h3>
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <label className="label-field">Nama Kantor</label>
@@ -165,6 +167,14 @@ export default function ProfilKantor() {
             <div>
               <label className="label-field">NIP Kepala KUA</label>
               <input className="input-field" value={form.nip_kepala_kua} onChange={(e) => ubah('nip_kepala_kua', e.target.value)} />
+            </div>
+            <div>
+              <label className="label-field">Kepala Kemenag Kabupaten/Kota</label>
+              <input className="input-field" placeholder="Nama Kepala Kantor Kementerian Agama" value={form.kepala_kemenag || ''} onChange={(e) => ubah('kepala_kemenag', e.target.value)} />
+            </div>
+            <div>
+              <label className="label-field">NIP Kepala Kemenag</label>
+              <input className="input-field" value={form.nip_kepala_kemenag || ''} onChange={(e) => ubah('nip_kepala_kemenag', e.target.value)} />
             </div>
             <div>
               <label className="label-field">Kabupaten/Kota</label>
