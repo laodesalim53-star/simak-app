@@ -60,6 +60,7 @@ import {
   Briefcase,
   BookOpen,
   LayoutGrid,
+  CalendarCheck,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
@@ -262,6 +263,7 @@ function getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelum
   label: 'Keagamaan',
   links: [
     { to: '/pusat-materi-majelis', label: 'Materi Majelis', icon: BookOpenCheck },
+    { to: '/rktp-penyuluh-2', label: 'RKTP Penyuluh 2', icon: CalendarCheck },
     { to: '/pusat-kelompok-binaan', label: 'Kelompok Binaan', icon: Users },
     { to: '/pendaftaran-nikah', label: 'Pendaftaran Nikah', icon: FileSignature },
   ],
@@ -336,6 +338,7 @@ function getLinksKantorPegawai(jumlahPesanBelumDibaca = 0) {
     { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
     { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
     { to: '/pusat-materi-majelis', label: 'Materi Majelis', icon: BookOpenCheck },
+    { to: '/rktp-penyuluh-2', label: 'RKTP Penyuluh 2', icon: CalendarCheck },
     { to: '/pusat-kelompok-binaan', label: 'Kelompok Binaan', icon: Users },
     { to: '/pendaftaran-nikah', label: 'Pendaftaran Nikah', icon: FileSignature },
     { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
