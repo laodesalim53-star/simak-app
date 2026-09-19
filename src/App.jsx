@@ -105,6 +105,7 @@ const MateriWakaf = lazy(() => import('./pages/MateriWakaf'))
 const MateriAkhlak = lazy(() => import('./pages/MateriAkhlak'))
 const MateriModerasiBeragama = lazy(() => import('./pages/MateriModerasiBeragama'))
 const LaporanPenyuluhanMasyarakatBermoral = lazy(() => import('./pages/LaporanPenyuluhanMasyarakatBermoral'))
+const RKTPPenyuluh2 = lazy(() => import('./pages/RKTPPenyuluh2'))
 const RencanaKerjaTahunan = lazy(() => import('./pages/RencanaKerjaTahunan'))
 const MateriMajelisTaklim = lazy(() => import('./pages/MateriMajelisTaklim'))
 const PusatKelompokBinaan = lazy(() => import('./pages/PusatKelompokBinaan'))
@@ -284,6 +285,7 @@ export default function App() {
           <Route path="/rencana-kerja-tahunan" element={<ProtectedRoute adminOnly><RencanaKerjaTahunan /></ProtectedRoute>} />
           <Route path="/materi-moderasi-beragama" element={<ProtectedRoute><MateriModerasiBeragama /></ProtectedRoute>} />
           <Route path="/laporan-masyarakat-bermoral-harmonis" element={<ProtectedRoute><LaporanPenyuluhanMasyarakatBermoral /></ProtectedRoute>} />
+          <Route path="/rktp-penyuluh-2" element={<ProtectedRoute><RKTPPenyuluh2 /></ProtectedRoute>} />
           {/* Materi Majelis Taklim: khusus pengguna kantor — jangan buka ke ProtectedRoute biasa. */}
           <Route path="/materi-majelis-taklim" element={<ProtectedRoute adminOnly><MateriMajelisTaklim /></ProtectedRoute>} />
           <Route path="/pusat-kelompok-binaan" element={<ProtectedRoute><PusatKelompokBinaan /></ProtectedRoute>} />
