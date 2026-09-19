@@ -107,6 +107,7 @@ const MateriModerasiBeragama = lazy(() => import('./pages/MateriModerasiBeragama
 const LaporanPenyuluhanMasyarakatBermoral = lazy(() => import('./pages/LaporanPenyuluhanMasyarakatBermoral'))
 const RKTPPenyuluh2 = lazy(() => import('./pages/RKTPPenyuluh2'))
 const LaporanKepenghuluan = lazy(() => import('./pages/LaporanKepenghuluan'))
+const LaporanKepalaKUA = lazy(() => import('./pages/LaporanKepalaKUA'))
 const RencanaKerjaTahunan = lazy(() => import('./pages/RencanaKerjaTahunan'))
 const MateriMajelisTaklim = lazy(() => import('./pages/MateriMajelisTaklim'))
 const PusatKelompokBinaan = lazy(() => import('./pages/PusatKelompokBinaan'))
@@ -288,6 +289,9 @@ export default function App() {
           <Route path="/laporan-masyarakat-bermoral-harmonis" element={<ProtectedRoute><LaporanPenyuluhanMasyarakatBermoral /></ProtectedRoute>} />
           <Route path="/rktp-penyuluh-2" element={<ProtectedRoute><RKTPPenyuluh2 /></ProtectedRoute>} />
           <Route path="/laporan-kepenghuluan" element={<ProtectedRoute><LaporanKepenghuluan /></ProtectedRoute>} />
+          {/* Laporan Kepala KUA: khusus admin_utama (Kepala KUA) — tanda tangan
+              otomatis dikunci sebagai "pembuat Kepala KUA", diketahui Kepala Kemenag. */}
+          <Route path="/laporan-kepala-kua" element={<ProtectedRoute adminUtamaOnly><LaporanKepalaKUA /></ProtectedRoute>} />
           {/* Materi Majelis Taklim: khusus pengguna kantor — jangan buka ke ProtectedRoute biasa. */}
           <Route path="/materi-majelis-taklim" element={<ProtectedRoute adminOnly><MateriMajelisTaklim /></ProtectedRoute>} />
           <Route path="/pusat-kelompok-binaan" element={<ProtectedRoute><PusatKelompokBinaan /></ProtectedRoute>} />
