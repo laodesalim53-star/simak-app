@@ -266,6 +266,7 @@ function getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelum
     { to: '/rktp-penyuluh-2', label: 'RKTP Penyuluh 2', icon: CalendarCheck },
     { to: '/pusat-kelompok-binaan', label: 'Kelompok Binaan', icon: Users },
     { to: '/pendaftaran-nikah', label: 'Pendaftaran Nikah', icon: FileSignature },
+    { to: '/laporan-kepenghuluan', label: 'Laporan Kepenghuluan', icon: FileStack },
   ],
 },
     {
@@ -341,6 +342,7 @@ function getLinksKantorPegawai(jumlahPesanBelumDibaca = 0) {
     { to: '/rktp-penyuluh-2', label: 'RKTP Penyuluh 2', icon: CalendarCheck },
     { to: '/pusat-kelompok-binaan', label: 'Kelompok Binaan', icon: Users },
     { to: '/pendaftaran-nikah', label: 'Pendaftaran Nikah', icon: FileSignature },
+    { to: '/laporan-kepenghuluan', label: 'Laporan Kepenghuluan', icon: FileStack },
     { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
     { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
     { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
