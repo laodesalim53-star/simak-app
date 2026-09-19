@@ -14,26 +14,40 @@
 const PLACEHOLDER = '..............................'
 
 const normNip = (s) => String(s || '').replace(/\D/g, '')
-const normNama = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+
+// Nama dibandingkan tanpa gelar & tanda baca: "FAHRUR ROZI, S.H." dan
+// "Fahrur Rozi" dianggap sama. Gelar belakang (setelah koma) dan gelar depan
+// yang umum (Dr., Drs., H., Hj., Ir., Prof.) diabaikan.
+const GELAR_DEPAN = new Set(['dr', 'drs', 'dra', 'h', 'hj', 'ir', 'prof'])
+function normNama(s) {
+  const tanpaGelarBelakang = String(s || '').toLowerCase().split(',')[0]
+  return tanpaGelarBelakang
+    .split(/\s+/)
+    .map((t) => t.replace(/[^a-z0-9]/g, ''))
+    .filter((t) => t && !GELAR_DEPAN.has(t))
+    .join('')
+}
 
 /**
  * @param mode 'otomatis' | 'pegawai' | 'kepala_kua'
  * @returns 'pegawai' | 'kepala_kua'
+ *
+ * Mode otomatis: pembuat dianggap Kepala KUA kalau NIP-nya ATAU namanya sama
+ * dengan Kepala KUA di Profil Kantor. (Sengaja "atau": kalau NIP di akun
+ * pembuat salah ketik/berbeda, nama yang sama tetap dikenali.)
  */
 export function tentukanModeTtd({ mode = 'otomatis', profilKantor, namaPembuat, nipPembuat }) {
   if (mode === 'pegawai' || mode === 'kepala_kua') return mode
 
   const nipKepala = normNip(profilKantor?.nip_kepala_kua)
   const nipPembuatBersih = normNip(nipPembuat)
-  if (nipKepala && nipPembuatBersih) {
-    return nipKepala === nipPembuatBersih ? 'kepala_kua' : 'pegawai'
-  }
+  const samaNip = !!nipKepala && !!nipPembuatBersih && nipKepala === nipPembuatBersih
 
   const namaKepala = normNama(profilKantor?.kepala_kua)
   const namaPembuatBersih = normNama(namaPembuat)
-  if (namaKepala && namaPembuatBersih && namaKepala === namaPembuatBersih) return 'kepala_kua'
+  const samaNama = !!namaKepala && !!namaPembuatBersih && namaKepala === namaPembuatBersih
 
-  return 'pegawai'
+  return samaNip || samaNama ? 'kepala_kua' : 'pegawai'
 }
 
 // Pilihan penandatangan untuk form (tidak ikut tercetak — taruh di dalam
@@ -135,10 +149,12 @@ export default function BlokTandaTangan({
 
   return (
     <div className="ttd-block flex justify-between mt-10 text-sm text-slate-700">
-      <div className="text-center w-56">
-        <p>Mengetahui,</p>
-        <p>{kiri.baris1}</p>
-        {kiri.baris2 ? <p>{kiri.baris2}</p> : null}
+      <div className="text-center w-64">
+        <div className="min-h-[5rem]">
+          <p>Mengetahui,</p>
+          <p>{kiri.baris1}</p>
+          {kiri.baris2 ? <p>{kiri.baris2}</p> : null}
+        </div>
         <div className="h-20 flex items-end justify-center">
           {kiri.ttdUrl && (
             <img src={kiri.ttdUrl} alt="Tanda tangan" className="max-h-20 object-contain" />
@@ -150,9 +166,11 @@ export default function BlokTandaTangan({
         </p>
       </div>
 
-      <div className="text-center w-56">
-        <p>{tempatTanggal || '\u00A0'}</p>
-        <p>{kanan.jabatan}</p>
+      <div className="text-center w-64">
+        <div className="min-h-[5rem]">
+          <p>{tempatTanggal || '\u00A0'}</p>
+          <p>{kanan.jabatan}</p>
+        </div>
         <div className="h-20 flex items-end justify-center">
           {kanan.ttdUrl && (
             <img src={kanan.ttdUrl} alt="Tanda tangan" className="max-h-20 object-contain" />
