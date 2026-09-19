@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import { Link } from 'react-router-dom'
 import { Printer, ArrowLeft, Handshake } from 'lucide-react'
 import Layout from '../components/Layout'
+import BlokTandaTangan, { PilihModeTtd } from '../components/BlokTandaTangan'
 import DaftarHadirCetak from '../components/DaftarHadirCetak'
 
 // Ganti 'logo' di bawah ini kalau nama bucket storage-mu berbeda
@@ -29,6 +30,7 @@ export default function LaporanPenyuluhanMasyarakatBermoral() {
   const [waktuKegiatan, setWaktuKegiatan] = useState('2026-01-15')
   const [tempatKegiatan, setTempatKegiatan] = useState('Desa Tabarfane')
   const [jumlahPeserta, setJumlahPeserta] = useState(15)
+  const [modeTtd, setModeTtd] = useState('otomatis')
 
   // Query profil_kantor kini di-scope per kantor lewat sekolah_id (bukan
   // lagi id=1 yang hardcode), sama seperti ProfilKantor.jsx dan KopSurat.jsx.
@@ -39,7 +41,7 @@ export default function LaporanPenyuluhanMasyarakatBermoral() {
     }
     supabase
       .from('profil_kantor')
-      .select('nama_kantor, alamat, kabupaten, kecamatan, telepon, email, kepala_kua, nip_kepala_kua, tempat_ttd, logo_path, ttd_kepala_kua_path')
+      .select('nama_kantor, alamat, kabupaten, kecamatan, telepon, email, kepala_kua, nip_kepala_kua, kepala_kemenag, nip_kepala_kemenag, tempat_ttd, logo_path, ttd_kepala_kua_path')
       .eq('sekolah_id', sekolahId)
       .maybeSingle()
       .then(({ data }) => setProfilKantor(data))
@@ -140,6 +142,7 @@ export default function LaporanPenyuluhanMasyarakatBermoral() {
               className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
+          <PilihModeTtd value={modeTtd} onChange={setModeTtd} profilKantor={profilKantor} namaPembuat={namaPenyuluh || profil?.nama_lengkap || ''} nipPembuat={nipPenyuluh || profil?.nip || ''} />
         </div>
         <p className="text-xs text-slate-400 mt-3">
           Isi data di atas sebelum mencetak. Jumlah peserta akan otomatis menyesuaikan jumlah baris
@@ -359,39 +362,17 @@ export default function LaporanPenyuluhanMasyarakatBermoral() {
               pemateriAwal={namaPenyuluh}
             />
 
-            {/* === TANDA TANGAN OTOMATIS === */}
-            <div className="ttd-block flex justify-between mt-10 text-sm text-slate-700">
-              <div className="text-center w-48">
-                <p>Mengetahui,</p>
-                <p>Kepala KUA</p>
-                <div className="h-20 flex items-end justify-center">
-                  {ttdKepalaKuaUrl && (
-                    <img
-                      src={ttdKepalaKuaUrl}
-                      alt="Tanda Tangan Kepala KUA"
-                      className="max-h-20 object-contain"
-                    />
-                  )}
-                </div>
-                <p className="font-semibold border-t border-slate-400 pt-1">
-                  ({profilKantor?.kepala_kua || '..............................'})
-                </p>
-                <p className="text-xs text-slate-500">
-                  NIP. {profilKantor?.nip_kepala_kua || '..............................'}
-                </p>
-              </div>
-              <div className="text-center w-48">
-                <p>{tempatTtd ? `${tempatTtd}, ${tanggalCetak}` : '\u00A0'}</p>
-                <p>Penyuluh Agama Islam</p>
-                <div className="h-20" />
-                <p className="font-semibold border-t border-slate-400 pt-1">
-                  ({namaPenyuluh || profil?.nama_lengkap || '..............................'})
-                </p>
-                <p className="text-xs text-slate-500">
-                  NIP. {nipPenyuluh || profil?.nip || '..............................'}
-                </p>
-              </div>
-            </div>
+            {/* === TANDA TANGAN OTOMATIS — pihak "Mengetahui" menyesuaikan pembuat laporan === */}
+            <BlokTandaTangan
+              profilKantor={profilKantor}
+              ttdKepalaKuaUrl={ttdKepalaKuaUrl}
+              mode={modeTtd}
+              namaPembuat={namaPenyuluh || profil?.nama_lengkap || ''}
+              nipPembuat={nipPenyuluh || profil?.nip || ''}
+              jabatanPembuat="Penyuluh Agama Islam"
+              labelNipPembuat="NIP."
+              tempatTanggal={tempatTtd ? `${tempatTtd}, ${tanggalCetak}` : ''}
+            />
           </div>
         </div>
       </div>
