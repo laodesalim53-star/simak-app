@@ -19,6 +19,17 @@ const PH_ANGKA = '....'
 // akad dihitung "Di luar KUA". Sama dengan halaman Laporan Kepenghuluan.
 const POLA_DI_KUA = /\b(kua|balai nikah|kantor urusan agama)\b/i
 
+// Kelompok binaan (sama dengan slug di PusatKelompokBinaan.jsx dan
+// DaftarHadirCetak.jsx). Dipakai untuk menghitung jumlah anggota terdaftar
+// per kelompok sebagai info pendukung — BUKAN jumlah kegiatan per bulan,
+// karena aplikasi belum punya log kegiatan bertanggal untuk kelompok binaan.
+const KELOMPOK_BINAAN_LABEL = [
+  ['majelis-taklim', 'Majelis Taklim'],
+  ['lapas', 'Lapas'],
+  ['rsu', 'RSU'],
+  ['masyarakat', 'Masyarakat'],
+]
+
 /* ------------------------------------------------------------------ */
 /*  Isi tetap & bawaan (sesuai contoh laporan Kepala KUA)              */
 /* ------------------------------------------------------------------ */
@@ -294,6 +305,11 @@ export default function LaporanKepalaKUA() {
   const [loadingNikah, setLoadingNikah] = useState(true)
   const [errorNikah, setErrorNikah] = useState('')
 
+  // Jumlah anggota terdaftar per kelompok binaan (Majelis Taklim, Lapas,
+  // RSU, Masyarakat) — info pendukung, ditarik dari kelompok_binaan_anggota.
+  const [jumlahAnggota, setJumlahAnggota] = useState({})
+  const [loadingAnggota, setLoadingAnggota] = useState(true)
+
   // === DATA LAPORAN — DAPAT DIISI ULANG SETIAP BULAN ===
   const [bulan, setBulan] = useState(bulanIniISO())
   const [tanggalLaporan, setTanggalLaporan] = useState(todayISO())
@@ -305,7 +321,10 @@ export default function LaporanKepalaKUA() {
   const [modeTtd, setModeTtd] = useState('kepala_kua')
 
   // Wilayah kerja: satu baris = satu desa/kelurahan, keterangan dipisah "|"
+  // Otomatis terisi dari profil_kantor.wilayah_kerja (lihat useEffect di bawah),
+  // tapi tetap bisa diedit/ditambah manual di sini.
   const [wilayahKerja, setWilayahKerja] = useState('')
+  const wilayahKerjaDiisiOtomatis = useRef(false)
 
   // Angka yang belum tercatat di aplikasi — diisi manual
   const [angka, setAngka] = useState({})
@@ -363,11 +382,51 @@ export default function LaporanKepalaKUA() {
     }
     supabase
       .from('profil_kantor')
-      .select('nama_kantor, alamat, kabupaten, kecamatan, telepon, email, kepala_kua, nip_kepala_kua, kepala_kemenag, nip_kepala_kemenag, tempat_ttd, logo_path, ttd_kepala_kua_path')
+      .select(
+        'nama_kantor, alamat, kabupaten, kecamatan, provinsi, kode_pos, wilayah_kerja, telepon, email, kepala_kua, nip_kepala_kua, kepala_kemenag, nip_kepala_kemenag, tempat_ttd, logo_path, ttd_kepala_kua_path'
+      )
       .eq('sekolah_id', sekolahId)
       .maybeSingle()
       .then(({ data }) => setProfilKantor(data))
   }, [sekolahId])
+
+  // Wilayah Kerja: sekali terisi otomatis dari profil kantor (kalau ada dan
+  // form belum pernah diisi manual). Setelah itu perubahan di profil kantor
+  // tidak menimpa lagi apa yang sudah diketik/diedit user di sini.
+  useEffect(() => {
+    if (!wilayahKerjaDiisiOtomatis.current && profilKantor?.wilayah_kerja) {
+      setWilayahKerja(profilKantor.wilayah_kerja)
+      wilayahKerjaDiisiOtomatis.current = true
+    }
+  }, [profilKantor])
+
+  // Jumlah anggota per kelompok binaan — dihitung dari kelompok_binaan_anggota
+  // (sama seperti tabel yang dibaca DaftarHadirCetak.jsx / PusatKelompokBinaan.jsx).
+  // Tidak difilter sekolah_id secara eksplisit, mengikuti pola query yang sudah
+  // dipakai di DaftarHadirCetak.jsx (RLS Supabase yang menentukan cakupannya).
+  useEffect(() => {
+    let aktif = true
+    setLoadingAnggota(true)
+    supabase
+      .from('kelompok_binaan_anggota')
+      .select('kelompok')
+      .then(({ data, error }) => {
+        if (!aktif) return
+        if (error) {
+          setJumlahAnggota({})
+        } else {
+          const hitung = {}
+          ;(data || []).forEach((row) => {
+            hitung[row.kelompok] = (hitung[row.kelompok] || 0) + 1
+          })
+          setJumlahAnggota(hitung)
+        }
+        setLoadingAnggota(false)
+      })
+    return () => {
+      aktif = false
+    }
+  }, [])
 
   // Pendaftaran nikah — diambil sekali, disaring per bulan di sisi klien.
   // Catatan: yang terbaca mengikuti RLS di Supabase. Akun admin utama melihat
@@ -453,6 +512,8 @@ export default function LaporanKepalaKUA() {
 
   const namaEfektif = namaKepala || profilKantor?.kepala_kua || ''
   const nipEfektif = nipKepala || profilKantor?.nip_kepala_kua || ''
+  const provinsiEfektif = provinsi || profilKantor?.provinsi || ''
+  const kodePosEfektif = kodePos || profilKantor?.kode_pos || ''
   const namaKantor = profilKantor?.nama_kantor || 'KUA Kecamatan ..........................'
   const jabatanEfektif = jabatan || `Kepala ${profilKantor?.nama_kantor || 'KUA Kecamatan'}`
   const kemenagKota = denganAwalanWilayah(profilKantor?.kabupaten)
@@ -471,9 +532,9 @@ export default function LaporanKepalaKUA() {
   const identitas = [
     ['Nama Kantor', namaKantor],
     ['Kabupaten/Kota', profilKantor?.kabupaten || PLACEHOLDER],
-    ['Provinsi', isi(provinsi)],
+    ['Provinsi', isi(provinsiEfektif)],
     ['Alamat', alamatKantor || PLACEHOLDER],
-    ['Kode Pos', isi(kodePos)],
+    ['Kode Pos', isi(kodePosEfektif)],
     ['Kepala KUA', isi(namaEfektif)],
     ['Periode Laporan', periode || PLACEHOLDER],
   ]
@@ -554,14 +615,24 @@ export default function LaporanKepalaKUA() {
             onChange={setJabatan}
             placeholder={`Otomatis: ${jabatanEfektif}`}
           />
-          <FieldText label="Provinsi" value={provinsi} onChange={setProvinsi} />
-          <FieldText label="Kode Pos" value={kodePos} onChange={setKodePos} />
+          <FieldText
+            label="Provinsi"
+            value={provinsi}
+            onChange={setProvinsi}
+            placeholder={profilKantor?.provinsi ? `Otomatis: ${profilKantor.provinsi}` : ''}
+          />
+          <FieldText
+            label="Kode Pos"
+            value={kodePos}
+            onChange={setKodePos}
+            placeholder={profilKantor?.kode_pos ? `Otomatis: ${profilKantor.kode_pos}` : ''}
+          />
           <div className="hidden sm:block" />
           <PilihModeTtd value={modeTtd} onChange={setModeTtd} profilKantor={profilKantor} namaPembuat={namaEfektif} nipPembuat={nipEfektif} />
 
           <SubJudulForm>Wilayah Kerja</SubJudulForm>
           <FieldArea
-            label="Desa/Kelurahan (satu baris = satu desa; keterangan opsional setelah tanda |)"
+            label="Desa/Kelurahan (satu baris = satu desa; keterangan opsional setelah tanda |). Terisi otomatis dari Profil Kantor, tetap bisa diedit."
             value={wilayahKerja}
             onChange={setWilayahKerja}
             placeholder={'Contoh:\nDesa Contoh Satu | 1.200 jiwa\nDesa Contoh Dua'}
@@ -683,8 +754,12 @@ export default function LaporanKepalaKUA() {
           <p className="text-slate-400">
             Akad nikah dihitung dari pendaftaran berstatus <em>diverifikasi</em> yang tanggal akadnya
             jatuh di bulan laporan. Pemeriksaan berkas = berkas diverifikasi + ditolak pada bulan laporan.
-            Kop surat, Kepala KUA, dan tanda tangan ditarik otomatis dari Profil Kantor. Angka yang belum
-            tercatat di aplikasi diisi manual; yang dikosongkan tampil sebagai titik-titik.
+            Kop surat, Kepala KUA, Provinsi, Kode Pos, Wilayah Kerja, dan tanda tangan ditarik otomatis
+            dari Profil Kantor. Jumlah anggota kelompok binaan (Majelis Taklim, Lapas, RSU, Masyarakat)
+            ditarik otomatis dari Pusat Kelompok Binaan sebagai info pendukung — bukan jumlah kegiatan
+            per bulan, karena aplikasi belum mencatat log kegiatan bertanggal untuk kelompok binaan.
+            Angka kegiatan lain yang belum tercatat di aplikasi diisi manual; yang dikosongkan tampil
+            sebagai titik-titik.
           </p>
         </div>
       </div>
@@ -799,6 +874,32 @@ export default function LaporanKepalaKUA() {
                         <td className={cellCenter}>{i + 1}</td>
                         <td className={cell}>{w.desa || PLACEHOLDER}</td>
                         <td className={cell}>{w.ket || PLACEHOLDER}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Sub>
+              <Sub huruf="C" judul="Kelompok Binaan Terdaftar">
+                <p className="text-justify text-xs text-slate-500">
+                  Jumlah anggota terdaftar per kelompok binaan (data pendukung, ditarik otomatis dari
+                  Pusat Kelompok Binaan — bukan jumlah kegiatan pada periode laporan ini).
+                </p>
+                <table className="lap-table w-full text-xs border-collapse">
+                  <thead>
+                    <tr>
+                      <th className={`${cellHead} w-10 text-center`}>No.</th>
+                      <th className={cellHead}>Kelompok Binaan</th>
+                      <th className={`${cellHead} w-32`}>Jumlah Anggota</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {KELOMPOK_BINAAN_LABEL.map(([slug, label], i) => (
+                      <tr key={slug}>
+                        <td className={cellCenter}>{i + 1}</td>
+                        <td className={cell}>{label}</td>
+                        <td className={cell}>
+                          {loadingAnggota ? '...' : `${jumlahAnggota[slug] || 0} orang`}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
