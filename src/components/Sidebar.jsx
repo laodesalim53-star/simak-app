@@ -187,7 +187,7 @@ function getGroupsAdmin(
           : []),
       ],
     },
-       {
+    {
       label: 'Administrasi',
       links: [
         { to: '/pengajuan-surat-aktif', label: 'Pengajuan Surat Aktif', icon: FileCheck2 },
@@ -219,8 +219,9 @@ function getGroupsAdmin(
         { to: '/kartu', label: 'Cetak Kartu', icon: IdCard },
       ],
     },
-      ]
+  ]
 }
+
 // Menu ADMIN untuk tenant "kantor" (isKantor) — versi ringkas dari
 // getGroupsAdmin() di atas, hanya fitur umum yang diminta: data pegawai,
 // presensi, surat-menyurat, dan dokumen. Semua item akademik (siswa, kelas,
@@ -247,39 +248,41 @@ function getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelum
         { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
       ],
     },
- {
-  label: 'Kepegawaian',
-  links: [
-    { to: '/data-pegawai-kantor', label: 'Data Pegawai', icon: Briefcase },
-    // PERBAIKAN: sebelumnya reuse "/presensi" (punya guru) — sekarang pakai
-    // rute & tabel presensi_pegawai_kantor sendiri (lihat PresensiKantor.jsx).
-    { to: '/presensi-kantor', label: 'Presensi Pegawai', icon: ClipboardCheck },
-    { to: '/profil-kantor', label: 'Profil Kantor', icon: Building2 },
-    { to: '/daftar-hadir-kantor', label: 'Daftar Hadir Kantor', icon: FileSpreadsheet },
-    { to: '/daftar-hadir-pegawai', label: 'Daftar Hadir Pegawai', icon: ClipboardList },
-  ],
-},
     {
-  label: 'Keagamaan',
-  links: [
-    { to: '/pusat-materi-majelis', label: 'Materi Majelis', icon: BookOpenCheck },
-    { to: '/rktp-penyuluh-2', label: 'RKTP Penyuluh 2', icon: CalendarCheck },
-    { to: '/pusat-kelompok-binaan', label: 'Kelompok Binaan', icon: Users },
-    { to: '/pendaftaran-nikah', label: 'Pendaftaran Nikah', icon: FileSignature },
-    { to: '/laporan-kepenghuluan', label: 'Laporan Kepenghuluan', icon: FileStack },
-  ],
-},
+      label: 'Kepegawaian',
+      links: [
+        { to: '/data-pegawai-kantor', label: 'Data Pegawai', icon: Briefcase },
+        // PERBAIKAN: sebelumnya reuse "/presensi" (punya guru) — sekarang pakai
+        // rute & tabel presensi_pegawai_kantor sendiri (lihat PresensiKantor.jsx).
+        { to: '/presensi-kantor', label: 'Presensi Pegawai', icon: ClipboardCheck },
+        { to: '/profil-kantor', label: 'Profil Kantor', icon: Building2 },
+        { to: '/daftar-hadir-kantor', label: 'Daftar Hadir Kantor', icon: FileSpreadsheet },
+        { to: '/daftar-hadir-pegawai', label: 'Daftar Hadir Pegawai', icon: ClipboardList },
+      ],
+    },
+    {
+      label: 'Keagamaan',
+      links: [
+        { to: '/pusat-materi-majelis', label: 'Materi Majelis', icon: BookOpenCheck },
+        { to: '/rktp-penyuluh-2', label: 'RKTP Penyuluh 2', icon: CalendarCheck },
+        { to: '/pusat-kelompok-binaan', label: 'Kelompok Binaan', icon: Users },
+        { to: '/pendaftaran-nikah', label: 'Pendaftaran Nikah', icon: FileSignature },
+        { to: '/laporan-kepenghuluan', label: 'Laporan Kepenghuluan', icon: FileStack },
+      ],
+    },
     {
       label: 'Administrasi',
       links: [
         { to: '/agenda', label: 'Agenda Kantor', icon: CalendarDays },
         { to: '/surat', label: 'Surat Masuk/Keluar', icon: Mail },
         { to: '/backup', label: 'Backup Data', icon: DatabaseBackup },
-        // "Persetujuan Akun" dan "Profil Kantor" hanya untuk admin utama.
+        // "Persetujuan Akun", "Verifikasi Nikah" dan "Laporan Kepala KUA"
+        // hanya untuk admin utama.
         ...(isAdminUtama
           ? [
               { to: '/persetujuan-akun', label: 'Persetujuan Akun', icon: ShieldCheck, badge: jumlahMenunggu },
-              { to: '/verifikasi-nikah', label: 'Verifikasi Nikah', icon: FileSignature }, 
+              { to: '/verifikasi-nikah', label: 'Verifikasi Nikah', icon: FileSignature },
+              { to: '/laporan-kepala-kua', label: 'Laporan Kepala KUA', icon: BookOpen },
             ]
           : []),
       ],
