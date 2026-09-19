@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import { Link } from 'react-router-dom'
 import { Printer, ArrowLeft, ClipboardList } from 'lucide-react'
 import Layout from '../components/Layout'
+import BlokTandaTangan, { PilihModeTtd } from '../components/BlokTandaTangan'
 
 // Ganti 'profil-kantor' di bawah ini kalau nama bucket storage-mu berbeda
 const LOGO_BUCKET = 'profil-kantor'
@@ -188,6 +189,7 @@ export default function RKTPPenyuluh2() {
   const [isuPrioritas, setIsuPrioritas] = useState('')
   const [potensiWilayah, setPotensiWilayah] = useState('')
   const [tanggalDokumen, setTanggalDokumen] = useState(todayISO())
+  const [modeTtd, setModeTtd] = useState('otomatis')
 
   // Query profil_kantor di-scope per kantor lewat sekolah_id (sama seperti
   // ProfilKantor.jsx, KopSurat.jsx, dan halaman laporan penyuluhan).
@@ -198,7 +200,7 @@ export default function RKTPPenyuluh2() {
     }
     supabase
       .from('profil_kantor')
-      .select('nama_kantor, alamat, kabupaten, kecamatan, telepon, email, kepala_kua, nip_kepala_kua, tempat_ttd, logo_path, ttd_kepala_kua_path')
+      .select('nama_kantor, alamat, kabupaten, kecamatan, telepon, email, kepala_kua, nip_kepala_kua, kepala_kemenag, nip_kepala_kemenag, tempat_ttd, logo_path, ttd_kepala_kua_path')
       .eq('sekolah_id', sekolahId)
       .maybeSingle()
       .then(({ data }) => setProfilKantor(data))
@@ -335,6 +337,7 @@ export default function RKTPPenyuluh2() {
             value={tanggalDokumen}
             onChange={setTanggalDokumen}
           />
+          <PilihModeTtd value={modeTtd} onChange={setModeTtd} profilKantor={profilKantor} namaPembuat={namaEfektif} nipPembuat={nipEfektif} />
           <FieldArea
             label="Karakteristik Masyarakat"
             value={karakteristik}
@@ -608,43 +611,17 @@ export default function RKTPPenyuluh2() {
             </section>
           </div>
 
-          {/* === TANDA TANGAN OTOMATIS === */}
-          <div className="ttd-block flex justify-between mt-10 text-sm text-slate-700">
-            <div className="text-center w-56">
-              <p>Mengetahui,</p>
-              <p>Kepala KUA Kecamatan {profilKantor?.kecamatan || '................'}</p>
-              <div className="h-20 flex items-end justify-center">
-                {ttdKepalaKuaUrl && (
-                  <img
-                    src={ttdKepalaKuaUrl}
-                    alt="Tanda Tangan Kepala KUA"
-                    className="max-h-20 object-contain"
-                  />
-                )}
-              </div>
-              <p className="font-semibold border-t border-slate-400 pt-1">
-                ({profilKantor?.kepala_kua || PLACEHOLDER})
-              </p>
-              <p className="text-xs text-slate-500">
-                NIP. {profilKantor?.nip_kepala_kua || PLACEHOLDER}
-              </p>
-            </div>
-            <div className="text-center w-56">
-              <p>
-                {tempatTtd && tanggalDokumenFormatted
-                  ? `${tempatTtd}, ${tanggalDokumenFormatted}`
-                  : '\u00A0'}
-              </p>
-              <p>Dibuat oleh, Penyuluh Agama</p>
-              <div className="h-20" />
-              <p className="font-semibold border-t border-slate-400 pt-1">
-                ({namaEfektif || PLACEHOLDER})
-              </p>
-              <p className="text-xs text-slate-500">
-                NIP/NI PPPK. {nipEfektif || PLACEHOLDER}
-              </p>
-            </div>
-          </div>
+          {/* === TANDA TANGAN OTOMATIS — pihak "Mengetahui" menyesuaikan pembuat laporan === */}
+          <BlokTandaTangan
+            profilKantor={profilKantor}
+            ttdKepalaKuaUrl={ttdKepalaKuaUrl}
+            mode={modeTtd}
+            namaPembuat={namaEfektif}
+            nipPembuat={nipEfektif}
+            jabatanPembuat="Dibuat oleh, Penyuluh Agama"
+            labelNipPembuat="NIP/NI PPPK."
+            tempatTanggal={tempatTtd && tanggalDokumenFormatted ? `${tempatTtd}, ${tanggalDokumenFormatted}` : ''}
+          />
         </div>
       </div>
 
