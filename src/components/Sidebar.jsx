@@ -276,13 +276,14 @@ function getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelum
         { to: '/agenda', label: 'Agenda Kantor', icon: CalendarDays },
         { to: '/surat', label: 'Surat Masuk/Keluar', icon: Mail },
         { to: '/backup', label: 'Backup Data', icon: DatabaseBackup },
-        // "Persetujuan Akun", "Verifikasi Nikah" dan "Laporan Kepala KUA"
-        // hanya untuk admin utama.
+        // "Persetujuan Akun", "Verifikasi Nikah", "Laporan Kepala KUA" dan
+        // "Laporan Bulanan KUA" hanya untuk admin utama.
         ...(isAdminUtama
           ? [
               { to: '/persetujuan-akun', label: 'Persetujuan Akun', icon: ShieldCheck, badge: jumlahMenunggu },
               { to: '/verifikasi-nikah', label: 'Verifikasi Nikah', icon: FileSignature },
               { to: '/laporan-kepala-kua', label: 'Laporan Kepala KUA', icon: BookOpen },
+              { to: '/laporan-bulanan-kua', label: 'Laporan Bulanan KUA', icon: NotebookPen },
             ]
           : []),
       ],
