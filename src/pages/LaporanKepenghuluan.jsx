@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import { Link } from 'react-router-dom'
 import { Printer, ArrowLeft, FileSignature } from 'lucide-react'
 import Layout from '../components/Layout'
+import BlokTandaTangan, { PilihModeTtd } from '../components/BlokTandaTangan'
 
 // Ganti kalau nama bucket storage-mu berbeda
 const LOGO_BUCKET = 'profil-kantor'
@@ -125,6 +126,7 @@ export default function LaporanKepenghuluan() {
   const [jabatan, setJabatan] = useState('Penghulu')
   const [pangkatGolongan, setPangkatGolongan] = useState('')
   const [tanggalLaporan, setTanggalLaporan] = useState(todayISO())
+  const [modeTtd, setModeTtd] = useState('otomatis')
 
   // Kegiatan yang tidak tercatat di pendaftaran nikah — diisi manual
   const [jumlahBimbingan, setJumlahBimbingan] = useState('')
@@ -147,7 +149,7 @@ export default function LaporanKepenghuluan() {
     }
     supabase
       .from('profil_kantor')
-      .select('nama_kantor, alamat, kabupaten, kecamatan, telepon, email, kepala_kua, nip_kepala_kua, tempat_ttd, logo_path, ttd_kepala_kua_path')
+      .select('nama_kantor, alamat, kabupaten, kecamatan, telepon, email, kepala_kua, nip_kepala_kua, kepala_kemenag, nip_kepala_kemenag, tempat_ttd, logo_path, ttd_kepala_kua_path')
       .eq('sekolah_id', sekolahId)
       .maybeSingle()
       .then(({ data }) => setProfilKantor(data))
@@ -335,6 +337,7 @@ export default function LaporanKepenghuluan() {
             onChange={setJumlahKonsultasi}
           />
           <div className="hidden sm:block" />
+          <PilihModeTtd value={modeTtd} onChange={setModeTtd} profilKantor={profilKantor} namaPembuat={namaEfektif} nipPembuat={nipEfektif} />
           <FieldArea
             label="Kendala (satu baris = satu poin)"
             value={kendala}
@@ -584,41 +587,17 @@ export default function LaporanKepenghuluan() {
             </section>
           </div>
 
-          {/* === TANDA TANGAN OTOMATIS === */}
-          <div className="ttd-block flex justify-between mt-10 text-sm text-slate-700">
-            <div className="text-center w-56">
-              <p>Mengetahui,</p>
-              <p>Kepala KUA Kecamatan {profilKantor?.kecamatan || '................'}</p>
-              <div className="h-20 flex items-end justify-center">
-                {ttdKepalaKuaUrl && (
-                  <img
-                    src={ttdKepalaKuaUrl}
-                    alt="Tanda Tangan Kepala KUA"
-                    className="max-h-20 object-contain"
-                  />
-                )}
-              </div>
-              <p className="font-semibold border-t border-slate-400 pt-1">
-                ({profilKantor?.kepala_kua || PLACEHOLDER})
-              </p>
-              <p className="text-xs text-slate-500">
-                NIP. {profilKantor?.nip_kepala_kua || PLACEHOLDER}
-              </p>
-            </div>
-            <div className="text-center w-56">
-              <p>
-                {tempatTtd && tanggalLaporanFormatted
-                  ? `${tempatTtd}, ${tanggalLaporanFormatted}`
-                  : '\u00A0'}
-              </p>
-              <p>{jabatan || 'Penghulu'}</p>
-              <div className="h-20" />
-              <p className="font-semibold border-t border-slate-400 pt-1">
-                ({namaEfektif || PLACEHOLDER})
-              </p>
-              <p className="text-xs text-slate-500">NIP. {nipEfektif || PLACEHOLDER}</p>
-            </div>
-          </div>
+          {/* === TANDA TANGAN OTOMATIS — pihak "Mengetahui" menyesuaikan pembuat laporan === */}
+          <BlokTandaTangan
+            profilKantor={profilKantor}
+            ttdKepalaKuaUrl={ttdKepalaKuaUrl}
+            mode={modeTtd}
+            namaPembuat={namaEfektif}
+            nipPembuat={nipEfektif}
+            jabatanPembuat={jabatan || 'Penghulu'}
+            labelNipPembuat="NIP."
+            tempatTanggal={tempatTtd && tanggalLaporanFormatted ? `${tempatTtd}, ${tanggalLaporanFormatted}` : ''}
+          />
         </div>
       </div>
 
