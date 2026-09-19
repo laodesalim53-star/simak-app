@@ -9,6 +9,11 @@ import BlokTandaTangan, { PilihModeTtd } from '../components/BlokTandaTangan'
 // Ganti kalau nama bucket storage-mu berbeda
 const LOGO_BUCKET = 'profil-kantor'
 
+// Nama kolom penanda kantor di database. Warisan dari aplikasi sekolah masih
+// bernama 'sekolah_id'; begitu kolomnya di-rename di Supabase (mis. jadi
+// 'kantor_id'), cukup ubah SATU baris ini — seluruh query di bawah ikut.
+const KOLOM_KANTOR = 'kantor_id'
+
 // Ganti tujuan tombol "Kembali" sesuai menu tempat halaman ini diletakkan
 const HALAMAN_KEMBALI = '/dashboard'
 
@@ -356,7 +361,10 @@ function TabelCetak({ header, baris, kosong = '-', footer }) {
 /* ------------------------------------------------------------------ */
 
 export default function LaporanBulananKUA() {
-  const { sekolahId } = useAuth()
+  // AuthContext masih memakai nama lama `kantorId` (warisan aplikasi
+  // sekolah). Di halaman ini dipakai sebagai `kantorId`. Kalau nanti
+  // AuthContext sudah di-rename, cukup ubah jadi: const { kantorId } = useAuth()
+  const { kantorId: kantorId } = useAuth()
   const [profilKantor, setProfilKantor] = useState(null)
 
   // Data pendaftaran nikah milik kantor ini (tabel yang sama dengan halaman
@@ -383,18 +391,18 @@ export default function LaporanBulananKUA() {
   // Bab I, II, IV & V: daftar pegawai kantor aktif (halaman "Data Pegawai").
   const [pegawaiKantor, setPegawaiKantor] = useState([])
   useEffect(() => {
-    if (!sekolahId) {
+    if (!kantorId) {
       setPegawaiKantor([])
       return
     }
     supabase
       .from('pegawai_kantor')
       .select('id, nama_lengkap, nip, jenis_kelamin, pangkat_golongan, jabatan, status_kepegawaian')
-      .eq('sekolah_id', sekolahId)
+      .eq(KOLOM_KANTOR, kantorId)
       .eq('status', 'aktif')
       .order('nama_lengkap')
       .then(({ data }) => setPegawaiKantor(data || []))
-  }, [sekolahId])
+  }, [kantorId])
 
   // Bab III: presensi pegawai kantor pada bulan terpilih (halaman "Presensi
   // Pegawai"). Status yang dicatat sistem hanya hadir/izin/sakit/alpa — kolom
@@ -402,36 +410,33 @@ export default function LaporanBulananKUA() {
   const [presensiBulan, setPresensiBulan] = useState([])
   useEffect(() => {
     const batasAtas = bulanBerikutnyaISO(bulan)
-    if (!sekolahId || !bulan || !batasAtas) {
+    if (!kantorId || !bulan || !batasAtas) {
       setPresensiBulan([])
       return
     }
     supabase
       .from('presensi_pegawai_kantor')
       .select('pegawai_kantor_id, status')
-      .eq('sekolah_id', sekolahId)
+      .eq(KOLOM_KANTOR, kantorId)
       .gte('tanggal', `${bulan}-01`)
       .lt('tanggal', batasAtas)
       .then(({ data }) => setPresensiBulan(data || []))
-  }, [sekolahId, bulan])
+  }, [kantorId, bulan])
 
   // Bab IX: anggota kelompok binaan "Majelis Taklim" (halaman Pusat Kelompok
   // Binaan), dikelompokkan per desa. Jumlah majelis = banyaknya nama
   // kelompok berbeda di desa itu. Jumlah kegiatan tidak dicatat di sana,
   // jadi tetap diisi manual.
+  // Catatan: tabel ini TIDAK punya kolom kantor (datanya global, dipakai
+  // bersama semua kantor) — jangan tambahkan filter KOLOM_KANTOR di sini.
   const [majelisData, setMajelisData] = useState([])
   useEffect(() => {
-    if (!sekolahId) {
-      setMajelisData([])
-      return
-    }
     supabase
       .from('kelompok_binaan_anggota')
       .select('desa, nama_kelompok')
-      .eq('sekolah_id', sekolahId)
       .eq('kelompok', 'majelis-taklim')
       .then(({ data }) => setMajelisData(data || []))
-  }, [sekolahId])
+  }, [])
 
   // Bab X: surat masuk & keluar pada bulan terpilih (halaman "Surat Masuk &
   // Keluar"). Tabel ini cuma membedakan masuk/keluar — jenis surat lain
@@ -455,19 +460,19 @@ export default function LaporanBulananKUA() {
   const [agendaBulan, setAgendaBulan] = useState([])
   useEffect(() => {
     const batasAtas = bulanBerikutnyaISO(bulan)
-    if (!sekolahId || !bulan || !batasAtas) {
+    if (!kantorId || !bulan || !batasAtas) {
       setAgendaBulan([])
       return
     }
     supabase
       .from('agenda')
       .select('id, judul, tanggal_mulai, lokasi, penanggung_jawab')
-      .eq('sekolah_id', sekolahId)
+      .eq(KOLOM_KANTOR, kantorId)
       .gte('tanggal_mulai', `${bulan}-01`)
       .lt('tanggal_mulai', batasAtas)
       .order('tanggal_mulai')
       .then(({ data }) => setAgendaBulan(data || []))
-  }, [sekolahId, bulan])
+  }, [kantorId, bulan])
 
   // Rekap Bab II (jumlah L/P per kategori ASN/PPPK/Non-ASN) dihitung dari
   // pegawaiKantor — dipakai sebagai NILAI OTOMATIS, admin tetap bisa
@@ -698,25 +703,25 @@ export default function LaporanBulananKUA() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agendaBulan])
 
-  // Profil kantor — di-scope per kantor lewat sekolah_id.
+  // Profil kantor — di-scope per kantor lewat KOLOM_KANTOR.
   // Catatan: kalau tabel profil_kantor belum punya kolom `provinsi`, hapus
   // kolom itu dari .select() di bawah (kolom yang tidak ada bikin query gagal).
   useEffect(() => {
-    if (!sekolahId) {
+    if (!kantorId) {
       setProfilKantor(null)
       return
     }
     supabase
       .from('profil_kantor')
       .select('nama_kantor, alamat, provinsi, kabupaten, kecamatan, telepon, email, kepala_kua, nip_kepala_kua, kepala_kemenag, nip_kepala_kemenag, tempat_ttd, logo_path, ttd_kepala_kua_path')
-      .eq('sekolah_id', sekolahId)
+      .eq(KOLOM_KANTOR, kantorId)
       .maybeSingle()
       .then(({ data }) => setProfilKantor(data))
-  }, [sekolahId])
+  }, [kantorId])
 
   // Pendaftaran nikah — diambil sekali, disaring per bulan di sisi klien.
   useEffect(() => {
-    if (!sekolahId) {
+    if (!kantorId) {
       setDataNikah([])
       setLoadingNikah(false)
       return
@@ -727,7 +732,7 @@ export default function LaporanBulananKUA() {
     supabase
       .from('pendaftaran_nikah')
       .select('id, status, data_n1, data_n2, dibuat_pada, diverifikasi_pada')
-      .eq('sekolah_id', sekolahId)
+      .eq(KOLOM_KANTOR, kantorId)
       .neq('status', 'draft')
       .order('dibuat_pada', { ascending: true })
       .then(({ data, error }) => {
@@ -743,7 +748,7 @@ export default function LaporanBulananKUA() {
     return () => {
       aktif = false
     }
-  }, [sekolahId])
+  }, [kantorId])
 
   const logoUrl = profilKantor?.logo_path
     ? supabase.storage.from(LOGO_BUCKET).getPublicUrl(profilKantor.logo_path).data.publicUrl
