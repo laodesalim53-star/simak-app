@@ -121,10 +121,31 @@ function bulanLokal(timestamp) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
+// 'YYYY-MM' -> 'YYYY-MM-01' bulan berikutnya. Dipakai sebagai batas atas
+// (exclusive) saat memfilter kolom timestamp (mis. agenda.tanggal_mulai)
+// supaya tidak meleset akibat komponen jam pada timestamp tersebut.
+function bulanBerikutnyaISO(bulanISO) {
+  if (!/^\d{4}-\d{2}$/.test(bulanISO || '')) return ''
+  const [y, m] = bulanISO.split('-').map(Number)
+  const y2 = m === 12 ? y + 1 : y
+  const m2 = m === 12 ? 1 : m + 1
+  return `${y2}-${String(m2).padStart(2, '0')}-01`
+}
+
 // Nama kabupaten/kota di profil kantor bisa tersimpan dengan atau tanpa awalan.
 function denganAwalanWilayah(nama) {
   if (!nama) return 'Kabupaten/Kota ..........................'
   return /^(kabupaten|kota)\s/i.test(nama) ? nama : `Kabupaten ${nama}`
+}
+
+// status_kepegawaian di tabel pegawai_kantor adalah teks bebas (mis. "PNS",
+// "PPPK", "Honorer") — dipetakan ke tiga kategori baku yang dipakai Bab II
+// Rekapitulasi Pegawai (ASN / PPPK / Non-ASN).
+function kategoriKepegawaian(teks) {
+  const t = (teks || '').toLowerCase()
+  if (t.includes('pppk')) return 'PPPK'
+  if (t.includes('pns') || t.includes('asn')) return 'ASN'
+  return 'Non-ASN'
 }
 
 const isi = (v) => (v && String(v).trim() ? v : PLACEHOLDER)
@@ -323,11 +344,145 @@ export default function LaporanBulananKUA() {
   const [provinsi, setProvinsi] = useState('')
   const [modeTtd, setModeTtd] = useState('kepala_kua')
 
-  // Angka yang belum tercatat di aplikasi — diisi manual
+  /* ---------------------------------------------------------------- */
+  /*  SUMBER DATA OTOMATIS — ditarik dari halaman lain yang sudah ada  */
+  /*  di aplikasi ini, supaya admin tidak perlu mengisi ulang manual.  */
+  /* ---------------------------------------------------------------- */
+
+  // Bab I & II: daftar pegawai kantor aktif (halaman "Data Pegawai").
+  const [pegawaiKantor, setPegawaiKantor] = useState([])
+  useEffect(() => {
+    if (!sekolahId) {
+      setPegawaiKantor([])
+      return
+    }
+    supabase
+      .from('pegawai_kantor')
+      .select('id, nama_lengkap, nip, jenis_kelamin, pangkat_golongan, jabatan, status_kepegawaian')
+      .eq('sekolah_id', sekolahId)
+      .eq('status', 'aktif')
+      .order('nama_lengkap')
+      .then(({ data }) => setPegawaiKantor(data || []))
+  }, [sekolahId])
+
+  // Bab III: presensi pegawai kantor pada bulan terpilih (halaman "Presensi
+  // Pegawai"). Status yang dicatat sistem hanya hadir/izin/sakit/alpa — kolom
+  // Cuti & Dinas Luar di Bab III tidak punya sumber otomatis, tetap manual.
+  const [presensiBulan, setPresensiBulan] = useState([])
+  useEffect(() => {
+    if (!sekolahId || !bulan) {
+      setPresensiBulan([])
+      return
+    }
+    supabase
+      .from('presensi_pegawai_kantor')
+      .select('pegawai_kantor_id, status')
+      .eq('sekolah_id', sekolahId)
+      .gte('tanggal', `${bulan}-01`)
+      .lte('tanggal', `${bulan}-31`)
+      .then(({ data }) => setPresensiBulan(data || []))
+  }, [sekolahId, bulan])
+
+  // Bab IX: anggota kelompok binaan "Majelis Taklim" (halaman Pusat Kelompok
+  // Binaan), dikelompokkan per desa. Jumlah majelis = banyaknya nama
+  // kelompok berbeda di desa itu. Jumlah kegiatan tidak dicatat di sana,
+  // jadi tetap diisi manual.
+  const [majelisData, setMajelisData] = useState([])
+  useEffect(() => {
+    supabase
+      .from('kelompok_binaan_anggota')
+      .select('desa, nama_kelompok')
+      .eq('kelompok', 'majelis-taklim')
+      .then(({ data }) => setMajelisData(data || []))
+  }, [])
+
+  // Bab X: surat masuk & keluar pada bulan terpilih (halaman "Surat Masuk &
+  // Keluar"). Tabel ini cuma membedakan masuk/keluar — jenis surat lain
+  // (surat tugas, surat keterangan, rekomendasi) tidak dibedakan di sana,
+  // jadi tetap diisi manual.
+  const [suratBulan, setSuratBulan] = useState([])
+  useEffect(() => {
+    if (!bulan) {
+      setSuratBulan([])
+      return
+    }
+    supabase
+      .from('surat')
+      .select('jenis, tanggal')
+      .gte('tanggal', `${bulan}-01`)
+      .lte('tanggal', `${bulan}-31`)
+      .then(({ data }) => setSuratBulan(data || []))
+  }, [bulan])
+
+  // Bab XIV: kegiatan pada bulan terpilih (halaman "Agenda Kantor").
+  const [agendaBulan, setAgendaBulan] = useState([])
+  useEffect(() => {
+    const batasAtas = bulanBerikutnyaISO(bulan)
+    if (!bulan || !batasAtas) {
+      setAgendaBulan([])
+      return
+    }
+    supabase
+      .from('agenda')
+      .select('id, judul, tanggal_mulai, lokasi, penanggung_jawab')
+      .gte('tanggal_mulai', `${bulan}-01`)
+      .lt('tanggal_mulai', batasAtas)
+      .order('tanggal_mulai')
+      .then(({ data }) => setAgendaBulan(data || []))
+  }, [bulan])
+
+  // Rekap Bab II (jumlah L/P per kategori ASN/PPPK/Non-ASN) dihitung dari
+  // pegawaiKantor — dipakai sebagai NILAI OTOMATIS, admin tetap bisa
+  // menimpanya lewat field manual di bawah (lihat `otomatis` & aNum()).
+  const rekapPegawaiOtomatis = useMemo(() => {
+    const hitung = { ASN: { L: 0, P: 0 }, PPPK: { L: 0, P: 0 }, 'Non-ASN': { L: 0, P: 0 } }
+    for (const p of pegawaiKantor) {
+      const kategori = kategoriKepegawaian(p.status_kepegawaian)
+      const jk = p.jenis_kelamin === 'P' ? 'P' : 'L'
+      hitung[kategori][jk] += 1
+    }
+    return hitung
+  }, [pegawaiKantor])
+
+  // Bab X: surat masuk & keluar bulan terpilih.
+  const jumlahSuratMasukOtomatis = useMemo(
+    () => suratBulan.filter((s) => s.jenis === 'masuk').length,
+    [suratBulan]
+  )
+  const jumlahSuratKeluarOtomatis = useMemo(
+    () => suratBulan.filter((s) => s.jenis === 'keluar').length,
+    [suratBulan]
+  )
+
+  // Peta kunci-angka -> nilai otomatis. Dipakai oleh a()/aNum() di bawah
+  // sebagai nilai bawaan setiap kali field angka yang bersangkutan masih
+  // kosong — begitu admin mengisi manual, nilai manual itu yang menang
+  // (pola yang sama seperti namaEfektif/nipEfektif untuk Kepala KUA).
+  const otomatis = useMemo(
+    () => ({
+      rekapAsnL: rekapPegawaiOtomatis.ASN.L,
+      rekapAsnP: rekapPegawaiOtomatis.ASN.P,
+      rekapPppkL: rekapPegawaiOtomatis.PPPK.L,
+      rekapPppkP: rekapPegawaiOtomatis.PPPK.P,
+      rekapNonAsnL: rekapPegawaiOtomatis['Non-ASN'].L,
+      rekapNonAsnP: rekapPegawaiOtomatis['Non-ASN'].P,
+      suratMasuk: jumlahSuratMasukOtomatis,
+      suratKeluar: jumlahSuratKeluarOtomatis,
+    }),
+    [rekapPegawaiOtomatis, jumlahSuratMasukOtomatis, jumlahSuratKeluarOtomatis]
+  )
+
+  // Angka yang belum tercatat di aplikasi — diisi manual. Untuk kunci yang
+  // ada di `otomatis` (lihat atas), nilai otomatis dipakai selama field
+  // manualnya masih kosong.
   const [angka, setAngka] = useState({})
   const ubahAngka = (kunci) => (nilai) => setAngka((s) => ({ ...s, [kunci]: nilai }))
-  const a = (kunci) => angkaTampil(angka[kunci])
-  const aNum = (kunci) => Number(angka[kunci]) || 0
+  const nilaiAngka = (kunci) => {
+    const manual = angka[kunci]
+    return manual !== undefined && manual !== '' ? manual : otomatis[kunci]
+  }
+  const a = (kunci) => angkaTampil(nilaiAngka(kunci))
+  const aNum = (kunci) => Number(nilaiAngka(kunci)) || 0
 
   const [kondisiKantorUmum, setKondisiKantorUmum] = useState('Baik')
   const [keteranganLain, setKeteranganLain] = useState('')
@@ -385,6 +540,86 @@ export default function LaporanBulananKUA() {
   const [arsip, setArsip] = useState(ARSIP_AWAL)
   const ubahArsip = (i, kolom, nilai) =>
     setArsip((rows) => rows.map((r, idx) => (idx === i ? { ...r, [kolom]: nilai } : r)))
+
+  /* ---------------------------------------------------------------- */
+  /*  ISI OTOMATIS — begitu data sumber datang, isi tabel Bab terkait. */
+  /*  Admin tetap bisa mengedit/menghapus baris hasil isian otomatis   */
+  /*  ini secara manual lewat TabelEditorForm seperti biasa.           */
+  /* ---------------------------------------------------------------- */
+
+  // Bab I: daftar pegawai dari pegawaiKantor.
+  useEffect(() => {
+    if (pegawaiKantor.length === 0) return
+    pegawai.setRows(
+      pegawaiKantor.map((p) => ({
+        id: p.id,
+        nama: p.nip ? `${p.nama_lengkap} / ${p.nip}` : p.nama_lengkap,
+        pangkat: p.pangkat_golongan || '',
+        jabatan: p.jabatan || '',
+        status: kategoriKepegawaian(p.status_kepegawaian),
+        ket: 'Aktif',
+      }))
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pegawaiKantor])
+
+  // Bab III: rekap kehadiran per pegawai untuk bulan terpilih.
+  useEffect(() => {
+    if (pegawaiKantor.length === 0) return
+    kehadiran.setRows(
+      pegawaiKantor.map((p) => {
+        const milikSaya = presensiBulan.filter((r) => r.pegawai_kantor_id === p.id)
+        const hitung = (status) => milikSaya.filter((r) => r.status === status).length
+        return {
+          id: p.id,
+          nama: p.nama_lengkap,
+          hadir: hitung('hadir'),
+          sakit: hitung('sakit'),
+          izin: hitung('izin'),
+          cuti: '', // tidak dicatat di Presensi Pegawai — diisi manual
+          dinasLuar: '', // tidak dicatat di Presensi Pegawai — diisi manual
+          alpa: hitung('alpa'),
+        }
+      })
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pegawaiKantor, presensiBulan])
+
+  // Bab IX: jumlah majelis taklim per desa dari data kelompok binaan.
+  useEffect(() => {
+    if (majelisData.length === 0) return
+    const petaDesa = {}
+    for (const row of majelisData) {
+      const desa = (row.desa || '').trim() || 'Belum diisi'
+      if (!petaDesa[desa]) petaDesa[desa] = new Set()
+      if (row.nama_kelompok) petaDesa[desa].add(row.nama_kelompok.trim())
+    }
+    const rows = Object.entries(petaDesa).map(([desa, namaKelompokSet]) => ({
+      id: desa,
+      desa,
+      jumlahMajelis: namaKelompokSet.size,
+      jumlahKegiatan: '', // tidak dicatat di Kelompok Binaan — diisi manual
+      ket: '',
+    }))
+    if (rows.length > 0) majelis.setRows(rows)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [majelisData])
+
+  // Bab XIV: kegiatan/kunjungan dinas dari Agenda Kantor bulan terpilih.
+  useEffect(() => {
+    if (agendaBulan.length === 0) return
+    kegiatanDinas.setRows(
+      agendaBulan.map((row) => ({
+        id: row.id,
+        tanggal: (row.tanggal_mulai || '').slice(0, 10),
+        kegiatan: row.judul || '',
+        pelaksana: row.penanggung_jawab || '',
+        tempat: row.lokasi || '',
+        ket: '',
+      }))
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agendaBulan])
 
   // Profil kantor — di-scope per kantor lewat sekolah_id
   useEffect(() => {
@@ -528,7 +763,7 @@ export default function LaporanBulananKUA() {
   return (
     <Layout
       title="Laporan Bulanan KUA"
-      subtitle="Laporan bulanan keadaan pegawai dan administrasi KUA Kecamatan, sebagian otomatis terisi dari data pendaftaran nikah dan profil kantor."
+      subtitle="Laporan bulanan keadaan pegawai dan administrasi KUA Kecamatan, sebagian otomatis terisi dari data pendaftaran nikah, data pegawai, presensi, kelompok binaan, surat, agenda, dan profil kantor."
     >
       <div className="no-print flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between mb-5">
         <Link
@@ -568,7 +803,7 @@ export default function LaporanBulananKUA() {
           <div className="hidden sm:block" />
           <PilihModeTtd value={modeTtd} onChange={setModeTtd} profilKantor={profilKantor} namaPembuat={namaEfektif} nipPembuat={nipEfektif} />
 
-          <SubJudulForm>I. Keadaan Pegawai</SubJudulForm>
+          <SubJudulForm>I. Keadaan Pegawai — otomatis dari Data Pegawai</SubJudulForm>
           <TabelEditorForm
             labelTambah="Tambah pegawai"
             rows={pegawai.rows}
@@ -584,15 +819,15 @@ export default function LaporanBulananKUA() {
             ]}
           />
 
-          <SubJudulForm>II. Rekapitulasi Pegawai (jumlah orang)</SubJudulForm>
-          <FieldText label="ASN — Laki-laki" type="number" min="0" value={angka.rekapAsnL ?? ''} onChange={ubahAngka('rekapAsnL')} />
-          <FieldText label="ASN — Perempuan" type="number" min="0" value={angka.rekapAsnP ?? ''} onChange={ubahAngka('rekapAsnP')} />
-          <FieldText label="PPPK — Laki-laki" type="number" min="0" value={angka.rekapPppkL ?? ''} onChange={ubahAngka('rekapPppkL')} />
-          <FieldText label="PPPK — Perempuan" type="number" min="0" value={angka.rekapPppkP ?? ''} onChange={ubahAngka('rekapPppkP')} />
-          <FieldText label="Non-ASN — Laki-laki" type="number" min="0" value={angka.rekapNonAsnL ?? ''} onChange={ubahAngka('rekapNonAsnL')} />
-          <FieldText label="Non-ASN — Perempuan" type="number" min="0" value={angka.rekapNonAsnP ?? ''} onChange={ubahAngka('rekapNonAsnP')} />
+          <SubJudulForm>II. Rekapitulasi Pegawai (jumlah orang) — otomatis dari Data Pegawai</SubJudulForm>
+          <FieldText label="ASN — Laki-laki" type="number" min="0" value={angka.rekapAsnL ?? ''} onChange={ubahAngka('rekapAsnL')} placeholder={`Otomatis: ${otomatis.rekapAsnL}`} />
+          <FieldText label="ASN — Perempuan" type="number" min="0" value={angka.rekapAsnP ?? ''} onChange={ubahAngka('rekapAsnP')} placeholder={`Otomatis: ${otomatis.rekapAsnP}`} />
+          <FieldText label="PPPK — Laki-laki" type="number" min="0" value={angka.rekapPppkL ?? ''} onChange={ubahAngka('rekapPppkL')} placeholder={`Otomatis: ${otomatis.rekapPppkL}`} />
+          <FieldText label="PPPK — Perempuan" type="number" min="0" value={angka.rekapPppkP ?? ''} onChange={ubahAngka('rekapPppkP')} placeholder={`Otomatis: ${otomatis.rekapPppkP}`} />
+          <FieldText label="Non-ASN — Laki-laki" type="number" min="0" value={angka.rekapNonAsnL ?? ''} onChange={ubahAngka('rekapNonAsnL')} placeholder={`Otomatis: ${otomatis.rekapNonAsnL}`} />
+          <FieldText label="Non-ASN — Perempuan" type="number" min="0" value={angka.rekapNonAsnP ?? ''} onChange={ubahAngka('rekapNonAsnP')} placeholder={`Otomatis: ${otomatis.rekapNonAsnP}`} />
 
-          <SubJudulForm>III. Keadaan Kehadiran Pegawai</SubJudulForm>
+          <SubJudulForm>III. Keadaan Kehadiran Pegawai — hadir/sakit/izin/alpa otomatis dari Presensi Pegawai; cuti & dinas luar manual</SubJudulForm>
           <TabelEditorForm
             labelTambah="Tambah baris kehadiran"
             rows={kehadiran.rows}
@@ -626,7 +861,7 @@ export default function LaporanBulananKUA() {
             ]}
           />
 
-          <SubJudulForm>V. Keadaan Penyuluh Agama</SubJudulForm>
+          <SubJudulForm>V. Keadaan Penyuluh Agama — belum ada sumber otomatis, diisi manual</SubJudulForm>
           <TabelEditorForm
             labelTambah="Tambah penyuluh"
             rows={penyuluh.rows}
@@ -669,7 +904,7 @@ export default function LaporanBulananKUA() {
             ]}
           />
 
-          <SubJudulForm>IX. Keadaan Majelis Taklim</SubJudulForm>
+          <SubJudulForm>IX. Keadaan Majelis Taklim — jumlah majelis otomatis dari Kelompok Binaan; jumlah kegiatan manual</SubJudulForm>
           <TabelEditorForm
             labelTambah="Tambah desa/kelurahan"
             rows={majelis.rows}
@@ -684,9 +919,9 @@ export default function LaporanBulananKUA() {
             ]}
           />
 
-          <SubJudulForm>X. Administrasi Surat</SubJudulForm>
-          <FieldText label="Surat masuk" type="number" min="0" value={angka.suratMasuk ?? ''} onChange={ubahAngka('suratMasuk')} />
-          <FieldText label="Surat keluar" type="number" min="0" value={angka.suratKeluar ?? ''} onChange={ubahAngka('suratKeluar')} />
+          <SubJudulForm>X. Administrasi Surat — surat masuk/keluar otomatis dari Surat Masuk & Keluar</SubJudulForm>
+          <FieldText label="Surat masuk" type="number" min="0" value={angka.suratMasuk ?? ''} onChange={ubahAngka('suratMasuk')} placeholder={`Otomatis: ${otomatis.suratMasuk}`} />
+          <FieldText label="Surat keluar" type="number" min="0" value={angka.suratKeluar ?? ''} onChange={ubahAngka('suratKeluar')} placeholder={`Otomatis: ${otomatis.suratKeluar}`} />
           <FieldText label="Surat tugas" type="number" min="0" value={angka.suratTugas ?? ''} onChange={ubahAngka('suratTugas')} />
           <FieldText label="Surat keterangan" type="number" min="0" value={angka.suratKeterangan ?? ''} onChange={ubahAngka('suratKeterangan')} />
           <FieldText label="Rekomendasi" type="number" min="0" value={angka.suratRekomendasi ?? ''} onChange={ubahAngka('suratRekomendasi')} />
@@ -748,7 +983,7 @@ export default function LaporanBulananKUA() {
             ))}
           </div>
 
-          <SubJudulForm>XIV. Kegiatan/Kunjungan Dinas</SubJudulForm>
+          <SubJudulForm>XIV. Kegiatan/Kunjungan Dinas — otomatis dari Agenda Kantor</SubJudulForm>
           <TabelEditorForm
             labelTambah="Tambah kegiatan"
             rows={kegiatanDinas.rows}
@@ -794,9 +1029,15 @@ export default function LaporanBulananKUA() {
               ({rekapNikah.diKua} di KUA, {rekapNikah.luarKua} di luar KUA).
             </p>
           )}
+          <p>
+            Juga terbaca otomatis: {pegawaiKantor.length} pegawai aktif, {jumlahSuratMasukOtomatis} surat masuk &
+            {' '}{jumlahSuratKeluarOtomatis} surat keluar, {agendaBulan.length} kegiatan agenda pada {periode || 'bulan terpilih'}.
+          </p>
           <p className="text-slate-400">
-            Kop surat, Kepala KUA, dan tanda tangan ditarik otomatis dari Profil Kantor. Angka yang belum
-            tercatat di aplikasi diisi manual; yang dikosongkan tampil sebagai titik-titik.
+            Kop surat, Kepala KUA, dan tanda tangan ditarik otomatis dari Profil Kantor. Field bertanda
+            "Otomatis: ..." sudah terisi sendiri dari data yang ada — kosongkan untuk memakainya, atau isi manual
+            untuk menimpanya. Angka yang belum tercatat di aplikasi tetap diisi manual; yang dikosongkan tampil
+            sebagai titik-titik.
           </p>
         </div>
       </div>
