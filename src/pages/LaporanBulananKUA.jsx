@@ -122,8 +122,8 @@ function bulanLokal(timestamp) {
 }
 
 // 'YYYY-MM' -> 'YYYY-MM-01' bulan berikutnya. Dipakai sebagai batas atas
-// (exclusive) saat memfilter kolom timestamp (mis. agenda.tanggal_mulai)
-// supaya tidak meleset akibat komponen jam pada timestamp tersebut.
+// (exclusive) saat memfilter kolom tanggal/timestamp supaya tidak meleset
+// akibat bulan 28/30 hari atau komponen jam pada timestamp.
 function bulanBerikutnyaISO(bulanISO) {
   if (!/^\d{4}-\d{2}$/.test(bulanISO || '')) return ''
   const [y, m] = bulanISO.split('-').map(Number)
@@ -148,10 +148,17 @@ function kategoriKepegawaian(teks) {
   return 'Non-ASN'
 }
 
+// Pencocokan jabatan untuk Bab IV (Penghulu) & Bab V (Penyuluh Agama).
+const punyaJabatan = (p, kata) => (p.jabatan || '').toLowerCase().includes(kata)
+
 const isi = (v) => (v && String(v).trim() ? v : PLACEHOLDER)
 const angkaTampil = (v) => (v !== undefined && v !== null && String(v).trim() !== '' ? v : PH_ANGKA)
 const jumlahkan = (arr, kunci) =>
   arr.reduce((total, r) => total + (Number(r[kunci]) || 0), 0)
+
+// Hitung baris yang benar-benar terisi namanya — dipakai Bab XVI supaya baris
+// kosong bawaan tidak ikut dihitung sebagai orang.
+const jumlahTerisi = (rows) => rows.filter((r) => (r.nama || '').trim()).length
 
 /* ------------------------------------------------------------------ */
 /*  Hook kecil untuk tabel dengan baris yang bisa ditambah/dihapus     */
@@ -160,11 +167,35 @@ const jumlahkan = (arr, kunci) =>
 function useDaftarBaris(awal, kolomBaru) {
   const [rows, setRows] = useState(awal)
   const idRef = useRef(1000)
-  const tambah = () => setRows((r) => [...r, { id: ++idRef.current, ...kolomBaru }])
-  const ubah = (id, kolom, nilai) =>
+  // Sekali admin menyentuh tabel ini, isian otomatis berhenti menimpanya.
+  const disentuh = useRef(false)
+
+  const tambah = () => {
+    disentuh.current = true
+    setRows((r) => [...r, { id: ++idRef.current, ...kolomBaru }])
+  }
+  const ubah = (id, kolom, nilai) => {
+    disentuh.current = true
     setRows((r) => r.map((x) => (x.id === id ? { ...x, [kolom]: nilai } : x)))
-  const hapus = (id) => setRows((r) => r.filter((x) => x.id !== id))
-  return { rows, setRows, tambah, ubah, hapus }
+  }
+  const hapus = (id) => {
+    disentuh.current = true
+    setRows((r) => r.filter((x) => x.id !== id))
+  }
+
+  // Dipakai oleh efek auto-isi. Menerima array baris, atau fungsi
+  // (barisSebelumnya) => barisBaru kalau perlu mempertahankan isian manual
+  // pada kolom yang tidak punya sumber otomatis (mis. Cuti & Dinas Luar).
+  const isiOtomatis = (barisBaruAtauFn) => {
+    if (disentuh.current) return
+    setRows((sebelumnya) => {
+      const hasil =
+        typeof barisBaruAtauFn === 'function' ? barisBaruAtauFn(sebelumnya) : barisBaruAtauFn
+      return hasil && hasil.length > 0 ? hasil : awal
+    })
+  }
+
+  return { rows, setRows, tambah, ubah, hapus, isiOtomatis }
 }
 
 /* ------------------------------------------------------------------ */
@@ -349,7 +380,7 @@ export default function LaporanBulananKUA() {
   /*  di aplikasi ini, supaya admin tidak perlu mengisi ulang manual.  */
   /* ---------------------------------------------------------------- */
 
-  // Bab I & II: daftar pegawai kantor aktif (halaman "Data Pegawai").
+  // Bab I, II, IV & V: daftar pegawai kantor aktif (halaman "Data Pegawai").
   const [pegawaiKantor, setPegawaiKantor] = useState([])
   useEffect(() => {
     if (!sekolahId) {
@@ -370,7 +401,8 @@ export default function LaporanBulananKUA() {
   // Cuti & Dinas Luar di Bab III tidak punya sumber otomatis, tetap manual.
   const [presensiBulan, setPresensiBulan] = useState([])
   useEffect(() => {
-    if (!sekolahId || !bulan) {
+    const batasAtas = bulanBerikutnyaISO(bulan)
+    if (!sekolahId || !bulan || !batasAtas) {
       setPresensiBulan([])
       return
     }
@@ -379,7 +411,7 @@ export default function LaporanBulananKUA() {
       .select('pegawai_kantor_id, status')
       .eq('sekolah_id', sekolahId)
       .gte('tanggal', `${bulan}-01`)
-      .lte('tanggal', `${bulan}-31`)
+      .lt('tanggal', batasAtas)
       .then(({ data }) => setPresensiBulan(data || []))
   }, [sekolahId, bulan])
 
@@ -389,12 +421,17 @@ export default function LaporanBulananKUA() {
   // jadi tetap diisi manual.
   const [majelisData, setMajelisData] = useState([])
   useEffect(() => {
+    if (!sekolahId) {
+      setMajelisData([])
+      return
+    }
     supabase
       .from('kelompok_binaan_anggota')
       .select('desa, nama_kelompok')
+      .eq('sekolah_id', sekolahId)
       .eq('kelompok', 'majelis-taklim')
       .then(({ data }) => setMajelisData(data || []))
-  }, [])
+  }, [sekolahId])
 
   // Bab X: surat masuk & keluar pada bulan terpilih (halaman "Surat Masuk &
   // Keluar"). Tabel ini cuma membedakan masuk/keluar — jenis surat lain
@@ -418,18 +455,19 @@ export default function LaporanBulananKUA() {
   const [agendaBulan, setAgendaBulan] = useState([])
   useEffect(() => {
     const batasAtas = bulanBerikutnyaISO(bulan)
-    if (!bulan || !batasAtas) {
+    if (!sekolahId || !bulan || !batasAtas) {
       setAgendaBulan([])
       return
     }
     supabase
       .from('agenda')
       .select('id, judul, tanggal_mulai, lokasi, penanggung_jawab')
+      .eq('sekolah_id', sekolahId)
       .gte('tanggal_mulai', `${bulan}-01`)
       .lt('tanggal_mulai', batasAtas)
       .order('tanggal_mulai')
       .then(({ data }) => setAgendaBulan(data || []))
-  }, [bulan])
+  }, [sekolahId, bulan])
 
   // Rekap Bab II (jumlah L/P per kategori ASN/PPPK/Non-ASN) dihitung dari
   // pegawaiKantor — dipakai sebagai NILAI OTOMATIS, admin tetap bisa
@@ -543,14 +581,13 @@ export default function LaporanBulananKUA() {
 
   /* ---------------------------------------------------------------- */
   /*  ISI OTOMATIS — begitu data sumber datang, isi tabel Bab terkait. */
-  /*  Admin tetap bisa mengedit/menghapus baris hasil isian otomatis   */
-  /*  ini secara manual lewat TabelEditorForm seperti biasa.           */
+  /*  isiOtomatis() berhenti menimpa begitu admin menyentuh tabel yang */
+  /*  bersangkutan, jadi editan manual tidak hilang saat ganti bulan.  */
   /* ---------------------------------------------------------------- */
 
   // Bab I: daftar pegawai dari pegawaiKantor.
   useEffect(() => {
-    if (pegawaiKantor.length === 0) return
-    pegawai.setRows(
+    pegawai.isiOtomatis(
       pegawaiKantor.map((p) => ({
         id: p.id,
         nama: p.nip ? `${p.nama_lengkap} / ${p.nip}` : p.nama_lengkap,
@@ -563,11 +600,13 @@ export default function LaporanBulananKUA() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pegawaiKantor])
 
-  // Bab III: rekap kehadiran per pegawai untuk bulan terpilih.
+  // Bab III: rekap kehadiran per pegawai untuk bulan terpilih. Kolom Cuti &
+  // Dinas Luar tidak punya sumber otomatis — nilai yang sudah diketik admin
+  // dipertahankan saat data presensi dimuat ulang.
   useEffect(() => {
-    if (pegawaiKantor.length === 0) return
-    kehadiran.setRows(
-      pegawaiKantor.map((p) => {
+    kehadiran.isiOtomatis((sebelumnya) => {
+      const lama = new Map(sebelumnya.map((r) => [r.id, r]))
+      return pegawaiKantor.map((p) => {
         const milikSaya = presensiBulan.filter((r) => r.pegawai_kantor_id === p.id)
         const hitung = (status) => milikSaya.filter((r) => r.status === status).length
         return {
@@ -576,39 +615,77 @@ export default function LaporanBulananKUA() {
           hadir: hitung('hadir'),
           sakit: hitung('sakit'),
           izin: hitung('izin'),
-          cuti: '', // tidak dicatat di Presensi Pegawai — diisi manual
-          dinasLuar: '', // tidak dicatat di Presensi Pegawai — diisi manual
+          cuti: lama.get(p.id)?.cuti ?? '',
+          dinasLuar: lama.get(p.id)?.dinasLuar ?? '',
           alpa: hitung('alpa'),
         }
       })
-    )
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pegawaiKantor, presensiBulan])
 
+  // Bab IV: penghulu — disaring dari Data Pegawai berdasarkan jabatan.
+  // Jumlah pelayanan nikah per penghulu belum tercatat, jadi tetap manual.
+  useEffect(() => {
+    penghulu.isiOtomatis((sebelumnya) => {
+      const lama = new Map(sebelumnya.map((r) => [r.id, r]))
+      return pegawaiKantor
+        .filter((p) => punyaJabatan(p, 'penghulu'))
+        .map((p) => ({
+          id: p.id,
+          nama: p.nama_lengkap,
+          nip: p.nip || '',
+          pangkat: p.pangkat_golongan || '',
+          pelayanan: lama.get(p.id)?.pelayanan ?? '',
+          ket: lama.get(p.id)?.ket ?? '',
+        }))
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pegawaiKantor])
+
+  // Bab V: penyuluh agama — disaring dari Data Pegawai berdasarkan jabatan.
+  // Wilayah binaan & jumlah kegiatan belum tercatat, jadi tetap manual.
+  useEffect(() => {
+    penyuluh.isiOtomatis((sebelumnya) => {
+      const lama = new Map(sebelumnya.map((r) => [r.id, r]))
+      return pegawaiKantor
+        .filter((p) => punyaJabatan(p, 'penyuluh'))
+        .map((p) => ({
+          id: p.id,
+          nama: p.nama_lengkap,
+          status: kategoriKepegawaian(p.status_kepegawaian),
+          wilayah: lama.get(p.id)?.wilayah ?? '',
+          jumlahKegiatan: lama.get(p.id)?.jumlahKegiatan ?? '',
+          ket: lama.get(p.id)?.ket ?? '',
+        }))
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pegawaiKantor])
+
   // Bab IX: jumlah majelis taklim per desa dari data kelompok binaan.
   useEffect(() => {
-    if (majelisData.length === 0) return
     const petaDesa = {}
     for (const row of majelisData) {
       const desa = (row.desa || '').trim() || 'Belum diisi'
       if (!petaDesa[desa]) petaDesa[desa] = new Set()
       if (row.nama_kelompok) petaDesa[desa].add(row.nama_kelompok.trim())
     }
-    const rows = Object.entries(petaDesa).map(([desa, namaKelompokSet]) => ({
-      id: desa,
-      desa,
-      jumlahMajelis: namaKelompokSet.size,
-      jumlahKegiatan: '', // tidak dicatat di Kelompok Binaan — diisi manual
-      ket: '',
-    }))
-    if (rows.length > 0) majelis.setRows(rows)
+    majelis.isiOtomatis((sebelumnya) => {
+      const lama = new Map(sebelumnya.map((r) => [r.id, r]))
+      return Object.entries(petaDesa).map(([desa, namaKelompokSet]) => ({
+        id: desa,
+        desa,
+        jumlahMajelis: namaKelompokSet.size,
+        jumlahKegiatan: lama.get(desa)?.jumlahKegiatan ?? '', // manual
+        ket: lama.get(desa)?.ket ?? '',
+      }))
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [majelisData])
 
   // Bab XIV: kegiatan/kunjungan dinas dari Agenda Kantor bulan terpilih.
   useEffect(() => {
-    if (agendaBulan.length === 0) return
-    kegiatanDinas.setRows(
+    kegiatanDinas.isiOtomatis(
       agendaBulan.map((row) => ({
         id: row.id,
         tanggal: (row.tanggal_mulai || '').slice(0, 10),
@@ -621,7 +698,9 @@ export default function LaporanBulananKUA() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agendaBulan])
 
-  // Profil kantor — di-scope per kantor lewat sekolah_id
+  // Profil kantor — di-scope per kantor lewat sekolah_id.
+  // Catatan: kalau tabel profil_kantor belum punya kolom `provinsi`, hapus
+  // kolom itu dari .select() di bawah (kolom yang tidak ada bikin query gagal).
   useEffect(() => {
     if (!sekolahId) {
       setProfilKantor(null)
@@ -629,7 +708,7 @@ export default function LaporanBulananKUA() {
     }
     supabase
       .from('profil_kantor')
-      .select('nama_kantor, alamat, kabupaten, kecamatan, telepon, email, kepala_kua, nip_kepala_kua, kepala_kemenag, nip_kepala_kemenag, tempat_ttd, logo_path, ttd_kepala_kua_path')
+      .select('nama_kantor, alamat, provinsi, kabupaten, kecamatan, telepon, email, kepala_kua, nip_kepala_kua, kepala_kemenag, nip_kepala_kemenag, tempat_ttd, logo_path, ttd_kepala_kua_path')
       .eq('sekolah_id', sekolahId)
       .maybeSingle()
       .then(({ data }) => setProfilKantor(data))
@@ -695,6 +774,7 @@ export default function LaporanBulananKUA() {
 
   const namaEfektif = namaKepala || profilKantor?.kepala_kua || ''
   const nipEfektif = nipKepala || profilKantor?.nip_kepala_kua || ''
+  const provinsiEfektif = provinsi || profilKantor?.provinsi || ''
   const namaKantor = profilKantor?.nama_kantor || 'KUA Kecamatan ..........................'
   const jabatanEfektif = jabatan || `Kepala ${profilKantor?.nama_kantor || 'KUA Kecamatan'}`
   const kemenagKota = denganAwalanWilayah(profilKantor?.kabupaten)
@@ -746,9 +826,9 @@ export default function LaporanBulananKUA() {
   ]
 
   const rekapBulananRows = [
-    ['Jumlah pegawai', `${pegawai.rows.length} orang`],
-    ['Jumlah penghulu', `${penghulu.rows.length} orang`],
-    ['Jumlah penyuluh', `${penyuluh.rows.length} orang`],
+    ['Jumlah pegawai', `${jumlahTerisi(pegawai.rows)} orang`],
+    ['Jumlah penghulu', `${jumlahTerisi(penghulu.rows)} orang`],
+    ['Jumlah penyuluh', `${jumlahTerisi(penyuluh.rows)} orang`],
     ['Jumlah peristiwa nikah', rekapNikah.peristiwa.length],
     ['Jumlah wakaf', a('wakafPendaftaran')],
     ['Jumlah masjid', totalMasjid],
@@ -799,7 +879,12 @@ export default function LaporanBulananKUA() {
             placeholder={profilKantor?.nip_kepala_kua ? `Otomatis: ${profilKantor.nip_kepala_kua}` : 'Opsional'}
           />
           <FieldText label="Jabatan" value={jabatan} onChange={setJabatan} placeholder={`Otomatis: ${jabatanEfektif}`} />
-          <FieldText label="Provinsi" value={provinsi} onChange={setProvinsi} />
+          <FieldText
+            label="Provinsi"
+            value={provinsi}
+            onChange={setProvinsi}
+            placeholder={profilKantor?.provinsi ? `Otomatis: ${profilKantor.provinsi}` : ''}
+          />
           <div className="hidden sm:block" />
           <PilihModeTtd value={modeTtd} onChange={setModeTtd} profilKantor={profilKantor} namaPembuat={namaEfektif} nipPembuat={nipEfektif} />
 
@@ -845,7 +930,7 @@ export default function LaporanBulananKUA() {
             ]}
           />
 
-          <SubJudulForm>IV. Keadaan Penghulu</SubJudulForm>
+          <SubJudulForm>IV. Keadaan Penghulu — otomatis dari Data Pegawai (jabatan mengandung "penghulu"); pelayanan nikah manual</SubJudulForm>
           <TabelEditorForm
             labelTambah="Tambah penghulu"
             rows={penghulu.rows}
@@ -861,7 +946,7 @@ export default function LaporanBulananKUA() {
             ]}
           />
 
-          <SubJudulForm>V. Keadaan Penyuluh Agama — belum ada sumber otomatis, diisi manual</SubJudulForm>
+          <SubJudulForm>V. Keadaan Penyuluh Agama — otomatis dari Data Pegawai (jabatan mengandung "penyuluh"); wilayah & kegiatan manual</SubJudulForm>
           <TabelEditorForm
             labelTambah="Tambah penyuluh"
             rows={penyuluh.rows}
@@ -1036,8 +1121,9 @@ export default function LaporanBulananKUA() {
           <p className="text-slate-400">
             Kop surat, Kepala KUA, dan tanda tangan ditarik otomatis dari Profil Kantor. Field bertanda
             "Otomatis: ..." sudah terisi sendiri dari data yang ada — kosongkan untuk memakainya, atau isi manual
-            untuk menimpanya. Angka yang belum tercatat di aplikasi tetap diisi manual; yang dikosongkan tampil
-            sebagai titik-titik.
+            untuk menimpanya. Tabel yang terisi otomatis berhenti diperbarui begitu kamu mengeditnya, jadi hasil
+            ketikanmu tidak hilang saat ganti bulan. Angka yang belum tercatat di aplikasi tetap diisi manual;
+            yang dikosongkan tampil sebagai titik-titik.
           </p>
         </div>
       </div>
@@ -1092,7 +1178,7 @@ export default function LaporanBulananKUA() {
               Bulan {namaBulanSaja || PLACEHOLDER} Tahun {tahun || '2026'}
             </p>
             <p className="text-sm text-slate-700">
-              Kabupaten/Kota: {profilKantor?.kabupaten || PLACEHOLDER} &nbsp;|&nbsp; Provinsi: {isi(provinsi)}
+              Kabupaten/Kota: {profilKantor?.kabupaten || PLACEHOLDER} &nbsp;|&nbsp; Provinsi: {isi(provinsiEfektif)}
             </p>
           </div>
 
