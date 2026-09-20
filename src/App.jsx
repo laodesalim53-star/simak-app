@@ -78,6 +78,7 @@ const PortofolioAnak = lazy(() => import('./pages/PortofolioAnak'))
 const GaleriOrangTua = lazy(() => import('./pages/GaleriOrangTua'))
 
 const Inventaris = lazy(() => import('./pages/Inventaris'))
+const Bangunan = lazy(() => import('./pages/Bangunan'))   // BARU — Kondisi Bangunan
 const Agenda = lazy(() => import('./pages/Agenda'))
 const Surat = lazy(() => import('./pages/Surat'))
 const SuratKeterangan = lazy(() => import('./pages/SuratKeterangan'))
@@ -379,6 +380,10 @@ export default function App() {
               6. ADMINISTRASI & KEUANGAN SEKOLAH
              ============================================================ */}
           <Route path="/inventaris" element={<ProtectedRoute adminOnly><Inventaris /></ProtectedRoute>} />
+          {/* Kondisi Bangunan — halaman baru, satu paket dengan RingkasanAset
+              (dipakai juga di Laporan Kepala Sekolah / Laporan Kepala KUA).
+              Proteksi disamakan dengan /inventaris (adminOnly). */}
+          <Route path="/bangunan" element={<ProtectedRoute adminOnly><Bangunan /></ProtectedRoute>} />
           <Route path="/agenda" element={<ProtectedRoute><Agenda /></ProtectedRoute>} />
           <Route path="/surat" element={<ProtectedRoute adminOnly><Surat /></ProtectedRoute>} />
           <Route path="/surat-keterangan" element={<ProtectedRoute adminOnly><SuratKeterangan /></ProtectedRoute>} />
