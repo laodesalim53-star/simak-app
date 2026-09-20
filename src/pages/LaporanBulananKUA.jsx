@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import { Link } from 'react-router-dom'
 import { Printer, ArrowLeft, Plus, Trash2 } from 'lucide-react'
 import Layout from '../components/Layout'
-import BlokTandaTangan, { PilihModeTtd } from '../components/BlokTandaTangan'
+import BlokTandaTangan from '../components/BlokTandaTangan'
 
 // Ganti kalau nama bucket storage-mu berbeda
 const LOGO_BUCKET = 'profil-kantor'
@@ -57,15 +57,23 @@ const MASALAH_AWAL = [1, 2, 3].map((id) => ({ id, permasalahan: '', upaya: '', k
 const SARANA_ITEMS = [
   'Meja kerja', 'Kursi', 'Komputer/Laptop', 'Printer', 'Lemari arsip', 'AC/Kipas Angin', 'Kendaraan dinas',
 ]
-const SARANA_AWAL = SARANA_ITEMS.map((nama) => ({
-  nama, jumlah: '', baik: '', rusakRingan: '', rusakBerat: '',
+const SARANA_AWAL = SARANA_ITEMS.map((nama, i) => ({
+  id: i + 1, nama, jumlah: '', baik: '', rusakRingan: '', rusakBerat: '',
 }))
 
 const GEDUNG_ITEMS = [
   'Ruang Kepala KUA', 'Ruang pelayanan', 'Ruang arsip', 'Ruang kerja pegawai',
   'Toilet', 'Halaman kantor', 'Papan nama kantor',
 ]
-const GEDUNG_AWAL = GEDUNG_ITEMS.map((uraian) => ({ uraian, kondisi: 'Baik', ket: '' }))
+const GEDUNG_AWAL = GEDUNG_ITEMS.map((uraian, i) => ({ id: i + 1, uraian, kondisi: 'Baik', ket: '' }))
+
+// kondisi di tabel `bangunan` cuma 3 nilai baku — dipetakan ke label yang
+// ditampilkan di Bab XII.
+const KONDISI_BANGUNAN_LABEL = {
+  baik: 'Baik',
+  rusak_ringan: 'Rusak Ringan',
+  rusak_berat: 'Rusak Berat',
+}
 
 const ARSIP_ITEMS = [
   'Arsip pernikahan', 'Arsip wakaf', 'Arsip kepegawaian',
@@ -111,14 +119,6 @@ function pecahBulan(bulanISO) {
     bulan: new Date(y, m - 1, 1).toLocaleDateString('id-ID', { month: 'long' }),
     tahun: String(y),
   }
-}
-
-// Timestamp dari database (UTC) -> 'YYYY-MM' menurut zona waktu perangkat
-function bulanLokal(timestamp) {
-  if (!timestamp) return ''
-  const d = new Date(timestamp)
-  if (Number.isNaN(d.getTime())) return ''
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
 // 'YYYY-MM' -> 'YYYY-MM-01' bulan berikutnya. Dipakai sebagai batas atas
@@ -230,21 +230,6 @@ function FieldSelect({ label, value, onChange, options }) {
           <option key={o} value={o}>{o}</option>
         ))}
       </select>
-    </div>
-  )
-}
-
-function FieldArea({ label, value, onChange, placeholder, rows = 3 }) {
-  return (
-    <div className="sm:col-span-2">
-      <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
-      <textarea
-        rows={rows}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className={inputClass}
-      />
     </div>
   )
 }
@@ -374,11 +359,7 @@ export default function LaporanBulananKUA() {
   const [tanggalLaporan, setTanggalLaporan] = useState(todayISO())
   const [namaKepala, setNamaKepala] = useState('')
   const [nipKepala, setNipKepala] = useState('')
-  const [jabatan, setJabatan] = useState('')
   const [provinsi, setProvinsi] = useState('')
-  // 'otomatis': dikenali dari nama/NIP pembuat. Kalau kosong, pembuat dianggap
-  // Kepala KUA (nama diambil dari Profil Kantor) sehingga "Mengetahui" = Kepala Kemenag.
-  const [modeTtd, setModeTtd] = useState('otomatis')
 
   /* ---------------------------------------------------------------- */
   /*  SUMBER DATA OTOMATIS — ditarik dari halaman lain yang sudah ada  */
@@ -471,6 +452,43 @@ export default function LaporanBulananKUA() {
         setSuratBulan(data || [])
       })
   }, [sekolahId, bulan])
+
+  // Bab XI: sarana & prasarana dari halaman "Inventaris", digabung per nama
+  // barang. Kalau tabel `inventaris` di database-mu tidak punya kolom
+  // sekolah_id, hapus baris `.eq('sekolah_id', sekolahId)` di bawah.
+  const [inventarisData, setInventarisData] = useState([])
+  useEffect(() => {
+    if (!sekolahId) {
+      setInventarisData([])
+      return
+    }
+    supabase
+      .from('inventaris')
+      .select('id, nama_barang, jumlah, kondisi')
+      .eq('sekolah_id', sekolahId)
+      .then(({ data, error }) => {
+        if (error) console.error('inventaris:', error)
+        setInventarisData(data || [])
+      })
+  }, [sekolahId])
+
+  // Bab XII: kondisi gedung/kantor dari halaman "Kondisi Bangunan".
+  const [bangunanData, setBangunanData] = useState([])
+  useEffect(() => {
+    if (!sekolahId) {
+      setBangunanData([])
+      return
+    }
+    supabase
+      .from('bangunan')
+      .select('id, nama, jenis, jumlah, kondisi, catatan')
+      .eq('sekolah_id', sekolahId)
+      .order('nama')
+      .then(({ data, error }) => {
+        if (error) console.error('bangunan:', error)
+        setBangunanData(data || [])
+      })
+  }, [sekolahId])
 
   // Bab XIV: kegiatan pada bulan terpilih (halaman "Agenda Kantor").
   const [agendaBulan, setAgendaBulan] = useState([])
@@ -578,6 +596,14 @@ export default function LaporanBulananKUA() {
     desa: '', jumlahMajelis: '', jumlahKegiatan: '', ket: '',
   })
 
+  // XI. Sarana dan Prasarana — otomatis dari Inventaris, dikelompokkan per nama barang.
+  const sarana = useDaftarBaris(SARANA_AWAL, {
+    nama: '', jumlah: '', baik: '', rusakRingan: '', rusakBerat: '',
+  })
+
+  // XII. Keadaan Gedung/Kantor — otomatis dari Kondisi Bangunan.
+  const gedung = useDaftarBaris(GEDUNG_AWAL, { uraian: '', kondisi: 'Baik', ket: '' })
+
   // XIV. Kegiatan/Kunjungan Dinas
   const kegiatanDinas = useDaftarBaris(KEGIATAN_AWAL, {
     tanggal: '', kegiatan: '', pelaksana: '', tempat: '', ket: '',
@@ -585,19 +611,6 @@ export default function LaporanBulananKUA() {
 
   // XV. Permasalahan dan Tindak Lanjut
   const masalah = useDaftarBaris(MASALAH_AWAL, { permasalahan: '', upaya: '', ket: '' })
-
-  // XI. Sarana dan Prasarana — daftar tetap, hanya angka yang diisi
-  const [sarana, setSarana] = useState(SARANA_AWAL)
-  const ubahSarana = (i, kolom, nilai) =>
-    setSarana((rows) => rows.map((r, idx) => (idx === i ? { ...r, [kolom]: nilai } : r)))
-  const tambahSarana = () =>
-    setSarana((rows) => [...rows, { nama: '', jumlah: '', baik: '', rusakRingan: '', rusakBerat: '' }])
-  const hapusSarana = (i) => setSarana((rows) => rows.filter((_, idx) => idx !== i))
-
-  // XII. Keadaan Gedung/Kantor — daftar tetap, kondisi + keterangan
-  const [gedung, setGedung] = useState(GEDUNG_AWAL)
-  const ubahGedung = (i, kolom, nilai) =>
-    setGedung((rows) => rows.map((r, idx) => (idx === i ? { ...r, [kolom]: nilai } : r)))
 
   // XIII. Keadaan Arsip — daftar tetap, keadaan + keterangan
   const [arsip, setArsip] = useState(ARSIP_AWAL)
@@ -708,6 +721,39 @@ export default function LaporanBulananKUA() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [majelisData])
 
+  // Bab XI: gabungkan baris inventaris dengan nama barang yang sama,
+  // jumlahkan berdasarkan kondisinya (baik/rusak ringan/rusak berat).
+  useEffect(() => {
+    const peta = new Map()
+    for (const row of inventarisData) {
+      const nama = (row.nama_barang || '').trim() || 'Tanpa nama'
+      if (!peta.has(nama)) peta.set(nama, { jumlah: 0, baik: 0, rusakRingan: 0, rusakBerat: 0 })
+      const g = peta.get(nama)
+      const jml = Number(row.jumlah) || 0
+      g.jumlah += jml
+      if (row.kondisi === 'rusak_ringan') g.rusakRingan += jml
+      else if (row.kondisi === 'rusak_berat') g.rusakBerat += jml
+      else g.baik += jml
+    }
+    sarana.isiOtomatis(
+      Array.from(peta.entries()).map(([nama, g], i) => ({ id: i + 1, nama, ...g }))
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inventarisData])
+
+  // Bab XII: satu baris per data bangunan. Keterangan diisi dari catatan.
+  useEffect(() => {
+    gedung.isiOtomatis(
+      bangunanData.map((row) => ({
+        id: row.id,
+        uraian: row.jenis ? `${row.nama} (${row.jenis})` : row.nama,
+        kondisi: KONDISI_BANGUNAN_LABEL[row.kondisi] || 'Baik',
+        ket: row.catatan || '',
+      }))
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bangunanData])
+
   // Bab XIV: kegiatan/kunjungan dinas dari Agenda Kantor bulan terpilih.
   useEffect(() => {
     kegiatanDinas.isiOtomatis(
@@ -805,7 +851,6 @@ export default function LaporanBulananKUA() {
   const nipEfektif = nipKepala || profilKantor?.nip_kepala_kua || ''
   const provinsiEfektif = provinsi || profilKantor?.provinsi || ''
   const namaKantor = profilKantor?.nama_kantor || 'KUA Kecamatan ..........................'
-  const jabatanEfektif = jabatan || `Kepala ${profilKantor?.nama_kantor || 'KUA Kecamatan'}`
   const kemenagKota = denganAwalanWilayah(profilKantor?.kabupaten)
   const { bulan: namaBulanSaja, tahun } = pecahBulan(bulan)
   const periode = namaBulanSaja ? `${namaBulanSaja} ${tahun}` : ''
@@ -872,7 +917,7 @@ export default function LaporanBulananKUA() {
   return (
     <Layout
       title="Laporan Bulanan KUA"
-      subtitle="Laporan bulanan keadaan pegawai dan administrasi KUA Kecamatan, sebagian otomatis terisi dari data pendaftaran nikah, data pegawai, presensi, kelompok binaan, surat, agenda, dan profil kantor."
+      subtitle="Laporan bulanan keadaan pegawai dan administrasi KUA Kecamatan, sebagian otomatis terisi dari data pendaftaran nikah, data pegawai, presensi, kelompok binaan, surat, agenda, inventaris, bangunan, dan profil kantor."
     >
       <div className="no-print flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between mb-5">
         <Link
@@ -907,15 +952,12 @@ export default function LaporanBulananKUA() {
             onChange={setNipKepala}
             placeholder={profilKantor?.nip_kepala_kua ? `Otomatis: ${profilKantor.nip_kepala_kua}` : 'Opsional'}
           />
-          <FieldText label="Jabatan" value={jabatan} onChange={setJabatan} placeholder={`Otomatis: ${jabatanEfektif}`} />
           <FieldText
             label="Provinsi"
             value={provinsi}
             onChange={setProvinsi}
             placeholder={profilKantor?.provinsi ? `Otomatis: ${profilKantor.provinsi}` : ''}
           />
-          <div className="hidden sm:block" />
-          <PilihModeTtd value={modeTtd} onChange={setModeTtd} profilKantor={profilKantor} namaPembuat={namaEfektif} nipPembuat={nipEfektif} />
 
           <SubJudulForm>I. Keadaan Pegawai — otomatis dari Data Pegawai</SubJudulForm>
           <TabelEditorForm
@@ -1040,45 +1082,55 @@ export default function LaporanBulananKUA() {
           <FieldText label="Surat keterangan" type="number" min="0" value={angka.suratKeterangan ?? ''} onChange={ubahAngka('suratKeterangan')} />
           <FieldText label="Rekomendasi" type="number" min="0" value={angka.suratRekomendasi ?? ''} onChange={ubahAngka('suratRekomendasi')} />
 
-          <SubJudulForm>XI. Sarana dan Prasarana</SubJudulForm>
-          <div className="sm:col-span-2 space-y-2">
-            {sarana.map((r, i) => (
-              <div key={i} className="grid grid-cols-2 sm:grid-cols-6 gap-2 items-end border border-slate-100 rounded-lg p-2">
-                <div className="col-span-2">
-                  <FieldText label="Jenis Barang" value={r.nama} onChange={(v) => ubahSarana(i, 'nama', v)} />
-                </div>
-                <FieldText label="Jumlah" type="number" min="0" value={r.jumlah} onChange={(v) => ubahSarana(i, 'jumlah', v)} />
-                <FieldText label="Baik" type="number" min="0" value={r.baik} onChange={(v) => ubahSarana(i, 'baik', v)} />
-                <FieldText label="Rusak Ringan" type="number" min="0" value={r.rusakRingan} onChange={(v) => ubahSarana(i, 'rusakRingan', v)} />
-                <div className="flex gap-2 items-end">
-                  <div className="flex-1">
-                    <FieldText label="Rusak Berat" type="number" min="0" value={r.rusakBerat} onChange={(v) => ubahSarana(i, 'rusakBerat', v)} />
-                  </div>
-                  <button type="button" onClick={() => hapusSarana(i)} className="p-2 text-slate-400 hover:text-red-600" aria-label="Hapus baris">
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-            ))}
-            <button type="button" onClick={tambahSarana} className="inline-flex items-center gap-1.5 text-sm text-teal-700 hover:text-teal-900">
-              <Plus size={16} /> Tambah barang
-            </button>
-          </div>
+          <SubJudulForm>XI. Sarana dan Prasarana — otomatis dari Inventaris</SubJudulForm>
+          <TabelEditorForm
+            labelTambah="Tambah barang"
+            rows={sarana.rows}
+            ubah={sarana.ubah}
+            tambah={sarana.tambah}
+            hapus={sarana.hapus}
+            kolom={[
+              { key: 'nama', label: 'Jenis Barang', lebar: 'col-span-2 sm:col-span-2' },
+              { key: 'jumlah', label: 'Jumlah', type: 'number' },
+              { key: 'baik', label: 'Baik', type: 'number' },
+              { key: 'rusakRingan', label: 'Rusak Ringan', type: 'number' },
+              { key: 'rusakBerat', label: 'Rusak Berat', type: 'number' },
+            ]}
+          />
 
-          <SubJudulForm>XII. Keadaan Gedung/Kantor</SubJudulForm>
+          <SubJudulForm>XII. Keadaan Gedung/Kantor — otomatis dari Kondisi Bangunan</SubJudulForm>
           <div className="sm:col-span-2 space-y-2">
-            {gedung.map((r, i) => (
-              <div key={i} className="grid grid-cols-2 sm:grid-cols-6 gap-2 items-end border border-slate-100 rounded-lg p-2">
+            {gedung.rows.map((r) => (
+              <div key={r.id} className="grid grid-cols-2 sm:grid-cols-6 gap-2 items-end border border-slate-100 rounded-lg p-2">
                 <div className="col-span-2 sm:col-span-3">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Uraian</label>
-                  <p className="text-sm text-slate-800 px-3 py-2">{r.uraian}</p>
+                  <FieldText label="Uraian" value={r.uraian} onChange={(v) => gedung.ubah(r.id, 'uraian', v)} />
                 </div>
-                <FieldSelect label="Kondisi" value={r.kondisi} onChange={(v) => ubahGedung(i, 'kondisi', v)} options={['Baik', 'Rusak']} />
+                <FieldSelect
+                  label="Kondisi"
+                  value={r.kondisi}
+                  onChange={(v) => gedung.ubah(r.id, 'kondisi', v)}
+                  options={['Baik', 'Rusak Ringan', 'Rusak Berat']}
+                />
                 <div className="col-span-2">
-                  <FieldText label="Keterangan" value={r.ket} onChange={(v) => ubahGedung(i, 'ket', v)} />
+                  <FieldText label="Keterangan" value={r.ket} onChange={(v) => gedung.ubah(r.id, 'ket', v)} />
                 </div>
+                <button
+                  type="button"
+                  onClick={() => gedung.hapus(r.id)}
+                  className="p-2 self-center text-slate-400 hover:text-red-600"
+                  aria-label="Hapus baris"
+                >
+                  <Trash2 size={16} />
+                </button>
               </div>
             ))}
+            <button
+              type="button"
+              onClick={gedung.tambah}
+              className="inline-flex items-center gap-1.5 text-sm text-teal-700 hover:text-teal-900"
+            >
+              <Plus size={16} /> Tambah bangunan
+            </button>
           </div>
 
           <SubJudulForm>XIII. Keadaan Arsip</SubJudulForm>
@@ -1152,6 +1204,10 @@ export default function LaporanBulananKUA() {
           <p>
             Juga terbaca otomatis: {pegawaiKantor.length} pegawai aktif, {jumlahSuratMasukOtomatis} surat masuk &
             {' '}{jumlahSuratKeluarOtomatis} surat keluar, {agendaBulan.length} kegiatan agenda pada {periode || 'bulan terpilih'}.
+          </p>
+          <p>
+            Serta {inventarisData.length} baris data inventaris dan {bangunanData.length} data bangunan dari
+            halaman Inventaris & Kondisi Bangunan.
           </p>
           <p className="text-slate-400">
             Kop surat, Kepala KUA, dan tanda tangan ditarik otomatis dari Profil Kantor. Field bertanda
@@ -1300,7 +1356,7 @@ export default function LaporanBulananKUA() {
             <Bab no="XI" judul="Sarana dan Prasarana">
               <TabelCetak
                 header={['No', 'Jenis Barang', 'Jumlah', 'Baik', 'Rusak Ringan', 'Rusak Berat']}
-                baris={sarana.map((r, i) => [
+                baris={sarana.rows.map((r, i) => [
                   i + 1, r.nama, angkaTampil(r.jumlah), angkaTampil(r.baik), angkaTampil(r.rusakRingan), angkaTampil(r.rusakBerat),
                 ])}
               />
@@ -1309,7 +1365,7 @@ export default function LaporanBulananKUA() {
             <Bab no="XII" judul="Keadaan Gedung/Kantor">
               <TabelCetak
                 header={['No', 'Uraian', 'Kondisi', 'Keterangan']}
-                baris={gedung.map((r, i) => [i + 1, r.uraian, r.kondisi, r.ket])}
+                baris={gedung.rows.map((r, i) => [i + 1, r.uraian, r.kondisi, r.ket])}
               />
             </Bab>
 
@@ -1354,15 +1410,14 @@ export default function LaporanBulananKUA() {
             </section>
           </div>
 
-          {/* === TANDA TANGAN OTOMATIS === */}
+          {/* === TANDA TANGAN OTOMATIS — hanya Kepala KUA (laporan lain tetap === */}
+          {/* memakai dua tanda tangan lewat komponen yang sama)              === */}
           <BlokTandaTangan
             profilKantor={profilKantor}
             ttdKepalaKuaUrl={ttdKepalaKuaUrl}
-            mode={modeTtd}
+            satuTandaTangan
             namaPembuat={namaEfektif}
             nipPembuat={nipEfektif}
-            jabatanPembuat={jabatanEfektif}
-            labelNipPembuat="NIP."
             tempatTanggal={tempatTtd && tanggalLaporanFormatted ? `${tempatTtd}, ${tanggalLaporanFormatted}` : ''}
           />
         </div>
