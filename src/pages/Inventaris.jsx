@@ -6,6 +6,7 @@ import { Plus, Search, Pencil, Trash2, X, Loader2, FileSpreadsheet } from 'lucid
 
 const emptyForm = {
   nama_barang: '',
+  jenis: 'barang_inventaris',
   kategori: '',
   jumlah: 1,
   kondisi: 'baik',
@@ -18,6 +19,13 @@ const kondisiLabel = {
   baik: 'Baik',
   rusak_ringan: 'Rusak Ringan',
   rusak_berat: 'Rusak Berat',
+}
+
+// Peralatan = alat kerja/perangkat (komputer, printer, proyektor, dst).
+// Barang Inventaris = perabot & perlengkapan (meja, kursi, lemari, dst).
+const jenisLabel = {
+  peralatan: 'Peralatan',
+  barang_inventaris: 'Barang Inventaris',
 }
 
 export default function Inventaris() {
@@ -47,7 +55,17 @@ export default function Inventaris() {
   }
 
   function openEdit(row) {
-    setForm({ ...emptyForm, ...row })
+    // Nilai kosong (null) dari database diganti string kosong supaya input
+    // tidak jadi "uncontrolled" dan tanggal kosong tidak memicu peringatan React.
+    setForm({
+      ...emptyForm,
+      ...row,
+      jenis: row.jenis || 'barang_inventaris',
+      kategori: row.kategori || '',
+      lokasi: row.lokasi || '',
+      tanggal_masuk: row.tanggal_masuk || '',
+      catatan: row.catatan || '',
+    })
     setEditingId(row.id)
     setShowForm(true)
   }
@@ -55,7 +73,13 @@ export default function Inventaris() {
   async function handleSubmit(e) {
     e.preventDefault()
     setSaving(true)
-    const payload = { ...form, jumlah: Number(form.jumlah) || 1 }
+    // tanggal_masuk yang dikosongkan dikirim sebagai null — string kosong
+    // ditolak Postgres untuk kolom bertipe date.
+    const payload = {
+      ...form,
+      jumlah: Number(form.jumlah) || 1,
+      tanggal_masuk: form.tanggal_masuk || null,
+    }
     const { error } = editingId
       ? await supabase.from('inventaris').update(payload).eq('id', editingId)
       : await supabase.from('inventaris').insert(payload)
@@ -79,6 +103,7 @@ export default function Inventaris() {
     eksporExcel(
       filtered.map((d) => ({
         'Nama Barang': d.nama_barang,
+        Jenis: jenisLabel[d.jenis] || d.jenis,
         Kategori: d.kategori,
         Jumlah: d.jumlah,
         Kondisi: kondisiLabel[d.kondisi] || d.kondisi,
@@ -92,7 +117,9 @@ export default function Inventaris() {
   }
 
   const filtered = data.filter((d) =>
-    `${d.nama_barang} ${d.kategori} ${d.lokasi}`.toLowerCase().includes(search.toLowerCase())
+    `${d.nama_barang} ${jenisLabel[d.jenis] || ''} ${d.kategori} ${d.lokasi}`
+      .toLowerCase()
+      .includes(search.toLowerCase())
   )
 
   return (
@@ -115,7 +142,7 @@ export default function Inventaris() {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-700/40" />
           <input
             className="input-field pl-9"
-            placeholder="Cari nama barang, kategori, atau lokasi..."
+            placeholder="Cari nama barang, jenis, kategori, atau lokasi..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -127,6 +154,7 @@ export default function Inventaris() {
           <thead>
             <tr>
               <th>Nama Barang</th>
+              <th>Jenis</th>
               <th>Kategori</th>
               <th>Jumlah</th>
               <th>Kondisi</th>
@@ -136,14 +164,15 @@ export default function Inventaris() {
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={6} className="text-center py-8 text-ink-700/50">Memuat data...</td></tr>
+              <tr><td colSpan={7} className="text-center py-8 text-ink-700/50">Memuat data...</td></tr>
             )}
             {!loading && filtered.length === 0 && (
-              <tr><td colSpan={6} className="text-center py-8 text-ink-700/50">Belum ada data.</td></tr>
+              <tr><td colSpan={7} className="text-center py-8 text-ink-700/50">Belum ada data.</td></tr>
             )}
             {filtered.map((d) => (
               <tr key={d.id}>
                 <td className="font-medium">{d.nama_barang}</td>
+                <td>{jenisLabel[d.jenis] || '-'}</td>
                 <td>{d.kategori || '-'}</td>
                 <td>{d.jumlah}</td>
                 <td>
@@ -174,7 +203,7 @@ export default function Inventaris() {
 
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-display text-lg font-semibold">
                 {editingId ? 'Ubah Barang' : 'Tambah Barang'}
@@ -193,6 +222,17 @@ export default function Inventaris() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
+                  <label className="label-field">Jenis</label>
+                  <select
+                    className="input-field"
+                    value={form.jenis}
+                    onChange={(e) => setForm({ ...form, jenis: e.target.value })}
+                  >
+                    <option value="barang_inventaris">Barang Inventaris</option>
+                    <option value="peralatan">Peralatan</option>
+                  </select>
+                </div>
+                <div>
                   <label className="label-field">Kategori</label>
                   <input
                     className="input-field"
@@ -201,6 +241,8 @@ export default function Inventaris() {
                     onChange={(e) => setForm({ ...form, kategori: e.target.value })}
                   />
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label-field">Jumlah</label>
                   <input
@@ -211,8 +253,6 @@ export default function Inventaris() {
                     onChange={(e) => setForm({ ...form, jumlah: e.target.value })}
                   />
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label-field">Kondisi</label>
                   <select
@@ -225,6 +265,8 @@ export default function Inventaris() {
                     <option value="rusak_berat">Rusak Berat</option>
                   </select>
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label-field">Tanggal Masuk</label>
                   <input
@@ -234,15 +276,15 @@ export default function Inventaris() {
                     onChange={(e) => setForm({ ...form, tanggal_masuk: e.target.value })}
                   />
                 </div>
-              </div>
-              <div>
-                <label className="label-field">Lokasi</label>
-                <input
-                  className="input-field"
-                  placeholder="Ruang Guru, Lab Komputer, dll"
-                  value={form.lokasi}
-                  onChange={(e) => setForm({ ...form, lokasi: e.target.value })}
-                />
+                <div>
+                  <label className="label-field">Lokasi</label>
+                  <input
+                    className="input-field"
+                    placeholder="Ruang Guru, Lab Komputer, dll"
+                    value={form.lokasi}
+                    onChange={(e) => setForm({ ...form, lokasi: e.target.value })}
+                  />
+                </div>
               </div>
               <div>
                 <label className="label-field">Catatan</label>
