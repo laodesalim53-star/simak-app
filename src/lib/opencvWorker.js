@@ -1,7 +1,8 @@
 // Web Worker: seluruh pemuatan OpenCV.js (~8 MB) DAN setiap operasinya
-// (deteksi tepi, warpPerspective, adaptiveThreshold) berjalan DI SINI,
-// terpisah dari thread utama — supaya UI (termasuk tombol kamera) tidak pernah
-// terkunci, seberapa pun lambat/lama proses ini berlangsung di HP tertentu.
+// (deteksi tepi, warpPerspective, adaptiveThreshold, penyesuaian manual)
+// berjalan DI SINI, terpisah dari thread utama — supaya UI (termasuk tombol
+// kamera) tidak pernah terkunci, seberapa pun lambat/lama proses ini
+// berlangsung di HP tertentu.
 //
 // Versi ini menambahkan penanganan pencahayaan kurang/tidak merata:
 //  - Normalisasi cahaya (estimasi latar lewat blur besar, lalu diratakan)
@@ -12,9 +13,13 @@
 //    TERLUAR yang dipertimbangkan, kontur di dalam kertas (bayangan, tulisan)
 //    diabaikan.
 //  - Fallback convex-hull kalau tidak ada kontur 4-titik yang pas.
-//  - Auto-brighten (CLAHE pada kanal kecerahan saja, warna tidak berubah)
-//    pada hasil crop, dan normalisasi cahaya sebelum ambang adaptif mode
-//    dokumen supaya latar tidak gelap saat foto aslinya kurang terang.
+//  - Normalisasi cahaya sebelum ambang adaptif mode dokumen supaya latar
+//    tidak gelap saat foto aslinya kurang terang.
+//
+// Catatan versi ini: hasil luruskan() TIDAK lagi diterangkan otomatis.
+// Kecerahan, kontras, dan ketajaman sekarang sepenuhnya kontrol manual
+// pengguna lewat tugas 'sesuaikanGambar', dijalankan dari halaman
+// EditorDokumen.jsx setelah proses luruskan() selesai.
 //
 // Jangan pakai worker ini langsung — semua akses lewat opencvLoader.js.
 //
@@ -140,45 +145,6 @@ function normalisasiCahaya(cv, abu) {
   }
 }
 
-// Terangkan foto berwarna tanpa mengubah warnanya: CLAHE hanya pada kanal
-// kecerahan (L) di ruang warna Lab. Aman dipakai pada foto yang sudah cukup
-// terang (efeknya minim) maupun yang kurang cahaya (efeknya terlihat jelas).
-function terangkanOtomatis(cv, matRGBA) {
-  const rgb = new cv.Mat()
-  const lab = new cv.Mat()
-  const kanal = new cv.MatVector()
-  const Lbaru = new cv.Mat()
-  const gabung = new cv.MatVector()
-  const labBaru = new cv.Mat()
-  const rgbBaru = new cv.Mat()
-  const rgbaBaru = new cv.Mat()
-  const clahe = new cv.CLAHE(2.5, new cv.Size(8, 8))
-  try {
-    cv.cvtColor(matRGBA, rgb, cv.COLOR_RGBA2RGB)
-    cv.cvtColor(rgb, lab, cv.COLOR_RGB2Lab)
-    cv.split(lab, kanal)
-    const L = kanal.get(0)
-    const A = kanal.get(1)
-    const B = kanal.get(2)
-    try {
-      clahe.apply(L, Lbaru)
-      gabung.push_back(Lbaru)
-      gabung.push_back(A)
-      gabung.push_back(B)
-      cv.merge(gabung, labBaru)
-      cv.cvtColor(labBaru, rgbBaru, cv.COLOR_Lab2RGB)
-      cv.cvtColor(rgbBaru, rgbaBaru, cv.COLOR_RGB2RGBA)
-    } finally {
-      L.delete(); A.delete(); B.delete()
-    }
-    return rgbaBaru.clone()
-  } finally {
-    rgb.delete(); lab.delete(); kanal.delete(); Lbaru.delete()
-    gabung.delete(); labBaru.delete(); rgbBaru.delete(); rgbaBaru.delete()
-    clahe.delete()
-  }
-}
-
 // ---------- Deteksi kontur 4-sisi dari gambar tepi (dipakai jalur utama & fallback) ----------
 function cariKontur4Sisi(cv, dilasi, luasFrame) {
   const kontur = new cv.MatVector()
@@ -279,6 +245,8 @@ const TUGAS = {
   },
 
   // payload: { bitmapSumber, sudut: [TL,TR,BR,BL], lebar, tinggi } -> { bitmapHasil }
+  // Catatan: hasil TIDAK diterangkan otomatis lagi. Kecerahan/kontras/ketajaman
+  // adalah kontrol manual pengguna lewat tugas 'sesuaikanGambar' di EditorDokumen.
   luruskan({ bitmapSumber, sudut, lebar, tinggi }) {
     const cv = self.cv
     const [p0, p1, p2, p3] = sudut
@@ -289,20 +257,15 @@ const TUGAS = {
     ])
     const dstTitik = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, lebar, 0, lebar, tinggi, 0, tinggi])
     const M = cv.getPerspectiveTransform(srcTitik, dstTitik)
-    let terang = null
     let bitmapHasil
     try {
       cv.warpPerspective(
         src, dst, M, new cv.Size(lebar, tinggi),
         cv.INTER_LINEAR, cv.BORDER_REPLICATE, new cv.Scalar()
       )
-      // Terangkan hasil crop supaya foto yang diambil di ruangan kurang
-      // cahaya tetap terlihat cerah (warna tidak berubah, hanya kecerahan).
-      terang = terangkanOtomatis(cv, dst)
-      bitmapHasil = matKeBitmap(terang)
+      bitmapHasil = matKeBitmap(dst)
     } finally {
       src.delete(); dst.delete(); srcTitik.delete(); dstTitik.delete(); M.delete()
-      terang?.delete()
     }
     return { data: { bitmapHasil }, transfer: [bitmapHasil] }
   },
@@ -338,6 +301,49 @@ const TUGAS = {
       bitmapHasil = matKeBitmap(hasilMat)
     } finally {
       src.delete(); abu.delete(); halus.delete(); hasilMat.delete()
+    }
+    return { data: { bitmapHasil }, transfer: [bitmapHasil] }
+  },
+
+  // payload: { bitmapSumber, kecerahan, kontras, ketajaman } -> { bitmapHasil }
+  // kecerahan: -100..100 (beta, ditambah langsung ke tiap piksel)
+  // kontras:   -100..100 (0 = normal; diubah jadi alpha di rentang 0..2)
+  // ketajaman: 0..100    (0 = tanpa unsharp mask, 100 = paling tajam)
+  // Dipanggil berulang kali secara live dari EditorDokumen.jsx saat slider
+  // digeser -- pemanggil bertanggung jawab mengirim ImageBitmap baru tiap
+  // kali (bitmapKeMat menutup bitmap yang diterima).
+  sesuaikanGambar({ bitmapSumber, kecerahan = 0, kontras = 0, ketajaman = 0 }) {
+    const cv = self.cv
+    const src = bitmapKeMat(bitmapSumber)
+    const rgb = new cv.Mat()
+    const disesuaikan = new cv.Mat()
+    const rgba = new cv.Mat()
+    let blur = null
+    let tajam = null
+    let bitmapHasil
+    try {
+      cv.cvtColor(src, rgb, cv.COLOR_RGBA2RGB)
+
+      // Kecerahan (beta) + kontras (alpha): dst = src*alpha + beta
+      const alpha = 1 + kontras / 100 // rentang 0..2
+      rgb.convertTo(disesuaikan, -1, alpha, kecerahan)
+
+      let akhir = disesuaikan
+      if (ketajaman > 0) {
+        blur = new cv.Mat()
+        tajam = new cv.Mat()
+        cv.GaussianBlur(disesuaikan, blur, new cv.Size(0, 0), 3)
+        // Unsharp mask: akhir = disesuaikan*jumlah - blur*(jumlah-1)
+        const jumlah = 1 + (ketajaman / 100) * 1.5 // rentang 1..2.5
+        cv.addWeighted(disesuaikan, jumlah, blur, -(jumlah - 1), 0, tajam)
+        akhir = tajam
+      }
+
+      cv.cvtColor(akhir, rgba, cv.COLOR_RGB2RGBA)
+      bitmapHasil = matKeBitmap(rgba)
+    } finally {
+      src.delete(); rgb.delete(); disesuaikan.delete(); rgba.delete()
+      blur?.delete(); tajam?.delete()
     }
     return { data: { bitmapHasil }, transfer: [bitmapHasil] }
   },
