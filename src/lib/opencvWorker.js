@@ -1,11 +1,24 @@
 // Web Worker: seluruh pemuatan OpenCV.js (~8 MB) DAN setiap operasinya
-// (Canny, findContours, warpPerspective, adaptiveThreshold) berjalan DI SINI,
+// (deteksi tepi, warpPerspective, adaptiveThreshold) berjalan DI SINI,
 // terpisah dari thread utama — supaya UI (termasuk tombol kamera) tidak pernah
 // terkunci, seberapa pun lambat/lama proses ini berlangsung di HP tertentu.
 //
+// Versi ini menambahkan penanganan pencahayaan kurang/tidak merata:
+//  - Normalisasi cahaya (estimasi latar lewat blur besar, lalu diratakan)
+//    sebelum deteksi tepi -> tidak lagi salah mengira garis bayangan di
+//    tengah kertas sebagai tepi dokumen (penyebab utama "kepotong setengah").
+//  - Ambang Canny otomatis mengikuti kecerahan foto (bukan angka tetap).
+//  - RETR_EXTERNAL (bukan RETR_LIST) + morphological close -> hanya kontur
+//    TERLUAR yang dipertimbangkan, kontur di dalam kertas (bayangan, tulisan)
+//    diabaikan.
+//  - Fallback convex-hull kalau tidak ada kontur 4-titik yang pas.
+//  - Auto-brighten (CLAHE pada kanal kecerahan saja, warna tidak berubah)
+//    pada hasil crop, dan normalisasi cahaya sebelum ambang adaptif mode
+//    dokumen supaya latar tidak gelap saat foto aslinya kurang terang.
+//
 // Jangan pakai worker ini langsung — semua akses lewat opencvLoader.js.
 //
-// Protokol pesan:
+// Protokol pesan (tidak berubah dari versi sebelumnya):
 //   -> { type: 'muat' }
 //   <- { type: 'siap' } | { type: 'gagal', pesan }
 //   -> { type: 'tugas', id, nama, payload }   (payload boleh berisi ImageBitmap)
@@ -99,52 +112,169 @@ function urutkanSudut(titik) {
   return [tl, tr, br, bl]
 }
 
+// ---------- Bantuan: pencahayaan ----------
+
+// Ratakan pencahayaan yang tidak merata (mis. separuh kertas kena bayangan)
+// dengan membagi foto dengan estimasi "peta latar"-nya (blur besar). Hasilnya
+// tepi kertas-vs-background jadi lebih jelas, dan garis bayangan di dalam
+// kertas tidak lagi terlihat seperti tepi yang kuat.
+function normalisasiCahaya(cv, abu) {
+  let sisi = Math.round(Math.min(abu.cols, abu.rows) / 6)
+  if (sisi < 21) sisi = 21
+  if (sisi % 2 === 0) sisi += 1
+
+  const latar = new cv.Mat()
+  const abuF = new cv.Mat()
+  const latarF = new cv.Mat()
+  const rasio = new cv.Mat()
+  const hasil = new cv.Mat()
+  try {
+    cv.GaussianBlur(abu, latar, new cv.Size(sisi, sisi), 0)
+    abu.convertTo(abuF, cv.CV_32F)
+    latar.convertTo(latarF, cv.CV_32F, 1, 1) // +1 supaya tidak dibagi nol
+    cv.divide(abuF, latarF, rasio)
+    rasio.convertTo(hasil, cv.CV_8U, 255)
+    return hasil
+  } finally {
+    latar.delete(); abuF.delete(); latarF.delete(); rasio.delete()
+  }
+}
+
+// Terangkan foto berwarna tanpa mengubah warnanya: CLAHE hanya pada kanal
+// kecerahan (L) di ruang warna Lab. Aman dipakai pada foto yang sudah cukup
+// terang (efeknya minim) maupun yang kurang cahaya (efeknya terlihat jelas).
+function terangkanOtomatis(cv, matRGBA) {
+  const rgb = new cv.Mat()
+  const lab = new cv.Mat()
+  const kanal = new cv.MatVector()
+  const Lbaru = new cv.Mat()
+  const gabung = new cv.MatVector()
+  const labBaru = new cv.Mat()
+  const rgbBaru = new cv.Mat()
+  const rgbaBaru = new cv.Mat()
+  const clahe = new cv.CLAHE(2.5, new cv.Size(8, 8))
+  try {
+    cv.cvtColor(matRGBA, rgb, cv.COLOR_RGBA2RGB)
+    cv.cvtColor(rgb, lab, cv.COLOR_RGB2Lab)
+    cv.split(lab, kanal)
+    const L = kanal.get(0)
+    const A = kanal.get(1)
+    const B = kanal.get(2)
+    try {
+      clahe.apply(L, Lbaru)
+      gabung.push_back(Lbaru)
+      gabung.push_back(A)
+      gabung.push_back(B)
+      cv.merge(gabung, labBaru)
+      cv.cvtColor(labBaru, rgbBaru, cv.COLOR_Lab2RGB)
+      cv.cvtColor(rgbBaru, rgbaBaru, cv.COLOR_RGB2RGBA)
+    } finally {
+      L.delete(); A.delete(); B.delete()
+    }
+    return rgbaBaru.clone()
+  } finally {
+    rgb.delete(); lab.delete(); kanal.delete(); Lbaru.delete()
+    gabung.delete(); labBaru.delete(); rgbBaru.delete(); rgbaBaru.delete()
+    clahe.delete()
+  }
+}
+
+// ---------- Deteksi kontur 4-sisi dari gambar tepi (dipakai jalur utama & fallback) ----------
+function cariKontur4Sisi(cv, dilasi, luasFrame) {
+  const kontur = new cv.MatVector()
+  const hierarki = new cv.Mat()
+  let sudutTerbaik = null
+  let idxTerbesar = -1
+  let luasTerbesar = 0
+  try {
+    cv.findContours(dilasi, kontur, hierarki, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+
+    for (let i = 0; i < kontur.size(); i++) {
+      const c = kontur.get(i)
+      const luas = cv.contourArea(c)
+      if (luas < luasFrame * 0.15 || luas > luasFrame * 0.97) {
+        c.delete()
+        continue
+      }
+      if (luas > luasTerbesar) {
+        luasTerbesar = luas
+        idxTerbesar = i
+      }
+      const keliling = cv.arcLength(c, true)
+      const aproks = new cv.Mat()
+      cv.approxPolyDP(c, aproks, 0.02 * keliling, true)
+      if (aproks.rows === 4 && cv.isContourConvex(aproks) && luas === luasTerbesar) {
+        const titik = []
+        for (let j = 0; j < 4; j++) titik.push([aproks.data32S[j * 2], aproks.data32S[j * 2 + 1]])
+        sudutTerbaik = titik
+      }
+      aproks.delete()
+      c.delete()
+    }
+
+    // Fallback: kontur terluar terbesar ditemukan tapi bentuknya bukan
+    // quad bersih (mis. sudut membulat/terpotong sedikit) -> paksa jadi
+    // 4 titik lewat convex hull, epsilon dilonggarkan bertahap.
+    if (!sudutTerbaik && idxTerbesar !== -1) {
+      const c = kontur.get(idxTerbesar)
+      const hull = new cv.Mat()
+      cv.convexHull(c, hull)
+      const keliling = cv.arcLength(hull, true)
+      for (let eps = 0.02; eps <= 0.12 && !sudutTerbaik; eps += 0.01) {
+        const aproks = new cv.Mat()
+        cv.approxPolyDP(hull, aproks, eps * keliling, true)
+        if (aproks.rows === 4 && cv.isContourConvex(aproks)) {
+          const titik = []
+          for (let j = 0; j < 4; j++) titik.push([aproks.data32S[j * 2], aproks.data32S[j * 2 + 1]])
+          sudutTerbaik = titik
+        }
+        aproks.delete()
+      }
+      hull.delete()
+      c.delete()
+    }
+  } finally {
+    kontur.delete()
+    hierarki.delete()
+  }
+  return sudutTerbaik ? urutkanSudut(sudutTerbaik) : null
+}
+
 const TUGAS = {
   // payload: { bitmapKecil } -> { sudut: [[x,y]x4] | null } (koordinat = bitmapKecil)
   deteksiSudut({ bitmapKecil }) {
     const cv = self.cv
     const src = bitmapKeMat(bitmapKecil)
     const abu = new cv.Mat()
+    const rata = new cv.Mat()
     const halus = new cv.Mat()
     const tepi = new cv.Mat()
     const dilasi = new cv.Mat()
-    const kernel = cv.Mat.ones(3, 3, cv.CV_8U)
-    const kontur = new cv.MatVector()
-    const hierarki = new cv.Mat()
-    let sudutTerbaik = null
+    const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5))
+    let sudut = null
     try {
       cv.cvtColor(src, abu, cv.COLOR_RGBA2GRAY)
-      cv.GaussianBlur(abu, halus, new cv.Size(5, 5), 0)
-      cv.Canny(halus, tepi, 50, 150)
-      cv.dilate(tepi, dilasi, kernel)
-      cv.findContours(dilasi, kontur, hierarki, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
+      const diratakan = normalisasiCahaya(cv, abu)
+      diratakan.copyTo(rata)
+      diratakan.delete()
+
+      cv.GaussianBlur(rata, halus, new cv.Size(5, 5), 0)
+
+      // Ambang Canny mengikuti kecerahan foto (bukan angka tetap), supaya
+      // tetap peka pada foto kurang cahaya maupun yang sudah terang.
+      const rataRata = cv.mean(halus)[0]
+      const sigma = 0.33
+      const bawah = Math.max(10, (1 - sigma) * rataRata)
+      const atas = Math.min(255, (1 + sigma) * rataRata)
+      cv.Canny(halus, tepi, bawah, atas)
+      cv.morphologyEx(tepi, dilasi, cv.MORPH_CLOSE, kernel, new cv.Point(-1, -1), 2)
 
       const luasFrame = src.cols * src.rows
-      let luasTerbesar = 0
-      for (let i = 0; i < kontur.size(); i++) {
-        const c = kontur.get(i)
-        const luas = cv.contourArea(c)
-        if (luas < luasFrame * 0.15 || luas > luasFrame * 0.97) {
-          c.delete()
-          continue
-        }
-        const keliling = cv.arcLength(c, true)
-        const aproks = new cv.Mat()
-        cv.approxPolyDP(c, aproks, 0.02 * keliling, true)
-        if (aproks.rows === 4 && cv.isContourConvex(aproks) && luas > luasTerbesar) {
-          luasTerbesar = luas
-          const titik = []
-          for (let j = 0; j < 4; j++) titik.push([aproks.data32S[j * 2], aproks.data32S[j * 2 + 1]])
-          sudutTerbaik = titik
-        }
-        aproks.delete()
-        c.delete()
-      }
+      sudut = cariKontur4Sisi(cv, dilasi, luasFrame)
     } finally {
-      src.delete(); abu.delete(); halus.delete(); tepi.delete(); dilasi.delete()
-      kernel.delete(); kontur.delete(); hierarki.delete()
+      src.delete(); abu.delete(); rata.delete(); halus.delete(); tepi.delete()
+      dilasi.delete(); kernel.delete()
     }
-    const sudut = sudutTerbaik ? urutkanSudut(sudutTerbaik) : null
     return { data: { sudut }, transfer: [] }
   },
 
@@ -159,15 +289,20 @@ const TUGAS = {
     ])
     const dstTitik = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, lebar, 0, lebar, tinggi, 0, tinggi])
     const M = cv.getPerspectiveTransform(srcTitik, dstTitik)
+    let terang = null
     let bitmapHasil
     try {
       cv.warpPerspective(
         src, dst, M, new cv.Size(lebar, tinggi),
         cv.INTER_LINEAR, cv.BORDER_REPLICATE, new cv.Scalar()
       )
-      bitmapHasil = matKeBitmap(dst)
+      // Terangkan hasil crop supaya foto yang diambil di ruangan kurang
+      // cahaya tetap terlihat cerah (warna tidak berubah, hanya kecerahan).
+      terang = terangkanOtomatis(cv, dst)
+      bitmapHasil = matKeBitmap(terang)
     } finally {
       src.delete(); dst.delete(); srcTitik.delete(); dstTitik.delete(); M.delete()
+      terang?.delete()
     }
     return { data: { bitmapHasil }, transfer: [bitmapHasil] }
   },
@@ -182,14 +317,23 @@ const TUGAS = {
     let bitmapHasil
     try {
       cv.cvtColor(src, abu, cv.COLOR_RGBA2GRAY)
-      cv.GaussianBlur(abu, halus, new cv.Size(3, 3), 0)
+      // Ratakan pencahayaan dulu SEBELUM ambang adaptif, supaya latar kertas
+      // yang tadinya redup di sebagian foto tetap jadi putih bersih, bukan
+      // ikut ter-threshold jadi hitam.
+      const diratakan = normalisasiCahaya(cv, abu)
+      try {
+        cv.GaussianBlur(diratakan, halus, new cv.Size(3, 3), 0)
+      } finally {
+        diratakan.delete()
+      }
+
       let blok = Math.round(Math.min(src.cols, src.rows) / 20)
       if (blok < 15) blok = 15
       if (blok % 2 === 0) blok += 1
       cv.adaptiveThreshold(
         halus, hasilMat, 255,
         cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY,
-        blok, 10
+        blok, 8
       )
       bitmapHasil = matKeBitmap(hasilMat)
     } finally {
