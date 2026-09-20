@@ -1,18 +1,16 @@
 // Scan dokumen lewat kamera: foto -> (deteksi & luruskan mengikuti kertas, via OpenCV.js) -> PDF.
 //
-// Perubahan dari versi sebelumnya (murni JS tanpa library):
-// - Deteksi tepi kertas sekarang pakai Canny edge detection + findContours + approxPolyDP
-//   (algoritma "document scanner" standar di OpenCV), jauh lebih tahan terhadap pencahayaan
-//   tidak rata dan latar yang tidak cukup gelap dibanding pendekatan Otsu + flood-fill lama.
-// - Pelurusan perspektif pakai cv.warpPerspective (native, cepat) menggantikan homografi
-//   tulisan tangan dengan interpolasi bilinear manual.
-// - Mode dokumen (B&W) sekarang pakai adaptiveThreshold per-blok, bukan contrast-stretch
-//   global, sehingga tahan terhadap bayangan/cahaya tidak merata dalam satu foto.
-// - Baru: suntingSudutFoto() untuk menerapkan sudut yang disunting manual oleh pengguna
-//   (lihat komponen SudutEditor), memakai ulang foto asli (bukan hasil potong sebelumnya)
-//   supaya kualitas tetap maksimal.
+// PERUBAHAN PENTING dari versi sebelumnya: seluruh pemrosesan OpenCV (deteksi
+// tepi, pelurusan perspektif, mode dokumen adaptif) sekarang berjalan di dalam
+// Web Worker (lihat opencvLoader.js + opencvWorker.js), bukan di thread utama.
+// Fungsi di file ini hanya menyiapkan ImageBitmap dan mengirimkannya ke worker,
+// lalu menerima hasilnya kembali sebagai ImageBitmap. Ini memastikan pemuatan
+// OpenCV.js (~8 MB) dan tiap operasinya tidak pernah mengunci UI/tombol kamera,
+// seberapa pun lambat/lama prosesnya di HP tertentu.
+//
+// API publik (siapkanFoto, buatPdfDariFoto, suntingSudutFoto) tidak berubah.
 
-import { muatOpenCv } from './opencvLoader'
+import { jalankanTugasCv } from './opencvLoader'
 
 const SISI_MAKS = 2200 // sisi terpanjang foto (piksel), supaya PDF tidak terlalu berat
 const SISI_DETEKSI = 500 // foto diperkecil ke ini dulu untuk deteksi tepi (cukup & lebih cepat)
@@ -53,123 +51,39 @@ function kanvasKeBlob(kanvas, kualitas) {
 }
 
 /* ================================================================
-   Deteksi sudut kertas (OpenCV.js)
-   1) Perkecil foto, ubah ke abu-abu, haluskan sedikit (Gaussian blur).
-   2) Cari tepi (Canny), lebarkan tipis (dilate) supaya tepi tersambung.
-   3) Cari semua kontur, ambil kontur 4-titik cembung terbesar yang masuk
-      akal ukurannya (bukan seluruh bingkai, bukan noda kecil).
-   4) Urutkan jadi [TL, TR, BR, BL] dan skalakan balik ke ukuran foto asli.
+   Deteksi sudut kertas (didelegasikan ke worker OpenCV)
+   1) Perkecil foto ke kanvas kecil (murah, dilakukan di sini).
+   2) Kirim sebagai ImageBitmap ke worker: di sana dilakukan Canny +
+      findContours + approxPolyDP untuk mencari kontur 4-sisi kertas.
+   3) Worker mengembalikan 4 titik [TL,TR,BR,BL] dalam koordinat kanvas kecil;
+      di sini diskalakan balik ke ukuran foto asli.
    Mengembalikan null bila tidak ada kontur yang cukup meyakinkan sebagai kertas.
    ================================================================ */
 
 async function deteksiSudutOtomatis(kanvasAsli) {
-  const cv = await muatOpenCv()
-
   const skala = Math.min(1, SISI_DETEKSI / Math.max(kanvasAsli.width, kanvasAsli.height))
   const w = Math.max(8, Math.round(kanvasAsli.width * skala))
   const h = Math.max(8, Math.round(kanvasAsli.height * skala))
   const kecil = buatKanvas(w, h)
   kecil.getContext('2d').drawImage(kanvasAsli, 0, 0, w, h)
+  const bitmapKecil = await createImageBitmap(kecil)
+  kecil.width = 0
 
-  const src = cv.imread(kecil)
-  const abu = new cv.Mat()
-  const halus = new cv.Mat()
-  const tepi = new cv.Mat()
-  const dilasi = new cv.Mat()
-  const kernel = cv.Mat.ones(3, 3, cv.CV_8U)
-  const kontur = new cv.MatVector()
-  const hierarki = new cv.Mat()
+  const { sudut } = await jalankanTugasCv('deteksiSudut', { bitmapKecil }, [bitmapKecil])
+  if (!sudut) return null
 
-  let sudutTerbaik = null
-
-  try {
-    cv.cvtColor(src, abu, cv.COLOR_RGBA2GRAY)
-    cv.GaussianBlur(abu, halus, new cv.Size(5, 5), 0)
-    cv.Canny(halus, tepi, 50, 150)
-    cv.dilate(tepi, dilasi, kernel)
-
-    cv.findContours(dilasi, kontur, hierarki, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
-
-    const luasFrame = w * h
-    let luasTerbesar = 0
-
-    for (let i = 0; i < kontur.size(); i++) {
-      const c = kontur.get(i)
-      const luas = cv.contourArea(c)
-
-      // Kertas harus cukup besar (>15% bingkai) tapi bukan seluruh bingkai (<97%).
-      if (luas < luasFrame * 0.15 || luas > luasFrame * 0.97) {
-        c.delete()
-        continue
-      }
-
-      const keliling = cv.arcLength(c, true)
-      const aproks = new cv.Mat()
-      cv.approxPolyDP(c, aproks, 0.02 * keliling, true)
-
-      if (aproks.rows === 4 && cv.isContourConvex(aproks) && luas > luasTerbesar) {
-        luasTerbesar = luas
-        const titik = []
-        for (let j = 0; j < 4; j++) {
-          titik.push([aproks.data32S[j * 2], aproks.data32S[j * 2 + 1]])
-        }
-        sudutTerbaik = titik
-      }
-
-      aproks.delete()
-      c.delete()
-    }
-  } finally {
-    src.delete()
-    abu.delete()
-    halus.delete()
-    tepi.delete()
-    dilasi.delete()
-    kernel.delete()
-    kontur.delete()
-    hierarki.delete()
-    kecil.width = 0
-  }
-
-  if (!sudutTerbaik) return null
-
-  const terurut = urutkanSudut(sudutTerbaik)
   const sx = kanvasAsli.width / w
   const sy = kanvasAsli.height / h
-  return terurut.map(([x, y]) => [x * sx, y * sy])
-}
-
-// Urutkan 4 titik sembarang menjadi [TL, TR, BR, BL].
-// TL/BR = jumlah (x+y) terkecil/terbesar. TR/BL = selisih (x-y) terbesar/terkecil.
-function urutkanSudut(titik) {
-  let tl = titik[0]
-  let br = titik[0]
-  let tr = titik[0]
-  let bl = titik[0]
-  let sMin = Infinity
-  let sMax = -Infinity
-  let dMin = Infinity
-  let dMax = -Infinity
-  for (const p of titik) {
-    const s = p[0] + p[1]
-    const d = p[0] - p[1]
-    if (s < sMin) { sMin = s; tl = p }
-    if (s > sMax) { sMax = s; br = p }
-    if (d > dMax) { dMax = d; tr = p }
-    if (d < dMin) { dMin = d; bl = p }
-  }
-  return [tl, tr, br, bl]
+  return sudut.map(([x, y]) => [x * sx, y * sy])
 }
 
 /* ================================================================
-   Pelurusan perspektif (OpenCV.js warpPerspective)
+   Pelurusan perspektif (didelegasikan ke worker OpenCV, cv.warpPerspective)
    sudut: [TL, TR, BR, BL] dalam koordinat kanvasSumber.
    ================================================================ */
 
 async function luruskanDenganSudut(kanvasSumber, sudut) {
-  const cv = await muatOpenCv()
   const [p0, p1, p2, p3] = sudut
-
   const jarak = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1])
   let lebar = (jarak(p0, p1) + jarak(p3, p2)) / 2
   let tinggi = (jarak(p0, p3) + jarak(p1, p2)) / 2
@@ -177,31 +91,16 @@ async function luruskanDenganSudut(kanvasSumber, sudut) {
   lebar = Math.max(200, Math.round(lebar * skala))
   tinggi = Math.max(200, Math.round(tinggi * skala))
 
-  const src = cv.imread(kanvasSumber)
-  const dst = new cv.Mat()
-  const srcTitik = cv.matFromArray(4, 1, cv.CV_32FC2, [
-    p0[0], p0[1], p1[0], p1[1], p2[0], p2[1], p3[0], p3[1],
-  ])
-  const dstTitik = cv.matFromArray(4, 1, cv.CV_32FC2, [
-    0, 0, lebar, 0, lebar, tinggi, 0, tinggi,
-  ])
-  const M = cv.getPerspectiveTransform(srcTitik, dstTitik)
+  const bitmapSumber = await createImageBitmap(kanvasSumber)
+  const { bitmapHasil } = await jalankanTugasCv(
+    'luruskan',
+    { bitmapSumber, sudut, lebar, tinggi },
+    [bitmapSumber]
+  )
 
   const hasil = buatKanvas(lebar, tinggi)
-  try {
-    cv.warpPerspective(
-      src, dst, M, new cv.Size(lebar, tinggi),
-      cv.INTER_LINEAR, cv.BORDER_REPLICATE, new cv.Scalar()
-    )
-    cv.imshow(hasil, dst)
-  } finally {
-    src.delete()
-    dst.delete()
-    srcTitik.delete()
-    dstTitik.delete()
-    M.delete()
-  }
-
+  hasil.getContext('2d').drawImage(bitmapHasil, 0, 0)
+  bitmapHasil.close()
   return hasil
 }
 
@@ -272,45 +171,22 @@ export async function suntingSudutFoto(blobAsli, sudutBaru) {
   }
 }
 
-// "Mode dokumen": ambang adaptif per-blok (OpenCV adaptiveThreshold) supaya kertas
-// jadi putih bersih dan tulisan hitam pekat, tahan terhadap bayangan/cahaya tidak
-// merata dalam satu foto (berbeda dari contrast-stretch global sebelumnya yang
-// mengasumsikan pencahayaan rata di seluruh foto).
+// "Mode dokumen": ambang adaptif per-blok (didelegasikan ke worker, OpenCV
+// adaptiveThreshold) supaya kertas jadi putih bersih dan tulisan hitam pekat,
+// tahan terhadap bayangan/cahaya tidak merata dalam satu foto.
 async function perbaikiDokumenAdaptif(kanvas) {
-  const cv = await muatOpenCv()
-  const src = cv.imread(kanvas)
-  const abu = new cv.Mat()
-  const halus = new cv.Mat()
-  const hasil = new cv.Mat()
-  try {
-    cv.cvtColor(src, abu, cv.COLOR_RGBA2GRAY)
-    // Blur ringan untuk mengurangi noise sensor sebelum thresholding,
-    // tanpa menghilangkan ketebalan garis tulisan tipis.
-    cv.GaussianBlur(abu, halus, new cv.Size(3, 3), 0)
-
-    // Ukuran blok mengikuti ukuran foto (kira-kira 1/20 sisi terpendek), harus ganjil.
-    let blok = Math.round(Math.min(kanvas.width, kanvas.height) / 20)
-    if (blok < 15) blok = 15
-    if (blok % 2 === 0) blok += 1
-
-    cv.adaptiveThreshold(
-      halus, hasil, 255,
-      cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY,
-      blok, 10
-    )
-    cv.imshow(kanvas, hasil)
-  } finally {
-    src.delete()
-    abu.delete()
-    halus.delete()
-    hasil.delete()
-  }
+  const bitmapSumber = await createImageBitmap(kanvas)
+  const { bitmapHasil } = await jalankanTugasCv('dokumenAdaptif', { bitmapSumber }, [bitmapSumber])
+  const ctx = kanvas.getContext('2d', { willReadFrequently: true })
+  ctx.clearRect(0, 0, kanvas.width, kanvas.height)
+  ctx.drawImage(bitmapHasil, 0, 0)
+  bitmapHasil.close()
 }
 
 /* ================================================================
    Susun PDF sederhana: satu foto JPEG per halaman (A4, otomatis tegak/mendatar).
-   (Tidak berubah dari versi sebelumnya — bagian ini murni penulisan byte PDF,
-   tidak melibatkan pemrosesan gambar.)
+   (Tidak berubah — bagian ini murni penulisan byte PDF, tidak melibatkan
+   pemrosesan gambar, jadi tetap aman berjalan di thread utama.)
    ================================================================ */
 
 function tulisPdf(halaman) {
