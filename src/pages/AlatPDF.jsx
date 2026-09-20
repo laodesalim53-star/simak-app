@@ -1,16 +1,18 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { saveAs } from 'file-saver'
 import {
   Loader2, Download, FileType2, FileSpreadsheet, Minimize2, FileUp, Trash2, Sparkles, FileText,
-  Camera, ImagePlus, ChevronLeft, ChevronRight, X, Crop,
+  Camera, ImagePlus, ChevronLeft, ChevronRight, X, Crop, PenLine,
 } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
+import SudutEditor from '../components/SudutEditor'
 import {
   bukaPdf, kompresPdf, renderHalaman, ambilTekslayer, jumlahHuruf, teksDariKata,
   buatWorkerOcr, ocrCanvas, scanDenganAI, klusterTabel, FAKTOR_KOLOM,
   penandaHalaman, buatDocx, teksBersih, buatXlsx, formatUkuran,
 } from '../lib/alatPdf'
-import { siapkanFoto, buatPdfDariFoto } from '../lib/kameraPdf'
+import { siapkanFoto, buatPdfDariFoto, suntingSudutFoto } from '../lib/kameraPdf'
+import { muatOpenCv, opencvSudahSiap } from '../lib/opencvLoader'
 
 const BATAS_UKURAN_MB = 100
 const PERINGATAN_UKURAN_MB = 30
@@ -55,7 +57,7 @@ function namaDasar(nama) {
   return nama.replace(/\.pdf$/i, '') || 'dokumen'
 }
 
-// Versi foto yang sedang dipakai: hasil potong otomatis, atau foto asli.
+// Versi foto yang sedang dipakai: hasil potong otomatis/sunting manual, atau foto asli.
 function versiAktif(f) {
   return f.pakaiPotong && f.potong ? f.potong : f.asli
 }
@@ -73,7 +75,7 @@ export default function AlatPDF() {
   const [error, setError] = useState('')
 
   // Kamera
-  // Tiap foto: { id, asli: {blob,w,h,url}, potong: {blob,w,h,url} | null, pakaiPotong }
+  // Tiap foto: { id, asli: {blob,w,h,url}, potong: {blob,w,h,url} | null, sudut: [[x,y]x4] | null, pakaiPotong }
   const [foto, setFoto] = useState([])
   const [potongOtomatis, setPotongOtomatis] = useState(true)
   const [modeDokumen, setModeDokumen] = useState(true)
@@ -81,6 +83,9 @@ export default function AlatPDF() {
   const [bacaFoto, setBacaFoto] = useState(false)
   const [bangunPdf, setBangunPdf] = useState(false)
   const [dariKamera, setDariKamera] = useState(false)
+  const [muatCv, setMuatCv] = useState(!opencvSudahSiap())
+  const [suntingId, setSuntingId] = useState(null) // id foto yang sedang disunting sudutnya
+  const [menyimpanSudut, setMenyimpanSudut] = useState(false)
 
   // Kompres
   const [preset, setPreset] = useState('sedang')
@@ -102,6 +107,24 @@ export default function AlatPDF() {
   // Excel
   const [kolom, setKolom] = useState('sedang')
   const [kataPerHalaman, setKataPerHalaman] = useState([]) // [{ no, kata, sumber }]
+
+  // Muat OpenCV.js di latar belakang begitu halaman dibuka, supaya saat pengguna
+  // mengambil foto pertama, mesin pemindai sudah siap (bukan menunggu ~8 MB baru mulai).
+  useEffect(() => {
+    if (opencvSudahSiap()) {
+      setMuatCv(false)
+      return
+    }
+    let batal = false
+    muatOpenCv()
+      .catch(() => {}) // gagal (mis. offline) tetap dibiarkan; dicoba lagi otomatis saat dipakai
+      .finally(() => {
+        if (!batal) setMuatCv(false)
+      })
+    return () => {
+      batal = true
+    }
+  }, [])
 
   const lembar = useMemo(
     () =>
@@ -194,11 +217,12 @@ export default function AlatPDF() {
     try {
       const baru = []
       for (const f of daftar) {
-        const { asli, potong } = await siapkanFoto(f, { potongOtomatis })
+        const { asli, potong, sudut } = await siapkanFoto(f, { potongOtomatis })
         baru.push({
           id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           asli: { ...asli, url: URL.createObjectURL(asli.blob) },
           potong: potong ? { ...potong, url: URL.createObjectURL(potong.blob) } : null,
+          sudut,
           pakaiPotong: !!potong,
         })
       }
@@ -206,8 +230,9 @@ export default function AlatPDF() {
       const tidakTerdeteksi = baru.filter((f) => !f.potong).length
       if (potongOtomatis && tidakTerdeteksi > 0) {
         setCatatanFoto(
-          `Tepi kertas tidak terdeteksi pada ${tidakTerdeteksi} foto, jadi dipakai apa adanya. ` +
-            'Coba letakkan kertas di atas alas yang lebih gelap dan pastikan seluruh kertas masuk bingkai.'
+          `Tepi kertas tidak terdeteksi otomatis pada ${tidakTerdeteksi} foto. ` +
+            'Ketuk ikon pensil pada foto tersebut untuk menandai sudut kertas secara manual, ' +
+            'atau coba letakkan kertas di atas alas yang lebih gelap dengan seluruh kertas masuk bingkai.'
         )
       }
     } catch (err) {
@@ -247,6 +272,44 @@ export default function AlatPDF() {
       return []
     })
     setCatatanFoto('')
+  }
+
+  // ---------- Editor sudut manual ----------
+  const fotoSunting = foto.find((f) => f.id === suntingId) || null
+
+  function bukaEditorSudut(id) {
+    setError('')
+    setSuntingId(id)
+  }
+
+  function tutupEditorSudut() {
+    setSuntingId(null)
+  }
+
+  async function terapkanSudutBaru(titikBaru) {
+    if (!fotoSunting) return
+    setMenyimpanSudut(true)
+    setError('')
+    try {
+      const potongBaru = await suntingSudutFoto(fotoSunting.asli.blob, titikBaru)
+      setFoto((lama) =>
+        lama.map((f) => {
+          if (f.id !== fotoSunting.id) return f
+          if (f.potong) URL.revokeObjectURL(f.potong.url)
+          return {
+            ...f,
+            potong: { ...potongBaru, url: URL.createObjectURL(potongBaru.blob) },
+            sudut: titikBaru,
+            pakaiPotong: true,
+          }
+        })
+      )
+      setSuntingId(null)
+    } catch (err) {
+      setError(err?.message || 'Gagal menerapkan sudut yang disunting.')
+    } finally {
+      setMenyimpanSudut(false)
+    }
   }
 
   async function jadikanPdf() {
@@ -497,6 +560,14 @@ export default function AlatPDF() {
               {/* Scan kamera */}
               <div className="border-t border-ink-950/10 pt-3 space-y-3">
                 <p className="text-xs font-semibold text-ink-950">Atau scan dokumen dengan kamera</p>
+
+                {muatCv && (
+                  <p className="flex items-center gap-2 text-xs text-ink-700/60">
+                    <Loader2 size={12} className="animate-spin" />
+                    Menyiapkan mesin pemindai untuk deteksi tepi kertas otomatis (sekali saja)...
+                  </p>
+                )}
+
                 <div className="flex flex-wrap items-center gap-3">
                   <label className={`btn-primary cursor-pointer ${kameraTerkunci ? 'opacity-40 pointer-events-none' : ''}`}>
                     <Camera size={16} />
@@ -542,16 +613,15 @@ export default function AlatPDF() {
                     disabled={kameraTerkunci}
                   />
                   <span>
-                    Potong otomatis mengikuti kertas dan luruskan bila foto miring. Berlaku untuk foto yang diambil
-                    setelah ini.
+                    Deteksi tepi kertas otomatis dan luruskan bila foto miring. Berlaku untuk foto yang diambil
+                    setelah ini. Hasil deteksi selalu bisa dikoreksi manual lewat ikon pensil pada tiap foto.
                   </span>
                 </label>
 
                 {foto.length === 0 && !bacaFoto && (
                   <p className="text-xs text-ink-700/60">
-                    Letakkan kertas di atas alas yang lebih gelap (misalnya meja gelap) supaya tepinya terdeteksi, dan
-                    pastikan seluruh kertas masuk bingkai. Tiap foto menjadi satu halaman PDF. Di komputer, tombol kamera
-                    akan membuka pemilih berkas.
+                    Pastikan seluruh kertas masuk bingkai dan cukup terang. Tiap foto menjadi satu halaman PDF. Di
+                    komputer, tombol kamera akan membuka pemilih berkas.
                   </p>
                 )}
 
@@ -578,6 +648,16 @@ export default function AlatPDF() {
                               className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center disabled:opacity-40"
                             >
                               <X size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => bukaEditorSudut(f.id)}
+                              disabled={kameraTerkunci}
+                              aria-label={`Sunting sudut halaman ${i + 1}`}
+                              title="Sunting sudut kertas secara manual"
+                              className="absolute bottom-6 right-1 w-5 h-5 rounded-full bg-sky-600 text-white flex items-center justify-center disabled:opacity-40"
+                            >
+                              <PenLine size={11} />
                             </button>
                             <div className="flex items-center justify-between bg-white/90 px-1 py-0.5">
                               <button
@@ -632,8 +712,8 @@ export default function AlatPDF() {
                         disabled={kameraTerkunci}
                       />
                       <span>
-                        Mode dokumen (hitam-putih, kertas dibuat putih bersih, ukuran lebih kecil). Matikan bila dokumen
-                        berwarna atau berisi foto.
+                        Mode dokumen (hitam-putih dengan ambang adaptif, tahan bayangan/cahaya tidak merata, ukuran
+                        lebih kecil). Matikan bila dokumen berwarna atau berisi foto.
                       </span>
                     </label>
 
@@ -945,6 +1025,25 @@ export default function AlatPDF() {
           </div>
         </div>
       </main>
+
+      {fotoSunting && (
+        <SudutEditor
+          url={fotoSunting.asli.url}
+          lebarAsli={fotoSunting.asli.w}
+          tinggiAsli={fotoSunting.asli.h}
+          sudutAwal={fotoSunting.sudut}
+          onTerapkan={terapkanSudutBaru}
+          onBatal={tutupEditorSudut}
+        />
+      )}
+      {menyimpanSudut && (
+        <div className="fixed inset-0 z-50 bg-ink-900/70 flex items-center justify-center">
+          <div className="bg-white rounded-xl px-6 py-4 flex items-center gap-3 text-sm text-ink-950">
+            <Loader2 size={18} className="animate-spin" />
+            Menerapkan sudut baru...
+          </div>
+        </div>
+      )}
     </div>
   )
 }
