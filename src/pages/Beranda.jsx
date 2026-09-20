@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, LogIn, GraduationCap, Video, Download, Monitor, Apple, Share, SquarePlus, X, BookOpen, IdCard, Wallet, MessageCircle, Settings, Users, ShoppingBag, Phone, Send, Fish, Shell, Shirt, Pencil, Building2 } from 'lucide-react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { ArrowRight, LogIn, Video, Download, Monitor, Apple, Share, SquarePlus, X, BookOpen, IdCard, Wallet, MessageCircle, Settings, Users, ShoppingBag, Phone, Send, Fish, Shell, Shirt, Pencil, Building2, Landmark, Megaphone, FileText, Library, ClipboardCheck } from 'lucide-react'
 // PENTING: sesuaikan path import ini dengan lokasi client Supabase Anda
 // yang sudah ada di project (biasanya di src/lib/ atau src/services/).
 import { supabase } from '../lib/supabaseClient'
@@ -29,13 +29,153 @@ import TanyaAI from '../components/TanyaAI'
 // pendidikan diberi badge "Khusus sekolah" supaya pengguna dari KUA tidak
 // salah ekspektasi.
 
-const NOMOR_WA_SEKOLAH = '6282197574897'
+const NOMOR_WA_ADMIN = '6282197574897'
 
 // Foto/ilustrasi "Ibu Guru" yang dipakai sebagai logo tombol kontak
 // mengambang & header panel Live Chat, menggantikan ikon generik. Taruh
 // file gambarnya di folder public proyek Anda dengan nama persis di bawah
 // ini — ganti nama filenya di sini kalau nama file Anda berbeda.
 const FOTO_ADMIN_CHAT = '/ibu-guru-chat.jpg'
+
+// ============================================================
+// DATA AREA — sumber tunggal untuk tile & kartu di bagian "area".
+//
+// untuk : jenis instansi yang melihat area ini. Nilainya harus cocok dengan
+//         id di OPSI_UNTUK di bawah. Untuk menambah jenis instansi baru
+//         (mis. puskesmas): tambah satu entri di OPSI_UNTUK, lalu isi
+//         `untuk` di area yang relevan.
+// items : string  -> tampil untuk semua jenis instansi pemilik area.
+//         {t, u}  -> hanya tampil bila jenis instansi yang dipilih ada di `u`
+//                    (pada tampilan "Semua", semuanya tampil).
+// link  : bila diisi, tile & kartu menjadi tautan (dipakai Toko Sekolah).
+//
+// Nama modul KUA di bawah mengikuti rute di App.jsx.
+// ============================================================
+const OPSI_UNTUK = [
+  { id: 'semua', label: 'Semua' },
+  { id: 'sekolah', label: 'Sekolah' },
+  { id: 'kua', label: 'KUA' },
+]
+
+const DAFTAR_AREA = [
+  {
+    id: 'akademik', warna: '#2E5AAC', ikon: BookOpen, untuk: ['sekolah'],
+    nama: 'Akademik & Ujian', judul: 'Akademik & ujian',
+    items: [
+      'Ujian online & bank soal',
+      'Kuis seru untuk kelas rendah',
+      'Nilai, rapor & nilai asesmen',
+      'RPP & arsip RPP guru',
+      'Portofolio & sertifikat siswa',
+      'Perpustakaan digital',
+    ],
+  },
+  {
+    id: 'admin-siswa', warna: '#1F7A5C', ikon: IdCard, untuk: ['sekolah'],
+    nama: 'Administrasi Siswa', judul: 'Administrasi siswa',
+    items: [
+      'Data siswa, kelas & jadwal',
+      'Presensi harian',
+      'Kartu siswa, ijazah & SKL',
+      'Pendaftaran siswa baru (PPDB) online',
+      'Pengajuan surat & perbaikan data',
+    ],
+  },
+  {
+    id: 'penyuluhan', warna: '#2F7D32', ikon: Megaphone, untuk: ['kua'],
+    nama: 'Layanan Penyuluhan', judul: 'Layanan penyuluhan',
+    items: [
+      'Laporan penyuluhan masyarakat bermoral & harmonis',
+      'RKTP Penyuluh Agama (rencana kerja tahunan)',
+      'Pusat & pengelolaan kelompok binaan',
+    ],
+  },
+  {
+    id: 'kepenghuluan', warna: '#7A4B1E', ikon: FileText, untuk: ['kua'],
+    nama: 'Kepenghuluan & Nikah', judul: 'Kepenghuluan & nikah',
+    items: [
+      'Pendaftaran nikah online untuk jamaah & pegawai',
+      'Verifikasi pengajuan nikah oleh Kepala KUA',
+      'Laporan kepenghuluan bulanan',
+    ],
+  },
+  {
+    id: 'materi-majelis', warna: '#5B6B1A', ikon: Library, untuk: ['kua'],
+    nama: 'Pusat Materi Majelis', judul: 'Pusat materi majelis',
+    items: [
+      'Keluarga sakinah',
+      'Pengelolaan zakat & wakaf',
+      'Akhlak & moderasi beragama',
+      'Materi majelis taklim',
+    ],
+  },
+  {
+    id: 'laporan-kua', warna: '#3B4A8C', ikon: ClipboardCheck, untuk: ['kua'],
+    nama: 'Laporan & Perencanaan', judul: 'Laporan & perencanaan KUA',
+    items: [
+      'Laporan Kepala KUA dengan tanda tangan otomatis',
+      'Laporan bulanan KUA',
+      'Rencana kerja tahunan',
+      'Ringkasan aset: inventaris & kondisi bangunan',
+    ],
+  },
+  {
+    id: 'keuangan', warna: '#B15A17', ikon: Wallet, untuk: ['sekolah', 'kua'],
+    nama: 'Keuangan Sekolah & KUA', judul: 'Keuangan sekolah & KUA',
+    items: [
+      { t: 'Keuangan sekolah & kas kelas', u: ['sekolah'] },
+      { t: 'Keuangan & anggaran KUA', u: ['kua'] },
+      'Kuitansi & nota otomatis',
+      'Laporan bulanan',
+      'Backup data terjadwal',
+    ],
+  },
+  {
+    id: 'komunikasi', warna: '#6B4FA0', ikon: MessageCircle, untuk: ['sekolah', 'kua'],
+    nama: 'Komunikasi', judul: 'Komunikasi & publikasi',
+    items: [
+      'Pengumuman & agenda',
+      { t: 'Pesan langsung antar warga sekolah', u: ['sekolah'] },
+      { t: 'Pesan langsung antar staf KUA', u: ['kua'] },
+      'Rapat online lewat video',
+      'Galeri foto kegiatan',
+      'Scan dokumen jadi Word',
+      'Surat & surat keterangan resmi',
+    ],
+  },
+  {
+    id: 'manajemen', warna: '#146B71', ikon: Settings, untuk: ['sekolah', 'kua'],
+    nama: 'Manajemen Sekolah & KUA', judul: 'Manajemen sekolah & KUA',
+    items: [
+      { t: 'Data guru & inventaris sekolah', u: ['sekolah'] },
+      { t: 'Data pegawai, presensi & daftar hadir KUA', u: ['kua'] },
+      { t: 'Inventaris & kondisi bangunan KUA', u: ['kua'] },
+      { t: 'Profil & identitas sekolah', u: ['sekolah'] },
+      { t: 'Profil kantor, kop surat & tanda tangan otomatis', u: ['kua'] },
+      'Kalender kerja & hari libur',
+      'Persetujuan akun pengguna baru',
+    ],
+  },
+  {
+    id: 'orang-tua', warna: '#A23E56', ikon: Users, untuk: ['sekolah'],
+    nama: 'Portal Orang Tua', judul: 'Portal orang tua',
+    items: [
+      'Pantau rapor & nilai anak',
+      'Presensi & portofolio anak',
+      'Galeri foto khusus orang tua',
+    ],
+  },
+  {
+    id: 'toko', warna: '#0F6FA3', ikon: ShoppingBag, untuk: ['sekolah'],
+    nama: 'Toko Sekolah', judul: 'Toko sekolah',
+    link: '/toko', tanpaLogin: true, ctaLabel: 'Buka Toko Sekolah',
+    items: [
+      'Belanja kebutuhan sekolah secara online',
+      'Keranjang, checkout & riwayat pesanan',
+      'Kelola pesanan masuk & pencairan dana untuk penjual',
+    ],
+  },
+]
 
 function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 72 }) {
   return (
@@ -83,6 +223,25 @@ function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 
 
 export default function Beranda() {
   const navigate = useNavigate()
+
+  // Jenis instansi yang sedang dilihat pengunjung: Semua / Sekolah / KUA.
+  // Disimpan di URL (?untuk=kua) supaya bisa dibagikan — mis. link khusus
+  // untuk KUA: https://situs-anda/?untuk=kua
+  const [searchParams, setSearchParams] = useSearchParams()
+  const paramUntuk = searchParams.get('untuk')
+  const untuk = OPSI_UNTUK.some((o) => o.id === paramUntuk) ? paramUntuk : 'semua'
+  function pilihUntuk(id) {
+    setSearchParams(id === 'semua' ? {} : { untuk: id }, { replace: true })
+  }
+  const areaTampil = DAFTAR_AREA
+    .filter((a) => untuk === 'semua' || a.untuk.includes(untuk))
+    .map((a, i) => ({
+      ...a,
+      nomor: i + 1,
+      daftarItem: a.items
+        .filter((it) => typeof it === 'string' || untuk === 'semua' || it.u.includes(untuk))
+        .map((it) => (typeof it === 'string' ? it : it.t)),
+    }))
   // Gabung rapat langsung dari beranda lewat link/kode yang dibagikan
   // host (misal lewat WhatsApp). Menerima link penuh (.../rapat/xxxx) atau
   // kode ruangan saja.
@@ -220,7 +379,7 @@ export default function Beranda() {
 
             <div className="header-content">
               <div className="brand-logo">
-                <div className="brand-logo-icon"><GraduationCap size={22} strokeWidth={2.5} /></div>
+                <div className="brand-logo-icon"><Landmark size={22} strokeWidth={2.5} /></div>
                 <span className="brand-logo-text">SIMAK</span>
                 {/* Badge kecil di samping logo menandaskan bahwa platform ini
                     sekarang melayani dua jenis pendaftar: sekolah & kantor. */}
@@ -231,9 +390,10 @@ export default function Beranda() {
               </div>
               <h1 className="beranda-title">Satu aplikasi, untuk Sekolah &amp; KUA</h1>
               <p className="beranda-sub">
-                Sistem informasi terpadu untuk Sekolah dan Kantor Urusan Agama (KUA), dengan tujuh
-                area utama dan puluhan modul siap pakai — akademik, administrasi, keuangan,
-                komunikasi, hingga toko sekolah, dalam satu sistem yang sama.
+                Sistem informasi terpadu untuk Sekolah dan Kantor Urusan Agama (KUA), dengan{' '}
+                {DAFTAR_AREA.length} area utama dan puluhan modul siap pakai — dari akademik dan
+                administrasi siswa, penyuluhan dan kepenghuluan, hingga keuangan, komunikasi,
+                dan laporan pimpinan.
               </p>
               <div className="header-actions">
                 <Link to="/register" className="btn-primary">
@@ -279,7 +439,7 @@ export default function Beranda() {
           </div>
 
           <div className="aru-banner">
-            <div className="aru-icon"><GraduationCap size={20} /></div>
+            <div className="aru-icon"><Users size={20} /></div>
             <p className="aru-text">
               Salam hangat untuk Bapak/Ibu Guru dan staf KUA (Kantor Urusan Agama) di Kabupaten
               Kepulauan Aru — SIMAK dibuat untuk membantu sekolah maupun KUA Anda mengelola data
@@ -319,166 +479,135 @@ export default function Beranda() {
             />
 
             <div className="area-showcase-heading">
-              <h2 className="area-showcase-title">Tujuh area, untuk Sekolah &amp; KUA</h2>
+              <h2 className="area-showcase-title">
+                {untuk === 'kua'
+                  ? `${areaTampil.length} area untuk KUA`
+                  : untuk === 'sekolah'
+                    ? `${areaTampil.length} area untuk Sekolah`
+                    : `${areaTampil.length} area, untuk Sekolah & KUA`}
+              </h2>
               <p className="area-showcase-sub">
-                Modul dengan badge <span className="badge-sekolah-inline">Khusus sekolah</span> hanya tampil untuk akun sekolah — akun KUA otomatis mendapat modul yang relevan.
+                {untuk === 'semua' ? (
+                  <>
+                    Pilih jenis instansi Anda untuk melihat modul yang tersedia. Badge{' '}
+                    <span className="badge-sekolah-inline">Khusus sekolah</span> dan{' '}
+                    <span className="badge-kua-inline">Khusus KUA</span> menandai modul yang hanya
+                    tampil untuk jenis akun tersebut.
+                  </>
+                ) : (
+                  <>
+                    Semua modul di bawah tersedia untuk akun {untuk === 'kua' ? 'KUA' : 'sekolah'}.
+                    Kewenangan tiap pengguna (admin, kepala, pegawai) diatur setelah login.
+                  </>
+                )}
               </p>
+              <div className="aud-switch" role="tablist" aria-label="Pilih jenis instansi">
+                {OPSI_UNTUK.map((o) => (
+                  <button
+                    key={o.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={untuk === o.id}
+                    className={`aud-btn${untuk === o.id ? ' active' : ''}`}
+                    onClick={() => pilihUntuk(o.id)}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="tile-strip">
-            <div className="tile" style={{ background: '#2E5AAC' }}>
-              <span className="tile-badge-sekolah">Khusus sekolah</span>
-              <div className="tile-icon"><BookOpen size={15} strokeWidth={2.4} /></div>
-              <p className="tile-label">Area 1</p>
-              <p className="tile-name">Akademik &amp; Ujian</p>
-            </div>
-            <div className="tile" style={{ background: '#1F7A5C' }}>
-              <span className="tile-badge-sekolah">Khusus sekolah</span>
-              <div className="tile-icon"><IdCard size={15} strokeWidth={2.4} /></div>
-              <p className="tile-label">Area 2</p>
-              <p className="tile-name">Administrasi Siswa</p>
-            </div>
-            <div className="tile" style={{ background: '#B15A17' }}>
-              <div className="tile-icon"><Wallet size={15} strokeWidth={2.4} /></div>
-              <p className="tile-label">Area 3</p>
-              <p className="tile-name">Keuangan Sekolah &amp; KUA</p>
-            </div>
-            <div className="tile" style={{ background: '#6B4FA0' }}>
-              <div className="tile-icon"><MessageCircle size={15} strokeWidth={2.4} /></div>
-              <p className="tile-label">Area 4</p>
-              <p className="tile-name">Komunikasi</p>
-            </div>
-            <div className="tile" style={{ background: '#146B71' }}>
-              <div className="tile-icon"><Settings size={15} strokeWidth={2.4} /></div>
-              <p className="tile-label">Area 5</p>
-              <p className="tile-name">Manajemen Sekolah &amp; KUA</p>
-            </div>
-            <div className="tile" style={{ background: '#A23E56' }}>
-              <span className="tile-badge-sekolah">Khusus sekolah</span>
-              <div className="tile-icon"><Users size={15} strokeWidth={2.4} /></div>
-              <p className="tile-label">Area 6</p>
-              <p className="tile-name">Portal Orang Tua</p>
-            </div>
-            {/* Tile Area 7 (Toko Sekolah) adalah <Link> langsung ke /toko.
-                Dibedakan dengan warna biru langit yang konsisten dengan
-                tombol "Lihat Toko Sekolah" di atas, dan badge "Tanpa Login"
-                statis (tidak berdenyut) supaya tetap menonjol tanpa
-                terasa berlebihan. */}
-            <Link
-              to="/toko"
-              className="tile tile-link tile-toko"
-              style={{ background: '#0F6FA3' }}
-            >
-              <span className="tile-toko-badge">Tanpa login</span>
-              <div className="tile-icon"><ShoppingBag size={15} strokeWidth={2.4} /></div>
-              <p className="tile-label">Area 7</p>
-              <p className="tile-name">Toko Sekolah</p>
-            </Link>
+              {areaTampil.map((a) => {
+                const Ikon = a.ikon
+                // Badge "Khusus ..." hanya perlu di tampilan Semua — kalau
+                // sudah difilter, badge itu redundan.
+                const badgeJenis =
+                  untuk === 'semua' && !a.tanpaLogin && a.untuk.length === 1 ? a.untuk[0] : null
+                const isi = (
+                  <>
+                    {badgeJenis === 'sekolah' && <span className="tile-badge-sekolah">Khusus sekolah</span>}
+                    {badgeJenis === 'kua' && <span className="tile-badge-kua">Khusus KUA</span>}
+                    {a.tanpaLogin && <span className="tile-toko-badge">Tanpa login</span>}
+                    <div className="tile-icon"><Ikon size={15} strokeWidth={2.4} /></div>
+                    <p className="tile-label">Area {a.nomor}</p>
+                    <p className="tile-name">{a.nama}</p>
+                  </>
+                )
+                return a.link ? (
+                  <Link
+                    key={a.id}
+                    to={a.link}
+                    className="tile tile-link tile-toko"
+                    style={{ background: a.warna }}
+                  >
+                    {isi}
+                  </Link>
+                ) : (
+                  <div key={a.id} className="tile" style={{ background: a.warna }}>
+                    {isi}
+                  </div>
+                )
+              })}
             </div>
 
             <div className="cat-section">
+              {areaTampil.map((a) => {
+                const Ikon = a.ikon
+                const badgeJenis =
+                  untuk === 'semua' && !a.tanpaLogin && a.untuk.length === 1 ? a.untuk[0] : null
+                const judul = (
+                  <h2 className="cat-title">
+                    <Ikon size={17} strokeWidth={2.2} className="cat-icon" style={{ color: a.warna }} />
+                    {a.judul}
+                  </h2>
+                )
+                const daftar = (
+                  <ul className="cat-list" style={{ '--accent': a.warna }}>
+                    {a.daftarItem.map((teks) => (
+                      <li key={teks}>{teks}</li>
+                    ))}
+                  </ul>
+                )
 
-            <div className="cat-card">
-              <span className="cat-tag" style={{ background: '#2E5AAC' }}>Area 1</span>
-              <span className="cat-card-badge-sekolah">Khusus sekolah</span>
-              <h2 className="cat-title"><BookOpen size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#2E5AAC' }} />Akademik &amp; ujian</h2>
-              <ul className="cat-list" style={{ '--accent': '#2E5AAC' }}>
-                <li>Ujian online &amp; bank soal</li>
-                <li>Kuis seru untuk kelas rendah</li>
-                <li>Nilai, rapor &amp; nilai asesmen</li>
-                <li>RPP &amp; arsip RPP guru</li>
-                <li>Portofolio &amp; sertifikat siswa</li>
-                <li>Perpustakaan digital</li>
-              </ul>
-            </div>
+                if (a.link) {
+                  // Kartu berupa tautan (Toko Sekolah): border biru tipis +
+                  // badge "Tanpa login" statis, panah CTA bergeser saat di-hover.
+                  return (
+                    <Link key={a.id} to={a.link} className="cat-card wide cat-card-link cat-card-toko">
+                      <span className="cat-card-toko-badge">Tanpa login</span>
+                      <span className="cat-tag" style={{ background: a.warna }}>
+                        Area {a.nomor} — bisa diakses tanpa login
+                      </span>
+                      {judul}
+                      {daftar}
+                      <span className="cat-card-link-cta">
+                        {a.ctaLabel}
+                        <ArrowRight size={14} strokeWidth={2.5} className="cat-card-cta-arrow" />
+                      </span>
+                      {/* Ikon dekoratif produk toko (hasil laut, pakaian, ATK) —
+                          statis dan samar, merujuk pada hasil bumi/laut khas
+                          Kepulauan Aru yang bisa dijual lewat toko ini. */}
+                      <span className="cat-card-toko-deco" aria-hidden="true">
+                        <Fish size={22} strokeWidth={2} className="deco-icon" />
+                        <Shell size={18} strokeWidth={2} className="deco-icon deco-icon-kerang" />
+                        <Shirt size={22} strokeWidth={2} className="deco-icon deco-icon-pakaian" />
+                        <Pencil size={18} strokeWidth={2} className="deco-icon deco-icon-atk" />
+                      </span>
+                    </Link>
+                  )
+                }
 
-            <div className="cat-card">
-              <span className="cat-tag" style={{ background: '#1F7A5C' }}>Area 2</span>
-              <span className="cat-card-badge-sekolah">Khusus sekolah</span>
-              <h2 className="cat-title"><IdCard size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#1F7A5C' }} />Administrasi siswa</h2>
-              <ul className="cat-list" style={{ '--accent': '#1F7A5C' }}>
-                <li>Data siswa, kelas &amp; jadwal</li>
-                <li>Presensi harian</li>
-                <li>Kartu siswa, ijazah &amp; SKL</li>
-                <li>Pendaftaran siswa baru (PPDB) online</li>
-                <li>Pengajuan surat &amp; perbaikan data</li>
-              </ul>
-            </div>
-
-            <div className="cat-card">
-              <span className="cat-tag" style={{ background: '#B15A17' }}>Area 3</span>
-              <h2 className="cat-title"><Wallet size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#B15A17' }} />Keuangan sekolah &amp; KUA</h2>
-              <ul className="cat-list" style={{ '--accent': '#B15A17' }}>
-                <li>Keuangan sekolah, kas kelas &amp; anggaran KUA</li>
-                <li>Kuitansi &amp; nota otomatis</li>
-                <li>Laporan bulanan</li>
-                <li>Backup data terjadwal</li>
-              </ul>
-            </div>
-
-            <div className="cat-card">
-              <span className="cat-tag" style={{ background: '#6B4FA0' }}>Area 4</span>
-              <h2 className="cat-title"><MessageCircle size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#6B4FA0' }} />Komunikasi &amp; publikasi</h2>
-              <ul className="cat-list" style={{ '--accent': '#6B4FA0' }}>
-                <li>Pengumuman &amp; agenda sekolah/KUA</li>
-                <li>Pesan langsung antar warga sekolah &amp; staf KUA</li>
-                <li>Rapat online lewat video</li>
-                <li>Galeri foto kegiatan</li>
-                <li>Scan dokumen jadi Word</li>
-                <li>Surat &amp; surat keterangan resmi</li>
-              </ul>
-            </div>
-
-            <div className="cat-card">
-              <span className="cat-tag" style={{ background: '#146B71' }}>Area 5</span>
-              <h2 className="cat-title"><Settings size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#146B71' }} />Manajemen sekolah &amp; KUA</h2>
-              <ul className="cat-list" style={{ '--accent': '#146B71' }}>
-                <li>Data guru/staf KUA &amp; inventaris</li>
-                <li>Profil &amp; identitas sekolah/KUA</li>
-                <li>Kalender kerja &amp; hari libur</li>
-                <li>Persetujuan akun pengguna baru</li>
-              </ul>
-            </div>
-
-            <div className="cat-card">
-              <span className="cat-tag" style={{ background: '#A23E56' }}>Area 6</span>
-              <span className="cat-card-badge-sekolah">Khusus sekolah</span>
-              <h2 className="cat-title"><Users size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#A23E56' }} />Portal orang tua</h2>
-              <ul className="cat-list" style={{ '--accent': '#A23E56' }}>
-                <li>Pantau rapor &amp; nilai anak</li>
-                <li>Presensi &amp; portofolio anak</li>
-                <li>Galeri foto khusus orang tua</li>
-              </ul>
-            </div>
-
-            {/* Kartu Area 7 (Toko Sekolah) adalah <Link> langsung ke /toko.
-                Ditandai dengan border biru tipis + badge "Tanpa Login"
-                statis, dan panah CTA yang bergeser halus saat di-hover —
-                tanpa efek berdenyut terus-menerus. */}
-            <Link to="/toko" className="cat-card wide cat-card-link cat-card-toko">
-              <span className="cat-card-toko-badge">Tanpa login</span>
-              <span className="cat-tag" style={{ background: '#0F6FA3' }}>Area 7 — bisa diakses tanpa login</span>
-              <h2 className="cat-title"><ShoppingBag size={17} strokeWidth={2.2} className="cat-icon" style={{ color: '#0F6FA3' }} />Toko sekolah</h2>
-              <ul className="cat-list" style={{ '--accent': '#0F6FA3' }}>
-                <li>Belanja kebutuhan sekolah secara online</li>
-                <li>Keranjang, checkout &amp; riwayat pesanan</li>
-                <li>Kelola pesanan masuk &amp; pencairan dana untuk penjual</li>
-              </ul>
-              <span className="cat-card-link-cta">
-                Buka Toko Sekolah
-                <ArrowRight size={14} strokeWidth={2.5} className="cat-card-cta-arrow" />
-              </span>
-              {/* Ikon dekoratif produk toko (hasil laut, pakaian, ATK) —
-                  statis dan cukup samar, merujuk pada hasil bumi/laut khas
-                  Kepulauan Aru yang bisa dijual lewat toko ini. */}
-              <span className="cat-card-toko-deco" aria-hidden="true">
-                <Fish size={22} strokeWidth={2} className="deco-icon" />
-                <Shell size={18} strokeWidth={2} className="deco-icon deco-icon-kerang" />
-                <Shirt size={22} strokeWidth={2} className="deco-icon deco-icon-pakaian" />
-                <Pencil size={18} strokeWidth={2} className="deco-icon deco-icon-atk" />
-              </span>
-            </Link>
-
+                return (
+                  <div key={a.id} className="cat-card">
+                    <span className="cat-tag" style={{ background: a.warna }}>Area {a.nomor}</span>
+                    {badgeJenis === 'sekolah' && <span className="cat-card-badge-sekolah">Khusus sekolah</span>}
+                    {badgeJenis === 'kua' && <span className="cat-card-badge-kua">Khusus KUA</span>}
+                    {judul}
+                    {daftar}
+                  </div>
+                )
+              })}
             </div>
           </div>
 
@@ -538,7 +667,7 @@ export default function Beranda() {
       )}
 
       {/* Tombol kontak mengambang — tap untuk memilih WhatsApp atau
-          Live Chat. Nomor WA memakai konstanta NOMOR_WA_SEKOLAH di atas.
+          Live Chat. Nomor WA memakai konstanta NOMOR_WA_ADMIN di atas.
           Ring di sekeliling tombol adalah satu-satunya animasi berulang
           yang dipertahankan di halaman ini — dipakai khusus untuk menarik
           perhatian ke titik kontak, bukan disebar ke banyak elemen. */}
@@ -546,7 +675,7 @@ export default function Beranda() {
         {showFabMenu && (
           <div className="fab-menu">
             <a
-              href={`https://wa.me/${NOMOR_WA_SEKOLAH}?text=Halo%20SIMAK%2C%20saya%20ingin%20bertanya`}
+              href={`https://wa.me/${NOMOR_WA_ADMIN}?text=Halo%20SIMAK%2C%20saya%20ingin%20bertanya`}
               target="_blank"
               rel="noopener noreferrer"
               className="fab-menu-item"
@@ -1539,6 +1668,75 @@ export default function Beranda() {
           border-radius: 999px;
           text-decoration: none;
           white-space: nowrap;
+        }
+
+        /* Pemilih jenis instansi (Semua / Sekolah / KUA) */
+        .aud-switch {
+          display: inline-flex;
+          gap: 4px;
+          margin-top: 14px;
+          padding: 4px;
+          background: #fff;
+          border-radius: 999px;
+          box-shadow: 0 6px 18px rgba(23, 26, 46, 0.06);
+        }
+        .aud-btn {
+          font-family: inherit;
+          font-size: 13px;
+          font-weight: 700;
+          color: #5B6172;
+          background: transparent;
+          border: none;
+          padding: 9px 20px;
+          min-height: 40px;
+          border-radius: 999px;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+        .aud-btn:hover { background: #F1F3FA; }
+        .aud-btn.active { background: #2D3072; color: #fff; }
+        .aud-btn:focus-visible { outline: 2px solid #4E5FE0; outline-offset: 2px; }
+
+        .badge-kua-inline {
+          display: inline-block;
+          background: #86EFAC;
+          color: #14532D;
+          font-size: 10.5px;
+          font-weight: 800;
+          padding: 2px 8px;
+          border-radius: 999px;
+          vertical-align: 1px;
+        }
+        .tile-badge-kua {
+          position: absolute;
+          top: -8px;
+          left: -6px;
+          background: #86EFAC;
+          color: #14532D;
+          font-size: 9.5px;
+          font-weight: 800;
+          padding: 3px 8px;
+          border-radius: 999px;
+          box-shadow: 0 4px 10px rgba(0,0,0,0.18);
+          z-index: 2;
+          white-space: nowrap;
+        }
+        .cat-card-badge-kua {
+          position: absolute;
+          top: -9px;
+          right: 14px;
+          background: #86EFAC;
+          color: #14532D;
+          font-size: 10px;
+          font-weight: 800;
+          padding: 3px 9px;
+          border-radius: 999px;
+          box-shadow: 0 4px 10px rgba(0,0,0,0.18);
+          white-space: nowrap;
+        }
+        @media (max-width: 560px) {
+          .aud-switch { display: flex; width: 100%; }
+          .aud-btn { flex: 1; padding: 9px 8px; }
         }
 
         /* Tablet / layar sedang (mis. Android tablet, iPad mini) */
