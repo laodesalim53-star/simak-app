@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { Sparkles } from "lucide-react";
-import { useAuth } from "../lib/AuthContext"; // sesuaikan path jika beda
 import Layout from "../components/Layout"; // dibungkus Layout, sama seperti ProfilSaya.jsx
+import { PaketEmblem, usePaketSaatIni } from "../components/PaketBadge";
 
 // Daftar paket. Ubah nama, tagline, dan harga di sini saja.
 // "urutan" menentukan tingkatan: paket dengan urutan lebih rendah
@@ -25,22 +24,36 @@ const DAFTAR_PAKET = [
     id: "premium",
     nama: "Premium",
     urutan: 2,
-    tagline: "Paket lengkap: semua fitur Standar ditambah otomasi dan alat bantu guru/admin.",
+    tagline:
+      "Paket lengkap: semua fitur Standar ditambah otomasi dan alat bantu guru/admin.",
     harga: "Hubungi admin", // ganti mis. "Rp 100.000 / bulan" saat harga sudah pasti
     rekomendasi: true,
   },
 ];
 
-export default function UpgradeFitur() {
-  const { isPremium, paket } = useAuth();
+// Tampilan tiap kartu, dipisah dari data supaya mudah diubah.
+const TEMA_KARTU = {
+  free: {
+    kartu: "border border-slate-200 bg-white",
+    saatIni: "bg-slate-50 text-slate-500",
+    tombol: "",
+  },
+  standar: {
+    kartu: "border border-teal-200 bg-white",
+    saatIni: "bg-teal-50 font-medium text-teal-700",
+    tombol: "border border-teal-600 text-teal-700 hover:bg-teal-50",
+  },
+  premium: {
+    kartu:
+      "border-2 border-amber-400 bg-gradient-to-b from-amber-50 to-white shadow-md",
+    saatIni: "bg-amber-100 font-medium text-amber-900",
+    tombol:
+      "bg-gradient-to-r from-amber-300 to-amber-400 text-amber-950 hover:from-amber-200 hover:to-amber-300",
+  },
+};
 
-  // Premium mengikuti isPremium (sudah memperhitungkan aturan masa berlaku di AuthContext),
-  // Standar mengikuti kolom profil.paket.
-  const paketSaatIni = isPremium
-    ? "premium"
-    : paket === "standar"
-    ? "standar"
-    : "free";
+export default function UpgradeFitur() {
+  const paketSaatIni = usePaketSaatIni();
   const urutanSaatIni =
     DAFTAR_PAKET.find((p) => p.id === paketSaatIni)?.urutan ?? 0;
 
@@ -83,6 +96,7 @@ export default function UpgradeFitur() {
     >
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl">
         {DAFTAR_PAKET.map((p) => {
+          const tema = TEMA_KARTU[p.id];
           const sedangDipakai = p.id === paketSaatIni;
           const bisaUpgrade = p.urutan > urutanSaatIni;
           const sedangMemproses = memproses === p.id;
@@ -90,21 +104,18 @@ export default function UpgradeFitur() {
           return (
             <div
               key={p.id}
-              className={`relative flex flex-col rounded-xl p-6 ${
-                p.rekomendasi
-                  ? "border-2 border-teal-600"
-                  : "border border-slate-200"
-              }`}
+              className={`relative flex flex-col rounded-xl p-6 ${tema.kartu}`}
             >
               {p.rekomendasi && (
-                <span className="absolute -top-3 left-6 rounded-full bg-teal-600 px-3 py-1 text-xs font-medium text-white">
+                <span className="absolute -top-3 left-6 rounded-full bg-gradient-to-r from-amber-300 to-amber-400 px-3 py-1 text-xs font-semibold text-amber-950 shadow-sm">
                   Rekomendasi
                 </span>
               )}
 
-              <h2 className="flex items-center gap-2 text-lg font-medium text-slate-900">
+              <PaketEmblem paket={p.id} />
+
+              <h2 className="mt-4 text-lg font-medium text-slate-900">
                 {p.nama}
-                {p.rekomendasi && <Sparkles className="h-4 w-4 text-teal-600" />}
               </h2>
               <p className="mt-1 text-sm text-slate-500">{p.tagline}</p>
               <p className="mt-4 text-2xl font-semibold text-slate-900">
@@ -114,11 +125,7 @@ export default function UpgradeFitur() {
               <div className="mt-auto pt-6">
                 {sedangDipakai ? (
                   <div
-                    className={`rounded-md px-3 py-2 text-center text-sm ${
-                      p.rekomendasi
-                        ? "bg-teal-50 font-medium text-teal-700"
-                        : "bg-slate-50 text-slate-500"
-                    }`}
+                    className={`rounded-md px-3 py-2 text-center text-sm ${tema.saatIni}`}
                   >
                     Paket Anda saat ini
                   </div>
@@ -126,11 +133,7 @@ export default function UpgradeFitur() {
                   <button
                     onClick={() => handleUpgrade(p.id)}
                     disabled={memproses !== null}
-                    className={`w-full rounded-md px-4 py-2 text-sm font-medium disabled:opacity-60 ${
-                      p.rekomendasi
-                        ? "bg-teal-600 text-white hover:bg-teal-700"
-                        : "border border-teal-600 text-teal-700 hover:bg-teal-50"
-                    }`}
+                    className={`w-full rounded-md px-4 py-2 text-sm font-semibold disabled:opacity-60 ${tema.tombol}`}
                   >
                     {sedangMemproses ? "Memproses..." : `Upgrade ke ${p.nama}`}
                   </button>
