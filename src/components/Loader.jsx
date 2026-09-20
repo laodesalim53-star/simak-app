@@ -15,7 +15,7 @@ export default function Loader() {
     if (!el) return;
 
     const displayName = namaSekolah || PLACEHOLDER_NAME;
-    const welcomeText = `Welcome to ${displayName}`;
+    const welcomeText = `WELCOME TO ${displayName}`;
     const accentFrom = welcomeText.indexOf(displayName);
 
     el.innerHTML = "";
