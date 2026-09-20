@@ -2,10 +2,9 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import { Link } from 'react-router-dom'
-import { Printer, ArrowLeft, Plus, Trash2, ImagePlus } from 'lucide-react'
+import { Printer, ArrowLeft, Plus, Trash2 } from 'lucide-react'
 import Layout from '../components/Layout'
 import BlokTandaTangan, { PilihModeTtd } from '../components/BlokTandaTangan'
-import RingkasanAset from '../components/RingkasanAset'
 
 // Ganti kalau nama bucket storage-mu berbeda
 const LOGO_BUCKET = 'profil-kantor'
@@ -16,146 +15,63 @@ const HALAMAN_KEMBALI = '/dashboard'
 const PLACEHOLDER = '..............................'
 const PH_ANGKA = '....'
 
-// Tempat akad yang dianggap "Di KUA". Selain yang cocok dengan pola ini,
-// akad dihitung "Di luar KUA". Sama dengan halaman Laporan Kepenghuluan.
+// Tempat akad yang dianggap "Di KUA". Sama dengan halaman Laporan Kepala KUA.
 const POLA_DI_KUA = /\b(kua|balai nikah|kantor urusan agama)\b/i
 
-// Kelompok binaan (sama dengan slug di PusatKelompokBinaan.jsx dan
-// DaftarHadirCetak.jsx). Dipakai untuk menghitung jumlah anggota terdaftar
-// per kelompok sebagai info pendukung — BUKAN jumlah kegiatan per bulan,
-// karena aplikasi belum punya log kegiatan bertanggal untuk kelompok binaan.
-const KELOMPOK_BINAAN_LABEL = [
-  ['majelis-taklim', 'Majelis Taklim'],
-  ['lapas', 'Lapas'],
-  ['rsu', 'RSU'],
-  ['masyarakat', 'Masyarakat'],
-]
-
 /* ------------------------------------------------------------------ */
-/*  Isi tetap & bawaan (sesuai contoh laporan Kepala KUA)              */
+/*  Isi tetap & bawaan (sesuai contoh Format Laporan Bulanan KUA)      */
 /* ------------------------------------------------------------------ */
 
-const MATERI_BIMBINGAN = [
-  'Persiapan kehidupan berumah tangga.',
-  'Hak dan kewajiban suami dan istri.',
-  'Komunikasi dalam keluarga.',
-  'Pengelolaan ekonomi keluarga.',
-  'Pendidikan anak.',
-  'Pencegahan konflik dan kekerasan dalam rumah tangga.',
-  'Pembinaan kehidupan keluarga berdasarkan nilai-nilai agama.',
+const PEGAWAI_AWAL = [
+  { id: 1, nama: '', pangkat: '', jabatan: 'Kepala KUA', status: 'ASN', ket: 'Aktif' },
+  { id: 2, nama: '', pangkat: '', jabatan: 'Penghulu', status: 'ASN', ket: 'Aktif' },
+  { id: 3, nama: '', pangkat: '', jabatan: 'Penyuluh Agama', status: 'ASN', ket: 'Aktif' },
+  { id: 4, nama: '', pangkat: '', jabatan: 'JFU/JFT', status: 'ASN', ket: 'Aktif' },
+  { id: 5, nama: '', pangkat: '', jabatan: 'Tenaga Pendukung', status: 'Non-ASN', ket: 'Aktif' },
 ]
 
-const PEMBINAAN_KEAGAMAAN = [
-  'Ceramah dan penyuluhan keagamaan.',
-  'Pembinaan majelis taklim.',
-  'Pembinaan remaja masjid.',
-  'Pembinaan pengurus masjid.',
-  'Kegiatan keagamaan di desa/kelurahan.',
-  "Bimbingan membaca dan memahami Al-Qur'an.",
-  'Kegiatan keagamaan lainnya.',
+const KEHADIRAN_AWAL = [1, 2, 3, 4].map((id) => ({
+  id, nama: '', hadir: '', sakit: '', izin: '', cuti: '', dinasLuar: '', alpa: '',
+}))
+
+const PENGHULU_AWAL = [1, 2].map((id) => ({
+  id, nama: '', nip: '', pangkat: '', pelayanan: '', ket: '',
+}))
+
+const PENYULUH_AWAL = [1, 2, 3].map((id) => ({
+  id, nama: '', status: 'ASN', wilayah: '', jumlahKegiatan: '', ket: '',
+}))
+
+const MASJID_AWAL = [1, 2, 3].map((id) => ({ id, desa: '', masjid: '', musala: '' }))
+
+const MAJELIS_AWAL = [1, 2].map((id) => ({
+  id, desa: '', jumlahMajelis: '', jumlahKegiatan: '', ket: '',
+}))
+
+const KEGIATAN_AWAL = [1, 2, 3].map((id) => ({
+  id, tanggal: '', kegiatan: '', pelaksana: '', tempat: '', ket: '',
+}))
+
+const MASALAH_AWAL = [1, 2, 3].map((id) => ({ id, permasalahan: '', upaya: '', ket: '' }))
+
+const SARANA_ITEMS = [
+  'Meja kerja', 'Kursi', 'Komputer/Laptop', 'Printer', 'Lemari arsip', 'AC/Kipas Angin', 'Kendaraan dinas',
 ]
+const SARANA_AWAL = SARANA_ITEMS.map((nama) => ({
+  nama, jumlah: '', baik: '', rusakRingan: '', rusakBerat: '',
+}))
 
-const PEMBINAAN_MASJID = [
-  'Administrasi pengelolaan masjid.',
-  'Pembinaan imam dan khatib.',
-  'Pembinaan pengurus masjid.',
-  'Kegiatan pendidikan keagamaan.',
-  'Pengelolaan kegiatan sosial keagamaan.',
-  'Koordinasi kegiatan keagamaan masyarakat.',
+const GEDUNG_ITEMS = [
+  'Ruang Kepala KUA', 'Ruang pelayanan', 'Ruang arsip', 'Ruang kerja pegawai',
+  'Toilet', 'Halaman kantor', 'Papan nama kantor',
 ]
+const GEDUNG_AWAL = GEDUNG_ITEMS.map((uraian) => ({ uraian, kondisi: 'Baik', ket: '' }))
 
-const KONSULTASI = [
-  'Konsultasi pernikahan.',
-  'Konsultasi keluarga.',
-  'Konsultasi wakaf.',
-  'Konsultasi kehidupan keagamaan.',
-  'Konsultasi administrasi keagamaan.',
-  'Konsultasi lainnya sesuai tugas dan fungsi KUA.',
+const ARSIP_ITEMS = [
+  'Arsip pernikahan', 'Arsip wakaf', 'Arsip kepegawaian',
+  'Arsip surat masuk', 'Arsip surat keluar', 'Arsip administrasi kantor',
 ]
-
-const TUJUAN = [
-  'Memberikan gambaran pelaksanaan tugas dan kegiatan KUA Kecamatan.',
-  'Menyampaikan hasil pelayanan kepada masyarakat.',
-  'Mengetahui capaian program kerja yang telah dilaksanakan.',
-  'Menjadi bahan evaluasi terhadap pelaksanaan tugas.',
-  'Meningkatkan kualitas pelayanan keagamaan kepada masyarakat.',
-]
-
-// [kunci, uraian, sasaran]
-const BARIS_PENYULUH = [
-  ['penyuluhan', 'Penyuluhan keagamaan', 'Masyarakat'],
-  ['majelisTaklim', 'Pembinaan majelis taklim', 'Majelis Taklim'],
-  ['remaja', 'Pembinaan remaja', 'Remaja'],
-  ['keluarga', 'Pembinaan keluarga', 'Keluarga'],
-  ['masyarakat', 'Pembinaan masyarakat', 'Masyarakat'],
-  ['sosial', 'Kegiatan sosial keagamaan', 'Masyarakat'],
-]
-
-// [kunci, uraian]
-const BARIS_WAKAF = [
-  ['konsultasiWakaf', 'Konsultasi Wakaf'],
-  ['pendaftaranWakaf', 'Pendaftaran Wakaf'],
-  ['pemeriksaanDokumen', 'Pemeriksaan Dokumen'],
-  ['pendampingan', 'Pendampingan Administrasi'],
-]
-
-const LAMPIRAN_AWAL = [
-  { id: 1, kegiatan: 'Pelayanan Nikah', waktu: '', tempat: 'KUA', peserta: '', hasil: 'Terlaksana' },
-  { id: 2, kegiatan: 'Bimbingan Perkawinan', waktu: '', tempat: '', peserta: '', hasil: 'Terlaksana' },
-  { id: 3, kegiatan: 'Penyuluhan Agama', waktu: '', tempat: '', peserta: '', hasil: 'Terlaksana' },
-  { id: 4, kegiatan: 'Pembinaan Masjid', waktu: '', tempat: '', peserta: '', hasil: 'Terlaksana' },
-  { id: 5, kegiatan: 'Konsultasi Keagamaan', waktu: '', tempat: 'KUA', peserta: '', hasil: 'Terlaksana' },
-]
-
-const HASIL_AWAL = [
-  'Pelayanan administrasi masyarakat dapat dilaksanakan sesuai ketentuan.',
-  'Pelayanan dan pencatatan pernikahan berjalan tertib.',
-  'Kegiatan pembinaan keagamaan masyarakat dapat terlaksana.',
-  'Koordinasi dengan pemerintah kecamatan dan desa/kelurahan berjalan baik.',
-  'Penyuluhan keagamaan dapat dilaksanakan sesuai program.',
-  'Pelayanan konsultasi masyarakat dapat diberikan.',
-  'Pembinaan terhadap lembaga dan tokoh keagamaan terus dilakukan.',
-].join('\n')
-
-const KOORDINASI_AWAL = [
-  'Pemerintah Desa/Kelurahan.',
-  'Penyuluh Agama.',
-  'Tokoh agama.',
-  'Tokoh masyarakat.',
-  'Pengurus masjid.',
-  'Lembaga pendidikan keagamaan.',
-  'Organisasi/lembaga keagamaan.',
-  'Instansi terkait lainnya.',
-].join('\n')
-
-const KENDALA_AWAL = [
-  'Keterbatasan sarana dan prasarana kantor.',
-  'Masih terdapat masyarakat yang belum memahami persyaratan administrasi.',
-  'Keterbatasan sumber daya manusia dalam pelaksanaan beberapa kegiatan.',
-  'Kondisi geografis dan jarak wilayah kerja yang cukup jauh.',
-  'Keterbatasan anggaran kegiatan.',
-  'Kendala jaringan internet dalam pelayanan administrasi berbasis digital.',
-].join('\n')
-
-const UPAYA_AWAL = [
-  'Meningkatkan koordinasi dengan Kantor Kementerian Agama Kabupaten/Kota.',
-  'Meningkatkan koordinasi dengan pemerintah kecamatan dan desa/kelurahan.',
-  'Memberikan informasi yang lebih jelas kepada masyarakat mengenai persyaratan pelayanan.',
-  'Mengoptimalkan sarana dan prasarana yang tersedia.',
-  'Meningkatkan kemampuan dan kompetensi pegawai.',
-  'Mengoptimalkan pemanfaatan teknologi informasi.',
-  'Meningkatkan koordinasi dengan penyuluh agama dan tokoh masyarakat.',
-].join('\n')
-
-const RTL_AWAL = [
-  'Meningkatkan kualitas pelayanan kepada masyarakat.',
-  'Meningkatkan tertib administrasi.',
-  'Meningkatkan pembinaan calon pengantin.',
-  'Meningkatkan kegiatan penyuluhan agama.',
-  'Meningkatkan pembinaan masjid dan lembaga keagamaan.',
-  'Meningkatkan koordinasi dengan pemerintah daerah dan instansi terkait.',
-  'Melakukan evaluasi secara berkala terhadap pelaksanaan program kerja.',
-].join('\n')
+const ARSIP_AWAL = ARSIP_ITEMS.map((jenis) => ({ jenis, keadaan: 'Baik', ket: '' }))
 
 /* ------------------------------------------------------------------ */
 /*  Helper                                                             */
@@ -205,14 +121,82 @@ function bulanLokal(timestamp) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
+// 'YYYY-MM' -> 'YYYY-MM-01' bulan berikutnya. Dipakai sebagai batas atas
+// (exclusive) saat memfilter kolom tanggal/timestamp supaya tidak meleset
+// akibat bulan 28/30 hari atau komponen jam pada timestamp.
+function bulanBerikutnyaISO(bulanISO) {
+  if (!/^\d{4}-\d{2}$/.test(bulanISO || '')) return ''
+  const [y, m] = bulanISO.split('-').map(Number)
+  const y2 = m === 12 ? y + 1 : y
+  const m2 = m === 12 ? 1 : m + 1
+  return `${y2}-${String(m2).padStart(2, '0')}-01`
+}
+
 // Nama kabupaten/kota di profil kantor bisa tersimpan dengan atau tanpa awalan.
 function denganAwalanWilayah(nama) {
   if (!nama) return 'Kabupaten/Kota ..........................'
   return /^(kabupaten|kota)\s/i.test(nama) ? nama : `Kabupaten ${nama}`
 }
 
+// status_kepegawaian di tabel pegawai_kantor adalah teks bebas (mis. "PNS",
+// "PPPK", "Honorer") — dipetakan ke tiga kategori baku yang dipakai Bab II
+// Rekapitulasi Pegawai (ASN / PPPK / Non-ASN).
+function kategoriKepegawaian(teks) {
+  const t = (teks || '').toLowerCase()
+  if (t.includes('pppk')) return 'PPPK'
+  if (t.includes('pns') || t.includes('asn')) return 'ASN'
+  return 'Non-ASN'
+}
+
+// Pencocokan jabatan untuk Bab IV (Penghulu) & Bab V (Penyuluh Agama).
+const punyaJabatan = (p, kata) => (p.jabatan || '').toLowerCase().includes(kata)
+
 const isi = (v) => (v && String(v).trim() ? v : PLACEHOLDER)
-const barisTeks = (teks) => String(teks || '').split('\n').map((t) => t.trim()).filter(Boolean)
+const angkaTampil = (v) => (v !== undefined && v !== null && String(v).trim() !== '' ? v : PH_ANGKA)
+const jumlahkan = (arr, kunci) =>
+  arr.reduce((total, r) => total + (Number(r[kunci]) || 0), 0)
+
+// Hitung baris yang benar-benar terisi namanya — dipakai Bab XVI supaya baris
+// kosong bawaan tidak ikut dihitung sebagai orang.
+const jumlahTerisi = (rows) => rows.filter((r) => (r.nama || '').trim()).length
+
+/* ------------------------------------------------------------------ */
+/*  Hook kecil untuk tabel dengan baris yang bisa ditambah/dihapus     */
+/* ------------------------------------------------------------------ */
+
+function useDaftarBaris(awal, kolomBaru) {
+  const [rows, setRows] = useState(awal)
+  const idRef = useRef(1000)
+  // Sekali admin menyentuh tabel ini, isian otomatis berhenti menimpanya.
+  const disentuh = useRef(false)
+
+  const tambah = () => {
+    disentuh.current = true
+    setRows((r) => [...r, { id: ++idRef.current, ...kolomBaru }])
+  }
+  const ubah = (id, kolom, nilai) => {
+    disentuh.current = true
+    setRows((r) => r.map((x) => (x.id === id ? { ...x, [kolom]: nilai } : x)))
+  }
+  const hapus = (id) => {
+    disentuh.current = true
+    setRows((r) => r.filter((x) => x.id !== id))
+  }
+
+  // Dipakai oleh efek auto-isi. Menerima array baris, atau fungsi
+  // (barisSebelumnya) => barisBaru kalau perlu mempertahankan isian manual
+  // pada kolom yang tidak punya sumber otomatis (mis. Cuti & Dinas Luar).
+  const isiOtomatis = (barisBaruAtauFn) => {
+    if (disentuh.current) return
+    setRows((sebelumnya) => {
+      const hasil =
+        typeof barisBaruAtauFn === 'function' ? barisBaruAtauFn(sebelumnya) : barisBaruAtauFn
+      return hasil && hasil.length > 0 ? hasil : awal
+    })
+  }
+
+  return { rows, setRows, tambah, ubah, hapus, isiOtomatis }
+}
 
 /* ------------------------------------------------------------------ */
 /*  Komponen kecil untuk form                                          */
@@ -237,7 +221,20 @@ function FieldText({ label, value, onChange, placeholder, type = 'text', ...rest
   )
 }
 
-function FieldArea({ label, value, onChange, placeholder, rows = 4 }) {
+function FieldSelect({ label, value, onChange, options }) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={inputClass}>
+        {options.map((o) => (
+          <option key={o} value={o}>{o}</option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
+function FieldArea({ label, value, onChange, placeholder, rows = 3 }) {
   return (
     <div className="sm:col-span-2">
       <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
@@ -256,9 +253,53 @@ function SubJudulForm({ children }) {
   return <h3 className="sm:col-span-2 text-xs font-semibold text-slate-800 pt-2 border-t border-slate-100">{children}</h3>
 }
 
+// Editor baris generik: dipakai untuk semua tabel yang barisnya bisa ditambah/dihapus.
+function TabelEditorForm({ kolom, rows, ubah, tambah, hapus, labelTambah }) {
+  return (
+    <div className="sm:col-span-2 space-y-2">
+      {rows.map((r) => (
+        <div
+          key={r.id}
+          className="grid grid-cols-2 sm:grid-cols-6 gap-2 items-end border border-slate-100 rounded-lg p-2"
+        >
+          {kolom.map((k) => (
+            <div key={k.key} className={k.lebar || ''}>
+              <FieldText
+                label={k.label}
+                value={r[k.key]}
+                onChange={(v) => ubah(r.id, k.key, v)}
+                type={k.type || 'text'}
+              />
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => hapus(r.id)}
+            className="p-2 self-center text-slate-400 hover:text-red-600"
+            aria-label="Hapus baris"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={tambah}
+        className="inline-flex items-center gap-1.5 text-sm text-teal-700 hover:text-teal-900"
+      >
+        <Plus size={16} /> {labelTambah}
+      </button>
+    </div>
+  )
+}
+
 /* ------------------------------------------------------------------ */
 /*  Komponen kecil untuk lembar cetak                                  */
 /* ------------------------------------------------------------------ */
+
+const cellHead = 'border border-slate-400 bg-slate-100 px-2 py-1.5 text-left font-semibold text-slate-800'
+const cell = 'border border-slate-400 px-2 py-1.5 align-top'
+const cellCenter = `${cell} text-center`
 
 function Bab({ no, judul, children }) {
   return (
@@ -271,24 +312,42 @@ function Bab({ no, judul, children }) {
   )
 }
 
-function Sub({ huruf, judul, children }) {
+// Tabel cetak generik: header (array teks) + baris (array of array teks) + footer opsional (array teks).
+function TabelCetak({ header, baris, kosong = '-', footer }) {
   return (
-    <div className="space-y-2">
-      <h3 className="font-display text-sm font-semibold text-slate-900">
-        {huruf ? `${huruf}. ` : ''}{judul}
-      </h3>
-      {children}
-    </div>
-  )
-}
-
-function Poin({ items }) {
-  return (
-    <ul className="list-disc pl-5 space-y-1">
-      {items.map((t, i) => (
-        <li key={`${i}-${t}`}>{t}</li>
-      ))}
-    </ul>
+    <table className="lap-table w-full text-xs border-collapse">
+      <thead>
+        <tr>
+          {header.map((h, i) => (
+            <th key={i} className={i === 0 ? `${cellHead} w-10 text-center` : cellHead}>
+              {h}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {baris.length === 0 ? (
+          <tr>
+            <td className={`${cell} text-center text-slate-500`} colSpan={header.length}>{kosong}</td>
+          </tr>
+        ) : (
+          baris.map((row, i) => (
+            <tr key={i}>
+              {row.map((val, j) => (
+                <td key={j} className={j === 0 ? cellCenter : cell}>{val || PLACEHOLDER}</td>
+              ))}
+            </tr>
+          ))
+        )}
+        {footer && (
+          <tr>
+            {footer.map((val, j) => (
+              <td key={j} className={j === 0 ? `${cellHead} text-center` : cellHead}>{val}</td>
+            ))}
+          </tr>
+        )}
+      </tbody>
+    </table>
   )
 }
 
@@ -296,20 +355,19 @@ function Poin({ items }) {
 /*  Halaman                                                            */
 /* ------------------------------------------------------------------ */
 
-export default function LaporanKepalaKUA() {
-  const { profil, sekolahId } = useAuth()
+export default function LaporanBulananKUA() {
+  // AuthContext memakai nama field `sekolahId` (warisan aplikasi sekolah).
+  // Di aplikasi KUA nilainya adalah id kantor yang sedang login.
+  const { sekolahId } = useAuth()
   const [profilKantor, setProfilKantor] = useState(null)
+  const [errorProfil, setErrorProfil] = useState('')
 
   // Data pendaftaran nikah milik kantor ini (tabel yang sama dengan halaman
-  // Pendaftaran Nikah, Verifikasi Nikah, dan Laporan Kepenghuluan).
+  // Pendaftaran Nikah, Verifikasi Nikah, dan Laporan Kepala KUA) — dipakai
+  // untuk mengisi otomatis Bab VI. Keadaan Pernikahan.
   const [dataNikah, setDataNikah] = useState([])
   const [loadingNikah, setLoadingNikah] = useState(true)
   const [errorNikah, setErrorNikah] = useState('')
-
-  // Jumlah anggota terdaftar per kelompok binaan (Majelis Taklim, Lapas,
-  // RSU, Masyarakat) — info pendukung, ditarik dari kelompok_binaan_anggota.
-  const [jumlahAnggota, setJumlahAnggota] = useState({})
-  const [loadingAnggota, setLoadingAnggota] = useState(true)
 
   // === DATA LAPORAN — DAPAT DIISI ULANG SETIAP BULAN ===
   const [bulan, setBulan] = useState(bulanIniISO())
@@ -318,64 +376,356 @@ export default function LaporanKepalaKUA() {
   const [nipKepala, setNipKepala] = useState('')
   const [jabatan, setJabatan] = useState('')
   const [provinsi, setProvinsi] = useState('')
-  const [kodePos, setKodePos] = useState('')
-  const [modeTtd, setModeTtd] = useState('kepala_kua')
+  // 'otomatis': dikenali dari nama/NIP pembuat. Kalau kosong, pembuat dianggap
+  // Kepala KUA (nama diambil dari Profil Kantor) sehingga "Mengetahui" = Kepala Kemenag.
+  const [modeTtd, setModeTtd] = useState('otomatis')
 
-  // Wilayah kerja: satu baris = satu desa/kelurahan, keterangan dipisah "|"
-  // Otomatis terisi dari profil_kantor.wilayah_kerja (lihat useEffect di bawah),
-  // tapi tetap bisa diedit/ditambah manual di sini.
-  const [wilayahKerja, setWilayahKerja] = useState('')
-  const wilayahKerjaDiisiOtomatis = useRef(false)
+  /* ---------------------------------------------------------------- */
+  /*  SUMBER DATA OTOMATIS — ditarik dari halaman lain yang sudah ada  */
+  /*  di aplikasi ini, supaya admin tidak perlu mengisi ulang manual.  */
+  /* ---------------------------------------------------------------- */
 
-  // Angka yang belum tercatat di aplikasi — diisi manual
+  // Bab I, II, IV & V: daftar pegawai kantor aktif (halaman "Data Pegawai").
+  const [pegawaiKantor, setPegawaiKantor] = useState([])
+  useEffect(() => {
+    if (!sekolahId) {
+      setPegawaiKantor([])
+      return
+    }
+    supabase
+      .from('pegawai_kantor')
+      .select('id, nama_lengkap, nip, jenis_kelamin, pangkat_golongan, jabatan, status_kepegawaian')
+      .eq('sekolah_id', sekolahId)
+      .eq('status', 'aktif')
+      .order('nama_lengkap')
+      .then(({ data, error }) => {
+        if (error) console.error('pegawai_kantor:', error)
+        setPegawaiKantor(data || [])
+      })
+  }, [sekolahId])
+
+  // Bab III: presensi pegawai kantor pada bulan terpilih (halaman "Presensi
+  // Pegawai"). Status yang dicatat sistem hanya hadir/izin/sakit/alpa — kolom
+  // Cuti & Dinas Luar di Bab III tidak punya sumber otomatis, tetap manual.
+  const [presensiBulan, setPresensiBulan] = useState([])
+  useEffect(() => {
+    const batasAtas = bulanBerikutnyaISO(bulan)
+    if (!sekolahId || !bulan || !batasAtas) {
+      setPresensiBulan([])
+      return
+    }
+    supabase
+      .from('presensi_pegawai_kantor')
+      .select('pegawai_kantor_id, status')
+      .eq('sekolah_id', sekolahId)
+      .gte('tanggal', `${bulan}-01`)
+      .lt('tanggal', batasAtas)
+      .then(({ data, error }) => {
+        if (error) console.error('presensi_pegawai_kantor:', error)
+        setPresensiBulan(data || [])
+      })
+  }, [sekolahId, bulan])
+
+  // Bab IX: anggota kelompok binaan "Majelis Taklim" (halaman Pusat Kelompok
+  // Binaan), dikelompokkan per desa. Jumlah majelis = banyaknya nama
+  // kelompok berbeda di desa itu. Jumlah kegiatan tidak dicatat di sana,
+  // jadi tetap diisi manual.
+  // Catatan: tabel ini TIDAK punya kolom kantor (datanya global, dipakai
+  // bersama semua kantor) — jangan tambahkan filter sekolah_id di sini.
+  const [majelisData, setMajelisData] = useState([])
+  useEffect(() => {
+    supabase
+      .from('kelompok_binaan_anggota')
+      .select('desa, nama_kelompok')
+      .eq('kelompok', 'majelis-taklim')
+      .then(({ data, error }) => {
+        if (error) console.error('kelompok_binaan_anggota:', error)
+        setMajelisData(data || [])
+      })
+  }, [])
+
+  // Bab X: surat masuk & keluar pada bulan terpilih (halaman "Surat Masuk &
+  // Keluar"). Tabel ini cuma membedakan masuk/keluar — jenis surat lain
+  // (surat tugas, surat keterangan, rekomendasi) tidak dibedakan di sana,
+  // jadi tetap diisi manual.
+  // Batas atas memakai awal bulan berikutnya (exclusive) — JANGAN pakai
+  // `${bulan}-31`, karena bulan 30 hari (mis. September) membuat query gagal.
+  const [suratBulan, setSuratBulan] = useState([])
+  const [errorSurat, setErrorSurat] = useState('')
+  useEffect(() => {
+    const batasAtas = bulanBerikutnyaISO(bulan)
+    if (!sekolahId || !bulan || !batasAtas) {
+      setSuratBulan([])
+      setErrorSurat('')
+      return
+    }
+    supabase
+      .from('surat')
+      .select('jenis, tanggal')
+      .eq('sekolah_id', sekolahId)
+      .gte('tanggal', `${bulan}-01`)
+      .lt('tanggal', batasAtas)
+      .then(({ data, error }) => {
+        if (error) console.error('surat:', error)
+        setErrorSurat(error ? error.message : '')
+        setSuratBulan(data || [])
+      })
+  }, [sekolahId, bulan])
+
+  // Bab XIV: kegiatan pada bulan terpilih (halaman "Agenda Kantor").
+  const [agendaBulan, setAgendaBulan] = useState([])
+  useEffect(() => {
+    const batasAtas = bulanBerikutnyaISO(bulan)
+    if (!sekolahId || !bulan || !batasAtas) {
+      setAgendaBulan([])
+      return
+    }
+    supabase
+      .from('agenda')
+      .select('id, judul, tanggal_mulai, lokasi, penanggung_jawab')
+      .eq('sekolah_id', sekolahId)
+      .gte('tanggal_mulai', `${bulan}-01`)
+      .lt('tanggal_mulai', batasAtas)
+      .order('tanggal_mulai')
+      .then(({ data, error }) => {
+        if (error) console.error('agenda:', error)
+        setAgendaBulan(data || [])
+      })
+  }, [sekolahId, bulan])
+
+  // Rekap Bab II (jumlah L/P per kategori ASN/PPPK/Non-ASN) dihitung dari
+  // pegawaiKantor — dipakai sebagai NILAI OTOMATIS, admin tetap bisa
+  // menimpanya lewat field manual di bawah (lihat `otomatis` & aNum()).
+  const rekapPegawaiOtomatis = useMemo(() => {
+    const hitung = { ASN: { L: 0, P: 0 }, PPPK: { L: 0, P: 0 }, 'Non-ASN': { L: 0, P: 0 } }
+    for (const p of pegawaiKantor) {
+      const kategori = kategoriKepegawaian(p.status_kepegawaian)
+      const jk = p.jenis_kelamin === 'P' ? 'P' : 'L'
+      hitung[kategori][jk] += 1
+    }
+    return hitung
+  }, [pegawaiKantor])
+
+  // Bab X: surat masuk & keluar bulan terpilih. Pencocokan dibuat longgar
+  // supaya tetap terbaca kalau isi kolom `jenis` ditulis "Surat Masuk"/"MASUK".
+  const jumlahSuratMasukOtomatis = useMemo(
+    () => suratBulan.filter((s) => (s.jenis || '').toLowerCase().includes('masuk')).length,
+    [suratBulan]
+  )
+  const jumlahSuratKeluarOtomatis = useMemo(
+    () => suratBulan.filter((s) => (s.jenis || '').toLowerCase().includes('keluar')).length,
+    [suratBulan]
+  )
+
+  // Peta kunci-angka -> nilai otomatis. Dipakai oleh a()/aNum() di bawah
+  // sebagai nilai bawaan setiap kali field angka yang bersangkutan masih
+  // kosong — begitu admin mengisi manual, nilai manual itu yang menang
+  // (pola yang sama seperti namaEfektif/nipEfektif untuk Kepala KUA).
+  const otomatis = useMemo(
+    () => ({
+      rekapAsnL: rekapPegawaiOtomatis.ASN.L,
+      rekapAsnP: rekapPegawaiOtomatis.ASN.P,
+      rekapPppkL: rekapPegawaiOtomatis.PPPK.L,
+      rekapPppkP: rekapPegawaiOtomatis.PPPK.P,
+      rekapNonAsnL: rekapPegawaiOtomatis['Non-ASN'].L,
+      rekapNonAsnP: rekapPegawaiOtomatis['Non-ASN'].P,
+      suratMasuk: jumlahSuratMasukOtomatis,
+      suratKeluar: jumlahSuratKeluarOtomatis,
+    }),
+    [rekapPegawaiOtomatis, jumlahSuratMasukOtomatis, jumlahSuratKeluarOtomatis]
+  )
+
+  // Angka yang belum tercatat di aplikasi — diisi manual. Untuk kunci yang
+  // ada di `otomatis` (lihat atas), nilai otomatis dipakai selama field
+  // manualnya masih kosong.
   const [angka, setAngka] = useState({})
   const ubahAngka = (kunci) => (nilai) => setAngka((s) => ({ ...s, [kunci]: nilai }))
-  const a = (kunci, satuan = '') => {
-    const v = angka[kunci]
-    const ada = v !== undefined && String(v).trim() !== ''
-    return `${ada ? v : PH_ANGKA}${satuan ? ` ${satuan}` : ''}`
+  const nilaiAngka = (kunci) => {
+    const manual = angka[kunci]
+    return manual !== undefined && manual !== '' ? manual : otomatis[kunci]
   }
+  const a = (kunci) => angkaTampil(nilaiAngka(kunci))
+  const aNum = (kunci) => Number(nilaiAngka(kunci)) || 0
 
-  const [koordinasi, setKoordinasi] = useState(KOORDINASI_AWAL)
-  const [hasil, setHasil] = useState(HASIL_AWAL)
-  const [kendala, setKendala] = useState(KENDALA_AWAL)
-  const [upaya, setUpaya] = useState(UPAYA_AWAL)
-  const [rtl, setRtl] = useState(RTL_AWAL)
+  const [kondisiKantorUmum, setKondisiKantorUmum] = useState('Baik')
+  const [keteranganLain, setKeteranganLain] = useState('')
 
-  // Lampiran 1 (rekap kegiatan) dan Lampiran 2 (foto)
-  const [lampiran, setLampiran] = useState(LAMPIRAN_AWAL)
-  const idBerikut = useRef(100)
-  const ubahLampiran = (id, kolom, nilai) =>
-    setLampiran((rows) => rows.map((r) => (r.id === id ? { ...r, [kolom]: nilai } : r)))
-  const tambahLampiran = () =>
-    setLampiran((rows) => [
-      ...rows,
-      { id: ++idBerikut.current, kegiatan: '', waktu: '', tempat: '', peserta: '', hasil: 'Terlaksana' },
-    ])
-  const hapusLampiran = (id) => setLampiran((rows) => rows.filter((r) => r.id !== id))
+  // I. Keadaan Pegawai
+  const pegawai = useDaftarBaris(PEGAWAI_AWAL, {
+    nama: '', pangkat: '', jabatan: '', status: 'ASN', ket: 'Aktif',
+  })
 
-  const [fotos, setFotos] = useState([])
-  const fotosRef = useRef([])
-  fotosRef.current = fotos
-  useEffect(() => () => fotosRef.current.forEach((f) => URL.revokeObjectURL(f.url)), [])
-  const tambahFoto = (e) => {
-    const files = Array.from(e.target.files || [])
-    setFotos((prev) => [
-      ...prev,
-      ...files.map((f) => ({ id: ++idBerikut.current, url: URL.createObjectURL(f), caption: '' })),
-    ])
-    e.target.value = ''
-  }
-  const ubahCaption = (id, caption) =>
-    setFotos((prev) => prev.map((f) => (f.id === id ? { ...f, caption } : f)))
-  const hapusFoto = (id) =>
-    setFotos((prev) => {
-      const f = prev.find((x) => x.id === id)
-      if (f) URL.revokeObjectURL(f.url)
-      return prev.filter((x) => x.id !== id)
+  // III. Keadaan Kehadiran Pegawai
+  const kehadiran = useDaftarBaris(KEHADIRAN_AWAL, {
+    nama: '', hadir: '', sakit: '', izin: '', cuti: '', dinasLuar: '', alpa: '',
+  })
+
+  // IV. Keadaan Penghulu
+  const penghulu = useDaftarBaris(PENGHULU_AWAL, {
+    nama: '', nip: '', pangkat: '', pelayanan: '', ket: '',
+  })
+
+  // V. Keadaan Penyuluh Agama
+  const penyuluh = useDaftarBaris(PENYULUH_AWAL, {
+    nama: '', status: 'ASN', wilayah: '', jumlahKegiatan: '', ket: '',
+  })
+
+  // VIII. Keadaan Masjid dan Musala
+  const masjid = useDaftarBaris(MASJID_AWAL, { desa: '', masjid: '', musala: '' })
+
+  // IX. Keadaan Majelis Taklim
+  const majelis = useDaftarBaris(MAJELIS_AWAL, {
+    desa: '', jumlahMajelis: '', jumlahKegiatan: '', ket: '',
+  })
+
+  // XIV. Kegiatan/Kunjungan Dinas
+  const kegiatanDinas = useDaftarBaris(KEGIATAN_AWAL, {
+    tanggal: '', kegiatan: '', pelaksana: '', tempat: '', ket: '',
+  })
+
+  // XV. Permasalahan dan Tindak Lanjut
+  const masalah = useDaftarBaris(MASALAH_AWAL, { permasalahan: '', upaya: '', ket: '' })
+
+  // XI. Sarana dan Prasarana — daftar tetap, hanya angka yang diisi
+  const [sarana, setSarana] = useState(SARANA_AWAL)
+  const ubahSarana = (i, kolom, nilai) =>
+    setSarana((rows) => rows.map((r, idx) => (idx === i ? { ...r, [kolom]: nilai } : r)))
+  const tambahSarana = () =>
+    setSarana((rows) => [...rows, { nama: '', jumlah: '', baik: '', rusakRingan: '', rusakBerat: '' }])
+  const hapusSarana = (i) => setSarana((rows) => rows.filter((_, idx) => idx !== i))
+
+  // XII. Keadaan Gedung/Kantor — daftar tetap, kondisi + keterangan
+  const [gedung, setGedung] = useState(GEDUNG_AWAL)
+  const ubahGedung = (i, kolom, nilai) =>
+    setGedung((rows) => rows.map((r, idx) => (idx === i ? { ...r, [kolom]: nilai } : r)))
+
+  // XIII. Keadaan Arsip — daftar tetap, keadaan + keterangan
+  const [arsip, setArsip] = useState(ARSIP_AWAL)
+  const ubahArsip = (i, kolom, nilai) =>
+    setArsip((rows) => rows.map((r, idx) => (idx === i ? { ...r, [kolom]: nilai } : r)))
+
+  /* ---------------------------------------------------------------- */
+  /*  ISI OTOMATIS — begitu data sumber datang, isi tabel Bab terkait. */
+  /*  isiOtomatis() berhenti menimpa begitu admin menyentuh tabel yang */
+  /*  bersangkutan, jadi editan manual tidak hilang saat ganti bulan.  */
+  /* ---------------------------------------------------------------- */
+
+  // Bab I: daftar pegawai dari pegawaiKantor.
+  useEffect(() => {
+    pegawai.isiOtomatis(
+      pegawaiKantor.map((p) => ({
+        id: p.id,
+        nama: p.nip ? `${p.nama_lengkap} / ${p.nip}` : p.nama_lengkap,
+        pangkat: p.pangkat_golongan || '',
+        jabatan: p.jabatan || '',
+        status: kategoriKepegawaian(p.status_kepegawaian),
+        ket: 'Aktif',
+      }))
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pegawaiKantor])
+
+  // Bab III: rekap kehadiran per pegawai untuk bulan terpilih. Kolom Cuti &
+  // Dinas Luar tidak punya sumber otomatis — nilai yang sudah diketik admin
+  // dipertahankan saat data presensi dimuat ulang.
+  useEffect(() => {
+    kehadiran.isiOtomatis((sebelumnya) => {
+      const lama = new Map(sebelumnya.map((r) => [r.id, r]))
+      return pegawaiKantor.map((p) => {
+        const milikSaya = presensiBulan.filter((r) => r.pegawai_kantor_id === p.id)
+        const hitung = (status) => milikSaya.filter((r) => r.status === status).length
+        return {
+          id: p.id,
+          nama: p.nama_lengkap,
+          hadir: hitung('hadir'),
+          sakit: hitung('sakit'),
+          izin: hitung('izin'),
+          cuti: lama.get(p.id)?.cuti ?? '',
+          dinasLuar: lama.get(p.id)?.dinasLuar ?? '',
+          alpa: hitung('alpa'),
+        }
+      })
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pegawaiKantor, presensiBulan])
 
-  // Profil kantor — di-scope per kantor lewat sekolah_id
+  // Bab IV: penghulu — disaring dari Data Pegawai berdasarkan jabatan.
+  // Jumlah pelayanan nikah per penghulu belum tercatat, jadi tetap manual.
+  useEffect(() => {
+    penghulu.isiOtomatis((sebelumnya) => {
+      const lama = new Map(sebelumnya.map((r) => [r.id, r]))
+      return pegawaiKantor
+        .filter((p) => punyaJabatan(p, 'penghulu'))
+        .map((p) => ({
+          id: p.id,
+          nama: p.nama_lengkap,
+          nip: p.nip || '',
+          pangkat: p.pangkat_golongan || '',
+          pelayanan: lama.get(p.id)?.pelayanan ?? '',
+          ket: lama.get(p.id)?.ket ?? '',
+        }))
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pegawaiKantor])
+
+  // Bab V: penyuluh agama — disaring dari Data Pegawai berdasarkan jabatan.
+  // Wilayah binaan & jumlah kegiatan belum tercatat, jadi tetap manual.
+  useEffect(() => {
+    penyuluh.isiOtomatis((sebelumnya) => {
+      const lama = new Map(sebelumnya.map((r) => [r.id, r]))
+      return pegawaiKantor
+        .filter((p) => punyaJabatan(p, 'penyuluh'))
+        .map((p) => ({
+          id: p.id,
+          nama: p.nama_lengkap,
+          status: kategoriKepegawaian(p.status_kepegawaian),
+          wilayah: lama.get(p.id)?.wilayah ?? '',
+          jumlahKegiatan: lama.get(p.id)?.jumlahKegiatan ?? '',
+          ket: lama.get(p.id)?.ket ?? '',
+        }))
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pegawaiKantor])
+
+  // Bab IX: jumlah majelis taklim per desa dari data kelompok binaan.
+  useEffect(() => {
+    const petaDesa = {}
+    for (const row of majelisData) {
+      const desa = (row.desa || '').trim() || 'Belum diisi'
+      if (!petaDesa[desa]) petaDesa[desa] = new Set()
+      if (row.nama_kelompok) petaDesa[desa].add(row.nama_kelompok.trim())
+    }
+    majelis.isiOtomatis((sebelumnya) => {
+      const lama = new Map(sebelumnya.map((r) => [r.id, r]))
+      return Object.entries(petaDesa).map(([desa, namaKelompokSet]) => ({
+        id: desa,
+        desa,
+        jumlahMajelis: namaKelompokSet.size,
+        jumlahKegiatan: lama.get(desa)?.jumlahKegiatan ?? '', // manual
+        ket: lama.get(desa)?.ket ?? '',
+      }))
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [majelisData])
+
+  // Bab XIV: kegiatan/kunjungan dinas dari Agenda Kantor bulan terpilih.
+  useEffect(() => {
+    kegiatanDinas.isiOtomatis(
+      agendaBulan.map((row) => ({
+        id: row.id,
+        tanggal: (row.tanggal_mulai || '').slice(0, 10),
+        kegiatan: row.judul || '',
+        pelaksana: row.penanggung_jawab || '',
+        tempat: row.lokasi || '',
+        ket: '',
+      }))
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agendaBulan])
+
+  // Profil kantor — di-scope per kantor lewat sekolah_id.
+  // Memakai select('*') supaya satu kolom yang belum ada di tabel tidak membuat
+  // seluruh query gagal (dan seluruh kop/tanda tangan jadi titik-titik).
   useEffect(() => {
     if (!sekolahId) {
       setProfilKantor(null)
@@ -383,55 +733,17 @@ export default function LaporanKepalaKUA() {
     }
     supabase
       .from('profil_kantor')
-      .select(
-        'nama_kantor, alamat, kabupaten, kecamatan, provinsi, kode_pos, wilayah_kerja, telepon, email, kepala_kua, nip_kepala_kua, kepala_kemenag, nip_kepala_kemenag, tempat_ttd, logo_path, ttd_kepala_kua_path'
-      )
+      .select('*')
       .eq('sekolah_id', sekolahId)
       .maybeSingle()
-      .then(({ data }) => setProfilKantor(data))
+      .then(({ data, error }) => {
+        if (error) console.error('profil_kantor:', error)
+        setErrorProfil(error ? error.message : '')
+        setProfilKantor(data)
+      })
   }, [sekolahId])
 
-  // Wilayah Kerja: sekali terisi otomatis dari profil kantor (kalau ada dan
-  // form belum pernah diisi manual). Setelah itu perubahan di profil kantor
-  // tidak menimpa lagi apa yang sudah diketik/diedit user di sini.
-  useEffect(() => {
-    if (!wilayahKerjaDiisiOtomatis.current && profilKantor?.wilayah_kerja) {
-      setWilayahKerja(profilKantor.wilayah_kerja)
-      wilayahKerjaDiisiOtomatis.current = true
-    }
-  }, [profilKantor])
-
-  // Jumlah anggota per kelompok binaan — dihitung dari kelompok_binaan_anggota
-  // (sama seperti tabel yang dibaca DaftarHadirCetak.jsx / PusatKelompokBinaan.jsx).
-  // Tidak difilter sekolah_id secara eksplisit, mengikuti pola query yang sudah
-  // dipakai di DaftarHadirCetak.jsx (RLS Supabase yang menentukan cakupannya).
-  useEffect(() => {
-    let aktif = true
-    setLoadingAnggota(true)
-    supabase
-      .from('kelompok_binaan_anggota')
-      .select('kelompok')
-      .then(({ data, error }) => {
-        if (!aktif) return
-        if (error) {
-          setJumlahAnggota({})
-        } else {
-          const hitung = {}
-          ;(data || []).forEach((row) => {
-            hitung[row.kelompok] = (hitung[row.kelompok] || 0) + 1
-          })
-          setJumlahAnggota(hitung)
-        }
-        setLoadingAnggota(false)
-      })
-    return () => {
-      aktif = false
-    }
-  }, [])
-
   // Pendaftaran nikah — diambil sekali, disaring per bulan di sisi klien.
-  // Catatan: yang terbaca mengikuti RLS di Supabase. Akun admin utama melihat
-  // semua data kantor; akun biasa hanya melihat pendaftarannya sendiri.
   useEffect(() => {
     if (!sekolahId) {
       setDataNikah([])
@@ -470,51 +782,28 @@ export default function LaporanKepalaKUA() {
     ? supabase.storage.from(LOGO_BUCKET).getPublicUrl(profilKantor.ttd_kepala_kua_path).data.publicUrl
     : null
 
-  // Rekap otomatis dari data pendaftaran nikah untuk bulan terpilih
-  const rekap = useMemo(() => {
-    // 1) Akad nikah: sudah diverifikasi & tanggal akad jatuh di bulan laporan
+  // Rekap otomatis dari data pendaftaran nikah untuk bulan terpilih (sama
+  // dengan logika di halaman Laporan Kepala KUA)
+  const rekapNikah = useMemo(() => {
     const peristiwa = dataNikah
       .filter((r) => r.status === 'diverifikasi')
       .filter((r) => (r.data_n2?.rencana_tanggal_akad || '').slice(0, 7) === bulan)
-      .sort((x, y) => {
-        const tx = `${x.data_n2?.rencana_tanggal_akad || ''} ${x.data_n2?.rencana_waktu_akad || ''}`
-        const ty = `${y.data_n2?.rencana_tanggal_akad || ''} ${y.data_n2?.rencana_waktu_akad || ''}`
-        return tx.localeCompare(ty)
-      })
       .map((r) => {
         const tempat = (r.data_n2?.tempat_akad || '').trim()
         let lokasi = 'Belum diisi'
         if (tempat) lokasi = POLA_DI_KUA.test(tempat) ? 'Di KUA' : 'Di luar KUA'
-        return {
-          id: r.id,
-          tanggal: r.data_n2?.rencana_tanggal_akad || '',
-          waktu: r.data_n2?.rencana_waktu_akad || '',
-          suami: r.data_n1?.calon_suami?.nama_lengkap || '-',
-          istri: r.data_n1?.calon_istri?.nama_lengkap || '-',
-          tempat: tempat || '-',
-          lokasi,
-        }
+        return { id: r.id, lokasi }
       })
-
-    // 2) Pendaftaran yang masuk pada bulan laporan (berdasarkan tanggal dibuat)
-    const masuk = dataNikah.filter((r) => bulanLokal(r.dibuat_pada) === bulan)
-
     return {
       peristiwa,
       diKua: peristiwa.filter((p) => p.lokasi === 'Di KUA').length,
       luarKua: peristiwa.filter((p) => p.lokasi === 'Di luar KUA').length,
-      belumDiisi: peristiwa.filter((p) => p.lokasi === 'Belum diisi').length,
-      pendaftaranMasuk: masuk.length,
-      diverifikasi: masuk.filter((r) => r.status === 'diverifikasi').length,
-      ditolak: masuk.filter((r) => r.status === 'ditolak').length,
-      menunggu: masuk.filter((r) => r.status === 'menunggu').length,
     }
   }, [dataNikah, bulan])
 
   const namaEfektif = namaKepala || profilKantor?.kepala_kua || ''
   const nipEfektif = nipKepala || profilKantor?.nip_kepala_kua || ''
   const provinsiEfektif = provinsi || profilKantor?.provinsi || ''
-  const kodePosEfektif = kodePos || profilKantor?.kode_pos || ''
   const namaKantor = profilKantor?.nama_kantor || 'KUA Kecamatan ..........................'
   const jabatanEfektif = jabatan || `Kepala ${profilKantor?.nama_kantor || 'KUA Kecamatan'}`
   const kemenagKota = denganAwalanWilayah(profilKantor?.kabupaten)
@@ -526,56 +815,64 @@ export default function LaporanKepalaKUA() {
     .filter(Boolean)
     .join(', ')
 
-  const cellHead = 'border border-slate-400 bg-slate-100 px-2 py-1.5 text-left font-semibold text-slate-800'
-  const cell = 'border border-slate-400 px-2 py-1.5 align-top'
-  const cellCenter = `${cell} text-center`
+  // Total baris untuk tabel-tabel rekap
+  const totalMasjid = jumlahkan(masjid.rows, 'masjid')
+  const totalMusala = jumlahkan(masjid.rows, 'musala')
+  const totalMajelis = jumlahkan(majelis.rows, 'jumlahMajelis')
 
-  const identitas = [
-    ['Nama Kantor', namaKantor],
-    ['Kabupaten/Kota', profilKantor?.kabupaten || PLACEHOLDER],
-    ['Provinsi', isi(provinsiEfektif)],
-    ['Alamat', alamatKantor || PLACEHOLDER],
-    ['Kode Pos', isi(kodePosEfektif)],
-    ['Kepala KUA', isi(namaEfektif)],
-    ['Periode Laporan', periode || PLACEHOLDER],
+  const rekapPegawaiRows = [
+    ['ASN', aNum('rekapAsnL'), aNum('rekapAsnP')],
+    ['PPPK', aNum('rekapPppkL'), aNum('rekapPppkP')],
+    ['Non-ASN', aNum('rekapNonAsnL'), aNum('rekapNonAsnP')],
+  ]
+  const totalL = rekapPegawaiRows.reduce((t, r) => t + r[1], 0)
+  const totalP = rekapPegawaiRows.reduce((t, r) => t + r[2], 0)
+
+  const pernikahanRows = [
+    ['Nikah di KUA', rekapNikah.diKua],
+    ['Nikah di luar KUA', rekapNikah.luarKua],
+    ['Jumlah seluruh peristiwa nikah', rekapNikah.peristiwa.length],
+    ['Rujuk', a('rujuk')],
+    ['Rekomendasi nikah', a('rekomendasiNikah')],
+    ['Duplikat buku nikah', a('duplikatBukuNikah')],
+    ['Konsultasi pernikahan', a('konsultasiNikah')],
   ]
 
-  // Wilayah kerja: minimal 5 baris kosong supaya tabel tetap tampil seperti contoh
-  const barisWilayah = useMemo(() => {
-    const dariForm = barisTeks(wilayahKerja).map((t) => {
-      const [desa, ...sisa] = t.split('|')
-      return { desa: desa.trim(), ket: sisa.join('|').trim() }
-    })
-    const kosong = Math.max(0, 5 - dariForm.length)
-    return [...dariForm, ...Array.from({ length: kosong }, () => ({ desa: '', ket: '' }))]
-  }, [wilayahKerja])
-
-  const layananNikah = [
-    ['Pendaftaran Nikah', `${rekap.pendaftaranMasuk} pasangan`],
-    ['Pelaksanaan Akad Nikah', `${rekap.peristiwa.length} pasangan`],
-    ['Rujuk', a('rujuk', 'pasangan')],
-    ['Pemeriksaan Berkas Nikah', `${rekap.diverifikasi + rekap.ditolak} berkas`],
-    ['Penerbitan Buku Nikah', a('bukuNikah', 'pasang')],
-    ['Legalisasi/Pengantar Dokumen', a('legalisasi', 'dokumen')],
+  const wakafRows = [
+    ['Akta Ikrar Wakaf', a('wakafAktaIkrar')],
+    ['Pendaftaran wakaf', a('wakafPendaftaran')],
+    ['Sertifikat tanah wakaf', a('wakafSertifikat')],
+    ['Tanah wakaf', a('wakafTanah')],
+    ['Konsultasi wakaf', a('wakafKonsultasi')],
   ]
 
-  const daftarKoordinasi = [
-    `Camat Kecamatan ${profilKantor?.kecamatan || PLACEHOLDER}`,
-    ...barisTeks(koordinasi),
+  const suratRows = [
+    ['Surat masuk', a('suratMasuk')],
+    ['Surat keluar', a('suratKeluar')],
+    ['Surat tugas', a('suratTugas')],
+    ['Surat keterangan', a('suratKeterangan')],
+    ['Rekomendasi', a('suratRekomendasi')],
   ]
 
-  const dasarPelaksanaan = [
-    'Ketentuan peraturan perundang-undangan yang mengatur tugas dan fungsi Kementerian Agama.',
-    'Ketentuan mengenai tugas dan fungsi Kantor Urusan Agama Kecamatan.',
-    `Program kerja Kantor Kementerian Agama ${kemenagKota}.`,
-    `Program kerja ${namaKantor} Tahun ${tahun || '2026'}.`,
-    'Ketentuan dan kebijakan lain yang berkaitan dengan pelaksanaan tugas KUA Kecamatan.',
+  const rekapBulananRows = [
+    ['Jumlah pegawai', `${jumlahTerisi(pegawai.rows)} orang`],
+    ['Jumlah penghulu', `${jumlahTerisi(penghulu.rows)} orang`],
+    ['Jumlah penyuluh', `${jumlahTerisi(penyuluh.rows)} orang`],
+    ['Jumlah peristiwa nikah', rekapNikah.peristiwa.length],
+    ['Jumlah wakaf', a('wakafPendaftaran')],
+    ['Jumlah masjid', totalMasjid],
+    ['Jumlah musala', totalMusala],
+    ['Jumlah majelis taklim', totalMajelis],
+    ['Surat masuk', a('suratMasuk')],
+    ['Surat keluar', a('suratKeluar')],
+    ['Kondisi kantor', kondisiKantorUmum],
+    ['Keterangan lainnya', isi(keteranganLain)],
   ]
 
   return (
     <Layout
-      title="Laporan Kepala KUA"
-      subtitle="Laporan pelaksanaan tugas dan kegiatan Kepala KUA per bulan, otomatis terisi dari data pendaftaran nikah dan profil kantor."
+      title="Laporan Bulanan KUA"
+      subtitle="Laporan bulanan keadaan pegawai dan administrasi KUA Kecamatan, sebagian otomatis terisi dari data pendaftaran nikah, data pegawai, presensi, kelompok binaan, surat, agenda, dan profil kantor."
     >
       <div className="no-print flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between mb-5">
         <Link
@@ -610,158 +907,258 @@ export default function LaporanKepalaKUA() {
             onChange={setNipKepala}
             placeholder={profilKantor?.nip_kepala_kua ? `Otomatis: ${profilKantor.nip_kepala_kua}` : 'Opsional'}
           />
-          <FieldText
-            label="Jabatan"
-            value={jabatan}
-            onChange={setJabatan}
-            placeholder={`Otomatis: ${jabatanEfektif}`}
-          />
+          <FieldText label="Jabatan" value={jabatan} onChange={setJabatan} placeholder={`Otomatis: ${jabatanEfektif}`} />
           <FieldText
             label="Provinsi"
             value={provinsi}
             onChange={setProvinsi}
             placeholder={profilKantor?.provinsi ? `Otomatis: ${profilKantor.provinsi}` : ''}
           />
-          <FieldText
-            label="Kode Pos"
-            value={kodePos}
-            onChange={setKodePos}
-            placeholder={profilKantor?.kode_pos ? `Otomatis: ${profilKantor.kode_pos}` : ''}
-          />
           <div className="hidden sm:block" />
           <PilihModeTtd value={modeTtd} onChange={setModeTtd} profilKantor={profilKantor} namaPembuat={namaEfektif} nipPembuat={nipEfektif} />
 
-          <SubJudulForm>Wilayah Kerja</SubJudulForm>
-          <FieldArea
-            label="Desa/Kelurahan (satu baris = satu desa; keterangan opsional setelah tanda |). Terisi otomatis dari Profil Kantor, tetap bisa diedit."
-            value={wilayahKerja}
-            onChange={setWilayahKerja}
-            placeholder={'Contoh:\nDesa Contoh Satu | 1.200 jiwa\nDesa Contoh Dua'}
-            rows={5}
+          <SubJudulForm>I. Keadaan Pegawai — otomatis dari Data Pegawai</SubJudulForm>
+          <TabelEditorForm
+            labelTambah="Tambah pegawai"
+            rows={pegawai.rows}
+            ubah={pegawai.ubah}
+            tambah={pegawai.tambah}
+            hapus={pegawai.hapus}
+            kolom={[
+              { key: 'nama', label: 'Nama/NIP', lebar: 'col-span-2 sm:col-span-2' },
+              { key: 'pangkat', label: 'Pangkat/Gol.' },
+              { key: 'jabatan', label: 'Jabatan' },
+              { key: 'status', label: 'Status (ASN/Non-ASN)' },
+              { key: 'ket', label: 'Ket.' },
+            ]}
           />
 
-          <SubJudulForm>Pelayanan Nikah — diisi manual (pendaftaran, akad, dan pemeriksaan berkas sudah otomatis)</SubJudulForm>
-          <FieldText label="Rujuk (pasangan)" type="number" min="0" value={angka.rujuk ?? ''} onChange={ubahAngka('rujuk')} />
-          <FieldText label="Penerbitan Buku Nikah (pasang)" type="number" min="0" value={angka.bukuNikah ?? ''} onChange={ubahAngka('bukuNikah')} />
-          <FieldText label="Legalisasi/Pengantar Dokumen (dokumen)" type="number" min="0" value={angka.legalisasi ?? ''} onChange={ubahAngka('legalisasi')} />
+          <SubJudulForm>II. Rekapitulasi Pegawai (jumlah orang) — otomatis dari Data Pegawai</SubJudulForm>
+          <FieldText label="ASN — Laki-laki" type="number" min="0" value={angka.rekapAsnL ?? ''} onChange={ubahAngka('rekapAsnL')} placeholder={`Otomatis: ${otomatis.rekapAsnL}`} />
+          <FieldText label="ASN — Perempuan" type="number" min="0" value={angka.rekapAsnP ?? ''} onChange={ubahAngka('rekapAsnP')} placeholder={`Otomatis: ${otomatis.rekapAsnP}`} />
+          <FieldText label="PPPK — Laki-laki" type="number" min="0" value={angka.rekapPppkL ?? ''} onChange={ubahAngka('rekapPppkL')} placeholder={`Otomatis: ${otomatis.rekapPppkL}`} />
+          <FieldText label="PPPK — Perempuan" type="number" min="0" value={angka.rekapPppkP ?? ''} onChange={ubahAngka('rekapPppkP')} placeholder={`Otomatis: ${otomatis.rekapPppkP}`} />
+          <FieldText label="Non-ASN — Laki-laki" type="number" min="0" value={angka.rekapNonAsnL ?? ''} onChange={ubahAngka('rekapNonAsnL')} placeholder={`Otomatis: ${otomatis.rekapNonAsnL}`} />
+          <FieldText label="Non-ASN — Perempuan" type="number" min="0" value={angka.rekapNonAsnP ?? ''} onChange={ubahAngka('rekapNonAsnP')} placeholder={`Otomatis: ${otomatis.rekapNonAsnP}`} />
 
-          <SubJudulForm>Bimbingan Perkawinan</SubJudulForm>
-          <FieldText label="Jumlah peserta (orang/pasangan)" type="number" min="0" value={angka.pesertaBimbingan ?? ''} onChange={ubahAngka('pesertaBimbingan')} />
+          <SubJudulForm>III. Keadaan Kehadiran Pegawai — hadir/sakit/izin/alpa otomatis dari Presensi Pegawai; cuti & dinas luar manual</SubJudulForm>
+          <TabelEditorForm
+            labelTambah="Tambah baris kehadiran"
+            rows={kehadiran.rows}
+            ubah={kehadiran.ubah}
+            tambah={kehadiran.tambah}
+            hapus={kehadiran.hapus}
+            kolom={[
+              { key: 'nama', label: 'Nama Pegawai', lebar: 'col-span-2 sm:col-span-2' },
+              { key: 'hadir', label: 'Hadir', type: 'number' },
+              { key: 'sakit', label: 'Sakit', type: 'number' },
+              { key: 'izin', label: 'Izin', type: 'number' },
+              { key: 'cuti', label: 'Cuti', type: 'number' },
+              { key: 'dinasLuar', label: 'Dinas Luar', type: 'number' },
+              { key: 'alpa', label: 'Alpa', type: 'number' },
+            ]}
+          />
 
-          <SubJudulForm>Pelaksanaan Tugas Penyuluh Agama (jumlah kegiatan)</SubJudulForm>
-          {BARIS_PENYULUH.map(([kunci, uraian]) => (
-            <FieldText key={kunci} label={uraian} type="number" min="0" value={angka[kunci] ?? ''} onChange={ubahAngka(kunci)} />
-          ))}
+          <SubJudulForm>IV. Keadaan Penghulu — otomatis dari Data Pegawai (jabatan mengandung "penghulu"); pelayanan nikah manual</SubJudulForm>
+          <TabelEditorForm
+            labelTambah="Tambah penghulu"
+            rows={penghulu.rows}
+            ubah={penghulu.ubah}
+            tambah={penghulu.tambah}
+            hapus={penghulu.hapus}
+            kolom={[
+              { key: 'nama', label: 'Nama Penghulu', lebar: 'col-span-2' },
+              { key: 'nip', label: 'NIP' },
+              { key: 'pangkat', label: 'Pangkat/Gol.' },
+              { key: 'pelayanan', label: 'Pelayanan Nikah', type: 'number' },
+              { key: 'ket', label: 'Ket.' },
+            ]}
+          />
 
-          <SubJudulForm>Pelayanan Wakaf (jumlah)</SubJudulForm>
-          {BARIS_WAKAF.map(([kunci, uraian]) => (
-            <FieldText key={kunci} label={uraian} type="number" min="0" value={angka[kunci] ?? ''} onChange={ubahAngka(kunci)} />
-          ))}
+          <SubJudulForm>V. Keadaan Penyuluh Agama — otomatis dari Data Pegawai (jabatan mengandung "penyuluh"); wilayah & kegiatan manual</SubJudulForm>
+          <TabelEditorForm
+            labelTambah="Tambah penyuluh"
+            rows={penyuluh.rows}
+            ubah={penyuluh.ubah}
+            tambah={penyuluh.tambah}
+            hapus={penyuluh.hapus}
+            kolom={[
+              { key: 'nama', label: 'Nama Penyuluh', lebar: 'col-span-2' },
+              { key: 'status', label: 'Status (ASN/Non-ASN)' },
+              { key: 'wilayah', label: 'Wilayah Binaan' },
+              { key: 'jumlahKegiatan', label: 'Jumlah Kegiatan', type: 'number' },
+              { key: 'ket', label: 'Ket.' },
+            ]}
+          />
 
-          <SubJudulForm>Uraian (satu baris = satu poin)</SubJudulForm>
-          <FieldArea label="Pihak yang diajak berkoordinasi (Camat sudah otomatis)" value={koordinasi} onChange={setKoordinasi} />
-          <FieldArea label="Hasil yang Dicapai" value={hasil} onChange={setHasil} />
-          <FieldArea label="Kendala yang Dihadapi" value={kendala} onChange={setKendala} />
-          <FieldArea label="Upaya Penyelesaian" value={upaya} onChange={setUpaya} />
-          <FieldArea label="Rencana Tindak Lanjut" value={rtl} onChange={setRtl} />
+          <SubJudulForm>VI. Keadaan Pernikahan — diisi manual (nikah di/luar KUA sudah otomatis)</SubJudulForm>
+          <FieldText label="Rujuk" type="number" min="0" value={angka.rujuk ?? ''} onChange={ubahAngka('rujuk')} />
+          <FieldText label="Rekomendasi nikah" type="number" min="0" value={angka.rekomendasiNikah ?? ''} onChange={ubahAngka('rekomendasiNikah')} />
+          <FieldText label="Duplikat buku nikah" type="number" min="0" value={angka.duplikatBukuNikah ?? ''} onChange={ubahAngka('duplikatBukuNikah')} />
+          <FieldText label="Konsultasi pernikahan" type="number" min="0" value={angka.konsultasiNikah ?? ''} onChange={ubahAngka('konsultasiNikah')} />
 
-          <SubJudulForm>Lampiran 1 — Rekapitulasi Kegiatan</SubJudulForm>
+          <SubJudulForm>VII. Keadaan Wakaf</SubJudulForm>
+          <FieldText label="Akta Ikrar Wakaf" type="number" min="0" value={angka.wakafAktaIkrar ?? ''} onChange={ubahAngka('wakafAktaIkrar')} />
+          <FieldText label="Pendaftaran wakaf" type="number" min="0" value={angka.wakafPendaftaran ?? ''} onChange={ubahAngka('wakafPendaftaran')} />
+          <FieldText label="Sertifikat tanah wakaf" type="number" min="0" value={angka.wakafSertifikat ?? ''} onChange={ubahAngka('wakafSertifikat')} />
+          <FieldText label="Tanah wakaf" type="number" min="0" value={angka.wakafTanah ?? ''} onChange={ubahAngka('wakafTanah')} />
+          <FieldText label="Konsultasi wakaf" type="number" min="0" value={angka.wakafKonsultasi ?? ''} onChange={ubahAngka('wakafKonsultasi')} />
+
+          <SubJudulForm>VIII. Keadaan Masjid dan Musala</SubJudulForm>
+          <TabelEditorForm
+            labelTambah="Tambah desa/kelurahan"
+            rows={masjid.rows}
+            ubah={masjid.ubah}
+            tambah={masjid.tambah}
+            hapus={masjid.hapus}
+            kolom={[
+              { key: 'desa', label: 'Desa/Kelurahan', lebar: 'col-span-2 sm:col-span-3' },
+              { key: 'masjid', label: 'Masjid', type: 'number' },
+              { key: 'musala', label: 'Musala', type: 'number' },
+            ]}
+          />
+
+          <SubJudulForm>IX. Keadaan Majelis Taklim — jumlah majelis otomatis dari Kelompok Binaan; jumlah kegiatan manual</SubJudulForm>
+          <TabelEditorForm
+            labelTambah="Tambah desa/kelurahan"
+            rows={majelis.rows}
+            ubah={majelis.ubah}
+            tambah={majelis.tambah}
+            hapus={majelis.hapus}
+            kolom={[
+              { key: 'desa', label: 'Desa/Kelurahan', lebar: 'col-span-2' },
+              { key: 'jumlahMajelis', label: 'Jumlah Majelis Taklim', type: 'number' },
+              { key: 'jumlahKegiatan', label: 'Jumlah Kegiatan', type: 'number' },
+              { key: 'ket', label: 'Ket.' },
+            ]}
+          />
+
+          <SubJudulForm>X. Administrasi Surat — surat masuk/keluar otomatis dari Surat Masuk & Keluar</SubJudulForm>
+          <FieldText label="Surat masuk" type="number" min="0" value={angka.suratMasuk ?? ''} onChange={ubahAngka('suratMasuk')} placeholder={`Otomatis: ${otomatis.suratMasuk}`} />
+          <FieldText label="Surat keluar" type="number" min="0" value={angka.suratKeluar ?? ''} onChange={ubahAngka('suratKeluar')} placeholder={`Otomatis: ${otomatis.suratKeluar}`} />
+          <FieldText label="Surat tugas" type="number" min="0" value={angka.suratTugas ?? ''} onChange={ubahAngka('suratTugas')} />
+          <FieldText label="Surat keterangan" type="number" min="0" value={angka.suratKeterangan ?? ''} onChange={ubahAngka('suratKeterangan')} />
+          <FieldText label="Rekomendasi" type="number" min="0" value={angka.suratRekomendasi ?? ''} onChange={ubahAngka('suratRekomendasi')} />
+
+          <SubJudulForm>XI. Sarana dan Prasarana</SubJudulForm>
           <div className="sm:col-span-2 space-y-2">
-            {lampiran.map((r) => (
-              <div key={r.id} className="grid grid-cols-2 sm:grid-cols-6 gap-2 items-end border border-slate-100 rounded-lg p-2">
+            {sarana.map((r, i) => (
+              <div key={i} className="grid grid-cols-2 sm:grid-cols-6 gap-2 items-end border border-slate-100 rounded-lg p-2">
                 <div className="col-span-2">
-                  <FieldText label="Kegiatan" value={r.kegiatan} onChange={(v) => ubahLampiran(r.id, 'kegiatan', v)} />
+                  <FieldText label="Jenis Barang" value={r.nama} onChange={(v) => ubahSarana(i, 'nama', v)} />
                 </div>
-                <FieldText label="Waktu" value={r.waktu} onChange={(v) => ubahLampiran(r.id, 'waktu', v)} />
-                <FieldText label="Tempat" value={r.tempat} onChange={(v) => ubahLampiran(r.id, 'tempat', v)} />
-                <FieldText
-                  label="Peserta"
-                  value={r.peserta}
-                  onChange={(v) => ubahLampiran(r.id, 'peserta', v)}
-                  placeholder={r.kegiatan === 'Pelayanan Nikah' ? `Otomatis: ${rekap.peristiwa.length} pasangan` : ''}
-                />
+                <FieldText label="Jumlah" type="number" min="0" value={r.jumlah} onChange={(v) => ubahSarana(i, 'jumlah', v)} />
+                <FieldText label="Baik" type="number" min="0" value={r.baik} onChange={(v) => ubahSarana(i, 'baik', v)} />
+                <FieldText label="Rusak Ringan" type="number" min="0" value={r.rusakRingan} onChange={(v) => ubahSarana(i, 'rusakRingan', v)} />
                 <div className="flex gap-2 items-end">
                   <div className="flex-1">
-                    <FieldText label="Hasil" value={r.hasil} onChange={(v) => ubahLampiran(r.id, 'hasil', v)} />
+                    <FieldText label="Rusak Berat" type="number" min="0" value={r.rusakBerat} onChange={(v) => ubahSarana(i, 'rusakBerat', v)} />
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => hapusLampiran(r.id)}
-                    className="p-2 text-slate-400 hover:text-red-600"
-                    aria-label="Hapus baris"
-                  >
+                  <button type="button" onClick={() => hapusSarana(i)} className="p-2 text-slate-400 hover:text-red-600" aria-label="Hapus baris">
                     <Trash2 size={16} />
                   </button>
                 </div>
               </div>
             ))}
-            <button
-              type="button"
-              onClick={tambahLampiran}
-              className="inline-flex items-center gap-1.5 text-sm text-teal-700 hover:text-teal-900"
-            >
-              <Plus size={16} /> Tambah baris kegiatan
+            <button type="button" onClick={tambahSarana} className="inline-flex items-center gap-1.5 text-sm text-teal-700 hover:text-teal-900">
+              <Plus size={16} /> Tambah barang
             </button>
           </div>
 
-          <SubJudulForm>Lampiran 2 — Dokumentasi</SubJudulForm>
+          <SubJudulForm>XII. Keadaan Gedung/Kantor</SubJudulForm>
           <div className="sm:col-span-2 space-y-2">
-            <label className="inline-flex items-center gap-1.5 text-sm text-teal-700 hover:text-teal-900 cursor-pointer">
-              <ImagePlus size={16} /> Tambah foto kegiatan
-              <input type="file" accept="image/*" multiple onChange={tambahFoto} className="hidden" />
-            </label>
-            {fotos.length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {fotos.map((f) => (
-                  <div key={f.id} className="flex gap-2 items-center border border-slate-100 rounded-lg p-2">
-                    <img src={f.url} alt="" className="w-16 h-16 object-cover rounded shrink-0" />
-                    <input
-                      value={f.caption}
-                      onChange={(e) => ubahCaption(f.id, e.target.value)}
-                      placeholder="Keterangan foto"
-                      className={inputClass}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => hapusFoto(f.id)}
-                      className="p-2 text-slate-400 hover:text-red-600"
-                      aria-label="Hapus foto"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                ))}
+            {gedung.map((r, i) => (
+              <div key={i} className="grid grid-cols-2 sm:grid-cols-6 gap-2 items-end border border-slate-100 rounded-lg p-2">
+                <div className="col-span-2 sm:col-span-3">
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Uraian</label>
+                  <p className="text-sm text-slate-800 px-3 py-2">{r.uraian}</p>
+                </div>
+                <FieldSelect label="Kondisi" value={r.kondisi} onChange={(v) => ubahGedung(i, 'kondisi', v)} options={['Baik', 'Rusak']} />
+                <div className="col-span-2">
+                  <FieldText label="Keterangan" value={r.ket} onChange={(v) => ubahGedung(i, 'ket', v)} />
+                </div>
               </div>
-            )}
-            <p className="text-xs text-slate-400">
-              Foto hanya dipakai untuk pratinjau dan cetak, tidak disimpan ke server. Foto hilang kalau halaman dimuat ulang.
-            </p>
+            ))}
           </div>
+
+          <SubJudulForm>XIII. Keadaan Arsip</SubJudulForm>
+          <div className="sm:col-span-2 space-y-2">
+            {arsip.map((r, i) => (
+              <div key={i} className="grid grid-cols-2 sm:grid-cols-6 gap-2 items-end border border-slate-100 rounded-lg p-2">
+                <div className="col-span-2 sm:col-span-3">
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Jenis Arsip</label>
+                  <p className="text-sm text-slate-800 px-3 py-2">{r.jenis}</p>
+                </div>
+                <FieldSelect label="Keadaan" value={r.keadaan} onChange={(v) => ubahArsip(i, 'keadaan', v)} options={['Baik', 'Cukup']} />
+                <div className="col-span-2">
+                  <FieldText label="Keterangan" value={r.ket} onChange={(v) => ubahArsip(i, 'ket', v)} />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <SubJudulForm>XIV. Kegiatan/Kunjungan Dinas — otomatis dari Agenda Kantor</SubJudulForm>
+          <TabelEditorForm
+            labelTambah="Tambah kegiatan"
+            rows={kegiatanDinas.rows}
+            ubah={kegiatanDinas.ubah}
+            tambah={kegiatanDinas.tambah}
+            hapus={kegiatanDinas.hapus}
+            kolom={[
+              { key: 'tanggal', label: 'Tanggal', type: 'date' },
+              { key: 'kegiatan', label: 'Kegiatan', lebar: 'col-span-2' },
+              { key: 'pelaksana', label: 'Pelaksana' },
+              { key: 'tempat', label: 'Tempat' },
+              { key: 'ket', label: 'Ket.' },
+            ]}
+          />
+
+          <SubJudulForm>XV. Permasalahan dan Tindak Lanjut</SubJudulForm>
+          <TabelEditorForm
+            labelTambah="Tambah baris"
+            rows={masalah.rows}
+            ubah={masalah.ubah}
+            tambah={masalah.tambah}
+            hapus={masalah.hapus}
+            kolom={[
+              { key: 'permasalahan', label: 'Permasalahan', lebar: 'col-span-2 sm:col-span-2' },
+              { key: 'upaya', label: 'Upaya/Tindak Lanjut', lebar: 'col-span-2 sm:col-span-2' },
+              { key: 'ket', label: 'Ket.' },
+            ]}
+          />
+
+          <SubJudulForm>XVI. Rekapitulasi Keadaan Bulanan</SubJudulForm>
+          <FieldSelect label="Kondisi kantor" value={kondisiKantorUmum} onChange={setKondisiKantorUmum} options={['Baik', 'Cukup', 'Rusak']} />
+          <FieldText label="Keterangan lainnya" value={keteranganLain} onChange={setKeteranganLain} />
         </div>
 
         <div className="mt-3 text-xs text-slate-500 space-y-1">
+          {errorProfil && (
+            <p className="text-red-600">Gagal memuat Profil Kantor: {errorProfil}</p>
+          )}
+          {errorSurat && (
+            <p className="text-red-600">Gagal memuat data surat: {errorSurat}</p>
+          )}
           {loadingNikah && <p>Memuat data pendaftaran nikah…</p>}
           {!loadingNikah && errorNikah && (
             <p className="text-red-600">Gagal memuat data pendaftaran nikah: {errorNikah}</p>
           )}
           {!loadingNikah && !errorNikah && (
             <p>
-              Data terbaca: {rekap.pendaftaranMasuk} pendaftaran masuk dan {rekap.peristiwa.length} akad
-              nikah pada {periode || 'bulan terpilih'}.
-              {rekap.belumDiisi > 0 &&
-                ` ${rekap.belumDiisi} akad belum mengisi tempat akad sehingga tidak masuk hitungan Di KUA / Di luar KUA.`}
+              Data terbaca otomatis: {rekapNikah.peristiwa.length} akad nikah pada {periode || 'bulan terpilih'}
+              ({rekapNikah.diKua} di KUA, {rekapNikah.luarKua} di luar KUA).
             </p>
           )}
+          <p>
+            Juga terbaca otomatis: {pegawaiKantor.length} pegawai aktif, {jumlahSuratMasukOtomatis} surat masuk &
+            {' '}{jumlahSuratKeluarOtomatis} surat keluar, {agendaBulan.length} kegiatan agenda pada {periode || 'bulan terpilih'}.
+          </p>
           <p className="text-slate-400">
-            Akad nikah dihitung dari pendaftaran berstatus <em>diverifikasi</em> yang tanggal akadnya
-            jatuh di bulan laporan. Pemeriksaan berkas = berkas diverifikasi + ditolak pada bulan laporan.
-            Kop surat, Kepala KUA, Provinsi, Kode Pos, Wilayah Kerja, dan tanda tangan ditarik otomatis
-            dari Profil Kantor. Jumlah anggota kelompok binaan (Majelis Taklim, Lapas, RSU, Masyarakat)
-            ditarik otomatis dari Pusat Kelompok Binaan sebagai info pendukung — bukan jumlah kegiatan
-            per bulan, karena aplikasi belum mencatat log kegiatan bertanggal untuk kelompok binaan.
-            Angka kegiatan lain yang belum tercatat di aplikasi diisi manual; yang dikosongkan tampil
-            sebagai titik-titik. Kondisi Bangunan, Peralatan, dan Barang Inventaris kantor pada Lampiran 4
-            ditarik otomatis dari halaman Inventaris dan Kondisi Bangunan.
+            Kop surat, Kepala KUA, dan tanda tangan ditarik otomatis dari Profil Kantor. Field bertanda
+            "Otomatis: ..." sudah terisi sendiri dari data yang ada — kosongkan untuk memakainya, atau isi manual
+            untuk menimpanya. Tabel yang terisi otomatis berhenti diperbarui begitu kamu mengeditnya, jadi hasil
+            ketikanmu tidak hilang saat ganti bulan. Angka yang belum tercatat di aplikasi tetap diisi manual;
+            yang dikosongkan tampil sebagai titik-titik.
           </p>
         </div>
       </div>
@@ -787,9 +1184,7 @@ export default function LaporanKepalaKUA() {
               <p className="font-display text-base font-bold uppercase text-slate-900 leading-tight">
                 {profilKantor?.nama_kantor || 'Nama Kantor Belum Diatur'}
               </p>
-              <p className="text-xs text-slate-600 leading-tight">
-                Alamat: {alamatKantor || PLACEHOLDER}
-              </p>
+              <p className="text-xs text-slate-600 leading-tight">Alamat: {alamatKantor || PLACEHOLDER}</p>
               {(profilKantor?.telepon || profilKantor?.email) && (
                 <p className="text-xs text-slate-600 leading-tight">
                   {[profilKantor?.telepon && `Telp. ${profilKantor.telepon}`, profilKantor?.email]
@@ -803,271 +1198,160 @@ export default function LaporanKepalaKUA() {
           {/* === JUDUL === */}
           <div className="text-center mb-6">
             <h1 className="font-display text-base font-bold uppercase text-slate-900 leading-snug">
-              Laporan Pelaksanaan Tugas dan Kegiatan
+              Laporan Bulanan
             </h1>
             <p className="font-display text-base font-bold uppercase text-slate-900 leading-snug">
-              Kepala Kantor Urusan Agama (KUA) Kecamatan
+              Keadaan Pegawai dan Administrasi
             </p>
-            <p className="font-display text-sm font-bold uppercase text-slate-900 leading-snug">
-              Periode Bulan {namaBulanSaja || PLACEHOLDER} Tahun {tahun || '2026'}
+            <p className="font-display text-base font-bold uppercase text-slate-900 leading-snug">
+              Kantor Urusan Agama (KUA)
+            </p>
+            <p className="font-display text-sm font-bold uppercase text-slate-900 leading-snug mt-2">
+              {namaKantor}
+            </p>
+            <p className="text-sm text-slate-700">
+              Bulan {namaBulanSaja || PLACEHOLDER} Tahun {tahun || '2026'}
+            </p>
+            <p className="text-sm text-slate-700">
+              Kabupaten/Kota: {profilKantor?.kabupaten || PLACEHOLDER} &nbsp;|&nbsp; Provinsi: {isi(provinsiEfektif)}
             </p>
           </div>
 
           <div className="space-y-6 text-sm leading-relaxed text-slate-700">
-            {/* I. PENDAHULUAN */}
-            <Bab no="I" judul="Pendahuluan">
-              <Sub huruf="A" judul="Latar Belakang">
-                <p className="text-justify">
-                  Kantor Urusan Agama (KUA) Kecamatan merupakan unit pelaksana teknis Kementerian Agama
-                  yang mempunyai tugas memberikan pelayanan dan bimbingan kepada masyarakat dalam bidang
-                  keagamaan sesuai dengan ketentuan peraturan perundang-undangan.
-                </p>
-                <p className="text-justify">
-                  Dalam rangka melaksanakan tugas tersebut, Kepala KUA Kecamatan melaksanakan fungsi
-                  koordinasi, pelayanan, pembinaan, pengawasan, serta pelaporan terhadap seluruh kegiatan
-                  yang dilaksanakan di wilayah kerja KUA Kecamatan.
-                </p>
-                <p className="text-justify">
-                  Laporan ini disusun sebagai bentuk pertanggungjawaban pelaksanaan tugas Kepala KUA
-                  Kecamatan selama periode {periode || PLACEHOLDER} serta sebagai bahan evaluasi untuk
-                  meningkatkan kualitas pelayanan kepada masyarakat.
-                </p>
-              </Sub>
-              <Sub huruf="B" judul="Dasar Pelaksanaan">
-                <Poin items={dasarPelaksanaan} />
-              </Sub>
-              <Sub huruf="C" judul="Maksud dan Tujuan">
-                <Poin items={TUJUAN} />
-              </Sub>
+            <Bab no="I" judul="Keadaan Pegawai">
+              <TabelCetak
+                header={['No', 'Nama/NIP', 'Pangkat/Gol.', 'Jabatan', 'Status', 'Ket.']}
+                baris={pegawai.rows.map((r, i) => [i + 1, r.nama, r.pangkat, r.jabatan, r.status, r.ket])}
+              />
             </Bab>
 
-            {/* II. PROFIL */}
-            <Bab no="II" judul="Profil KUA Kecamatan">
-              <Sub huruf="A" judul="Identitas Kantor">
-                <table className="lap-table w-full text-xs border-collapse">
-                  <thead>
-                    <tr>
-                      <th className={`${cellHead} w-48`}>Uraian</th>
-                      <th className={cellHead}>Keterangan</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {identitas.map(([label, nilai]) => (
-                      <tr key={label}>
-                        <td className={cell}>{label}</td>
-                        <td className={cell}>{nilai}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </Sub>
-              <Sub huruf="B" judul="Wilayah Kerja">
-                <table className="lap-table w-full text-xs border-collapse">
-                  <thead>
-                    <tr>
-                      <th className={`${cellHead} w-10 text-center`}>No.</th>
-                      <th className={cellHead}>Desa/Kelurahan</th>
-                      <th className={cellHead}>Keterangan</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {barisWilayah.map((w, i) => (
-                      <tr key={i}>
-                        <td className={cellCenter}>{i + 1}</td>
-                        <td className={cell}>{w.desa || PLACEHOLDER}</td>
-                        <td className={cell}>{w.ket || PLACEHOLDER}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </Sub>
-              <Sub huruf="C" judul="Kelompok Binaan Terdaftar">
-                <p className="text-justify text-xs text-slate-500">
-                  Jumlah anggota terdaftar per kelompok binaan (data pendukung, ditarik otomatis dari
-                  Pusat Kelompok Binaan — bukan jumlah kegiatan pada periode laporan ini).
-                </p>
-                <table className="lap-table w-full text-xs border-collapse">
-                  <thead>
-                    <tr>
-                      <th className={`${cellHead} w-10 text-center`}>No.</th>
-                      <th className={cellHead}>Kelompok Binaan</th>
-                      <th className={`${cellHead} w-32`}>Jumlah Anggota</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {KELOMPOK_BINAAN_LABEL.map(([slug, label], i) => (
-                      <tr key={slug}>
-                        <td className={cellCenter}>{i + 1}</td>
-                        <td className={cell}>{label}</td>
-                        <td className={cell}>
-                          {loadingAnggota ? '...' : `${jumlahAnggota[slug] || 0} orang`}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </Sub>
+            <Bab no="II" judul="Rekapitulasi Pegawai">
+              <TabelCetak
+                header={['No', 'Uraian', 'Laki-laki', 'Perempuan', 'Jumlah']}
+                baris={rekapPegawaiRows.map((r, i) => [i + 1, r[0], r[1], r[2], r[1] + r[2]])}
+                footer={['', 'JUMLAH', totalL, totalP, totalL + totalP]}
+              />
             </Bab>
 
-            {/* III. PELAKSANAAN TUGAS */}
-            <Bab no="III" judul="Pelaksanaan Tugas dan Kegiatan">
-              <Sub huruf="A" judul="Pelayanan Administrasi dan Pernikahan">
-                <p className="text-justify">
-                  Selama periode laporan, {namaKantor} telah melaksanakan pelayanan administrasi
-                  pernikahan kepada masyarakat.
-                  {rekap.peristiwa.length > 0 &&
-                    ` Dari ${rekap.peristiwa.length} akad nikah yang dilaksanakan, ${rekap.diKua} dilaksanakan di KUA dan ${rekap.luarKua} di luar KUA.`}
-                  {rekap.menunggu > 0 && ` Sebanyak ${rekap.menunggu} berkas masih menunggu verifikasi.`}
-                </p>
-                <table className="lap-table w-full text-xs border-collapse">
-                  <thead>
-                    <tr>
-                      <th className={`${cellHead} w-10 text-center`}>No.</th>
-                      <th className={cellHead}>Jenis Pelayanan</th>
-                      <th className={`${cellHead} w-40`}>Jumlah</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {layananNikah.map(([label, nilai], i) => (
-                      <tr key={label}>
-                        <td className={cellCenter}>{i + 1}</td>
-                        <td className={cell}>{label}</td>
-                        <td className={cell}>{nilai}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </Sub>
-
-              <Sub huruf="B" judul="Bimbingan Perkawinan">
-                <p className="text-justify">
-                  {namaKantor} melaksanakan kegiatan bimbingan dan pembinaan bagi calon pengantin sebagai
-                  upaya memberikan bekal pengetahuan dalam membangun keluarga yang harmonis.
-                </p>
-                <Poin items={MATERI_BIMBINGAN} />
-                <p>Jumlah peserta yang mengikuti kegiatan sebanyak {a('pesertaBimbingan')} orang/pasangan.</p>
-              </Sub>
-
-              <Sub huruf="C" judul="Pembinaan Kehidupan Keagamaan Masyarakat">
-                <p>Kegiatan pembinaan dilaksanakan melalui:</p>
-                <Poin items={PEMBINAAN_KEAGAMAAN} />
-              </Sub>
-
-              <Sub huruf="D" judul="Pelaksanaan Tugas Penyuluh Agama">
-                <p className="text-justify">
-                  Kepala KUA melakukan koordinasi dan monitoring terhadap pelaksanaan tugas Penyuluh
-                  Agama di wilayah kerja KUA.
-                </p>
-                <table className="lap-table w-full text-xs border-collapse">
-                  <thead>
-                    <tr>
-                      <th className={`${cellHead} w-10 text-center`}>No.</th>
-                      <th className={cellHead}>Kegiatan</th>
-                      <th className={cellHead}>Sasaran</th>
-                      <th className={`${cellHead} w-24`}>Jumlah</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {BARIS_PENYULUH.map(([kunci, uraian, sasaran], i) => (
-                      <tr key={kunci}>
-                        <td className={cellCenter}>{i + 1}</td>
-                        <td className={cell}>{uraian}</td>
-                        <td className={cell}>{sasaran}</td>
-                        <td className={cell}>{a(kunci)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </Sub>
-
-              <Sub huruf="E" judul="Pembinaan Masjid dan Rumah Ibadah">
-                <p className="text-justify">
-                  {namaKantor} melaksanakan koordinasi dan pembinaan terhadap pengurus masjid dan rumah
-                  ibadah di wilayah kerja.
-                </p>
-                <Poin items={PEMBINAAN_MASJID} />
-              </Sub>
-
-              <Sub huruf="F" judul="Pelayanan Wakaf">
-                <p className="text-justify">
-                  Pelayanan di bidang wakaf dilaksanakan melalui pemberian informasi, konsultasi, dan
-                  pendampingan administrasi wakaf kepada masyarakat.
-                </p>
-                <table className="lap-table w-full text-xs border-collapse">
-                  <thead>
-                    <tr>
-                      <th className={`${cellHead} w-10 text-center`}>No.</th>
-                      <th className={cellHead}>Jenis Kegiatan</th>
-                      <th className={`${cellHead} w-40`}>Jumlah</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {BARIS_WAKAF.map(([kunci, uraian], i) => (
-                      <tr key={kunci}>
-                        <td className={cellCenter}>{i + 1}</td>
-                        <td className={cell}>{uraian}</td>
-                        <td className={cell}>{a(kunci)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </Sub>
-
-              <Sub huruf="G" judul="Pelayanan Informasi dan Konsultasi Keagamaan">
-                <p className="text-justify">
-                  KUA memberikan pelayanan konsultasi kepada masyarakat mengenai berbagai persoalan
-                  keagamaan dan keluarga, antara lain:
-                </p>
-                <Poin items={KONSULTASI} />
-              </Sub>
+            <Bab no="III" judul="Keadaan Kehadiran Pegawai">
+              <TabelCetak
+                header={['No', 'Nama Pegawai', 'Hadir', 'Sakit', 'Izin', 'Cuti', 'Dinas Luar', 'Alpa']}
+                baris={kehadiran.rows.map((r, i) => [
+                  i + 1, r.nama, angkaTampil(r.hadir), angkaTampil(r.sakit), angkaTampil(r.izin),
+                  angkaTampil(r.cuti), angkaTampil(r.dinasLuar), angkaTampil(r.alpa),
+                ])}
+              />
             </Bab>
 
-            {/* IV. KOORDINASI */}
-            <Bab no="IV" judul="Koordinasi dan Kerja Sama">
-              <Poin items={daftarKoordinasi} />
+            <Bab no="IV" judul="Keadaan Penghulu">
+              <TabelCetak
+                header={['No', 'Nama Penghulu', 'NIP', 'Pangkat/Gol.', 'Pelayanan Nikah', 'Ket.']}
+                baris={penghulu.rows.map((r, i) => [i + 1, r.nama, r.nip, r.pangkat, angkaTampil(r.pelayanan), r.ket])}
+              />
+            </Bab>
+
+            <Bab no="V" judul="Keadaan Penyuluh Agama">
+              <TabelCetak
+                header={['No', 'Nama Penyuluh', 'Status', 'Wilayah Binaan', 'Jumlah Kegiatan', 'Ket.']}
+                baris={penyuluh.rows.map((r, i) => [i + 1, r.nama, r.status, r.wilayah, angkaTampil(r.jumlahKegiatan), r.ket])}
+              />
+            </Bab>
+
+            <Bab no="VI" judul="Keadaan Pernikahan">
+              <TabelCetak
+                header={['No', 'Uraian', 'Jumlah']}
+                baris={pernikahanRows.map((r, i) => [i + 1, r[0], r[1]])}
+              />
+            </Bab>
+
+            <Bab no="VII" judul="Keadaan Wakaf">
+              <TabelCetak
+                header={['No', 'Uraian', 'Jumlah']}
+                baris={wakafRows.map((r, i) => [i + 1, r[0], r[1]])}
+              />
+            </Bab>
+
+            <Bab no="VIII" judul="Keadaan Masjid dan Musala">
+              <TabelCetak
+                header={['No', 'Desa/Kelurahan', 'Masjid', 'Musala', 'Jumlah']}
+                baris={masjid.rows.map((r, i) => [
+                  i + 1, r.desa, angkaTampil(r.masjid), angkaTampil(r.musala),
+                  (Number(r.masjid) || 0) + (Number(r.musala) || 0),
+                ])}
+                footer={['', 'JUMLAH', totalMasjid, totalMusala, totalMasjid + totalMusala]}
+              />
+            </Bab>
+
+            <Bab no="IX" judul="Keadaan Majelis Taklim">
+              <TabelCetak
+                header={['No', 'Desa/Kelurahan', 'Jumlah Majelis Taklim', 'Jumlah Kegiatan', 'Ket.']}
+                baris={majelis.rows.map((r, i) => [i + 1, r.desa, angkaTampil(r.jumlahMajelis), angkaTampil(r.jumlahKegiatan), r.ket])}
+                footer={['', 'JUMLAH', totalMajelis, jumlahkan(majelis.rows, 'jumlahKegiatan'), '']}
+              />
+            </Bab>
+
+            <Bab no="X" judul="Administrasi Surat">
+              <TabelCetak
+                header={['No', 'Jenis Surat', 'Jumlah']}
+                baris={suratRows.map((r, i) => [i + 1, r[0], r[1]])}
+              />
+            </Bab>
+
+            <Bab no="XI" judul="Sarana dan Prasarana">
+              <TabelCetak
+                header={['No', 'Jenis Barang', 'Jumlah', 'Baik', 'Rusak Ringan', 'Rusak Berat']}
+                baris={sarana.map((r, i) => [
+                  i + 1, r.nama, angkaTampil(r.jumlah), angkaTampil(r.baik), angkaTampil(r.rusakRingan), angkaTampil(r.rusakBerat),
+                ])}
+              />
+            </Bab>
+
+            <Bab no="XII" judul="Keadaan Gedung/Kantor">
+              <TabelCetak
+                header={['No', 'Uraian', 'Kondisi', 'Keterangan']}
+                baris={gedung.map((r, i) => [i + 1, r.uraian, r.kondisi, r.ket])}
+              />
+            </Bab>
+
+            <Bab no="XIII" judul="Keadaan Arsip">
+              <TabelCetak
+                header={['No', 'Jenis Arsip', 'Keadaan', 'Keterangan']}
+                baris={arsip.map((r, i) => [i + 1, r.jenis, r.keadaan, r.ket])}
+              />
+            </Bab>
+
+            <Bab no="XIV" judul="Kegiatan/Kunjungan Dinas">
+              <TabelCetak
+                header={['No', 'Tanggal', 'Kegiatan', 'Pelaksana', 'Tempat', 'Ket.']}
+                baris={kegiatanDinas.rows.map((r, i) => [
+                  i + 1, formatTanggalIndonesia(r.tanggal) || '........', r.kegiatan, r.pelaksana, r.tempat, r.ket,
+                ])}
+              />
+            </Bab>
+
+            <Bab no="XV" judul="Permasalahan dan Tindak Lanjut">
+              <TabelCetak
+                header={['No', 'Permasalahan', 'Upaya/Tindak Lanjut', 'Ket.']}
+                baris={masalah.rows.map((r, i) => [i + 1, r.permasalahan, r.upaya, r.ket])}
+              />
+            </Bab>
+
+            <Bab no="XVI" judul="Rekapitulasi Keadaan Bulanan">
+              <TabelCetak
+                header={['No', 'Uraian', 'Jumlah/Keterangan']}
+                baris={rekapBulananRows.map((r, i) => [i + 1, r[0], r[1]])}
+              />
+            </Bab>
+
+            {/* PENUTUP */}
+            <section>
+              <h2 className="font-display text-[15px] font-semibold uppercase text-slate-900 mb-2">Penutup</h2>
               <p className="text-justify">
-                Koordinasi dilakukan untuk meningkatkan efektivitas pelayanan keagamaan dan
-                menyelesaikan berbagai permasalahan yang muncul di masyarakat.
+                Demikian laporan bulanan keadaan pegawai dan administrasi {namaKantor} bulan{' '}
+                {namaBulanSaja || PLACEHOLDER} tahun {tahun || '2026'} dibuat sebagai bahan laporan, evaluasi,
+                dan dokumentasi.
               </p>
-            </Bab>
-
-            {/* V. HASIL */}
-            <Bab no="V" judul="Hasil yang Dicapai">
-              {barisTeks(hasil).length > 0 ? <Poin items={barisTeks(hasil)} /> : <p>-</p>}
-            </Bab>
-
-            {/* VI. KENDALA */}
-            <Bab no="VI" judul="Kendala yang Dihadapi">
-              {barisTeks(kendala).length > 0 ? (
-                <Poin items={barisTeks(kendala)} />
-              ) : (
-                <p>Tidak ada kendala berarti.</p>
-              )}
-            </Bab>
-
-            {/* VII. UPAYA */}
-            <Bab no="VII" judul="Upaya Penyelesaian">
-              {barisTeks(upaya).length > 0 ? <Poin items={barisTeks(upaya)} /> : <p>-</p>}
-            </Bab>
-
-            {/* VIII. RTL */}
-            <Bab no="VIII" judul="Rencana Tindak Lanjut">
-              {barisTeks(rtl).length > 0 ? <Poin items={barisTeks(rtl)} /> : <p>-</p>}
-            </Bab>
-
-            {/* IX. PENUTUP */}
-            <Bab no="IX" judul="Penutup">
-              <p className="text-justify">
-                Demikian laporan pelaksanaan tugas dan kegiatan Kepala {namaKantor} ini dibuat sebagai
-                bentuk pertanggungjawaban atas pelaksanaan tugas selama periode {periode || PLACEHOLDER}.
-              </p>
-              <p className="text-justify">
-                Laporan ini diharapkan dapat menjadi bahan evaluasi dan acuan dalam meningkatkan kualitas
-                pelayanan keagamaan kepada masyarakat serta mendukung pelaksanaan program Kementerian
-                Agama di tingkat kecamatan.
-              </p>
-              <p className="text-justify">Atas perhatian dan kerja sama semua pihak, disampaikan terima kasih.</p>
-            </Bab>
+            </section>
           </div>
 
           {/* === TANDA TANGAN OTOMATIS === */}
@@ -1081,130 +1365,6 @@ export default function LaporanKepalaKUA() {
             labelNipPembuat="NIP."
             tempatTanggal={tempatTtd && tanggalLaporanFormatted ? `${tempatTtd}, ${tanggalLaporanFormatted}` : ''}
           />
-
-          {/* === LAMPIRAN (mulai di halaman baru) === */}
-          <div className="lampiran mt-10 space-y-6 text-sm leading-relaxed text-slate-700" style={{ pageBreakBefore: 'always', breakBefore: 'page' }}>
-            <h2 className="font-display text-[15px] font-semibold uppercase text-slate-900">Lampiran</h2>
-
-            <Sub judul="Lampiran 1. Rekapitulasi Kegiatan">
-              <table className="lap-table w-full text-xs border-collapse">
-                <thead>
-                  <tr>
-                    <th className={`${cellHead} w-8 text-center`}>No.</th>
-                    <th className={cellHead}>Kegiatan</th>
-                    <th className={cellHead}>Waktu</th>
-                    <th className={cellHead}>Tempat</th>
-                    <th className={cellHead}>Peserta</th>
-                    <th className={cellHead}>Hasil</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lampiran.length === 0 ? (
-                    <tr>
-                      <td className={`${cell} text-center text-slate-500`} colSpan={6}>-</td>
-                    </tr>
-                  ) : (
-                    lampiran.map((r, i) => (
-                      <tr key={r.id}>
-                        <td className={cellCenter}>{i + 1}</td>
-                        <td className={cell}>{r.kegiatan || PLACEHOLDER}</td>
-                        <td className={cell}>{r.waktu || '........'}</td>
-                        <td className={cell}>{r.tempat || '........'}</td>
-                        <td className={cell}>
-                          {r.peserta ||
-                            (r.kegiatan === 'Pelayanan Nikah' ? `${rekap.peristiwa.length} pasangan` : PH_ANGKA)}
-                        </td>
-                        <td className={cell}>{r.hasil || '-'}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </Sub>
-
-            <Sub judul="Lampiran 2. Dokumentasi">
-              {fotos.length === 0 ? (
-                <p className="text-slate-500">
-                  Foto kegiatan pelayanan KUA, bimbingan perkawinan, penyuluhan agama, pembinaan
-                  masyarakat, serta koordinasi dengan pemerintah dan tokoh masyarakat ditempatkan pada
-                  bagian ini.
-                </p>
-              ) : (
-                <div className="grid grid-cols-2 gap-3">
-                  {fotos.map((f) => (
-                    <figure key={f.id} className="ttd-block">
-                      <img src={f.url} alt={f.caption || 'Dokumentasi kegiatan'} className="w-full h-44 object-cover border border-slate-300" />
-                      {f.caption && (
-                        <figcaption className="text-xs text-center text-slate-600 mt-1">{f.caption}</figcaption>
-                      )}
-                    </figure>
-                  ))}
-                </div>
-              )}
-            </Sub>
-
-            <Sub judul="Lampiran 3. Rekapitulasi Data Pelayanan">
-              <p className="text-justify">
-                Daftar pelaksanaan akad nikah pada periode {periode || PLACEHOLDER}, diambil otomatis dari
-                data pendaftaran nikah yang telah diverifikasi.
-              </p>
-              <table className="lap-table w-full text-xs border-collapse">
-                <thead>
-                  <tr>
-                    <th className={`${cellHead} w-8 text-center`}>No.</th>
-                    <th className={cellHead}>Tanggal / Waktu</th>
-                    <th className={cellHead}>Suami</th>
-                    <th className={cellHead}>Istri</th>
-                    <th className={cellHead}>Tempat Akad</th>
-                    <th className={cellHead}>Ket.</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loadingNikah ? (
-                    <tr>
-                      <td className={`${cell} text-center text-slate-500`} colSpan={6}>Memuat data…</td>
-                    </tr>
-                  ) : rekap.peristiwa.length === 0 ? (
-                    <tr>
-                      <td className={`${cell} text-center text-slate-500`} colSpan={6}>
-                        Tidak ada akad nikah tercatat pada bulan ini.
-                      </td>
-                    </tr>
-                  ) : (
-                    rekap.peristiwa.map((p, i) => (
-                      <tr key={p.id}>
-                        <td className={cellCenter}>{i + 1}</td>
-                        <td className={cell}>
-                          {formatTanggalIndonesia(p.tanggal) || '-'}
-                          {p.waktu ? `, ${p.waktu}` : ''}
-                        </td>
-                        <td className={`${cell} uppercase`}>{p.suami}</td>
-                        <td className={`${cell} uppercase`}>{p.istri}</td>
-                        <td className={cell}>{p.tempat}</td>
-                        <td className={cell}>{p.lokasi}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-              <p className="text-xs text-slate-500">
-                Data pelayanan wakaf, bimbingan perkawinan, penyuluhan agama, dan kegiatan keagamaan
-                lainnya dapat dilampirkan sesuai periode laporan.
-              </p>
-            </Sub>
-
-            <Sub judul="Lampiran 4. Kondisi Aset Kantor">
-              <p className="text-justify text-xs text-slate-500">
-                Rekap kondisi Bangunan, Peralatan, dan Barang Inventaris kantor, ditarik otomatis dari
-                halaman Inventaris dan Kondisi Bangunan.
-              </p>
-              <RingkasanAset
-                judulBangunan="Kondisi Bangunan Kantor"
-                judulPeralatan="Kondisi Peralatan Kantor"
-                judulInventaris="Kondisi Barang Inventaris Kantor"
-              />
-            </Sub>
-          </div>
         </div>
       </div>
 
@@ -1246,14 +1406,9 @@ export default function LaporanKepalaKUA() {
             page-break-inside: avoid;
             break-inside: avoid;
           }
-          .lembar-cetak section h2,
-          .lembar-cetak h3 {
+          .lembar-cetak section h2 {
             page-break-after: avoid;
             break-after: avoid;
-          }
-          .lembar-cetak li {
-            page-break-inside: avoid;
-            break-inside: avoid;
           }
           .ttd-block {
             page-break-inside: avoid;
