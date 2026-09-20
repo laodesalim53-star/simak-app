@@ -569,6 +569,8 @@ function DashboardKantor({ sekolahId }) {
           })}
         </div>
 
+        <PintasanKUA />
+
         <div className="card p-6 mb-8">
           <h3 className="font-display text-lg font-semibold mb-4">Pengumuman Terbaru</h3>
           {pengumuman.length === 0 ? (
@@ -595,11 +597,6 @@ function DashboardKantor({ sekolahId }) {
         </div>
 
         <h2 className="font-display text-xl font-semibold text-ink-950 mt-8 mb-4">Analitik</h2>
-        <div className="card p-6">
-          <h3 className="font-display text-lg font-semibold mb-4">Tren Kehadiran Pegawai (14 Hari Terakhir)</h3>
-          {attendanceTrend.length === 0 ? (
-            <p className="text-sm text-ink-700/50">Belum ada data presensi.</p>
-          ) : (
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={attendanceTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
