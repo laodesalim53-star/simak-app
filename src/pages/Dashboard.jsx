@@ -4,6 +4,7 @@ import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
 import StoryBar from '../components/StoryBar'
 import StoryUploader from '../components/StoryUploader'
+import PintasanKUA from '../components/PintasanKUA'
 import { Users, GraduationCap, DoorOpen, Megaphone, LayoutDashboard, ClipboardCheck, FileClock, Briefcase, UserCheck } from 'lucide-react'
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
