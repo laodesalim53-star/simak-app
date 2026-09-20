@@ -166,6 +166,9 @@ function getGroupsAdmin(
         { to: '/nota', label: 'Nota Belanja', icon: ShoppingCart },
         { to: '/perpustakaan', label: 'Perpustakaan', icon: Library },
         { to: '/inventaris', label: 'Inventaris', icon: Boxes },
+        // BARU: Kondisi Bangunan — satu paket dengan RingkasanAset.jsx yang
+        // dipakai di Laporan Kepala Sekolah / Laporan Kepala KUA.
+        { to: '/bangunan', label: 'Kondisi Bangunan', icon: DoorOpen },
         // Riwayat Pencairan Saya: sisi penjual/pemilik toko (admin/admin_utama)
         // melihat riwayat pencairan dana toko miliknya sendiri. Bukan untuk
         // superadmin — superadmin punya "Pencairan Dana" (global, semua toko)
@@ -269,6 +272,15 @@ function getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelum
         { to: '/pusat-kelompok-binaan', label: 'Kelompok Binaan', icon: Users },
         { to: '/pendaftaran-nikah', label: 'Pendaftaran Nikah', icon: FileSignature },
         { to: '/laporan-kepenghuluan', label: 'Laporan Kepenghuluan', icon: FileStack },
+      ],
+    },
+    // BARU: Aset Kantor — Inventaris & Kondisi Bangunan kantor (dipakai
+    // juga oleh RingkasanAset.jsx di Laporan Kepala KUA / Laporan Bulanan KUA).
+    {
+      label: 'Aset Kantor',
+      links: [
+        { to: '/inventaris', label: 'Inventaris', icon: Boxes },
+        { to: '/bangunan', label: 'Kondisi Bangunan', icon: DoorOpen },
       ],
     },
     {
