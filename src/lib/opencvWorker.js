@@ -16,10 +16,14 @@
 //  - Normalisasi cahaya sebelum ambang adaptif mode dokumen supaya latar
 //    tidak gelap saat foto aslinya kurang terang.
 //
-// Catatan versi ini: hasil luruskan() TIDAK lagi diterangkan otomatis.
-// Kecerahan, kontras, dan ketajaman sekarang sepenuhnya kontrol manual
-// pengguna lewat tugas 'sesuaikanGambar', dijalankan dari halaman
-// EditorDokumen.jsx setelah proses luruskan() selesai.
+// Catatan versi ini: hasil luruskan() TIDAK diterangkan otomatis. Kecerahan,
+// kontras, dan ketajaman sepenuhnya kontrol manual pengguna lewat tugas
+// 'sesuaikanGambar', dijalankan dari halaman EditorDokumen.jsx setelah
+// proses luruskan() selesai. Penajaman memakai pendekatan edge-aware: besar
+// penajaman dibobot oleh peta gradien (Sobel) gambar, jadi hanya area
+// dengan tepi kuat (garis teks, tepi objek) yang dipertajam penuh --
+// area datar/berisik (noise kamera, tekstur kertas halus) ditekan mendekati
+// nol supaya tidak ikut menguat seperti pada unsharp mask polos.
 //
 // Jangan pakai worker ini langsung — semua akses lewat opencvLoader.js.
 //
@@ -245,8 +249,11 @@ const TUGAS = {
   },
 
   // payload: { bitmapSumber, sudut: [TL,TR,BR,BL], lebar, tinggi } -> { bitmapHasil }
-  // Catatan: hasil TIDAK diterangkan otomatis lagi. Kecerahan/kontras/ketajaman
+  // Catatan: hasil TIDAK diterangkan otomatis. Kecerahan/kontras/ketajaman
   // adalah kontrol manual pengguna lewat tugas 'sesuaikanGambar' di EditorDokumen.
+  // lebar/tinggi biasanya dihitung dari ukuranKertas.js (targetUkuran) supaya
+  // hasil crop proporsional dengan ukuran kertas asli (A4/Letter/Legal),
+  // bukan cuma mengikuti bentuk sudut yang digeser pengguna.
   luruskan({ bitmapSumber, sudut, lebar, tinggi }) {
     const cv = self.cv
     const [p0, p1, p2, p3] = sudut
@@ -308,7 +315,15 @@ const TUGAS = {
   // payload: { bitmapSumber, kecerahan, kontras, ketajaman } -> { bitmapHasil }
   // kecerahan: -100..100 (beta, ditambah langsung ke tiap piksel)
   // kontras:   -100..100 (0 = normal; diubah jadi alpha di rentang 0..2)
-  // ketajaman: 0..100    (0 = tanpa unsharp mask, 100 = paling tajam)
+  // ketajaman: 0..100    (0 = tanpa penajaman)
+  //
+  // Penajaman versi ini "edge-aware": besar penajaman dibobot oleh peta
+  // gradien (Sobel) gambar, jadi hanya area dengan tepi kuat (garis teks,
+  // tepi objek) yang dipertajam penuh -- area datar/berisik (noise kamera,
+  // tekstur kertas halus) ditekan mendekati nol supaya tidak ikut menguat.
+  // Ini mengurangi efek "grainy"/bintik yang biasa muncul pada unsharp mask
+  // biasa, tanpa perlu filter berat seperti bilateral filter.
+  //
   // Dipanggil berulang kali secara live dari EditorDokumen.jsx saat slider
   // digeser -- pemanggil bertanggung jawab mengirim ImageBitmap baru tiap
   // kali (bitmapKeMat menutup bitmap yang diterima).
@@ -318,8 +333,9 @@ const TUGAS = {
     const rgb = new cv.Mat()
     const disesuaikan = new cv.Mat()
     const rgba = new cv.Mat()
-    let blur = null
-    let tajam = null
+    let abu = null, gradX = null, gradY = null, magnitudo = null, maskF = null, mask3 = null
+    let disesuaikanF = null, blurF = null, tinggiFreqF = null, detailTertimbang = null
+    let hasilF = null, hasil8 = null
     let bitmapHasil
     try {
       cv.cvtColor(src, rgb, cv.COLOR_RGBA2RGB)
@@ -330,20 +346,57 @@ const TUGAS = {
 
       let akhir = disesuaikan
       if (ketajaman > 0) {
-        blur = new cv.Mat()
-        tajam = new cv.Mat()
-        cv.GaussianBlur(disesuaikan, blur, new cv.Size(0, 0), 3)
-        // Unsharp mask: akhir = disesuaikan*jumlah - blur*(jumlah-1)
-        const jumlah = 1 + (ketajaman / 100) * 1.5 // rentang 1..2.5
-        cv.addWeighted(disesuaikan, jumlah, blur, -(jumlah - 1), 0, tajam)
-        akhir = tajam
+        // 1) Peta tepi (edge map) dari gradien Sobel, dinormalisasi 0..1,
+        //    lalu dilengkungkan (pow 0.6) supaya tepi sedang pun cukup
+        //    terangkat, tapi noise sangat halus tetap tertekan ke ~0.
+        abu = new cv.Mat()
+        cv.cvtColor(disesuaikan, abu, cv.COLOR_RGB2GRAY)
+        gradX = new cv.Mat(); gradY = new cv.Mat(); magnitudo = new cv.Mat()
+        cv.Sobel(abu, gradX, cv.CV_32F, 1, 0, 3)
+        cv.Sobel(abu, gradY, cv.CV_32F, 0, 1, 3)
+        cv.magnitude(gradX, gradY, magnitudo)
+        cv.normalize(magnitudo, magnitudo, 0, 1, cv.NORM_MINMAX)
+        maskF = new cv.Mat()
+        cv.pow(magnitudo, 0.6, maskF)
+
+        mask3 = new cv.Mat()
+        const kanalMask = new cv.MatVector()
+        kanalMask.push_back(maskF); kanalMask.push_back(maskF); kanalMask.push_back(maskF)
+        cv.merge(kanalMask, mask3)
+        kanalMask.delete()
+
+        // 2) Unsharp mask standar, dikerjakan di ranah float supaya detail
+        //    negatif (area lebih gelap dari sekitarnya) tidak terpotong.
+        disesuaikanF = new cv.Mat()
+        disesuaikan.convertTo(disesuaikanF, cv.CV_32F)
+        blurF = new cv.Mat()
+        cv.GaussianBlur(disesuaikanF, blurF, new cv.Size(0, 0), 3)
+        tinggiFreqF = new cv.Mat()
+        cv.subtract(disesuaikanF, blurF, tinggiFreqF)
+
+        // 3) Detail (high-freq) dibobot dengan peta tepi SEBELUM ditambah
+        //    balik -> penajaman terkonsentrasi di garis teks, bukan noise.
+        detailTertimbang = new cv.Mat()
+        cv.multiply(tinggiFreqF, mask3, detailTertimbang)
+
+        // Karena sudah dibobot mask, aman dipakai jumlah lebih agresif
+        // (1..3) tanpa membuat background jadi berisik.
+        const jumlah = 1 + (ketajaman / 100) * 2
+        hasilF = new cv.Mat()
+        cv.addWeighted(disesuaikanF, 1, detailTertimbang, jumlah, 0, hasilF)
+
+        hasil8 = new cv.Mat()
+        hasilF.convertTo(hasil8, cv.CV_8U) // saturate ke 0..255
+        akhir = hasil8
       }
 
       cv.cvtColor(akhir, rgba, cv.COLOR_RGB2RGBA)
       bitmapHasil = matKeBitmap(rgba)
     } finally {
       src.delete(); rgb.delete(); disesuaikan.delete(); rgba.delete()
-      blur?.delete(); tajam?.delete()
+      abu?.delete(); gradX?.delete(); gradY?.delete(); magnitudo?.delete(); maskF?.delete(); mask3?.delete()
+      disesuaikanF?.delete(); blurF?.delete(); tinggiFreqF?.delete(); detailTertimbang?.delete()
+      hasilF?.delete(); hasil8?.delete()
     }
     return { data: { bitmapHasil }, transfer: [bitmapHasil] }
   },
