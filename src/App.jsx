@@ -117,6 +117,7 @@ const KelolaKelompokBinaan = lazy(() => import('./pages/KelolaKelompokBinaan'))
 // ...
 const AdminLiveChat = lazy(() => import('./pages/AdminLiveChat'))
 const ScanDokumen = lazy(() => import('./pages/ScanDokumen'))
+const AlatPDF = lazy(() => import('./pages/AlatPDF'))
 const Rapat = lazy(() => import('./pages/Rapat'))
 const RapatVideo = lazy(() => import('./pages/RapatVideo'))
 
@@ -416,6 +417,7 @@ export default function App() {
           {/* Scan Dokumen: OCR upload/foto dokumen jadi teks yang bisa diunduh sebagai
               Word/txt. Sengaja BUKAN adminOnly — guru juga butuh fitur ini. */}
           <Route path="/scan-dokumen" element={<ProtectedRoute><ScanDokumen /></ProtectedRoute>} />
+          <Route path="/alat-pdf" element={<ProtectedRoute><AlatPDF /></ProtectedRoute>} />
           <Route path="/rapat" element={<ProtectedRoute><Rapat /></ProtectedRoute>} />
           {/* Sengaja TIDAK dibungkus ProtectedRoute — link rapat dibagikan ke
               peserta yang mungkin belum/tidak punya akun (mis. orang tua, tamu),
