@@ -64,6 +64,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
+import PaketBadge, { usePaketSaatIni } from './PaketBadge'
 
 // Helper: hapus channel Supabase Realtime dengan nama (topic) yang sama
 // kalau masih ada, sebelum bikin channel baru dengan nama itu lagi.
@@ -99,8 +100,8 @@ function getGroupsAdmin(
         // Dashboard aplikasi dipindah ke "/dashboard" — menu ini harus ikut.
         { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
         { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
-        // Upgrade Fitur: status paket (free/premium) melekat ke akun masing-
-        // masing, jadi menu ini tampil untuk semua role, bukan cuma admin.
+        // Upgrade Fitur: status paket (free/standar/premium) melekat ke akun
+        // masing-masing, jadi menu ini tampil untuk semua role, bukan cuma admin.
         { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
         // Tab "Admin Pusat" sekarang jadi bagian dari halaman /pesan (lihat
         // Pesan.jsx) — badge menggabungkan unread pesan biasa + admin pusat.
@@ -357,11 +358,16 @@ function getLinksKantorPegawai(jumlahPesanBelumDibaca = 0) {
   ]
 }
 
+// PERBAIKAN ANDROID: tinggi baris menu dinaikkan di layar kecil (py-3, teks
+// 15px) supaya area sentuh lebih nyaman (~44px), `touch-manipulation`
+// menghilangkan jeda 300ms saat tap, dan efek hover dibatasi ke layar
+// desktop (md:hover) supaya tidak "menempel" setelah menyentuh menu di
+// layar sentuh — diganti efek `active:` saat ditekan.
 function NavItem({ to, label, icon: Icon, end, badge, onNavigate, external }) {
   const content = (isActive) => (
     <>
       <Icon
-        size={17}
+        size={18}
         strokeWidth={1.8}
         fill={isActive ? 'rgba(255,255,255,0.25)' : 'currentColor'}
         fillOpacity={isActive ? 1 : 0.15}
@@ -388,7 +394,7 @@ function NavItem({ to, label, icon: Icon, end, badge, onNavigate, external }) {
         target="_blank"
         rel="noopener noreferrer"
         onClick={onNavigate}
-        className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all text-white/70 hover:bg-white/[0.08] hover:text-white"
+        className="flex items-center gap-3 px-3 py-3 md:py-2.5 rounded-lg text-[15px] md:text-sm font-medium transition-all touch-manipulation text-white/70 active:bg-white/[0.12] md:hover:bg-white/[0.08] md:hover:text-white"
       >
         {content(false)}
       </a>
@@ -401,10 +407,10 @@ function NavItem({ to, label, icon: Icon, end, badge, onNavigate, external }) {
       end={end}
       onClick={onNavigate}
       className={({ isActive }) =>
-        `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+        `flex items-center gap-3 px-3 py-3 md:py-2.5 rounded-lg text-[15px] md:text-sm font-medium transition-all touch-manipulation ${
           isActive
             ? 'bg-gradient-to-r from-blue-500 to-indigo-400 text-white shadow-sm shadow-black/20'
-            : 'text-white/70 hover:bg-white/[0.08] hover:text-white'
+            : 'text-white/70 active:bg-white/[0.12] md:hover:bg-white/[0.08] md:hover:text-white'
         }`
       }
     >
@@ -504,6 +510,8 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
   const namaTampil = profil?.nama_lengkap || session?.user?.email || 'Pengguna'
 
   const labelPeran = getLabelPeran(profil, isSuperAdmin, isAdminUtama, isAdmin, isOrangTua, !!session)
+  // Paket akun yang sedang login (free / standar / premium) untuk lencana di header.
+  const paketSaatIni = usePaketSaatIni()
 
   // PERBAIKAN: sebelumnya tombol ini cuma memanggil signOut() dan
   // menunggu redirect otomatis dari ProtectedRoute. Itu tidak berlaku di
@@ -516,6 +524,18 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
     await signOut()
     navigate('/login', { replace: true })
   }
+
+  // PERBAIKAN ANDROID: saat drawer menu terbuka di HP, kunci scroll halaman
+  // di belakangnya supaya menggeser menu tidak ikut menggulung halaman.
+  // Hanya berlaku di layar kecil (di desktop sidebar selalu tampil).
+  useEffect(() => {
+    if (!open || typeof window === 'undefined' || window.innerWidth >= 768) return
+    const overflowSebelumnya = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = overflowSebelumnya
+    }
+  }, [open])
 
   // Notifikasi real-time: jumlah pendaftaran akun yang masih menunggu persetujuan.
   // Hanya relevan untuk admin utama / superadmin yang punya menu "Persetujuan Akun".
@@ -803,18 +823,37 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
         />
       )}
 
+      {/*
+        PERBAIKAN ANDROID:
+        - tinggi memakai 100dvh (tinggi layar yang sudah dikurangi address bar
+          Chrome Android) — sebelumnya h-screen (100vh) membuat menu paling
+          bawah tertutup bilah browser. Class h-screen dibiarkan sebagai
+          cadangan untuk browser lama yang belum mengenal dvh.
+        - tap highlight abu-abu bawaan Android dimatikan.
+      */}
       <aside
-        className={`w-72 max-w-[85vw] md:w-64 shrink-0 bg-blue-950 text-white flex flex-col h-screen fixed md:sticky top-0 left-0 z-50 border-r border-blue-900/50 transition-transform duration-300 ease-out
+        style={{ height: '100dvh' }}
+        className={`w-72 max-w-[85vw] md:w-64 shrink-0 bg-blue-950 text-white flex flex-col h-screen fixed md:sticky top-0 left-0 z-50 border-r border-blue-900/50 transition-transform duration-300 ease-out [-webkit-tap-highlight-color:transparent]
           ${open ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}
       >
-      <div className="relative overflow-hidden px-4 py-5 border-b border-white/10 bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-900">
-        {/* Tombol tutup — hanya tampil di HP */}
+      <div
+        style={{ paddingTop: 'calc(1.25rem + env(safe-area-inset-top, 0px))' }}
+        className="relative overflow-hidden shrink-0 px-4 pb-5 border-b border-white/10 bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-900"
+      >
+        {/*
+          Tombol tutup — hanya tampil di HP.
+          PERBAIKAN ANDROID: dulu tombol ini menempel di pojok kanan atas dan
+          bertumpuk dengan tombol Keluar (power). Sekarang sejajar
+          vertikal di tengah baris header, dan baris di bawahnya diberi
+          ruang kosong di kanan (pr-11) supaya keduanya berdampingan.
+        */}
         <button
           onClick={onClose}
           title="Tutup menu"
-          className="absolute top-3 right-3 z-10 w-8 h-8 rounded-lg flex items-center justify-center text-white/70 hover:bg-white/10 hover:text-white transition-colors md:hidden"
+          aria-label="Tutup menu"
+          className="absolute top-1/2 right-2 -translate-y-1/2 z-10 w-10 h-10 rounded-lg flex items-center justify-center text-white/70 active:bg-white/10 touch-manipulation md:hidden"
         >
-          <X size={18} />
+          <X size={20} />
         </button>
         {/* Motif batik dekoratif (senada dengan banner dashboard) */}
         <svg
@@ -832,7 +871,7 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
           <rect width="100%" height="100%" fill="url(#batikSidebar)" />
         </svg>
 
-        <div className="relative flex items-center gap-3">
+        <div className="relative flex items-center gap-3 pr-11 md:pr-0">
           {fotoUrl ? (
             <img
               src={fotoUrl}
@@ -846,19 +885,35 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
           )}
           <div className="min-w-0 flex-1">
             <p className="font-display font-semibold text-[13px] leading-tight truncate text-white">{namaTampil}</p>
-            <p className="text-[11px] text-white/50 mt-0.5">{labelPeran}</p>
+            {/* Label peran + lencana paket (Free / Standar / Premium). Lencana
+                disembunyikan untuk superadmin karena bukan pelanggan paket. */}
+            <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1">
+              <p className="text-xs text-white/60">{labelPeran}</p>
+              {session && !isSuperAdmin && <PaketBadge paket={paketSaatIni} size="sm" />}
+            </div>
           </div>
           <button
             onClick={session ? handleLogout : () => navigate('/login')}
             title={session ? 'Keluar' : 'Masuk'}
-            className="w-10 h-10 rounded-lg flex items-center justify-center text-red-400 hover:bg-red-500/15 hover:text-red-300 transition-colors shrink-0"
+            aria-label={session ? 'Keluar' : 'Masuk'}
+            className="w-10 h-10 rounded-lg flex items-center justify-center text-red-400 active:bg-red-500/20 md:hover:bg-red-500/15 md:hover:text-red-300 transition-colors shrink-0 touch-manipulation"
           >
             <Power size={20} strokeWidth={2.2} />
           </button>
         </div>
       </div>
 
-      <nav className="relative flex-1 overflow-y-auto py-4 px-3 bg-gradient-to-b from-blue-950 via-blue-900 to-indigo-950">
+      {/*
+        PERBAIKAN: motif batik menu dulu diletakkan DI DALAM area yang bisa
+        di-scroll, sehingga ikut tergulung ke atas dan bagian bawah menu yang
+        panjang jadi polos tanpa motif. Sekarang motif ada di pembungkus luar
+        yang diam, dan hanya <nav> di dalamnya yang di-scroll.
+        - overscroll-contain: menggulung sampai ujung menu tidak lagi
+          "menembus" menggulung halaman di belakang.
+        - padding bawah ditambah area aman (env) supaya menu terakhir tidak
+          tertutup bilah navigasi/gestur Android.
+      */}
+      <div className="relative flex-1 min-h-0 bg-gradient-to-b from-blue-950 via-blue-900 to-indigo-950">
         {/* Motif batik area menu — gaya berbeda dari header (kawung/diamond, bukan lingkaran) */}
         <svg
           className="absolute inset-0 w-full h-full opacity-[0.22] pointer-events-none"
@@ -880,12 +935,15 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
           <rect width="100%" height="100%" fill="url(#batikMenu)" />
         </svg>
 
-        <div className="relative">
+        <nav
+          style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
+          className="relative h-full overflow-y-auto overscroll-contain pt-4 px-3"
+        >
         {isAdmin ? (
           groupsAdmin.map((group, i) => (
             <div key={group.label ?? `top-${i}`} className={i > 0 ? 'mt-5' : ''}>
               {group.label && (
-                <p className="px-3 mb-1.5 text-[10px] font-semibold tracking-wider uppercase text-white/35">
+                <p className="px-3 mb-1.5 text-[11px] font-semibold tracking-wider uppercase text-white/50">
                   {group.label}
                 </p>
               )}
@@ -909,8 +967,8 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
             ))}
           </div>
         )}
-        </div>
-      </nav>
+        </nav>
+      </div>
       </aside>
     </>
   )
