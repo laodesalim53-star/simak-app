@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { saveAs } from 'file-saver'
 import {
   Loader2, Download, FileType2, FileSpreadsheet, Minimize2, FileUp, Trash2, Sparkles, FileText,
+  Camera, ImagePlus, ChevronLeft, ChevronRight, X,
 } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
 import {
@@ -9,9 +10,11 @@ import {
   buatWorkerOcr, ocrCanvas, scanDenganAI, klusterTabel, FAKTOR_KOLOM,
   penandaHalaman, buatDocx, teksBersih, buatXlsx, formatUkuran,
 } from '../lib/alatPdf'
+import { siapkanFoto, buatPdfDariFoto } from '../lib/kameraPdf'
 
 const BATAS_UKURAN_MB = 100
 const PERINGATAN_UKURAN_MB = 30
+const BATAS_FOTO = 40
 
 const TAB = [
   { id: 'kompres', label: 'Kompres PDF', icon: Minimize2 },
@@ -64,6 +67,13 @@ export default function AlatPDF() {
   const [ocrPersen, setOcrPersen] = useState(0)
   const [error, setError] = useState('')
 
+  // Kamera
+  const [foto, setFoto] = useState([]) // [{ id, blob, url, w, h }]
+  const [modeDokumen, setModeDokumen] = useState(true)
+  const [bacaFoto, setBacaFoto] = useState(false)
+  const [bangunPdf, setBangunPdf] = useState(false)
+  const [dariKamera, setDariKamera] = useState(false)
+
   // Kompres
   const [preset, setPreset] = useState('sedang')
   const [abuAbu, setAbuAbu] = useState(false)
@@ -102,18 +112,17 @@ export default function AlatPDF() {
     setError('')
   }
 
-  async function handlePilihFile(e) {
-    const f = e.target.files?.[0]
-    e.target.value = ''
-    if (!f) return
+  // Memuat sebuah berkas PDF (dari pilihan pengguna maupun hasil scan kamera).
+  // Mengembalikan true bila berhasil.
+  async function muatBerkas(f, { kamera = false } = {}) {
     setError('')
     if (!/\.pdf$/i.test(f.name) && f.type !== 'application/pdf') {
       setError('Berkas harus berformat PDF.')
-      return
+      return false
     }
     if (f.size > BATAS_UKURAN_MB * 1024 * 1024) {
       setError(`Berkas terlalu besar (maksimal ${BATAS_UKURAN_MB} MB agar tidak membuat perangkat hang).`)
-      return
+      return false
     }
     setSibuk(true)
     try {
@@ -127,23 +136,108 @@ export default function AlatPDF() {
       setDari(1)
       setSampai(halaman)
       setNamaFile(namaDasar(f.name))
+      setDariKamera(kamera)
       resetHasil()
+      return true
     } catch (err) {
       setError(err.message || 'Gagal membuka PDF.')
+      return false
     } finally {
       setSibuk(false)
     }
+  }
+
+  async function handlePilihFile(e) {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    await muatBerkas(f)
   }
 
   function hapusFile() {
     bufferRef.current = null
     setFile(null)
     setInfo(null)
+    setDariKamera(false)
     resetHasil()
   }
 
   function batalkan() {
     batalRef.current = true
+  }
+
+  // ---------- Kamera ----------
+  async function handleAmbilFoto(e) {
+    const daftar = Array.from(e.target.files || [])
+    e.target.value = ''
+    if (!daftar.length) return
+    if (foto.length + daftar.length > BATAS_FOTO) {
+      setError(`Maksimal ${BATAS_FOTO} halaman per scan. Jadikan PDF dulu, lalu lanjutkan scan berikutnya.`)
+      return
+    }
+    setError('')
+    setBacaFoto(true)
+    try {
+      const baru = []
+      for (const f of daftar) {
+        const { blob, w, h } = await siapkanFoto(f)
+        baru.push({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          blob,
+          w,
+          h,
+          url: URL.createObjectURL(blob),
+        })
+      }
+      setFoto((lama) => [...lama, ...baru])
+    } catch (err) {
+      setError(err?.message || 'Gagal membaca foto.')
+    } finally {
+      setBacaFoto(false)
+    }
+  }
+
+  function hapusFoto(id) {
+    setFoto((lama) => {
+      const target = lama.find((f) => f.id === id)
+      if (target) URL.revokeObjectURL(target.url)
+      return lama.filter((f) => f.id !== id)
+    })
+  }
+
+  function geserFoto(id, arah) {
+    setFoto((lama) => {
+      const i = lama.findIndex((f) => f.id === id)
+      const j = i + arah
+      if (i < 0 || j < 0 || j >= lama.length) return lama
+      const salin = [...lama]
+      ;[salin[i], salin[j]] = [salin[j], salin[i]]
+      return salin
+    })
+  }
+
+  function kosongkanFoto() {
+    setFoto((lama) => {
+      lama.forEach((f) => URL.revokeObjectURL(f.url))
+      return []
+    })
+  }
+
+  async function jadikanPdf() {
+    if (!foto.length) return
+    setError('')
+    setBangunPdf(true)
+    try {
+      const blob = await buatPdfDariFoto(foto, { modeDokumen })
+      const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')
+      const berkas = new File([blob], `scan-${stamp}.pdf`, { type: 'application/pdf' })
+      const ok = await muatBerkas(berkas, { kamera: true })
+      if (ok) kosongkanFoto()
+    } catch (err) {
+      setError(err?.message || 'Gagal membuat PDF dari foto.')
+    } finally {
+      setBangunPdf(false)
+    }
   }
 
   async function jalankan(kerja) {
@@ -306,6 +400,7 @@ export default function AlatPDF() {
   const persenBar = progres.n ? Math.round(((progres.i - 1 + ocrPersen / 100) / progres.n) * 100) : 0
   const banyakBaris = lembar.reduce((n, l) => n + l.baris.length, 0)
   const lembarPratinjau = lembar.find((l) => l.baris.length > 0)
+  const kameraTerkunci = sibuk || bacaFoto || bangunPdf
 
   return (
     <div className="flex min-h-screen bg-paper">
@@ -326,13 +421,24 @@ export default function AlatPDF() {
           <div className="bg-white rounded-2xl shadow-sm p-6 sm:p-8 space-y-5">
             {/* Pilih berkas */}
             <div className="rounded-xl border border-dashed border-ink-950/15 bg-paper/60 p-4 space-y-3">
-              <p className="text-sm font-semibold text-ink-950">1. Pilih berkas PDF</p>
+              <p className="text-sm font-semibold text-ink-950">1. Pilih berkas PDF atau scan dengan kamera</p>
               <div className="flex flex-wrap items-center gap-3">
                 <label className="btn-primary cursor-pointer">
                   <FileUp size={16} />
                   {file ? 'Ganti PDF' : 'Pilih PDF'}
                   <input type="file" accept="application/pdf,.pdf" onChange={handlePilihFile} className="hidden" disabled={sibuk} />
                 </label>
+                {file && dariKamera && (
+                  <button
+                    type="button"
+                    onClick={() => saveAs(file, file.name)}
+                    disabled={sibuk}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border border-ink-950/15 text-ink-950 hover:bg-ink-950/5 disabled:opacity-40"
+                  >
+                    <Download size={16} />
+                    Unduh PDF hasil scan
+                  </button>
+                )}
                 {file && (
                   <button
                     type="button"
@@ -361,6 +467,131 @@ export default function AlatPDF() {
                   <Loader2 size={16} className="animate-spin" /> Membuka PDF...
                 </div>
               )}
+
+              {/* Scan kamera */}
+              <div className="border-t border-ink-950/10 pt-3 space-y-3">
+                <p className="text-xs font-semibold text-ink-950">Atau scan dokumen dengan kamera</p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className={`btn-primary cursor-pointer ${kameraTerkunci ? 'opacity-40 pointer-events-none' : ''}`}>
+                    <Camera size={16} />
+                    {foto.length ? 'Tambah Halaman' : 'Buka Kamera'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleAmbilFoto}
+                      className="hidden"
+                      disabled={kameraTerkunci}
+                    />
+                  </label>
+                  <label
+                    className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-ink-950/15 text-ink-950 hover:bg-ink-950/5 cursor-pointer ${
+                      kameraTerkunci ? 'opacity-40 pointer-events-none' : ''
+                    }`}
+                  >
+                    <ImagePlus size={16} />
+                    Dari Galeri
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleAmbilFoto}
+                      className="hidden"
+                      disabled={kameraTerkunci}
+                    />
+                  </label>
+                  {bacaFoto && (
+                    <span className="flex items-center gap-2 text-sm text-ink-700/70">
+                      <Loader2 size={16} className="animate-spin" /> Memproses foto...
+                    </span>
+                  )}
+                </div>
+                {foto.length === 0 && !bacaFoto && (
+                  <p className="text-xs text-ink-700/60">
+                    Letakkan dokumen di permukaan rata, pastikan cahaya cukup, dan foto dari atas tanpa miring. Tiap foto
+                    menjadi satu halaman PDF. Di komputer, tombol kamera akan membuka pemilih berkas.
+                  </p>
+                )}
+
+                {foto.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                      {foto.map((f, i) => (
+                        <div key={f.id} className="relative rounded-lg overflow-hidden border border-ink-950/10 bg-paper">
+                          <img src={f.url} alt={`Halaman ${i + 1}`} className="w-full h-28 object-contain" />
+                          <span className="absolute top-1 left-1 bg-ink-950 text-white text-[10px] font-semibold rounded px-1.5 py-0.5">
+                            {i + 1}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => hapusFoto(f.id)}
+                            disabled={kameraTerkunci}
+                            aria-label={`Hapus halaman ${i + 1}`}
+                            className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center disabled:opacity-40"
+                          >
+                            <X size={12} />
+                          </button>
+                          <div className="flex items-center justify-between bg-white/90 px-1 py-0.5">
+                            <button
+                              type="button"
+                              onClick={() => geserFoto(f.id, -1)}
+                              disabled={i === 0 || kameraTerkunci}
+                              aria-label="Geser ke kiri"
+                              className="p-0.5 text-ink-950 disabled:opacity-25"
+                            >
+                              <ChevronLeft size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => geserFoto(f.id, 1)}
+                              disabled={i === foto.length - 1 || kameraTerkunci}
+                              aria-label="Geser ke kanan"
+                              className="p-0.5 text-ink-950 disabled:opacity-25"
+                            >
+                              <ChevronRight size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <label className="flex items-start gap-2 text-sm text-ink-950">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={modeDokumen}
+                        onChange={(e) => setModeDokumen(e.target.checked)}
+                        disabled={kameraTerkunci}
+                      />
+                      <span>
+                        Mode dokumen (hitam-putih, kertas dibuat putih bersih, ukuran lebih kecil). Matikan bila dokumen
+                        berwarna atau berisi foto.
+                      </span>
+                    </label>
+
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        onClick={jadikanPdf}
+                        disabled={kameraTerkunci}
+                        className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {bangunPdf ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
+                        {bangunPdf ? 'Membuat PDF...' : `Jadikan PDF (${foto.length} halaman)`}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={kosongkanFoto}
+                        disabled={kameraTerkunci}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 disabled:opacity-40"
+                      >
+                        <Trash2 size={16} />
+                        Kosongkan
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Tab */}
