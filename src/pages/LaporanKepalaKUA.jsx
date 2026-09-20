@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom'
 import { Printer, ArrowLeft, Plus, Trash2, ImagePlus } from 'lucide-react'
 import Layout from '../components/Layout'
 import BlokTandaTangan, { PilihModeTtd } from '../components/BlokTandaTangan'
+import RingkasanAset from '../components/RingkasanAset'
 
 // Ganti kalau nama bucket storage-mu berbeda
 const LOGO_BUCKET = 'profil-kantor'
@@ -759,7 +760,8 @@ export default function LaporanKepalaKUA() {
             ditarik otomatis dari Pusat Kelompok Binaan sebagai info pendukung — bukan jumlah kegiatan
             per bulan, karena aplikasi belum mencatat log kegiatan bertanggal untuk kelompok binaan.
             Angka kegiatan lain yang belum tercatat di aplikasi diisi manual; yang dikosongkan tampil
-            sebagai titik-titik.
+            sebagai titik-titik. Kondisi Bangunan, Peralatan, dan Barang Inventaris kantor pada Lampiran 4
+            ditarik otomatis dari halaman Inventaris dan Kondisi Bangunan.
           </p>
         </div>
       </div>
@@ -1189,6 +1191,18 @@ export default function LaporanKepalaKUA() {
                 Data pelayanan wakaf, bimbingan perkawinan, penyuluhan agama, dan kegiatan keagamaan
                 lainnya dapat dilampirkan sesuai periode laporan.
               </p>
+            </Sub>
+
+            <Sub judul="Lampiran 4. Kondisi Aset Kantor">
+              <p className="text-justify text-xs text-slate-500">
+                Rekap kondisi Bangunan, Peralatan, dan Barang Inventaris kantor, ditarik otomatis dari
+                halaman Inventaris dan Kondisi Bangunan.
+              </p>
+              <RingkasanAset
+                judulBangunan="Kondisi Bangunan Kantor"
+                judulPeralatan="Kondisi Peralatan Kantor"
+                judulInventaris="Kondisi Barang Inventaris Kantor"
+              />
             </Sub>
           </div>
         </div>
