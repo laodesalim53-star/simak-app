@@ -1,6 +1,7 @@
 // Simpan sebagai: src/components/BlokTandaTangan.jsx
 //
-// Aturan tanda tangan "Mengetahui" pada dokumen/laporan cetak:
+// Aturan tanda tangan "Mengetahui" pada dokumen/laporan cetak (dipakai
+// bersama oleh beberapa halaman laporan):
 //
 //   - Pembuat laporan = PEGAWAI (penyuluh, penghulu, staf, dst.)
 //       Mengetahui: Kepala KUA          | Pembuat: pegawai
@@ -10,6 +11,10 @@
 // Mode dipilih OTOMATIS: kalau NIP (atau, bila NIP kosong, nama) pembuat sama
 // dengan Kepala KUA di Profil Kantor, dianggap Kepala KUA. Bisa dipaksa manual
 // lewat <PilihModeTtd /> di form (bagian yang tidak ikut tercetak).
+//
+// Untuk laporan yang TIDAK PERNAH butuh tanda tangan kedua (Kepala Kemenag) —
+// misalnya Laporan Bulanan KUA — pakai prop `satuTandaTangan`: hanya tampil
+// satu kolom tanda tangan Kepala KUA, diambil dari Profil Kantor.
 
 const PLACEHOLDER = '..............................'
 
@@ -51,7 +56,7 @@ export function tentukanModeTtd({ mode = 'otomatis', profilKantor, namaPembuat, 
 }
 
 // Pilihan penandatangan untuk form (tidak ikut tercetak — taruh di dalam
-// area .no-print).
+// area .no-print). Tidak dipakai oleh laporan yang memakai `satuTandaTangan`.
 export function PilihModeTtd({ value, onChange, profilKantor, namaPembuat, nipPembuat }) {
   const efektif = tentukanModeTtd({ mode: value, profilKantor, namaPembuat, nipPembuat })
   const kemenagKosong = efektif === 'kepala_kua' && !profilKantor?.kepala_kemenag
@@ -86,19 +91,26 @@ export function PilihModeTtd({ value, onChange, profilKantor, namaPembuat, nipPe
 }
 
 /**
- * Blok tanda tangan dua kolom untuk lembar cetak.
+ * Blok tanda tangan untuk lembar cetak.
  *
  * Props:
  *  - profilKantor        baris profil_kantor (harus memuat kepala_kua, nip_kepala_kua,
  *                        kepala_kemenag, nip_kepala_kemenag, kabupaten, kecamatan)
  *  - ttdKepalaKuaUrl     URL gambar tanda tangan Kepala KUA (opsional)
- *  - mode                'otomatis' | 'pegawai' | 'kepala_kua'
+ *  - satuTandaTangan     true: HANYA tampilkan satu kolom tanda tangan Kepala KUA
+ *                        (tanpa "Mengetahui" Kepala Kemenag). Dipakai laporan
+ *                        yang memang tidak pernah butuh tanda tangan kedua,
+ *                        mis. Laporan Bulanan KUA. Default false (perilaku lama).
+ *  - mode                'otomatis' | 'pegawai' | 'kepala_kua' — diabaikan kalau satuTandaTangan
  *  - namaPembuat / nipPembuat / jabatanPembuat / labelNipPembuat
+ *      Saat satuTandaTangan=true: namaPembuat/nipPembuat dipakai sebagai override
+ *      nama/NIP Kepala KUA (kalau kosong, jatuh ke profilKantor.kepala_kua/nip_kepala_kua).
  *  - tempatTanggal       mis. "Fakfak, 19 September 2026" (boleh kosong)
  */
 export default function BlokTandaTangan({
   profilKantor,
   ttdKepalaKuaUrl,
+  satuTandaTangan = false,
   mode = 'otomatis',
   namaPembuat,
   nipPembuat,
@@ -106,10 +118,34 @@ export default function BlokTandaTangan({
   labelNipPembuat = 'NIP.',
   tempatTanggal = '',
 }) {
+  const labelKuaKecamatan = `Kepala KUA Kecamatan ${profilKantor?.kecamatan || '................'}`
+
+  // === Mode satu tanda tangan: hanya Kepala KUA, diambil dari Profil Kantor ===
+  if (satuTandaTangan) {
+    const nama = namaPembuat || profilKantor?.kepala_kua || PLACEHOLDER
+    const nip = nipPembuat || profilKantor?.nip_kepala_kua || PLACEHOLDER
+    return (
+      <div className="ttd-block flex justify-end mt-10 text-sm text-slate-700">
+        <div className="text-center w-64">
+          <div className="min-h-[3rem]">
+            <p>{tempatTanggal || '\u00A0'}</p>
+            <p>{labelKuaKecamatan}</p>
+          </div>
+          <div className="h-20 flex items-end justify-center">
+            {ttdKepalaKuaUrl && (
+              <img src={ttdKepalaKuaUrl} alt="Tanda tangan" className="max-h-20 object-contain" />
+            )}
+          </div>
+          <p className="font-semibold border-t border-slate-400 pt-1">({nama})</p>
+          <p className="text-xs text-slate-500">NIP. {nip}</p>
+        </div>
+      </div>
+    )
+  }
+
+  // === Mode dua tanda tangan (perilaku lama, dipakai laporan lain) ===
   const modeEfektif = tentukanModeTtd({ mode, profilKantor, namaPembuat, nipPembuat })
   const adalahKepalaKua = modeEfektif === 'kepala_kua'
-
-  const labelKuaKecamatan = `Kepala KUA Kecamatan ${profilKantor?.kecamatan || '................'}`
 
   // Kolom kiri — pihak yang "Mengetahui"
   const kiri = adalahKepalaKua
