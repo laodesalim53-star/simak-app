@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { saveAs } from 'file-saver'
 import {
   Loader2, Download, FileType2, FileSpreadsheet, Minimize2, FileUp, Trash2, Sparkles, FileText,
-  Camera, ImagePlus, ChevronLeft, ChevronRight, X,
+  Camera, ImagePlus, ChevronLeft, ChevronRight, X, Crop,
 } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
 import {
@@ -55,6 +55,11 @@ function namaDasar(nama) {
   return nama.replace(/\.pdf$/i, '') || 'dokumen'
 }
 
+// Versi foto yang sedang dipakai: hasil potong otomatis, atau foto asli.
+function versiAktif(f) {
+  return f.pakaiPotong && f.potong ? f.potong : f.asli
+}
+
 export default function AlatPDF() {
   const [tab, setTab] = useState('kompres')
   const [file, setFile] = useState(null)
@@ -68,8 +73,11 @@ export default function AlatPDF() {
   const [error, setError] = useState('')
 
   // Kamera
-  const [foto, setFoto] = useState([]) // [{ id, blob, url, w, h }]
+  // Tiap foto: { id, asli: {blob,w,h,url}, potong: {blob,w,h,url} | null, pakaiPotong }
+  const [foto, setFoto] = useState([])
+  const [potongOtomatis, setPotongOtomatis] = useState(true)
   const [modeDokumen, setModeDokumen] = useState(true)
+  const [catatanFoto, setCatatanFoto] = useState('')
   const [bacaFoto, setBacaFoto] = useState(false)
   const [bangunPdf, setBangunPdf] = useState(false)
   const [dariKamera, setDariKamera] = useState(false)
@@ -167,6 +175,11 @@ export default function AlatPDF() {
   }
 
   // ---------- Kamera ----------
+  function bebaskanUrl(f) {
+    URL.revokeObjectURL(f.asli.url)
+    if (f.potong) URL.revokeObjectURL(f.potong.url)
+  }
+
   async function handleAmbilFoto(e) {
     const daftar = Array.from(e.target.files || [])
     e.target.value = ''
@@ -176,20 +189,27 @@ export default function AlatPDF() {
       return
     }
     setError('')
+    setCatatanFoto('')
     setBacaFoto(true)
     try {
       const baru = []
       for (const f of daftar) {
-        const { blob, w, h } = await siapkanFoto(f)
+        const { asli, potong } = await siapkanFoto(f, { potongOtomatis })
         baru.push({
           id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          blob,
-          w,
-          h,
-          url: URL.createObjectURL(blob),
+          asli: { ...asli, url: URL.createObjectURL(asli.blob) },
+          potong: potong ? { ...potong, url: URL.createObjectURL(potong.blob) } : null,
+          pakaiPotong: !!potong,
         })
       }
       setFoto((lama) => [...lama, ...baru])
+      const tidakTerdeteksi = baru.filter((f) => !f.potong).length
+      if (potongOtomatis && tidakTerdeteksi > 0) {
+        setCatatanFoto(
+          `Tepi kertas tidak terdeteksi pada ${tidakTerdeteksi} foto, jadi dipakai apa adanya. ` +
+            'Coba letakkan kertas di atas alas yang lebih gelap dan pastikan seluruh kertas masuk bingkai.'
+        )
+      }
     } catch (err) {
       setError(err?.message || 'Gagal membaca foto.')
     } finally {
@@ -200,7 +220,7 @@ export default function AlatPDF() {
   function hapusFoto(id) {
     setFoto((lama) => {
       const target = lama.find((f) => f.id === id)
-      if (target) URL.revokeObjectURL(target.url)
+      if (target) bebaskanUrl(target)
       return lama.filter((f) => f.id !== id)
     })
   }
@@ -216,11 +236,17 @@ export default function AlatPDF() {
     })
   }
 
+  // Beralih antara hasil potong otomatis dan foto asli untuk satu halaman.
+  function alihPotong(id) {
+    setFoto((lama) => lama.map((f) => (f.id === id && f.potong ? { ...f, pakaiPotong: !f.pakaiPotong } : f)))
+  }
+
   function kosongkanFoto() {
     setFoto((lama) => {
-      lama.forEach((f) => URL.revokeObjectURL(f.url))
+      lama.forEach(bebaskanUrl)
       return []
     })
+    setCatatanFoto('')
   }
 
   async function jadikanPdf() {
@@ -228,7 +254,7 @@ export default function AlatPDF() {
     setError('')
     setBangunPdf(true)
     try {
-      const blob = await buatPdfDariFoto(foto, { modeDokumen })
+      const blob = await buatPdfDariFoto(foto.map(versiAktif), { modeDokumen })
       const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')
       const berkas = new File([blob], `scan-${stamp}.pdf`, { type: 'application/pdf' })
       const ok = await muatBerkas(berkas, { kamera: true })
@@ -506,53 +532,95 @@ export default function AlatPDF() {
                     </span>
                   )}
                 </div>
+
+                <label className="flex items-start gap-2 text-sm text-ink-950">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={potongOtomatis}
+                    onChange={(e) => setPotongOtomatis(e.target.checked)}
+                    disabled={kameraTerkunci}
+                  />
+                  <span>
+                    Potong otomatis mengikuti kertas dan luruskan bila foto miring. Berlaku untuk foto yang diambil
+                    setelah ini.
+                  </span>
+                </label>
+
                 {foto.length === 0 && !bacaFoto && (
                   <p className="text-xs text-ink-700/60">
-                    Letakkan dokumen di permukaan rata, pastikan cahaya cukup, dan foto dari atas tanpa miring. Tiap foto
-                    menjadi satu halaman PDF. Di komputer, tombol kamera akan membuka pemilih berkas.
+                    Letakkan kertas di atas alas yang lebih gelap (misalnya meja gelap) supaya tepinya terdeteksi, dan
+                    pastikan seluruh kertas masuk bingkai. Tiap foto menjadi satu halaman PDF. Di komputer, tombol kamera
+                    akan membuka pemilih berkas.
                   </p>
+                )}
+
+                {catatanFoto && (
+                  <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">{catatanFoto}</p>
                 )}
 
                 {foto.length > 0 && (
                   <div className="space-y-3">
                     <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                      {foto.map((f, i) => (
-                        <div key={f.id} className="relative rounded-lg overflow-hidden border border-ink-950/10 bg-paper">
-                          <img src={f.url} alt={`Halaman ${i + 1}`} className="w-full h-28 object-contain" />
-                          <span className="absolute top-1 left-1 bg-ink-950 text-white text-[10px] font-semibold rounded px-1.5 py-0.5">
-                            {i + 1}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => hapusFoto(f.id)}
-                            disabled={kameraTerkunci}
-                            aria-label={`Hapus halaman ${i + 1}`}
-                            className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center disabled:opacity-40"
-                          >
-                            <X size={12} />
-                          </button>
-                          <div className="flex items-center justify-between bg-white/90 px-1 py-0.5">
+                      {foto.map((f, i) => {
+                        const aktif = versiAktif(f)
+                        return (
+                          <div key={f.id} className="relative rounded-lg overflow-hidden border border-ink-950/10 bg-paper">
+                            <img src={aktif.url} alt={`Halaman ${i + 1}`} className="w-full h-28 object-contain" />
+                            <span className="absolute top-1 left-1 bg-ink-950 text-white text-[10px] font-semibold rounded px-1.5 py-0.5">
+                              {i + 1}
+                            </span>
                             <button
                               type="button"
-                              onClick={() => geserFoto(f.id, -1)}
-                              disabled={i === 0 || kameraTerkunci}
-                              aria-label="Geser ke kiri"
-                              className="p-0.5 text-ink-950 disabled:opacity-25"
+                              onClick={() => hapusFoto(f.id)}
+                              disabled={kameraTerkunci}
+                              aria-label={`Hapus halaman ${i + 1}`}
+                              className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center disabled:opacity-40"
                             >
-                              <ChevronLeft size={14} />
+                              <X size={12} />
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => geserFoto(f.id, 1)}
-                              disabled={i === foto.length - 1 || kameraTerkunci}
-                              aria-label="Geser ke kanan"
-                              className="p-0.5 text-ink-950 disabled:opacity-25"
-                            >
-                              <ChevronRight size={14} />
-                            </button>
+                            <div className="flex items-center justify-between bg-white/90 px-1 py-0.5">
+                              <button
+                                type="button"
+                                onClick={() => geserFoto(f.id, -1)}
+                                disabled={i === 0 || kameraTerkunci}
+                                aria-label="Geser ke kiri"
+                                className="p-0.5 text-ink-950 disabled:opacity-25"
+                              >
+                                <ChevronLeft size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => alihPotong(f.id)}
+                                disabled={!f.potong || kameraTerkunci}
+                                aria-pressed={!!(f.potong && f.pakaiPotong)}
+                                aria-label={f.pakaiPotong ? 'Pakai foto asli' : 'Pakai hasil potong otomatis'}
+                                title={
+                                  !f.potong
+                                    ? 'Kertas tidak terdeteksi, dipakai apa adanya'
+                                    : f.pakaiPotong
+                                      ? 'Dipotong otomatis (ketuk untuk pakai foto asli)'
+                                      : 'Foto asli (ketuk untuk potong otomatis)'
+                                }
+                                className={`p-0.5 disabled:opacity-25 ${
+                                  f.potong && f.pakaiPotong ? 'text-emerald-700' : 'text-ink-950'
+                                }`}
+                              >
+                                <Crop size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => geserFoto(f.id, 1)}
+                                disabled={i === foto.length - 1 || kameraTerkunci}
+                                aria-label="Geser ke kanan"
+                                className="p-0.5 text-ink-950 disabled:opacity-25"
+                              >
+                                <ChevronRight size={14} />
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
 
                     <label className="flex items-start gap-2 text-sm text-ink-950">
