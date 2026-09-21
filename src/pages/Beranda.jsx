@@ -317,6 +317,10 @@ export default function Beranda() {
   function pilihUntuk(id) {
     setSearchParams(id === 'semua' ? {} : { untuk: id }, { replace: true })
   }
+  // Tombol "Daftar" membawa pilihan jenis instansi ke halaman pendaftaran,
+  // jadi pengunjung yang sudah memilih KUA/Sekolah di sini tidak perlu
+  // memilih ulang di sana.
+  const linkDaftar = untuk === 'semua' ? '/register' : `/register?untuk=${untuk}`
   const areaTampil = DAFTAR_AREA
     .filter((a) => untuk === 'semua' || a.untuk.includes(untuk))
     .map((a, i) => ({
@@ -608,7 +612,7 @@ export default function Beranda() {
                   dan laporan pimpinan.
                 </p>
                 <div className="header-actions">
-                  <Link to="/register" className="btn-primary">
+                  <Link to={linkDaftar} className="btn-primary">
                     Daftar sekarang
                     <ArrowRight size={16} strokeWidth={2.5} />
                   </Link>
@@ -873,7 +877,7 @@ export default function Beranda() {
                 <p className="beranda-footer-title">Tertarik menerapkannya di sekolah atau KUA Anda?</p>
                 <p className="beranda-footer-sub">Gratis selama masa promo berlaku. Daftar akun untuk sekolah maupun KUA Anda sekarang.</p>
               </div>
-              <Link to="/register" className="beranda-cta">
+              <Link to={linkDaftar} className="beranda-cta">
                 Daftar sekarang
                 <ArrowRight size={16} strokeWidth={2.5} />
               </Link>
