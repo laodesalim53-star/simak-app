@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowRight, LogIn, Video, Download, Monitor, Apple, Share, SquarePlus, X, BookOpen, IdCard, Wallet, MessageCircle, Settings, Users, ShoppingBag, Phone, Send, Fish, Shell, Shirt, Pencil, Building2, Landmark, Megaphone, FileText, Library, ClipboardCheck } from 'lucide-react'
+import { ArrowRight, LogIn, Video, Download, Monitor, Apple, Smartphone, Share, SquarePlus, X, BookOpen, IdCard, Wallet, MessageCircle, Settings, Users, ShoppingBag, Phone, Send, Fish, Shell, Shirt, Pencil, Building2, Landmark, Megaphone, FileText, Library, ClipboardCheck } from 'lucide-react'
 // PENTING: sesuaikan path import ini dengan lokasi client Supabase Anda
 // yang sudah ada di project (biasanya di src/lib/ atau src/services/).
 import { supabase } from '../lib/supabaseClient'
@@ -218,19 +218,9 @@ const DAFTAR_AREA = [
   },
 ]
 
-// Cadangan untuk Android: bila browser tidak bisa memasang aplikasi web
-// (mis. Samsung Internet, atau browser bawaan WhatsApp/Facebook), unduh APK.
-function unduhApk() {
-  const a = document.createElement('a')
-  a.href = '/simak-app.apk'
-  a.download = ''
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-}
-
 // ---- Panduan instal manual ---------------------------------------------
-// Dua platform tidak punya "file installer" yang bisa diunduh langsung:
+// Semua platform dipasang lewat panduan yang sama (tanpa file installer):
+//  - Android: menu titik tiga Chrome > Instal aplikasi. APK hanya cadangan.
 //  - iPhone/iPad: Apple hanya mengizinkan "Tambah ke Layar Utama" via Safari.
 //  - Windows: paket .msix WAJIB ditandatangani sertifikat yang dipercaya
 //    Windows. Sertifikat buatan sendiri (self-signed) membuat tombol Install
@@ -247,6 +237,17 @@ const PANDUAN_INSTAL = {
       <>Scroll lalu pilih <strong>Tambah ke Layar Utama</strong> <SquarePlus size={14} className="ios-inline-icon" />, lalu tap <strong>Tambah</strong>.</>,
     ],
     catatan: 'Setelah itu, ikon SIMAK akan muncul di layar utama seperti aplikasi biasa.',
+  },
+  android: {
+    judul: 'Cara instal di Android',
+    sub: 'Cukup 3 langkah lewat Google Chrome — tanpa perlu mengunduh file.',
+    langkah: [
+      <>Buka <strong>{DOMAIN_SITUS}</strong> lewat <strong>Google Chrome</strong>. Kalau Anda membuka dari WhatsApp atau Facebook, ketuk titik tiga lalu pilih <strong>Buka di Chrome</strong>.</>,
+      <>Ketuk ikon <strong>titik tiga (⋮)</strong> di pojok kanan atas Chrome, lalu pilih <strong>Instal aplikasi</strong> (atau <strong>Tambahkan ke layar utama</strong>).</>,
+      <>Ketuk <strong>Instal</strong>. Ikon SIMAK akan muncul di layar utama seperti aplikasi biasa.</>,
+    ],
+    tautan: { href: '/simak-app.apk', label: 'Menu Instal tidak muncul? Unduh file APK' },
+    catatan: 'Aplikasi memperbarui dirinya sendiri, jadi tidak perlu mengunduh ulang.',
   },
   windows: {
     judul: 'Cara instal di Windows',
@@ -414,22 +415,19 @@ export default function Beranda() {
     }
   }, [])
 
-  // Satu pintu untuk semua tombol instal. Kalau browser sudah siap memasang
-  // aplikasi (Chrome/Edge di Android & Windows), langsung munculkan kotak
-  // instal yang SAMA dengan menu titik tiga browser — pengunjung tidak perlu
-  // mencari menunya. Kalau belum, jalankan cadangan (unduh APK / panduan).
-  async function instalAplikasi(cadangan) {
-    if (promptInstal) {
-      promptInstal.prompt()
-      try {
-        await promptInstal.userChoice
-      } catch {
-        // pengguna menutup kotak — tidak perlu ditangani
-      }
-      setPromptInstal(null)
-      return
+  // Pintasan di dalam panduan Android/Windows: kalau browser sudah siap
+  // memasang aplikasi, munculkan kotak instal yang SAMA dengan menu titik
+  // tiga browser. Kalau belum siap, tombolnya tidak ditampilkan dan
+  // pengunjung cukup mengikuti langkah di panduan.
+  async function instalLangsung() {
+    if (!promptInstal) return
+    promptInstal.prompt()
+    try {
+      await promptInstal.userChoice
+    } catch {
+      // pengguna menutup kotak — tidak perlu ditangani
     }
-    cadangan()
+    setPromptInstal(null)
   }
 
   // Tekan Esc untuk menutup panduan instal.
@@ -636,27 +634,17 @@ export default function Beranda() {
                 {!sudahTerpasang && (
                   <div className="install-row">
                     <span className="install-label">Instal aplikasi:</span>
-                    {promptInstal && (
-                      <button
-                        type="button"
-                        onClick={() => instalAplikasi(() => {})}
-                        className="install-chip install-chip-utama"
-                      >
-                        <Download size={14} strokeWidth={2.6} />
-                        Instal sekarang (1 klik)
-                      </button>
-                    )}
                     <button
                       type="button"
-                      onClick={() => instalAplikasi(unduhApk)}
+                      onClick={() => setPanduan('android')}
                       className="install-chip"
                     >
-                      <Download size={14} strokeWidth={2.4} />
+                      <Smartphone size={14} strokeWidth={2.4} />
                       Android
                     </button>
                     <button
                       type="button"
-                      onClick={() => instalAplikasi(() => setPanduan('windows'))}
+                      onClick={() => setPanduan('windows')}
                       className="install-chip"
                     >
                       <Monitor size={14} strokeWidth={2.4} />
@@ -920,6 +908,12 @@ export default function Beranda() {
               </button>
             </div>
             <p className="ios-modal-sub">{isiPanduan.sub}</p>
+            {promptInstal && panduan !== 'ios' && (
+              <button type="button" className="ios-instal-langsung" onClick={instalLangsung}>
+                <Download size={16} strokeWidth={2.5} />
+                Instal sekarang
+              </button>
+            )}
             <ol className="ios-steps">
               {isiPanduan.langkah.map((teks, i) => (
                 <li key={i}>
@@ -928,6 +922,11 @@ export default function Beranda() {
                 </li>
               ))}
             </ol>
+            {isiPanduan.tautan && (
+              <a href={isiPanduan.tautan.href} download className="ios-tautan">
+                {isiPanduan.tautan.label}
+              </a>
+            )}
             <p className="ios-modal-note">{isiPanduan.catatan}</p>
           </div>
         </div>
@@ -1280,14 +1279,6 @@ export default function Beranda() {
           white-space: nowrap;
         }
 
-        .install-chip-utama {
-          background: #3E82F1;
-          border-color: #3E82F1;
-          color: #fff;
-          font-weight: 700;
-        }
-        .install-chip-utama:hover { background: #5A96F5; border-color: #5A96F5; }
-
         .contact-fab-wrap {
           position: fixed;
           right: 24px;
@@ -1617,6 +1608,31 @@ export default function Beranda() {
           vertical-align: -2px;
           margin: 0 2px;
           color: #3E82F1;
+        }
+        .ios-instal-langsung {
+          width: 100%;
+          margin: 0 0 16px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          font-family: inherit;
+          font-size: 14px;
+          font-weight: 700;
+          color: #fff;
+          background: #3E82F1;
+          border: none;
+          border-radius: 999px;
+          min-height: 44px;
+          cursor: pointer;
+        }
+        .ios-tautan {
+          display: block;
+          margin: 0 0 12px;
+          text-align: center;
+          font-size: 13px;
+          font-weight: 600;
+          color: #2D3072;
         }
         .ios-modal-note {
           font-size: 12.5px;
