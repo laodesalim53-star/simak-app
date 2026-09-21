@@ -15,9 +15,13 @@ export default defineConfig({
       registerType: 'prompt',
       includeAssets: ['favicon.ico', 'icon-192.png', 'icon-512.png'],
       manifest: {
-        name: 'Simak Kepsek',
-        short_name: 'SimakKepsek',
-        description: 'Aplikasi Sekolah - Presensi, Surat, Agenda',
+        // Nama dibuat umum (bukan "Kepsek") karena aplikasi ini melayani
+        // Sekolah dan KUA. JANGAN ubah start_url di bawah — itu bagian dari
+        // identitas aplikasi; kalau berubah, pengguna harus instal ulang.
+        name: 'SIMAK Sekolah & KUA',
+        short_name: 'SIMAK',
+        description: 'Aplikasi terpadu untuk Sekolah & KUA - presensi, surat, agenda, laporan, dan keuangan',
+        lang: 'id',
         theme_color: '#ffffff',
         background_color: '#ffffff',
         display: 'standalone',
@@ -34,7 +38,12 @@ export default defineConfig({
         // sini cuma menambah risiko data basi dan membuat navigasi
         // menunggu network tanpa manfaat nyata. Biarkan Supabase client
         // sendiri yang menangani request-nya langsung ke network.
-        navigateFallbackDenylist: [/^\/api\//],
+        //
+        // Berkas unduhan (APK dll.) juga dikecualikan dari fallback
+        // navigasi. Klik link unduhan dianggap "navigasi" oleh browser,
+        // sehingga service worker bisa salah menyajikan index.html
+        // (halaman aplikasi) sebagai pengganti file yang diminta.
+        navigateFallbackDenylist: [/^\/api\//, /\.(?:apk|msix|pdf|zip)$/],
         runtimeCaching: []
       }
     })
