@@ -16,6 +16,7 @@ import {
   CalendarDays,
   Mail,
   FileBadge,
+  FileSignature,
   ScrollText,
   Stamp,
   Wallet,
