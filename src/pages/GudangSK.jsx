@@ -153,7 +153,7 @@ const daftarSK = [
     warna: 'sky',
     siap: true,
   },
-  {
+   {
     id: 'wali-kelas',
     kategori: 'tugas',
     judul: 'SK Wali Kelas',
@@ -161,7 +161,7 @@ const daftarSK = [
     icon: UserCheck,
     path: '/gudang-sk/wali-kelas',
     warna: 'amber',
-    siap: false,
+    siap: true,  
   },
   {
     id: 'pembina-ekstrakurikuler',
