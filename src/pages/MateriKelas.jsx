@@ -85,6 +85,54 @@ const MATERI = {
     { judul: 'Mengenal budaya dan tradisi setempat' },
     { judul: 'Permainan tradisional daerah' },
   ],
+
+  // ---------------------------------------------------------------
+  // SD KELAS 2
+  // ---------------------------------------------------------------
+  'SD-2-agama': [
+    { judul: 'Mengenal kitab suci dan cara merawatnya' },
+    { judul: 'Kisah keteladanan Nabi dan Rasul' },
+    { judul: 'Tata cara wudu dan salat berjemaah' },
+    { judul: 'Sikap jujur dan santun dalam keseharian' },
+  ],
+  'SD-2-pancasila': [
+    { judul: 'Makna sila-sila Pancasila' },
+    { judul: 'Hak dan kewajiban di rumah dan sekolah' },
+    { judul: 'Hidup rukun dalam keberagaman' },
+    { judul: 'Musyawarah untuk mufakat' },
+  ],
+  'SD-2-indonesia': [
+    { judul: 'Membaca teks pendek dengan lancar' },
+    { judul: 'Menulis kalimat sederhana' },
+    { judul: 'Menceritakan kembali isi cerita' },
+    { judul: 'Mengenal kosakata tentang lingkungan' },
+    { judul: 'Menulis puisi anak sederhana' },
+  ],
+  'SD-2-matematika': [
+    { judul: 'Bilangan sampai 100' },
+    { judul: 'Penjumlahan dan pengurangan bersusun' },
+    { judul: 'Perkalian sebagai penjumlahan berulang' },
+    { judul: 'Pengenalan pembagian sederhana' },
+    { judul: 'Mengenal satuan waktu dan uang' },
+    { judul: 'Bangun ruang sederhana' },
+  ],
+  'SD-2-pjok': [
+    { judul: 'Kombinasi gerak lokomotor dan non-lokomotor' },
+    { judul: 'Permainan kecil beregu' },
+    { judul: 'Latihan keseimbangan tubuh' },
+    { judul: 'Kebersihan dan keamanan saat berolahraga' },
+  ],
+  'SD-2-seni': [
+    { judul: 'Menggambar imajinatif dengan pewarna' },
+    { judul: 'Membuat karya kerajinan dari kertas' },
+    { judul: 'Menyanyi dengan iringan sederhana' },
+    { judul: 'Gerak tari sederhana mengikuti irama' },
+  ],
+  'SD-2-mulok': [
+    { judul: 'Kosakata bahasa daerah tentang keluarga' },
+    { judul: 'Lagu dan permainan daerah' },
+    { judul: 'Cerita rakyat setempat' },
+  ],
 }
 
 // =====================================================================
