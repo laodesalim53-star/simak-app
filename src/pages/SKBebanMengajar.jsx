@@ -1,20 +1,31 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Plus, Printer, Trash2 } from 'lucide-react'
+import { ArrowLeft, Loader2, Plus, Printer, RefreshCw, Trash2 } from 'lucide-react'
 import Layout from '../components/Layout'
+import { useAuth } from '../lib/AuthContext'
+import { supabase } from '../lib/supabaseClient'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SK Beban Mengajar — halaman anak dari GudangSK (route: /gudang-sk/beban-mengajar)
 //
-// Cara kerja: isi data di formulir → pratinjau kertas A4 langsung berubah →
-// tombol "Cetak / Simpan PDF". Dokumen terdiri dari 2 halaman: (1) Keputusan
-// dan (2) Lampiran daftar pembagian tugas.
+// Data diimpor otomatis (pola sama dengan LaporanKepangkatanGuru.jsx dan Kelas.jsx):
+//   • profil_sekolah → kop, alamat, kepala sekolah, NIP kepala sekolah, logo
+//   • guru (status aktif) → nama, NIP, tugas tambahan
+//   • kelas → wali kelas tiap guru (kolom wali_kelas_id)
 //
-// Versi ini SENGAJA belum menarik data dari Supabase (kop sekolah, kepala
-// sekolah, daftar guru) supaya pasti aman dibuild. Cara menyambungkannya ada di
-// komentar "SAMBUNGAN DATA" di bawah.
+// Aturan baris Lampiran:
+//   1. Kepala Sekolah SELALU di baris paling atas, jam = jam default (24),
+//      diisi sebagai tugas tambahan.
+//   2. Guru lain diurutkan golongan tertinggi dulu, lalu abjad — sama seperti
+//      laporan kepangkatan/nominatif.
+//   3. Setiap guru otomatis diberi jam default (24 jam / minggu). Kalau guru itu
+//      wali kelas di menu Kelas, kolom Kelas terisi nama kelasnya dan Mata
+//      Pelajaran terisi "Guru Kelas".
+// Semua isian tetap bisa diubah manual setelah diimpor.
 // ─────────────────────────────────────────────────────────────────────────────
+
+const JAM_DEFAULT = '24'
 
 let penghitungId = 0
 const barisBaru = () => ({
@@ -58,23 +69,134 @@ const pecahBaris = (teks) =>
 
 const isi = (v, pengganti = '…………') => (v && String(v).trim() ? v : pengganti)
 
-const menimbangAwal = (tp) =>
-  [
-    `bahwa untuk kelancaran pelaksanaan kegiatan belajar mengajar pada Tahun Pelajaran ${tp}, perlu dilakukan pembagian tugas mengajar guru;`,
-    'bahwa guru yang namanya tercantum dalam Lampiran Keputusan ini dinilai memenuhi syarat dan mampu melaksanakan tugas tersebut;',
-    'bahwa berdasarkan pertimbangan sebagaimana dimaksud pada huruf a dan huruf b, perlu menetapkan Keputusan Kepala Sekolah tentang Pembagian Tugas Mengajar Guru.',
-  ].join('\n')
+// {tahun} diganti otomatis dengan isi kolom "Tahun pelajaran" saat dokumen dirender,
+// jadi mengubah tahun pelajaran ikut mengubah teks Menimbang/Mengingat.
+const MENIMBANG_AWAL = [
+  'bahwa untuk kelancaran pelaksanaan kegiatan belajar mengajar pada Tahun Pelajaran {tahun}, perlu dilakukan pembagian tugas mengajar guru;',
+  'bahwa guru yang namanya tercantum dalam Lampiran Keputusan ini dinilai memenuhi syarat dan mampu melaksanakan tugas tersebut;',
+  'bahwa berdasarkan pertimbangan sebagaimana dimaksud pada huruf a dan huruf b, perlu menetapkan Keputusan Kepala Sekolah tentang Pembagian Tugas Mengajar Guru.',
+].join('\n')
 
 // Dasar hukum bawaan — SESUAIKAN dengan aturan yang berlaku di lembaga Anda
 // (misalnya madrasah di bawah Kemenag memakai dasar hukum yang berbeda).
-const mengingatAwal = (tp) =>
-  [
-    'Undang-Undang Nomor 20 Tahun 2003 tentang Sistem Pendidikan Nasional;',
-    'Undang-Undang Nomor 14 Tahun 2005 tentang Guru dan Dosen;',
-    'Peraturan Pemerintah Nomor 57 Tahun 2021 tentang Standar Nasional Pendidikan, sebagaimana telah diubah dengan Peraturan Pemerintah Nomor 4 Tahun 2022;',
-    'Peraturan Menteri Pendidikan dan Kebudayaan Nomor 15 Tahun 2018 tentang Pemenuhan Beban Kerja Guru, Kepala Sekolah, dan Pengawas Sekolah;',
-    `Kalender pendidikan dan struktur kurikulum sekolah Tahun Pelajaran ${tp}.`,
-  ].join('\n')
+const MENGINGAT_AWAL = [
+  'Undang-Undang Nomor 20 Tahun 2003 tentang Sistem Pendidikan Nasional;',
+  'Undang-Undang Nomor 14 Tahun 2005 tentang Guru dan Dosen;',
+  'Peraturan Pemerintah Nomor 57 Tahun 2021 tentang Standar Nasional Pendidikan, sebagaimana telah diubah dengan Peraturan Pemerintah Nomor 4 Tahun 2022;',
+  'Peraturan Menteri Pendidikan dan Kebudayaan Nomor 15 Tahun 2018 tentang Pemenuhan Beban Kerja Guru, Kepala Sekolah, dan Pengawas Sekolah;',
+  'Kalender pendidikan dan struktur kurikulum sekolah Tahun Pelajaran {tahun}.',
+].join('\n')
+
+// ─── Impor data ──────────────────────────────────────────────────────────────
+// Deteksi & urutan disalin dari LaporanKepangkatanGuru.jsx supaya konsisten.
+function isKepalaSekolah(g) {
+  const jabatan = `${g.tugas_tambahan || ''} ${g.jenis_ptk || ''}`.toLowerCase()
+  return jabatan.includes('kepala sekolah')
+}
+
+function peringkatGolongan(teks) {
+  if (!teks) return 0
+  const cocok = teks.toUpperCase().match(/(IX|VIII|VII|VI|IV|III|II|I|V)[\s./-]?([A-D])?/)
+  if (!cocok) return 0
+  const romawi = { I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9 }
+  const huruf = cocok[2] ? cocok[2].charCodeAt(0) - 64 : 0
+  return (romawi[cocok[1]] || 0) * 10 + huruf
+}
+
+function urutkanGuru(daftar) {
+  return [...daftar].sort((a, b) => {
+    const aKS = isKepalaSekolah(a) ? 0 : 1
+    const bKS = isKepalaSekolah(b) ? 0 : 1
+    if (aKS !== bKS) return aKS - bKS
+    const selisih = peringkatGolongan(b.pangkat_golongan) - peringkatGolongan(a.pangkat_golongan)
+    if (selisih !== 0) return selisih
+    return (a.nama_lengkap || '').localeCompare(b.nama_lengkap || '')
+  })
+}
+
+function formatKabupaten(teks) {
+  if (!teks) return ''
+  return teks
+    .replace(/^PEMERINTAH\s+KABUPATEN\s+/i, '')
+    .replace(/^KABUPATEN\s+/i, '')
+    .trim()
+}
+
+async function ambilDataSekolah(sekolahId) {
+  const [rs, rg, rk] = await Promise.all([
+    supabase.from('profil_sekolah').select('*').eq('sekolah_id', sekolahId).maybeSingle(),
+    supabase
+      .from('guru')
+      .select('id, nip, nama_lengkap, pangkat_golongan, tugas_tambahan, jenis_ptk, status')
+      .eq('sekolah_id', sekolahId)
+      .eq('status', 'aktif'),
+    supabase
+      .from('kelas')
+      .select('id, nama_kelas, tingkat, wali_kelas_id')
+      .eq('sekolah_id', sekolahId)
+      .order('nama_kelas'),
+  ])
+
+  const galat = rs.error || rg.error || rk.error
+  if (galat) throw galat
+
+  let logoUrl = ''
+  if (rs.data?.logo_path) {
+    const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(rs.data.logo_path)
+    logoUrl = pub?.publicUrl || ''
+  }
+
+  return { profil: rs.data || null, guru: rg.data || [], kelas: rk.data || [], logoUrl }
+}
+
+function susunBaris(guru, kelas, profil, jam) {
+  // Peta: id guru → daftar nama kelas yang dia walikan
+  const kelasPerGuru = {}
+  kelas.forEach((k) => {
+    if (!k.wali_kelas_id) return
+    if (!kelasPerGuru[k.wali_kelas_id]) kelasPerGuru[k.wali_kelas_id] = []
+    kelasPerGuru[k.wali_kelas_id].push(k.nama_kelas)
+  })
+
+  const baris = urutkanGuru(guru).map((g) => {
+    if (isKepalaSekolah(g)) {
+      return {
+        ...barisBaru(),
+        nama: g.nama_lengkap || '',
+        nip: g.nip || '',
+        mapel: 'Kepala Sekolah',
+        kelas: '-',
+        jam: String(jam),
+        tambahan: 'Tugas tambahan Kepala Sekolah',
+      }
+    }
+    const kls = kelasPerGuru[g.id] || []
+    return {
+      ...barisBaru(),
+      nama: g.nama_lengkap || '',
+      nip: g.nip || '',
+      mapel: kls.length ? 'Guru Kelas' : '',
+      kelas: kls.join(', '),
+      jam: String(jam),
+      tambahan: g.tugas_tambahan || '',
+    }
+  })
+
+  // Kepala sekolah belum ada di Data Guru → tetap ditaruh paling atas dari Profil Sekolah.
+  if (!guru.some(isKepalaSekolah) && profil?.kepala_sekolah) {
+    baris.unshift({
+      ...barisBaru(),
+      nama: profil.kepala_sekolah,
+      nip: profil.nip_kepala_sekolah || '',
+      mapel: 'Kepala Sekolah',
+      kelas: '-',
+      jam: String(jam),
+      tambahan: 'Tugas tambahan Kepala Sekolah',
+    })
+  }
+
+  return baris.length ? baris : [barisBaru(), barisBaru(), barisBaru()]
+}
 
 // ─── CSS dokumen + cetak ─────────────────────────────────────────────────────
 // Saat cetak, semua anak langsung <body> disembunyikan kecuali portal dokumen.
@@ -98,7 +220,9 @@ const CSS = `
 }
 .kertas p { margin: 0; }
 
-.sk-kop { text-align: center; border-bottom: 3px double #000; padding-bottom: 6px; margin-bottom: 14px; }
+.sk-kop { display: flex; align-items: center; gap: 12px; border-bottom: 3px double #000; padding-bottom: 6px; margin-bottom: 14px; }
+.sk-kop-logo { width: 20mm; height: 20mm; object-fit: contain; flex: none; }
+.sk-kop-teks { flex: 1; text-align: center; }
 .sk-kop-atas { font-size: 12pt; font-weight: 700; text-transform: uppercase; }
 .sk-kop-nama { font-size: 15pt; font-weight: 700; text-transform: uppercase; line-height: 1.25; }
 .sk-kop-alamat { font-size: 10.5pt; }
@@ -191,9 +315,11 @@ function BlokTTD({ sk, sekolah }) {
 function DokumenSK({ sk, sekolah, baris, menimbang, mengingat }) {
   const namaSekolah = isi(sekolah.nama, 'NAMA SEKOLAH')
   const tp = isi(sk.tahunPelajaran)
+  const gantiTahun = (teks) => teks.replace(/\{tahun\}/g, tp)
   const total = baris.reduce((a, r) => a + (parseFloat(String(r.jam).replace(',', '.')) || 0), 0)
   const totalTeks = Number.isInteger(total) ? String(total) : total.toFixed(1)
   const judulPanjang = `Pembagian Tugas Mengajar Guru pada ${namaSekolah} Tahun Pelajaran ${tp}`
+  const barisKop = pecahBaris(sekolah.kopAtas || '')
 
   const diktum = [
     ['KESATU', `Menugaskan guru yang namanya tercantum dalam Lampiran Keputusan ini untuk melaksanakan tugas mengajar pada ${namaSekolah} Tahun Pelajaran ${tp} sesuai dengan mata pelajaran, kelas, dan jumlah jam pelajaran sebagaimana tercantum dalam Lampiran.`],
@@ -208,10 +334,17 @@ function DokumenSK({ sk, sekolah, baris, menimbang, mengingat }) {
       {/* ── Halaman 1: Keputusan ── */}
       <div className="kertas">
         <div className="sk-kop">
-          {sekolah.kopAtas && <div className="sk-kop-atas">{sekolah.kopAtas}</div>}
-          <div className="sk-kop-nama">{namaSekolah}</div>
-          {sekolah.npsn && <div className="sk-kop-alamat">NPSN: {sekolah.npsn}</div>}
-          {sekolah.alamat && <div className="sk-kop-alamat">{sekolah.alamat}</div>}
+          {sekolah.logoUrl && <img src={sekolah.logoUrl} alt="Logo sekolah" className="sk-kop-logo" />}
+          <div className="sk-kop-teks">
+            {barisKop.map((teks, i) => (
+              <div key={i} className="sk-kop-atas">
+                {teks}
+              </div>
+            ))}
+            <div className="sk-kop-nama">{namaSekolah}</div>
+            {sekolah.npsn && <div className="sk-kop-alamat">NPSN: {sekolah.npsn}</div>}
+            {sekolah.alamat && <div className="sk-kop-alamat">{sekolah.alamat}</div>}
+          </div>
         </div>
 
         <div className="sk-judul">
@@ -231,14 +364,14 @@ function DokumenSK({ sk, sekolah, baris, menimbang, mengingat }) {
               <td className="k">Menimbang</td>
               <td className="t">:</td>
               <td>
-                <Daftar items={pecahBaris(menimbang)} gaya="huruf" />
+                <Daftar items={pecahBaris(menimbang).map(gantiTahun)} gaya="huruf" />
               </td>
             </tr>
             <tr>
               <td className="k">Mengingat</td>
               <td className="t">:</td>
               <td>
-                <Daftar items={pecahBaris(mengingat)} gaya="angka" />
+                <Daftar items={pecahBaris(mengingat).map(gantiTahun)} gaya="angka" />
               </td>
             </tr>
           </tbody>
@@ -356,11 +489,16 @@ function Field({ label, className = '', children }) {
   )
 }
 
-function Bagian({ judul, keterangan, children }) {
+function Bagian({ judul, keterangan, aksi, children }) {
   return (
     <section className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 mb-4">
-      <h3 className="font-display text-sm sm:text-[15px] font-semibold text-slate-900">{judul}</h3>
-      {keterangan && <p className="text-xs sm:text-[13px] text-slate-500 mt-0.5">{keterangan}</p>}
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 className="font-display text-sm sm:text-[15px] font-semibold text-slate-900">{judul}</h3>
+          {keterangan && <p className="text-xs sm:text-[13px] text-slate-500 mt-0.5">{keterangan}</p>}
+        </div>
+        {aksi}
+      </div>
       <div className="mt-3">{children}</div>
     </section>
   )
@@ -368,12 +506,9 @@ function Bagian({ judul, keterangan, children }) {
 
 // ─── Halaman ─────────────────────────────────────────────────────────────────
 export default function SKBebanMengajar() {
+  const { sekolahId } = useAuth()
   const tpAwal = tahunPelajaranSekarang()
 
-  // SAMBUNGAN DATA: nilai awal `sekolah` (nama, alamat, NPSN, kepala sekolah,
-  // NIP) dan `baris` (daftar guru) bisa diisi dari Supabase — sama seperti
-  // halaman cetak lain yang menarik Profil Sekolah dan data Guru. Cukup panggil
-  // setSekolah(...) / setBaris(...) di dalam useEffect setelah data terbaca.
   const [sekolah, setSekolah] = useState({
     kopAtas: '',
     nama: '',
@@ -381,18 +516,75 @@ export default function SKBebanMengajar() {
     alamat: '',
     kepala: '',
     nipKepala: '',
+    logoUrl: '',
   })
   const [sk, setSk] = useState({
     nomor: '',
     tahunPelajaran: tpAwal,
     tempat: '',
     tanggal: isoHariIni(),
-    minimalJam: '24',
+    minimalJam: JAM_DEFAULT,
     sumberDana: 'Dana BOS dan sumber lain yang sah',
   })
-  const [menimbang, setMenimbang] = useState(menimbangAwal(tpAwal))
-  const [mengingat, setMengingat] = useState(mengingatAwal(tpAwal))
+  const [menimbang, setMenimbang] = useState(MENIMBANG_AWAL)
+  const [mengingat, setMengingat] = useState(MENGINGAT_AWAL)
   const [baris, setBaris] = useState(() => [barisBaru(), barisBaru(), barisBaru()])
+
+  const [memuat, setMemuat] = useState(true)
+  const [galat, setGalat] = useState('')
+  const [ringkas, setRingkas] = useState('')
+
+  // Ambil Profil Sekolah + Guru + Kelas, lalu isi kop dan daftar Lampiran.
+  async function muatDariData(jam) {
+    if (!sekolahId) {
+      setMemuat(false)
+      return
+    }
+    setMemuat(true)
+    setGalat('')
+    try {
+      const { profil, guru, kelas, logoUrl } = await ambilDataSekolah(sekolahId)
+      const kepsekGuru = guru.find(isKepalaSekolah)
+      const kab = formatKabupaten(profil?.kabupaten)
+
+      setSekolah({
+        kopAtas: [kab ? `Pemerintah Kabupaten ${kab}` : '', profil?.dinas_pendidikan || 'Dinas Pendidikan']
+          .filter(Boolean)
+          .join('\n'),
+        nama: profil?.nama_sekolah || '',
+        npsn: profil?.npsn || '',
+        alamat:
+          [profil?.alamat, profil?.kecamatan, profil?.kabupaten, profil?.provinsi].filter(Boolean).join(', ') +
+          (profil?.kode_pos ? ` ${profil.kode_pos}` : ''),
+        kepala: profil?.kepala_sekolah || kepsekGuru?.nama_lengkap || '',
+        nipKepala: profil?.nip_kepala_sekolah || kepsekGuru?.nip || '',
+        logoUrl,
+      })
+
+      const tempatBaru = profil?.tempat_ttd || profil?.kecamatan || ''
+      if (tempatBaru) setSk((s) => ({ ...s, tempat: s.tempat || tempatBaru }))
+
+      setBaris(susunBaris(guru, kelas, profil, jam))
+      setRingkas(`${guru.length} guru aktif dan ${kelas.length} kelas terbaca.`)
+    } catch (e) {
+      console.error('Gagal memuat data SK Beban Mengajar:', e)
+      setGalat(e?.message || 'Data tidak dapat dibaca.')
+    } finally {
+      setMemuat(false)
+    }
+  }
+
+  useEffect(() => {
+    muatDariData(JAM_DEFAULT)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sekolahId])
+
+  function imporUlang() {
+    const yakin = window.confirm(
+      'Ganti seluruh daftar guru di Lampiran dengan data terbaru dari Data Guru dan Kelas? Perubahan manual pada daftar akan hilang.'
+    )
+    if (yakin) muatDariData(sk.minimalJam || JAM_DEFAULT)
+  }
 
   const ubahSekolah = (k) => (e) => setSekolah((s) => ({ ...s, [k]: e.target.value }))
   const ubahSk = (k) => (e) => setSk((s) => ({ ...s, [k]: e.target.value }))
@@ -408,7 +600,7 @@ export default function SKBebanMengajar() {
   return (
     <Layout
       title="SK Beban Mengajar"
-      subtitle="Isi data di bawah, pratinjau kertas A4 akan berubah langsung. Dokumen terdiri dari Keputusan dan Lampiran."
+      subtitle="Data sekolah, guru, dan wali kelas diambil otomatis. Periksa isiannya, lalu cetak. Dokumen terdiri dari Keputusan dan Lampiran."
     >
       <style>{CSS}</style>
 
@@ -420,6 +612,22 @@ export default function SKBebanMengajar() {
           <ArrowLeft size={15} /> Kembali ke Gudang SK
         </Link>
 
+        {memuat && (
+          <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800 mb-4">
+            <Loader2 size={16} className="animate-spin" /> Mengambil data sekolah, guru, dan kelas…
+          </div>
+        )}
+        {!memuat && galat && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 mb-4">
+            Data belum bisa dibaca ({galat}). Isian di bawah bisa diisi manual, atau coba impor ulang.
+          </div>
+        )}
+        {!memuat && !galat && ringkas && (
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 mb-4">
+            {ringkas} Kepala Sekolah ditaruh di baris pertama Lampiran.
+          </div>
+        )}
+
         <Bagian judul="Data SK" keterangan="Nomor, tahun pelajaran, dan tempat/tanggal penetapan.">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <Field label="Nomor SK">
@@ -428,7 +636,7 @@ export default function SKBebanMengajar() {
             <Field label="Tahun pelajaran">
               <input className={inputCls} value={sk.tahunPelajaran} onChange={ubahSk('tahunPelajaran')} placeholder="2026/2027" />
             </Field>
-            <Field label="Minimal jam tatap muka / minggu">
+            <Field label="Jam tatap muka / minggu (per guru)">
               <input className={inputCls} value={sk.minimalJam} onChange={ubahSk('minimalJam')} inputMode="numeric" />
             </Field>
             <Field label="Ditetapkan di">
@@ -443,10 +651,13 @@ export default function SKBebanMengajar() {
           </div>
         </Bagian>
 
-        <Bagian judul="Kop dan pejabat penandatangan" keterangan="Tampil di kop surat dan blok tanda tangan.">
+        <Bagian
+          judul="Kop dan pejabat penandatangan"
+          keterangan="Diambil dari Profil Sekolah. Tampil di kop surat dan blok tanda tangan."
+        >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Baris atas kop (opsional)" className="sm:col-span-2">
-              <input className={inputCls} value={sekolah.kopAtas} onChange={ubahSekolah('kopAtas')} placeholder="mis. PEMERINTAH KABUPATEN … / DINAS PENDIDIKAN" />
+            <Field label="Baris atas kop (satu baris per garis)" className="sm:col-span-2">
+              <textarea className={inputCls} rows={2} value={sekolah.kopAtas} onChange={ubahSekolah('kopAtas')} />
             </Field>
             <Field label="Nama sekolah">
               <input className={inputCls} value={sekolah.nama} onChange={ubahSekolah('nama')} />
@@ -468,7 +679,7 @@ export default function SKBebanMengajar() {
 
         <Bagian
           judul="Menimbang dan Mengingat"
-          keterangan="Satu poin per baris. Dasar hukum bawaan hanya contoh umum: cek dan sesuaikan dengan aturan yang berlaku di lembaga Anda."
+          keterangan="Satu poin per baris. {tahun} otomatis diganti tahun pelajaran. Dasar hukum bawaan hanya contoh umum: cek dan sesuaikan dengan aturan yang berlaku di lembaga Anda."
         >
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <Field label="Menimbang (a, b, c, …)">
@@ -480,7 +691,20 @@ export default function SKBebanMengajar() {
           </div>
         </Bagian>
 
-        <Bagian judul="Daftar guru (Lampiran)" keterangan="Satu baris per guru. Jumlah jam dihitung otomatis.">
+        <Bagian
+          judul="Daftar guru (Lampiran)"
+          keterangan="Terisi dari Data Guru dan Kelas: kepala sekolah di atas, guru lain otomatis sesuai jam per guru. Jumlah jam dihitung otomatis."
+          aksi={
+            <button
+              type="button"
+              onClick={imporUlang}
+              disabled={memuat || !sekolahId}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-blue-400 hover:text-blue-700 disabled:opacity-50"
+            >
+              <RefreshCw size={13} className={memuat ? 'animate-spin' : ''} /> Impor ulang dari Data Guru
+            </button>
+          }
+        >
           <div className="space-y-3">
             {baris.map((r, i) => (
               <div key={r.id} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
