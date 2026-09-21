@@ -153,7 +153,7 @@ const daftarSK = [
     warna: 'sky',
     siap: true,
   },
-   {
+  {
     id: 'wali-kelas',
     kategori: 'tugas',
     judul: 'SK Wali Kelas',
@@ -161,7 +161,7 @@ const daftarSK = [
     icon: UserCheck,
     path: '/gudang-sk/wali-kelas',
     warna: 'amber',
-    siap: true,  
+    siap: true,
   },
   {
     id: 'pembina-ekstrakurikuler',
@@ -171,7 +171,7 @@ const daftarSK = [
     icon: Trophy,
     path: '/gudang-sk/pembina-ekstrakurikuler',
     warna: 'orange',
-    siap: true,  
+    siap: true,
   },
   {
     id: 'petugas-perpustakaan',
@@ -181,7 +181,7 @@ const daftarSK = [
     icon: Library,
     path: '/gudang-sk/petugas-perpustakaan',
     warna: 'violet',
-    siap: true,   
+    siap: true,
   },
 
   // ---- Honorarium & Tenaga Pendukung ----
@@ -235,7 +235,7 @@ const daftarSK = [
     icon: ClipboardList,
     path: '/gudang-sk/panitia-ujian',
     warna: 'cyan',
-    siap: false,
+    siap: true,
   },
   {
     id: 'panitia-ppdb',
@@ -245,7 +245,7 @@ const daftarSK = [
     icon: Users,
     path: '/gudang-sk/panitia-ppdb',
     warna: 'rose',
-    siap: false,
+    siap: true,
   },
   {
     id: 'tim-bos',
@@ -255,7 +255,7 @@ const daftarSK = [
     icon: Banknote,
     path: '/gudang-sk/tim-bos',
     warna: 'green',
-    siap: false,
+    siap: true,
   },
 ]
 
