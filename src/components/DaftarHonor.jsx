@@ -1,26 +1,25 @@
- import { useEffect, useRef, useState } from 'react'
- import { useNavigate } from 'react-router-dom'
--import { Loader2, Plus, Trash2 } from 'lucide-react'
-+import { Loader2, Plus, Trash2, Send } from 'lucide-react'
- import { useAuth } from '../lib/AuthContext'
-+import { supabase } from '../lib/supabaseClient'
- import {
-   AreaLembar,
-   BagianSK as Bagian,
-   BarAtasCetak,
-   FieldSK as Field,
-   GayaCetakSK,
-   HalamanLampiran,
-   SEKOLAH_KOSONG,
-   ambilGuruDanKelas,
-   ambilProfilSekolah,
-   inputSK as inputCls,
-   isKepalaSekolah,
-   isi,
-   isoHariIni,
-   tahunPelajaranSekarang,
-   urutkanGuru,
- } from './CetakSK'
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Loader2, Plus, Trash2, Send } from 'lucide-react'
+import { useAuth } from '../lib/AuthContext'
+import { supabase } from '../lib/supabaseClient'
+import {
+  AreaLembar,
+  BagianSK as Bagian,
+  BarAtasCetak,
+  FieldSK as Field,
+  GayaCetakSK,
+  HalamanLampiran,
+  SEKOLAH_KOSONG,
+  ambilGuruDanKelas,
+  ambilProfilSekolah,
+  inputSK as inputCls,
+  isKepalaSekolah,
+  isi,
+  isoHariIni,
+  tahunPelajaranSekarang,
+  urutkanGuru,
+} from './CetakSK'
 
 // DaftarHonor — komponen bersama untuk DAFTAR PENERIMAAN HONORARIUM per
 // kegiatan (bukan Surat Keputusan): tabel Nama/NIP, Pangkat/Gol, Dibayarkan,
