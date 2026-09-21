@@ -9,7 +9,7 @@
 //   'SD-1-matematika': [
 //     { judul: 'Bilangan 1 sampai 10', link: 'https://drive.google.com/...' },
 //     { judul: 'Penjumlahan dan pengurangan sederhana' },
-//   ],
+//   ...MATERI_SD1,],
 export const MATERI = {
   // ---------------------------------------------------------------
   // SD KELAS 1
@@ -562,4 +562,5 @@ export const MATERI = {
     { judul: 'Pengolahan bahan pangan setengah jadi' },
     { judul: 'Rekayasa alat teknologi tepat guna' },
   ],
+   ...MATERI_SD1,
 }
