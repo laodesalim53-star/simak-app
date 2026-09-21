@@ -1,24 +1,26 @@
-import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Loader2, Plus, Trash2 } from 'lucide-react'
-import { useAuth } from '../lib/AuthContext'
-import {
-  AreaLembar,
-  BagianSK as Bagian,
-  BarAtasCetak,
-  FieldSK as Field,
-  GayaCetakSK,
-  HalamanLampiran,
-  SEKOLAH_KOSONG,
-  ambilGuruDanKelas,
-  ambilProfilSekolah,
-  inputSK as inputCls,
-  isKepalaSekolah,
-  isi,
-  isoHariIni,
-  tahunPelajaranSekarang,
-  urutkanGuru,
-} from './CetakSK'
+ import { useEffect, useRef, useState } from 'react'
+ import { useNavigate } from 'react-router-dom'
+-import { Loader2, Plus, Trash2 } from 'lucide-react'
++import { Loader2, Plus, Trash2, Send } from 'lucide-react'
+ import { useAuth } from '../lib/AuthContext'
++import { supabase } from '../lib/supabaseClient'
+ import {
+   AreaLembar,
+   BagianSK as Bagian,
+   BarAtasCetak,
+   FieldSK as Field,
+   GayaCetakSK,
+   HalamanLampiran,
+   SEKOLAH_KOSONG,
+   ambilGuruDanKelas,
+   ambilProfilSekolah,
+   inputSK as inputCls,
+   isKepalaSekolah,
+   isi,
+   isoHariIni,
+   tahunPelajaranSekarang,
+   urutkanGuru,
+ } from './CetakSK'
 
 // DaftarHonor — komponen bersama untuk DAFTAR PENERIMAAN HONORARIUM per
 // kegiatan (bukan Surat Keputusan): tabel Nama/NIP, Pangkat/Gol, Dibayarkan,
@@ -62,6 +64,48 @@ export default function DaftarHonor({ konfig }) {
   const [memuat, setMemuat] = useState(true)
   const [galat, setGalat] = useState('')
   const [ringkas, setRingkas] = useState('')
+    const [mengirim, setMengirim] = useState(false)
+
+  // Kirim tiap penerima di daftar sebagai satu baris Kuitansi Jasa (tabel
+  // `kuitansi`, jenis='kuitansi_jasa') — persis format yang dibuat
+  // KuitansiJasaModal, supaya langsung muncul di riwayat Kuitansi Jasa tanpa
+  // perlu "Tarik dari Kuitansi" lagi. Nomor tiap baris diambil dari RPC
+  // next_nomor_kuitansi yang sama dipakai kuitansi jasa manual.
+  async function kirimKeKuitansiJasa() {
+    const dikirim = barisTabel.filter((b) => String(b.nama || '').trim())
+    if (dikirim.length === 0) {
+      alert('Belum ada penerima yang bisa dikirim. Isi nama penerima terlebih dahulu.')
+      return
+    }
+    if (!confirm(`Kirim ${dikirim.length} penerima ke Kuitansi Jasa? Setiap penerima akan dibuatkan satu kuitansi.`)) return
+
+    setMengirim(true)
+    try {
+      for (const b of dikirim) {
+        const { data: nomorData, error: nomorErr } = await supabase.rpc('next_nomor_kuitansi', { p_jenis: 'kuitansi_jasa' })
+        if (nomorErr) throw nomorErr
+
+        const payload = {
+          jenis: 'kuitansi_jasa',
+          nomor: nomorData,
+          no_bukti: '',
+          tanggal: sk.tanggal,
+          diterima_dari: b.nama,
+          untuk_pembayaran: isi(sk.kegiatan, konfig.objek || ''),
+          jumlah_total: b.diterima,
+          nama_penerima: b.nama,
+          alamat_penerima: '',
+        }
+        const { error: insertErr } = await supabase.from('kuitansi').insert(payload)
+        if (insertErr) throw insertErr
+      }
+      navigate('/kuitansi-jasa')
+    } catch (err) {
+      alert('Gagal mengirim ke Kuitansi Jasa: ' + err.message)
+    } finally {
+      setMengirim(false)
+    }
+  }
 
   async function muatDariData() {
     if (!sekolahId) {
@@ -153,6 +197,23 @@ export default function DaftarHonor({ konfig }) {
             {ringkas} {baris.length} orang akan masuk daftar.
           </div>
         )}
+                 {!memuat && !galat && ringkas && (
+           <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 mb-4">
+             {ringkas} {baris.length} orang akan masuk daftar.
+           </div>
+         )}
++
++        <div className="flex justify-end mb-4">
++          <button
++            type="button"
++            onClick={kirimKeKuitansiJasa}
++            disabled={mengirim || barisTabel.length === 0}
++            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
++          >
++            {mengirim ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
++            Kirim ke Kuitansi Jasa
++          </button>
++        </div>
 
         <Bagian judul="Data Kegiatan" keterangan="Nama kegiatan, tempat, dan tanggal penandatanganan.">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
