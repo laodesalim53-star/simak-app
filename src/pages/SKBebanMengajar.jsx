@@ -561,7 +561,9 @@ export default function SKBebanMengajar() {
         logoUrl,
       })
 
-      const tempatBaru = profil?.tempat_ttd || profil?.kecamatan || ''
+      // Hanya tempat_ttd — kolom kecamatan berisi teks kop lengkap ("KECAMATAN ..."),
+      // kurang pantas dipakai sebagai "Ditetapkan di".
+      const tempatBaru = profil?.tempat_ttd || ''
       if (tempatBaru) setSk((s) => ({ ...s, tempat: s.tempat || tempatBaru }))
 
       setBaris(susunBaris(guru, kelas, profil, jam))
