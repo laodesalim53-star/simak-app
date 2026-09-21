@@ -1,13 +1,15 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowRight, LogIn, Video, Download, Monitor, Apple, Share, SquarePlus, X, BookOpen, IdCard, Wallet, MessageCircle, Settings, Users, ShoppingBag, Phone, Send, Fish, Shell, Shirt, Pencil, Building2, Landmark, Megaphone, FileText, Library, ClipboardCheck } from 'lucide-react'
 // PENTING: sesuaikan path import ini dengan lokasi client Supabase Anda
 // yang sudah ada di project (biasanya di src/lib/ atau src/services/).
 import { supabase } from '../lib/supabaseClient'
-// Widget "Tanya AI" — ditempatkan di pojok KIRI bawah supaya tidak
-// bertabrakan dengan tombol WhatsApp/Live Chat yang sudah ada di kanan bawah.
-// Sesuaikan path import ini dengan lokasi file TanyaAI.jsx di project Anda.
-import TanyaAI from '../components/TanyaAI'
+
+// Widget "Tanya AI" — dimuat malas (lazy) supaya tidak memperberat
+// pemuatan awal beranda, terutama di sinyal lambat. Ditempatkan di pojok
+// KIRI bawah supaya tidak bertabrakan dengan tombol WhatsApp/Live Chat di
+// kanan bawah. Sesuaikan path import ini dengan lokasi file TanyaAI.jsx.
+const TanyaAI = lazy(() => import('../components/TanyaAI'))
 
 // Halaman utama publik (landing page) — ditampilkan di "/" untuk pengunjung
 // yang belum login. Tombol "Daftar" & "Masuk" mengarah ke rute React Router
@@ -31,11 +33,50 @@ import TanyaAI from '../components/TanyaAI'
 
 const NOMOR_WA_ADMIN = '6282197574897'
 
+// Alamat situs yang ditampilkan di panduan instal iPhone/iPad. Dipisah jadi
+// konstanta supaya kalau domain berubah cukup diganti di satu tempat.
+const DOMAIN_SITUS = 'www.simaksdnwaria.site'
+
 // Foto/ilustrasi "Ibu Guru" yang dipakai sebagai logo tombol kontak
 // mengambang & header panel Live Chat, menggantikan ikon generik. Taruh
 // file gambarnya di folder public proyek Anda dengan nama persis di bawah
 // ini — ganti nama filenya di sini kalau nama file Anda berbeda.
 const FOTO_ADMIN_CHAT = '/ibu-guru-chat.jpg'
+
+// Tangkapan layar aplikasi (dasbor) untuk bagian atas beranda. Taruh
+// filenya di folder public dengan nama di bawah ini. Kalau file belum ada,
+// bagian ini otomatis tidak ditampilkan dan tampilan hero tetap rapi.
+// Saran: lebar ±1200px, rasio 16:10, format .webp/.png, ukuran < 200 KB.
+const FOTO_HERO = '/screenshot-dasbor.png'
+
+// ---- Pembantu localStorage & ID sesi ----------------------------------
+// localStorage bisa melempar error (mode privat, WebView lama, penyimpanan
+// diblokir). Dibungkus try/catch supaya beranda tidak ikut crash.
+function bacaLokal(kunci) {
+  try {
+    return localStorage.getItem(kunci)
+  } catch {
+    return null
+  }
+}
+function tulisLokal(kunci, nilai) {
+  try {
+    localStorage.setItem(kunci, nilai)
+  } catch {
+    // abaikan — chat tetap jalan, hanya tidak diingat antar kunjungan
+  }
+}
+// crypto.randomUUID tidak ada di sebagian WebView Android lama. Fallback
+// tetap menghasilkan UUID v4 yang valid supaya cocok dengan kolom uuid.
+function buatIdSesi() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16)
+  })
+}
 
 // ============================================================
 // DATA AREA — sumber tunggal untuk tile & kartu di bagian "area".
@@ -242,6 +283,49 @@ export default function Beranda() {
         .filter((it) => typeof it === 'string' || untuk === 'semua' || it.u.includes(untuk))
         .map((it) => (typeof it === 'string' ? it : it.t)),
     }))
+
+  // Klik tile -> gulir ke kartu area yang bersangkutan. Menghormati
+  // pengaturan "kurangi gerakan" milik perangkat.
+  function gulirKeArea(e, id) {
+    e.preventDefault()
+    const el = document.getElementById(`area-${id}`)
+    if (!el) return
+    const kurangiGerak = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    el.scrollIntoView({ behavior: kurangiGerak ? 'auto' : 'smooth', block: 'start' })
+    el.focus({ preventScroll: true })
+  }
+
+  // Judul tab & deskripsi halaman (penting untuk mesin pencari dan tab
+  // browser). Judul lama dikembalikan saat pengunjung pindah halaman.
+  // Catatan: pratinjau saat link dibagikan di WhatsApp memakai tag Open
+  // Graph di index.html, bukan dari sini.
+  useEffect(() => {
+    const judulSebelumnya = document.title
+    document.title = 'SIMAK — Aplikasi terpadu untuk Sekolah & KUA'
+    let meta = document.querySelector('meta[name="description"]')
+    if (!meta) {
+      meta = document.createElement('meta')
+      meta.setAttribute('name', 'description')
+      document.head.appendChild(meta)
+    }
+    meta.setAttribute(
+      'content',
+      'SIMAK: sistem informasi terpadu untuk Sekolah dan Kantor Urusan Agama (KUA) — akademik, administrasi, keuangan, laporan, dan komunikasi dalam satu aplikasi.'
+    )
+    return () => {
+      document.title = judulSebelumnya
+    }
+  }, [])
+
+  // Tangkapan layar di hero: hanya ditampilkan bila file-nya benar-benar
+  // ada dan berhasil dimuat, jadi tidak ada gambar rusak.
+  const [fotoHeroAda, setFotoHeroAda] = useState(false)
+  useEffect(() => {
+    const img = new Image()
+    img.onload = () => setFotoHeroAda(true)
+    img.src = FOTO_HERO
+  }, [])
+
   // Gabung rapat langsung dari beranda lewat link/kode yang dibagikan
   // host (misal lewat WhatsApp). Menerima link penuh (.../rapat/xxxx) atau
   // kode ruangan saja.
@@ -250,6 +334,16 @@ export default function Beranda() {
   // seperti APK/MSIX, jadi guru pengguna iOS dituntun lewat panduan manual
   // (Safari > Share > Tambah ke Layar Utama) alih-alih tombol download.
   const [showIosGuide, setShowIosGuide] = useState(false)
+
+  // Tekan Esc untuk menutup panduan iOS.
+  useEffect(() => {
+    if (!showIosGuide) return
+    function saatTombol(e) {
+      if (e.key === 'Escape') setShowIosGuide(false)
+    }
+    window.addEventListener('keydown', saatTombol)
+    return () => window.removeEventListener('keydown', saatTombol)
+  }, [showIosGuide])
 
   // Menu pilihan kontak (WhatsApp / Live Chat) dari tombol mengambang.
   const [showFabMenu, setShowFabMenu] = useState(false)
@@ -260,20 +354,21 @@ export default function Beranda() {
   // Setiap pengunjung punya sesi_id unik (disimpan di localStorage) agar
   // balasan admin bisa diarahkan ke percakapan yang tepat.
   const [namaPengunjung, setNamaPengunjung] = useState(
-    () => localStorage.getItem('simak_nama_pengunjung') || ''
+    () => bacaLokal('simak_nama_pengunjung') || ''
   )
   const [inputNama, setInputNama] = useState('')
   const [sesiId] = useState(() => {
-    let id = localStorage.getItem('simak_sesi_chat')
+    let id = bacaLokal('simak_sesi_chat')
     if (!id) {
-      id = crypto.randomUUID()
-      localStorage.setItem('simak_sesi_chat', id)
+      id = buatIdSesi()
+      tulisLokal('simak_sesi_chat', id)
     }
     return id
   })
   const [pesanList, setPesanList] = useState([])
   const [pesanBaru, setPesanBaru] = useState('')
   const [mengirim, setMengirim] = useState(false)
+  const [galatKirim, setGalatKirim] = useState(false)
   const chatBodyRef = useRef(null)
 
   // Ambil riwayat chat + dengarkan pesan baru (balasan admin) secara realtime
@@ -289,7 +384,10 @@ export default function Beranda() {
         .select('*')
         .eq('sesi_id', sesiId)
         .order('dibuat_pada', { ascending: true })
-      if (!error && aktif && data) setPesanList(data)
+      // Pesan yang masih "menunggu" (lokal) tidak dihapus oleh hasil muat.
+      if (!error && aktif && data) {
+        setPesanList((prev) => [...data, ...prev.filter((p) => p.lokal)])
+      }
     }
     muatRiwayat()
 
@@ -304,7 +402,22 @@ export default function Beranda() {
           filter: `sesi_id=eq.${sesiId}`,
         },
         (payload) => {
-          setPesanList((prev) => [...prev, payload.new])
+          const baru = payload.new
+          setPesanList((prev) => {
+            // Sudah ada (mis. dobel event) -> abaikan.
+            if (prev.some((p) => p.id === baru.id)) return prev
+            // Pesan pengunjung sendiri: ganti gelembung sementara dengan
+            // data asli dari server supaya tidak tampil dua kali.
+            if (baru.pengirim === 'pengunjung') {
+              const idx = prev.findIndex((p) => p.lokal && p.pesan === baru.pesan)
+              if (idx >= 0) {
+                const salinan = [...prev]
+                salinan[idx] = baru
+                return salinan
+              }
+            }
+            return [...prev, baru]
+          })
         }
       )
       .subscribe()
@@ -326,7 +439,7 @@ export default function Beranda() {
     e.preventDefault()
     const nama = inputNama.trim()
     if (!nama) return
-    localStorage.setItem('simak_nama_pengunjung', nama)
+    tulisLokal('simak_nama_pengunjung', nama)
     setNamaPengunjung(nama)
   }
 
@@ -335,7 +448,17 @@ export default function Beranda() {
     const isi = pesanBaru.trim()
     if (!isi || mengirim) return
     setMengirim(true)
+    setGalatKirim(false)
     setPesanBaru('')
+
+    // Tampilkan pesan langsung (optimistic) supaya pengunjung tidak
+    // menunggu — meski koneksi realtime lambat atau terputus.
+    const idSementara = `lokal-${Date.now()}`
+    setPesanList((prev) => [
+      ...prev,
+      { id: idSementara, pengirim: 'pengunjung', pesan: isi, lokal: true },
+    ])
+
     const { error } = await supabase.from('live_chat_pesan').insert({
       sesi_id: sesiId,
       nama_pengirim: namaPengunjung,
@@ -343,8 +466,11 @@ export default function Beranda() {
       pesan: isi,
     })
     if (error) {
-      // Kembalikan teks ke input kalau gagal terkirim, supaya tidak hilang
+      // Gagal: tarik kembali gelembung sementara, kembalikan teks ke
+      // input supaya tidak hilang, dan beri tahu pengunjung.
+      setPesanList((prev) => prev.filter((p) => p.id !== idSementara))
       setPesanBaru(isi)
+      setGalatKirim(true)
     }
     setMengirim(false)
   }
@@ -362,79 +488,84 @@ export default function Beranda() {
     <div className="beranda-canvas">
       <div className="beranda-wrap">
 
-        <div className="beranda-side">
-          <div className="side-avatar">S</div>
-          <div className="side-dot active"></div>
-          <div className="side-dot"></div>
-          <div className="side-dot"></div>
-          <div className="side-dot"></div>
-          <div className="side-dot"></div>
-          <div className="side-dot"></div>
-        </div>
-
         <div className="beranda-main">
 
           <div className="beranda-header">
             <BatikOverlay patternId="batikHero" strokeColor="#d4af37" opacity={0.9} />
 
-            <div className="header-content">
-              <div className="brand-logo">
-                <div className="brand-logo-icon"><Landmark size={22} strokeWidth={2.5} /></div>
-                <span className="brand-logo-text">SIMAK</span>
-                {/* Badge kecil di samping logo menandaskan bahwa platform ini
-                    sekarang melayani dua jenis pendaftar: sekolah & kantor. */}
-                <span className="brand-logo-badge">
-                  <Building2 size={11} strokeWidth={2.6} />
-                  Sekolah &amp; KUA
-                </span>
-              </div>
-              <h1 className="beranda-title">Satu aplikasi, untuk Sekolah &amp; KUA</h1>
-              <p className="beranda-sub">
-                Sistem informasi terpadu untuk Sekolah dan Kantor Urusan Agama (KUA), dengan{' '}
-                {DAFTAR_AREA.length} area utama dan puluhan modul siap pakai — dari akademik dan
-                administrasi siswa, penyuluhan dan kepenghuluan, hingga keuangan, komunikasi,
-                dan laporan pimpinan.
-              </p>
-              <div className="header-actions">
-                <Link to="/register" className="btn-primary">
-                  Daftar sekarang
-                  <ArrowRight size={16} strokeWidth={2.5} />
-                </Link>
-                <Link to="/login" className="btn-ghost">
-                  <LogIn size={15} strokeWidth={2.5} />
-                  Sudah punya akun? Masuk
-                </Link>
-                {/* Link ke Toko Sekolah — sengaja pakai <Link> biasa (bukan
-                    tombol instal/daftar) supaya pengunjung publik bisa
-                    langsung lihat-lihat toko TANPA perlu login/daftar dulu.
-                    Route "/toko" memang sudah publik di App.jsx. Diberi
-                    gaya outline (bukan solid) supaya tidak bersaing dengan
-                    CTA utama "Daftar sekarang". */}
-                <Link to="/toko" className="btn-outline-toko">
-                  <ShoppingBag size={16} strokeWidth={2.5} />
-                  Lihat Toko Sekolah
-                </Link>
+            <div className={`header-content${fotoHeroAda ? ' has-shot' : ''}`}>
+              <div className="header-text">
+                <div className="brand-logo">
+                  <div className="brand-logo-icon"><Landmark size={22} strokeWidth={2.5} /></div>
+                  <span className="brand-logo-text">SIMAK</span>
+                  {/* Badge kecil di samping logo menandaskan bahwa platform ini
+                      sekarang melayani dua jenis pendaftar: sekolah & kantor. */}
+                  <span className="brand-logo-badge">
+                    <Building2 size={11} strokeWidth={2.6} />
+                    Sekolah &amp; KUA
+                  </span>
+                </div>
+                <h1 className="beranda-title">Satu aplikasi, untuk Sekolah &amp; KUA</h1>
+                <p className="beranda-sub">
+                  Sistem informasi terpadu untuk Sekolah dan Kantor Urusan Agama (KUA), dengan{' '}
+                  {DAFTAR_AREA.length} area utama dan puluhan modul siap pakai — dari akademik dan
+                  administrasi siswa, penyuluhan dan kepenghuluan, hingga keuangan, komunikasi,
+                  dan laporan pimpinan.
+                </p>
+                <div className="header-actions">
+                  <Link to="/register" className="btn-primary">
+                    Daftar sekarang
+                    <ArrowRight size={16} strokeWidth={2.5} />
+                  </Link>
+                  <Link to="/login" className="btn-ghost">
+                    <LogIn size={15} strokeWidth={2.5} />
+                    Sudah punya akun? Masuk
+                  </Link>
+                  {/* Link ke Toko Sekolah — sengaja pakai <Link> biasa (bukan
+                      tombol instal/daftar) supaya pengunjung publik bisa
+                      langsung lihat-lihat toko TANPA perlu login/daftar dulu.
+                      Route "/toko" memang sudah publik di App.jsx. Diberi
+                      gaya outline (bukan solid) supaya tidak bersaing dengan
+                      CTA utama "Daftar sekarang". Disembunyikan pada
+                      tampilan KUA karena Toko Sekolah khusus sekolah. */}
+                  {untuk !== 'kua' && (
+                    <Link to="/toko" className="btn-outline-toko">
+                      <ShoppingBag size={16} strokeWidth={2.5} />
+                      Lihat Toko Sekolah
+                    </Link>
+                  )}
+                </div>
+
+                <div className="install-row">
+                  <span className="install-label">Instal aplikasi:</span>
+                  <a href="/simak-app.apk" download className="install-chip">
+                    <Download size={14} strokeWidth={2.4} />
+                    Android
+                  </a>
+                  <a href="/simak-app-windows.msix" download className="install-chip">
+                    <Monitor size={14} strokeWidth={2.4} />
+                    Windows
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setShowIosGuide(true)}
+                    className="install-chip"
+                  >
+                    <Apple size={14} strokeWidth={2.4} />
+                    iPhone/iPad
+                  </button>
+                </div>
               </div>
 
-              <div className="install-row">
-                <span className="install-label">Instal aplikasi:</span>
-                <a href="/simak-app.apk" download className="install-chip">
-                  <Download size={14} strokeWidth={2.4} />
-                  Android
-                </a>
-                <a href="/simak-app-windows.msix" download className="install-chip">
-                  <Monitor size={14} strokeWidth={2.4} />
-                  Windows
-                </a>
-                <button
-                  type="button"
-                  onClick={() => setShowIosGuide(true)}
-                  className="install-chip"
-                >
-                  <Apple size={14} strokeWidth={2.4} />
-                  iPhone/iPad
-                </button>
-              </div>
+              {fotoHeroAda && (
+                <div className="hero-shot">
+                  <img
+                    src={FOTO_HERO}
+                    alt="Contoh tampilan dasbor aplikasi SIMAK"
+                    decoding="async"
+                  />
+                </div>
+              )}
             </div>
           </div>
 
@@ -459,6 +590,7 @@ export default function Beranda() {
                 value={kodeRapat}
                 onChange={(e) => setKodeRapat(e.target.value)}
                 placeholder="Tempel link atau kode ruangan"
+                aria-label="Link atau kode ruangan rapat"
                 className="meet-input"
               />
               <button type="submit" className="meet-btn" disabled={!kodeRapat.trim()}>
@@ -470,16 +602,19 @@ export default function Beranda() {
           <div className="area-showcase">
             {/* Ilustrasi kelas ditampilkan sangat samar sebagai latar
                 dekoratif, statis (tanpa animasi timbul-tenggelam). Letakkan
-                file kelas-ilustrasi.png di folder public proyek Anda. */}
+                file kelas-ilustrasi.png di folder public proyek Anda.
+                Dimuat malas karena berada di bawah layar pertama. */}
             <img
               src="/kelas-ilustrasi.png"
               alt=""
               aria-hidden="true"
+              loading="lazy"
+              decoding="async"
               className="area-bg-image"
             />
 
             <div className="area-showcase-heading">
-              <h2 className="area-showcase-title">
+              <h2 className="area-showcase-title" aria-live="polite">
                 {untuk === 'kua'
                   ? `${areaTampil.length} area untuk KUA`
                   : untuk === 'sekolah'
@@ -501,13 +636,15 @@ export default function Beranda() {
                   </>
                 )}
               </p>
-              <div className="aud-switch" role="tablist" aria-label="Pilih jenis instansi">
+              {/* Pemilih jenis instansi: kelompok tombol dengan status
+                  tekan (aria-pressed), bukan tab — karena tidak ada panel
+                  tab terpisah, hanya isi halaman yang disaring. */}
+              <div className="aud-switch" role="group" aria-label="Pilih jenis instansi">
                 {OPSI_UNTUK.map((o) => (
                   <button
                     key={o.id}
                     type="button"
-                    role="tab"
-                    aria-selected={untuk === o.id}
+                    aria-pressed={untuk === o.id}
                     className={`aud-btn${untuk === o.id ? ' active' : ''}`}
                     onClick={() => pilihUntuk(o.id)}
                   >
@@ -534,6 +671,8 @@ export default function Beranda() {
                     <p className="tile-name">{a.nama}</p>
                   </>
                 )
+                // Semua tile bisa diklik: Toko -> halaman toko, lainnya ->
+                // gulir ke kartu area di bawah.
                 return a.link ? (
                   <Link
                     key={a.id}
@@ -544,9 +683,15 @@ export default function Beranda() {
                     {isi}
                   </Link>
                 ) : (
-                  <div key={a.id} className="tile" style={{ background: a.warna }}>
+                  <a
+                    key={a.id}
+                    href={`#area-${a.id}`}
+                    className="tile tile-link"
+                    style={{ background: a.warna }}
+                    onClick={(e) => gulirKeArea(e, a.id)}
+                  >
                     {isi}
-                  </div>
+                  </a>
                 )
               })}
             </div>
@@ -574,7 +719,12 @@ export default function Beranda() {
                   // Kartu berupa tautan (Toko Sekolah): border biru tipis +
                   // badge "Tanpa login" statis, panah CTA bergeser saat di-hover.
                   return (
-                    <Link key={a.id} to={a.link} className="cat-card wide cat-card-link cat-card-toko">
+                    <Link
+                      key={a.id}
+                      id={`area-${a.id}`}
+                      to={a.link}
+                      className="cat-card wide cat-card-link cat-card-toko"
+                    >
                       <span className="cat-card-toko-badge">Tanpa login</span>
                       <span className="cat-tag" style={{ background: a.warna }}>
                         Area {a.nomor} — bisa diakses tanpa login
@@ -589,7 +739,7 @@ export default function Beranda() {
                           statis dan samar, merujuk pada hasil bumi/laut khas
                           Kepulauan Aru yang bisa dijual lewat toko ini. */}
                       <span className="cat-card-toko-deco" aria-hidden="true">
-                        <Fish size={22} strokeWidth={2} className="deco-icon" />
+                        <Fish size={22} strokeWidth={2} className="deco-icon deco-icon-ikan" />
                         <Shell size={18} strokeWidth={2} className="deco-icon deco-icon-kerang" />
                         <Shirt size={22} strokeWidth={2} className="deco-icon deco-icon-pakaian" />
                         <Pencil size={18} strokeWidth={2} className="deco-icon deco-icon-atk" />
@@ -599,7 +749,7 @@ export default function Beranda() {
                 }
 
                 return (
-                  <div key={a.id} className="cat-card">
+                  <div key={a.id} id={`area-${a.id}`} tabIndex={-1} className="cat-card">
                     <span className="cat-tag" style={{ background: a.warna }}>Area {a.nomor}</span>
                     {badgeJenis === 'sekolah' && <span className="cat-card-badge-sekolah">Khusus sekolah</span>}
                     {badgeJenis === 'kua' && <span className="cat-card-badge-kua">Khusus KUA</span>}
@@ -629,17 +779,25 @@ export default function Beranda() {
       </div>
 
       {/* Modal panduan instal untuk iPhone/iPad, muncul saat tombol
-          "iPhone/iPad" diklik. */}
+          "iPhone/iPad" diklik. Bisa ditutup dengan tombol X, klik di luar
+          kotak, atau tombol Esc. */}
       {showIosGuide && (
         <div className="ios-overlay" onClick={() => setShowIosGuide(false)}>
-          <div className="ios-modal" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="ios-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ios-modal-judul"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="ios-modal-header">
-              <h3 className="ios-modal-title">Cara instal di iPhone/iPad</h3>
+              <h3 className="ios-modal-title" id="ios-modal-judul">Cara instal di iPhone/iPad</h3>
               <button
                 type="button"
                 onClick={() => setShowIosGuide(false)}
                 className="ios-modal-close"
                 aria-label="Tutup"
+                autoFocus
               >
                 <X size={18} />
               </button>
@@ -650,7 +808,7 @@ export default function Beranda() {
             <ol className="ios-steps">
               <li>
                 <span className="ios-step-num">1</span>
-                <span>Buka <strong>www.simaksdnwaria.site</strong> lewat browser <strong>Safari</strong> (bukan Chrome).</span>
+                <span>Buka <strong>{DOMAIN_SITUS}</strong> lewat browser <strong>Safari</strong> (bukan Chrome).</span>
               </li>
               <li>
                 <span className="ios-step-num">2</span>
@@ -704,12 +862,13 @@ export default function Beranda() {
           type="button"
           className="wa-fab"
           aria-label="Hubungi kami"
+          aria-expanded={showFabMenu}
           onClick={() => setShowFabMenu((v) => !v)}
         >
           {showFabMenu ? (
             <X size={24} strokeWidth={2.4} />
           ) : (
-            <img src={FOTO_ADMIN_CHAT} alt="Hubungi kami" className="wa-fab-avatar" />
+            <img src={FOTO_ADMIN_CHAT} alt="" className="wa-fab-avatar" />
           )}
           {!showFabMenu && <span className="wa-fab-ring"></span>}
         </button>
@@ -719,7 +878,7 @@ export default function Beranda() {
           "live_chat_pesan" sehingga langsung masuk ke aplikasi/dashboard
           admin. */}
       {showLiveChat && (
-        <div className="chat-panel">
+        <div className="chat-panel" role="dialog" aria-label="Live Chat SIMAK">
           <div className="chat-panel-header">
             <div className="chat-panel-title">
               <img src={FOTO_ADMIN_CHAT} alt="" className="chat-panel-avatar" />
@@ -743,6 +902,7 @@ export default function Beranda() {
                 value={inputNama}
                 onChange={(e) => setInputNama(e.target.value)}
                 placeholder="Nama Anda"
+                aria-label="Nama Anda"
                 className="chat-nama-input"
                 autoFocus
               />
@@ -752,7 +912,7 @@ export default function Beranda() {
             </form>
           ) : (
             <>
-              <div className="chat-panel-body" ref={chatBodyRef}>
+              <div className="chat-panel-body" ref={chatBodyRef} aria-live="polite">
                 {pesanList.length === 0 && (
                   <p className="chat-empty">
                     Halo {namaPengunjung}, silakan tulis pertanyaan Anda. Tim kami akan segera membalas.
@@ -767,15 +927,26 @@ export default function Beranda() {
                   </div>
                 ))}
               </div>
+              {galatKirim && (
+                <p className="chat-galat" role="alert">
+                  Pesan belum terkirim. Periksa koneksi internet lalu coba lagi.
+                </p>
+              )}
               <form className="chat-input-row" onSubmit={kirimPesanLiveChat}>
                 <input
                   type="text"
                   value={pesanBaru}
                   onChange={(e) => setPesanBaru(e.target.value)}
                   placeholder="Tulis pesan..."
+                  aria-label="Tulis pesan"
                   className="chat-input"
                 />
-                <button type="submit" className="chat-send-btn" disabled={!pesanBaru.trim() || mengirim}>
+                <button
+                  type="submit"
+                  className="chat-send-btn"
+                  aria-label="Kirim pesan"
+                  disabled={!pesanBaru.trim() || mengirim}
+                >
                   <Send size={16} strokeWidth={2.4} />
                 </button>
               </form>
@@ -787,8 +958,10 @@ export default function Beranda() {
       {/* Widget Tanya AI — ditempatkan terpisah di pojok KIRI bawah agar
           tidak bertumpuk dengan tombol WhatsApp/Live Chat di kanan bawah.
           Komponen ini sudah mengatur floating button + panel chat-nya
-          sendiri (lihat TanyaAI.jsx). */}
-      <TanyaAI />
+          sendiri (lihat TanyaAI.jsx). Dimuat malas lewat Suspense. */}
+      <Suspense fallback={null}>
+        <TanyaAI />
+      </Suspense>
 
       {/* Style khusus halaman Beranda — pola sama dengan Login.jsx (style
           ditulis inline lewat <style> di dalam komponen). */}
@@ -797,12 +970,28 @@ export default function Beranda() {
 
         .beranda-canvas * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         .beranda-canvas {
-          font-family: 'Plus Jakarta Sans', sans-serif;
+          font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
           background: #E7E9F5;
           padding: 22px;
           min-height: 100vh;
           touch-action: manipulation;
         }
+
+        /* Fokus keyboard yang terlihat jelas di semua elemen interaktif */
+        .beranda-canvas a:focus-visible,
+        .beranda-canvas button:focus-visible,
+        .beranda-canvas input:focus-visible,
+        .beranda-canvas [tabindex]:focus-visible {
+          outline: 3px solid #4E5FE0;
+          outline-offset: 2px;
+        }
+        .beranda-header a:focus-visible,
+        .beranda-header button:focus-visible,
+        .beranda-footer a:focus-visible,
+        .chat-panel-header button:focus-visible {
+          outline-color: #fff;
+        }
+
         .beranda-wrap {
           max-width: 1360px;
           margin: 0 auto;
@@ -812,32 +1001,6 @@ export default function Beranda() {
           box-shadow: 0 24px 50px rgba(21, 23, 55, 0.18);
           background: #fff;
         }
-
-        .beranda-side {
-          width: 68px;
-          flex-shrink: 0;
-          background: linear-gradient(180deg, #14162C 0%, #2D3072 100%);
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          padding: 22px 0;
-          gap: 16px;
-        }
-        .side-avatar {
-          width: 38px; height: 38px;
-          border-radius: 12px;
-          background: #E8683F;
-          color: #fff;
-          display: flex; align-items: center; justify-content: center;
-          font-weight: 700;
-          font-size: 15px;
-        }
-        .side-dot {
-          width: 30px; height: 30px;
-          border-radius: 9px;
-          background: rgba(255,255,255,0.08);
-        }
-        .side-dot.active { background: rgba(255,255,255,0.16); }
 
         .beranda-main {
           flex: 1;
@@ -863,6 +1026,22 @@ export default function Beranda() {
           padding: 34px 36px 28px;
         }
         .header-content { position: relative; }
+        /* Bila ada tangkapan layar: teks di kiri, gambar di kanan. */
+        .header-content.has-shot {
+          display: grid;
+          grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+          gap: 32px;
+          align-items: center;
+        }
+        .hero-shot img {
+          display: block;
+          width: 100%;
+          height: auto;
+          border-radius: 14px;
+          border: 1px solid rgba(255,255,255,0.2);
+          box-shadow: 0 22px 44px rgba(8, 9, 30, 0.45);
+          background: #1B1E4A;
+        }
         .brand-logo {
           display: flex;
           align-items: center;
@@ -888,7 +1067,7 @@ export default function Beranda() {
           display: inline-flex;
           align-items: center;
           gap: 5px;
-          font-size: 10.5px;
+          font-size: 11.5px;
           font-weight: 700;
           color: #C9F0FF;
           background: rgba(125, 211, 252, 0.14);
@@ -906,7 +1085,7 @@ export default function Beranda() {
         }
         .beranda-sub {
           font-size: 14.5px;
-          color: #B7BAD6;
+          color: #C4C7E0;
           margin: 0 0 24px;
           max-width: 54ch;
           line-height: 1.6;
@@ -971,20 +1150,21 @@ export default function Beranda() {
           margin-top: 16px;
         }
         .install-label {
-          font-size: 12.5px;
-          color: #8285A8;
+          font-size: 13px;
+          color: #B7BAD6;
         }
         .install-chip {
           display: inline-flex;
           align-items: center;
           gap: 6px;
           font-family: inherit;
-          font-size: 12.5px;
+          font-size: 13px;
           font-weight: 600;
-          color: #D8DBF5;
+          color: #E4E6FA;
           background: rgba(255,255,255,0.06);
-          border: 1px solid rgba(255,255,255,0.14);
-          padding: 7px 13px;
+          border: 1px solid rgba(255,255,255,0.18);
+          padding: 8px 14px;
+          min-height: 36px;
           border-radius: 999px;
           cursor: pointer;
           text-decoration: none;
@@ -1049,6 +1229,9 @@ export default function Beranda() {
           height: 100%;
           object-fit: cover;
         }
+        /* PERBAIKAN: overflow: hidden dihapus dari .wa-fab. Sebelumnya ring
+           yang membesar 1.6x ikut terpotong sehingga denyutnya tidak
+           terlihat. Foto tetap bulat karena <img> punya border-radius sendiri. */
         .wa-fab {
           width: 58px;
           height: 58px;
@@ -1062,7 +1245,6 @@ export default function Beranda() {
           border: none;
           cursor: pointer;
           position: relative;
-          overflow: hidden;
           padding: 0;
         }
         .wa-fab-avatar {
@@ -1085,6 +1267,7 @@ export default function Beranda() {
         }
         @media (prefers-reduced-motion: reduce) {
           .wa-fab-ring { animation: none; }
+          .fab-menu, .chat-panel { animation: none; }
         }
         @media (max-width: 560px) {
           .contact-fab-wrap { right: 16px; bottom: 16px; }
@@ -1130,7 +1313,7 @@ export default function Beranda() {
           flex-shrink: 0;
         }
         .chat-panel-close {
-          width: 28px; height: 28px;
+          width: 32px; height: 32px;
           border-radius: 999px;
           background: rgba(255,255,255,0.12);
           border: none;
@@ -1145,9 +1328,9 @@ export default function Beranda() {
           flex-direction: column;
           gap: 10px;
         }
-        .chat-nama-label { font-size: 12.5px; color: #5B6172; margin: 0; line-height: 1.5; }
+        .chat-nama-label { font-size: 13px; color: #4A5064; margin: 0; line-height: 1.5; }
         .chat-nama-input {
-          font-size: 14px;
+          font-size: 16px;
           padding: 11px 14px;
           border-radius: 11px;
           border: 1px solid #E2E5F0;
@@ -1176,10 +1359,20 @@ export default function Beranda() {
           background: #F7F8FC;
           min-height: 200px;
         }
-        .chat-empty { font-size: 12.5px; color: #7A8094; line-height: 1.6; margin: 0; }
+        .chat-empty { font-size: 13px; color: #4A5064; line-height: 1.6; margin: 0; }
+        .chat-galat {
+          margin: 0;
+          padding: 8px 14px;
+          font-size: 12.5px;
+          font-weight: 600;
+          color: #9B1C1C;
+          background: #FDECEC;
+          border-top: 1px solid #F7CACA;
+          flex-shrink: 0;
+        }
         .chat-bubble {
           max-width: 78%;
-          font-size: 13px;
+          font-size: 13.5px;
           line-height: 1.45;
           padding: 9px 12px;
           border-radius: 14px;
@@ -1209,7 +1402,7 @@ export default function Beranda() {
         .chat-input {
           flex: 1;
           min-width: 0;
-          font-size: 14px;
+          font-size: 16px;
           padding: 10px 14px;
           border-radius: 999px;
           border: 1px solid #E2E5F0;
@@ -1219,7 +1412,7 @@ export default function Beranda() {
         .chat-input:focus { outline: none; border-color: #4E5FE0; background: #fff; }
         .chat-send-btn {
           flex-shrink: 0;
-          width: 38px; height: 38px;
+          width: 40px; height: 40px;
           border-radius: 999px;
           background: #4E5FE0;
           color: #fff;
@@ -1271,8 +1464,8 @@ export default function Beranda() {
           flex-shrink: 0;
         }
         .ios-modal-sub {
-          font-size: 12.5px;
-          color: #7A8094;
+          font-size: 13px;
+          color: #5B6172;
           margin: 0 0 18px;
           line-height: 1.5;
         }
@@ -1309,8 +1502,8 @@ export default function Beranda() {
           color: #3E82F1;
         }
         .ios-modal-note {
-          font-size: 12px;
-          color: #9AA0B4;
+          font-size: 12.5px;
+          color: #6B7186;
           margin: 0;
           padding-top: 12px;
           border-top: 1px solid #EEF0F7;
@@ -1338,7 +1531,7 @@ export default function Beranda() {
           font-size: 14px;
           font-weight: 600;
           line-height: 1.55;
-          color: #8A6620;
+          color: #7A5A1B;
           margin: 0;
         }
 
@@ -1362,8 +1555,8 @@ export default function Beranda() {
           flex-shrink: 0;
         }
         .meet-text { flex: 1; min-width: 180px; }
-        .meet-title { font-size: 13px; font-weight: 700; color: #171A2E; margin: 0 0 2px; }
-        .meet-sub { font-size: 11.5px; color: #7A8094; margin: 0; }
+        .meet-title { font-size: 14px; font-weight: 700; color: #171A2E; margin: 0 0 2px; }
+        .meet-sub { font-size: 12.5px; color: #5B6172; margin: 0; }
         .meet-form {
           display: flex;
           align-items: center;
@@ -1432,8 +1625,8 @@ export default function Beranda() {
           margin: 0 0 4px;
         }
         .area-showcase-sub {
-          font-size: 12.5px;
-          color: #7A8094;
+          font-size: 13.5px;
+          color: #4A5064;
           margin: 0;
           line-height: 1.6;
         }
@@ -1441,7 +1634,7 @@ export default function Beranda() {
           display: inline-block;
           background: #FBBF24;
           color: #78350F;
-          font-size: 10.5px;
+          font-size: 11.5px;
           font-weight: 800;
           padding: 2px 8px;
           border-radius: 999px;
@@ -1480,7 +1673,7 @@ export default function Beranda() {
           justify-content: center;
           float: right;
         }
-        .tile-label { font-size: 11.5px; opacity: 0.85; margin: 0 0 20px; }
+        .tile-label { font-size: 12.5px; opacity: 0.95; margin: 0 0 20px; }
         .tile-name { font-size: 15px; font-weight: 700; line-height: 1.25; margin: 0; }
 
         .tile-badge-sekolah {
@@ -1489,7 +1682,7 @@ export default function Beranda() {
           left: -6px;
           background: #FBBF24;
           color: #78350F;
-          font-size: 9.5px;
+          font-size: 11px;
           font-weight: 800;
           padding: 3px 8px;
           border-radius: 999px;
@@ -1505,7 +1698,7 @@ export default function Beranda() {
           right: -6px;
           background: #FBBF24;
           color: #78350F;
-          font-size: 9.5px;
+          font-size: 11px;
           font-weight: 800;
           padding: 3px 8px;
           border-radius: 999px;
@@ -1527,6 +1720,7 @@ export default function Beranda() {
           border-radius: 18px;
           padding: 16px 18px;
           box-shadow: 0 6px 18px rgba(23, 26, 46, 0.06);
+          scroll-margin-top: 16px;
         }
         .cat-card.wide { grid-column: span 2; }
         .cat-card-badge-sekolah {
@@ -1535,7 +1729,7 @@ export default function Beranda() {
           right: 14px;
           background: #FBBF24;
           color: #78350F;
-          font-size: 10px;
+          font-size: 11px;
           font-weight: 800;
           padding: 3px 9px;
           border-radius: 999px;
@@ -1558,7 +1752,7 @@ export default function Beranda() {
           align-items: center;
           gap: 6px;
           margin-top: 12px;
-          font-size: 12.5px;
+          font-size: 13px;
           font-weight: 700;
           color: #0F6FA3;
         }
@@ -1573,7 +1767,7 @@ export default function Beranda() {
           right: 16px;
           background: #FBBF24;
           color: #78350F;
-          font-size: 10.5px;
+          font-size: 11.5px;
           font-weight: 800;
           padding: 4px 10px;
           border-radius: 999px;
@@ -1599,7 +1793,7 @@ export default function Beranda() {
           opacity: 0.14;
           color: #0F6FA3;
         }
-        .deco-icon { top: 44px; right: 62px; }
+        .deco-icon-ikan { top: 44px; right: 62px; }
         .deco-icon-kerang { top: 92px; right: 22px; }
         .deco-icon-pakaian { bottom: 56px; right: 76px; }
         .deco-icon-atk { bottom: 22px; right: 26px; }
@@ -1608,7 +1802,7 @@ export default function Beranda() {
         }
         .cat-tag {
           display: inline-block;
-          font-size: 11px;
+          font-size: 11.5px;
           font-weight: 700;
           color: #fff;
           padding: 4px 10px;
@@ -1625,12 +1819,12 @@ export default function Beranda() {
           margin: 0 0 10px;
         }
         .cat-icon { flex-shrink: 0; }
-        .cat-list { list-style: none; margin: 0; padding: 0; font-size: 12.5px; line-height: 1.75; color: #5B6172; }
+        .cat-list { list-style: none; margin: 0; padding: 0; font-size: 13.5px; line-height: 1.7; color: #4A5064; }
         .cat-list li { padding-left: 14px; position: relative; }
         .cat-list li::before {
           content: "";
           position: absolute;
-          left: 0; top: 8px;
+          left: 0; top: 9px;
           width: 5px; height: 5px;
           border-radius: 50%;
           background: var(--accent);
@@ -1653,7 +1847,7 @@ export default function Beranda() {
           flex-wrap: wrap;
         }
         .beranda-footer-title { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
-        .beranda-footer-sub { font-size: 12.5px; color: #B7BAD6; margin: 0; }
+        .beranda-footer-sub { font-size: 13px; color: #C4C7E0; margin: 0; }
         .beranda-cta {
           display: inline-flex;
           align-items: center;
@@ -1684,7 +1878,7 @@ export default function Beranda() {
           font-family: inherit;
           font-size: 13px;
           font-weight: 700;
-          color: #5B6172;
+          color: #4A5064;
           background: transparent;
           border: none;
           padding: 9px 20px;
@@ -1695,13 +1889,12 @@ export default function Beranda() {
         }
         .aud-btn:hover { background: #F1F3FA; }
         .aud-btn.active { background: #2D3072; color: #fff; }
-        .aud-btn:focus-visible { outline: 2px solid #4E5FE0; outline-offset: 2px; }
 
         .badge-kua-inline {
           display: inline-block;
           background: #86EFAC;
           color: #14532D;
-          font-size: 10.5px;
+          font-size: 11.5px;
           font-weight: 800;
           padding: 2px 8px;
           border-radius: 999px;
@@ -1713,7 +1906,7 @@ export default function Beranda() {
           left: -6px;
           background: #86EFAC;
           color: #14532D;
-          font-size: 9.5px;
+          font-size: 11px;
           font-weight: 800;
           padding: 3px 8px;
           border-radius: 999px;
@@ -1727,7 +1920,7 @@ export default function Beranda() {
           right: 14px;
           background: #86EFAC;
           color: #14532D;
-          font-size: 10px;
+          font-size: 11px;
           font-weight: 800;
           padding: 3px 9px;
           border-radius: 999px;
@@ -1743,9 +1936,9 @@ export default function Beranda() {
         @media (max-width: 900px) {
           .beranda-canvas { padding: 0; }
           .beranda-wrap { flex-direction: column; border-radius: 0; min-height: 100vh; }
-          .beranda-side { width: 100%; flex-direction: row; justify-content: center; padding: 12px; gap: 10px; }
-          .side-dot { width: 26px; height: 26px; }
           .beranda-header { padding: 26px 20px 24px; }
+          .header-content.has-shot { grid-template-columns: 1fr; gap: 24px; }
+          .hero-shot { max-width: 560px; }
           .beranda-title { font-size: 26px; }
           .cat-section { grid-template-columns: repeat(2, 1fr); padding: 16px 20px 24px; }
           .cat-card.wide { grid-column: span 2; }
@@ -1760,7 +1953,7 @@ export default function Beranda() {
         @media (max-width: 560px) {
           .beranda-header { padding: 22px 16px 20px; }
           .beranda-title { font-size: 22px; }
-          .beranda-sub { font-size: 13px; margin-bottom: 18px; }
+          .beranda-sub { font-size: 13.5px; margin-bottom: 18px; }
           .cat-section { grid-template-columns: 1fr; padding: 14px 16px 24px; gap: 12px; }
           .cat-card.wide { grid-column: span 1; }
           .header-actions { flex-direction: column; align-items: stretch; gap: 10px; }
