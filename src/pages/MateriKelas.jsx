@@ -19,16 +19,33 @@ export default function MateriKelas() {
   const [kelas, setKelas] = useState(1)
   const [cari, setCari] = useState('')
   const [terbuka, setTerbuka] = useState(null)
+  // Menyimpan item materi (tanpa link) mana saja yang sedang di-expand,
+  // per mapel, supaya tidak bentrok antar kartu. Bentuk: { [idMapel]: Set(indeks) }
+  const [materiTerbuka, setMateriTerbuka] = useState({})
 
   const pilihJenjang = (j) => {
     setJenjang(j)
     setKelas(1)
     setTerbuka(null)
+    setMateriTerbuka({})
   }
 
   const pilihKelas = (k) => {
     setKelas(k)
     setTerbuka(null)
+    setMateriTerbuka({})
+  }
+
+  const toggleMateri = (idMapel, indeks) => {
+    setMateriTerbuka((prev) => {
+      const set = new Set(prev[idMapel] || [])
+      if (set.has(indeks)) {
+        set.delete(indeks)
+      } else {
+        set.add(indeks)
+      }
+      return { ...prev, [idMapel]: set }
+    })
   }
 
   // Semua mapel untuk jenjang + kelas terpilih, lengkap dengan materinya.
@@ -164,6 +181,7 @@ export default function MateriKelas() {
             const Icon = m.icon
             const buka = terbuka === m.id || (cari.trim() !== '' && daftarMapel.length <= 3)
             const idPanel = `panel-${jenjang}-${kelas}-${m.id}`
+            const setMateriTerbukaMapel = materiTerbuka[m.id] || new Set()
 
             return (
               <div
@@ -205,27 +223,68 @@ export default function MateriKelas() {
                       </p>
                     ) : (
                       <ul className="border-t border-slate-100 pt-2 divide-y divide-slate-100">
-                        {m.materi.map((x, i) => (
-                          <li key={`${x.judul}-${i}`}>
-                            {x.link ? (
-                              <a
-                                href={x.link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-2.5 py-2.5 text-sm text-slate-700 hover:text-blue-700 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                              >
-                                <FileText size={15} className="shrink-0 text-slate-400" />
-                                <span className="flex-1">{x.judul}</span>
-                                <ExternalLink size={13} className="shrink-0 text-slate-400" />
-                              </a>
-                            ) : (
+                        {m.materi.map((x, i) => {
+                          const punyaRingkasan = Boolean(x.ringkasan)
+                          const itemTerbuka = setMateriTerbukaMapel.has(i)
+                          const idIsi = `${idPanel}-materi-${i}`
+
+                          if (x.link) {
+                            return (
+                              <li key={`${x.judul}-${i}`}>
+                                <a
+                                  href={x.link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-2.5 py-2.5 text-sm text-slate-700 hover:text-blue-700 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                                >
+                                  <FileText size={15} className="shrink-0 text-slate-400" />
+                                  <span className="flex-1">{x.judul}</span>
+                                  <ExternalLink size={13} className="shrink-0 text-slate-400" />
+                                </a>
+                              </li>
+                            )
+                          }
+
+                          if (punyaRingkasan) {
+                            return (
+                              <li key={`${x.judul}-${i}`}>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleMateri(m.id, i)}
+                                  aria-expanded={itemTerbuka}
+                                  aria-controls={idIsi}
+                                  className="w-full flex items-center gap-2.5 py-2.5 text-sm text-slate-700 hover:text-blue-700 text-left rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                                >
+                                  <FileText size={15} className="shrink-0 text-slate-400" />
+                                  <span className="flex-1">{x.judul}</span>
+                                  <ChevronDown
+                                    size={14}
+                                    className={`shrink-0 text-slate-400 transition-transform duration-200 ${
+                                      itemTerbuka ? 'rotate-180' : ''
+                                    }`}
+                                  />
+                                </button>
+                                {itemTerbuka && (
+                                  <p
+                                    id={idIsi}
+                                    className="pb-3 pl-[1.65rem] pr-2 text-[13px] leading-relaxed text-slate-600"
+                                  >
+                                    {x.ringkasan}
+                                  </p>
+                                )}
+                              </li>
+                            )
+                          }
+
+                          return (
+                            <li key={`${x.judul}-${i}`}>
                               <div className="flex items-center gap-2.5 py-2.5 text-sm text-slate-700">
                                 <FileText size={15} className="shrink-0 text-slate-400" />
                                 <span className="flex-1">{x.judul}</span>
                               </div>
-                            )}
-                          </li>
-                        ))}
+                            </li>
+                          )
+                        })}
                       </ul>
                     )}
                   </div>
