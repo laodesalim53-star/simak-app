@@ -1,3 +1,5 @@
+import { MATERI_SD1 } from './materiSD1'
+
 // =====================================================================
 // DATA MATERI — bagian yang paling sering Anda ubah
 // =====================================================================
@@ -9,8 +11,9 @@
 //   'SD-1-matematika': [
 //     { judul: 'Bilangan 1 sampai 10', link: 'https://drive.google.com/...' },
 //     { judul: 'Penjumlahan dan pengurangan sederhana' },
-//   ...MATERI_SD1,],
- import { MATERI_SD1 } from './materiSD1'
+//   ],
+
+export const MATERI = {
   // ---------------------------------------------------------------
   // SD KELAS 1
   // ---------------------------------------------------------------
@@ -562,5 +565,6 @@
     { judul: 'Pengolahan bahan pangan setengah jadi' },
     { judul: 'Rekayasa alat teknologi tepat guna' },
   ],
-   ...MATERI_SD1,
+
+  ...MATERI_SD1,
 }
