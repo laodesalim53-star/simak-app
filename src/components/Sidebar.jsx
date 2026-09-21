@@ -58,7 +58,6 @@ import {
   FileStack,
   Inbox,
   Sparkles,
-  FileStack,
   Briefcase,
   BookOpen,
   LayoutGrid,
