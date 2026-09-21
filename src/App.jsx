@@ -93,7 +93,6 @@ const Inventaris = lazy(() => import('./pages/Inventaris'))
 const Bangunan = lazy(() => import('./pages/Bangunan'))   // BARU — Kondisi Bangunan
 const Agenda = lazy(() => import('./pages/Agenda'))
 const Surat = lazy(() => import('./pages/Surat'))
-const SuratKeterangan = lazy(() => import('./pages/SuratKeterangan'))
 const Keuangan = lazy(() => import('./pages/Keuangan'))
 const KeuanganKelas = lazy(() => import('./pages/KeuanganKelas'))
 const Kuitansi = lazy(() => import('./pages/Kuitansi'))
@@ -411,7 +410,6 @@ export default function App() {
           <Route path="/bangunan" element={<ProtectedRoute adminOnly><Bangunan /></ProtectedRoute>} />
           <Route path="/agenda" element={<ProtectedRoute><Agenda /></ProtectedRoute>} />
           <Route path="/surat" element={<ProtectedRoute adminOnly><Surat /></ProtectedRoute>} />
-          <Route path="/surat-keterangan" element={<ProtectedRoute adminOnly><SuratKeterangan /></ProtectedRoute>} />
           <Route path="/keuangan" element={<ProtectedRoute adminOnly><Keuangan /></ProtectedRoute>} />
           {/* Keuangan Kelas: BUKAN adminOnly — ini kas kelas yang dipegang wali kelas (guru),
               admin tetap bisa membuka untuk memantau semua kelas. */}
