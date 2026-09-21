@@ -46,6 +46,8 @@ const LaporanBulanan = lazy(() => import('./pages/LaporanBulanan'))
 // selector "Jenis Laporan" di LaporanBulanan.jsx (logika & template sama).
 const LaporanDaftarHadirGuru = lazy(() => import('./pages/LaporanDaftarHadirGuru'))
 const PusatLaporanGuru = lazy(() => import('./pages/PusatLaporanGuru'))
+const GudangSK = lazy(() => import('./pages/GudangSK'))                    
+const SKBebanMengajar = lazy(() => import('./pages/SKBebanMengajar'))  
 // Cetak Sampul Laporan (generik, kop otomatis dari profil_sekolah) — satu
 // halaman dengan sidebar menu, menggantikan file terpisah CetakSampul.jsx /
 // CetakSampulSemester.jsx / CetakSampul8355.jsx.
@@ -331,6 +333,8 @@ export default function App() {
               dari selector "Jenis Laporan" di LaporanBulanan.jsx, logika sama). */}
           <Route path="/laporan-daftar-hadir-guru" element={<ProtectedRoute adminOnly><LaporanDaftarHadirGuru /></ProtectedRoute>} />
           <Route path="/laporan-guru" element={<ProtectedRoute adminOnly><PusatLaporanGuru /></ProtectedRoute>} />
+          <Route path="/gudang-sk" element={<ProtectedRoute adminOnly><GudangSK /></ProtectedRoute>} />
+          <Route path="/gudang-sk/beban-mengajar" element={<ProtectedRoute adminOnly><SKBebanMengajar /></ProtectedRoute>} />
           {/* Cetak Sampul Laporan — satu halaman dengan sidebar menu berisi
               semua jenis laporan (Bulanan, Semester, 8355, LPJ BOS, dst).
               Dikunci adminOnly — dulu ada versi kedua tanpa adminOnly di bagian
