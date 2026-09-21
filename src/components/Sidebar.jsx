@@ -55,6 +55,7 @@ import {
   MessageCircle,
   MessagesSquare,
   Building2,
+  FileStack,
   Inbox,
   Sparkles,
   FileStack,
@@ -200,6 +201,7 @@ function getGroupsAdmin(
         { to: '/perbaikan-data-siswa', label: 'Perbaikan Data Siswa', icon: UserCog },
         { to: '/surat', label: 'Surat Masuk/Keluar', icon: Mail },
         { to: '/surat-keterangan', label: 'Surat Keterangan', icon: FileSignature },
+        { to: '/gudang-sk', label: 'Gudang SK', icon: FileStack },
         { to: '/ppdb-admin', label: 'PPDB Siswa Baru', icon: UserPlus },
         // Laporan Kepegawaian Guru: satu pintu untuk semua laporan guru,
         // TERMASUK Laporan Bulanan, Cetak Sampul, Data Ujian 8355 & Cetak
