@@ -10,7 +10,7 @@
 //     { judul: 'Bilangan 1 sampai 10', link: 'https://drive.google.com/...' },
 //     { judul: 'Penjumlahan dan pengurangan sederhana' },
 //   ...MATERI_SD1,],
-export const MATERI = {
+ import { MATERI_SD1 } from './materiSD1'
   // ---------------------------------------------------------------
   // SD KELAS 1
   // ---------------------------------------------------------------
