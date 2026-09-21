@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import {
   GraduationCap,
   ArrowLeft,
@@ -98,6 +98,7 @@ const PALET_WARNA = {
 const kunciMateri = (jenjang, kelas, idMapel) => `${jenjang}-${kelas}-${idMapel}`
 
 export default function MateriKelas() {
+  const navigate = useNavigate()
   const [jenjang, setJenjang] = useState('SD')
   const [kelas, setKelas] = useState(1)
   const [cari, setCari] = useState('')
@@ -143,12 +144,13 @@ export default function MateriKelas() {
       subtitle="Pilih jenjang dan kelas, lalu buka mata pelajaran untuk melihat materinya."
     >
       <div className="relative">
-        <Link
-          to="/gudang-sk"
-          className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-slate-500 hover:text-slate-800 mb-3"
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-slate-500 hover:text-slate-800 mb-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded"
         >
-          <ArrowLeft size={14} /> Kembali ke Gudang SK
-        </Link>
+          <ArrowLeft size={14} /> Kembali
+        </button>
 
         {/* Banner */}
         <div className="relative overflow-hidden rounded-xl p-4 sm:p-6 mb-5 sm:mb-6 flex flex-wrap items-center gap-3 sm:gap-4 bg-gradient-to-br from-blue-900 to-blue-950">
