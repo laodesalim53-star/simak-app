@@ -218,6 +218,48 @@ const DAFTAR_AREA = [
   },
 ]
 
+// Cadangan untuk Android: bila browser tidak bisa memasang aplikasi web
+// (mis. Samsung Internet, atau browser bawaan WhatsApp/Facebook), unduh APK.
+function unduhApk() {
+  const a = document.createElement('a')
+  a.href = '/simak-app.apk'
+  a.download = ''
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+}
+
+// ---- Panduan instal manual ---------------------------------------------
+// Dua platform tidak punya "file installer" yang bisa diunduh langsung:
+//  - iPhone/iPad: Apple hanya mengizinkan "Tambah ke Layar Utama" via Safari.
+//  - Windows: paket .msix WAJIB ditandatangani sertifikat yang dipercaya
+//    Windows. Sertifikat buatan sendiri (self-signed) membuat tombol Install
+//    abu-abu dan pesan "publisher certificate could not be verified".
+//    Jalan keluar gratis: pasang SIMAK sebagai PWA lewat Edge/Chrome — tanpa
+//    installer, tanpa sertifikat, tanpa izin administrator, update otomatis.
+const PANDUAN_INSTAL = {
+  ios: {
+    judul: 'Cara instal di iPhone/iPad',
+    sub: 'Apple belum mengizinkan instal 1 klik seperti Android, jadi ikuti 3 langkah singkat ini lewat Safari.',
+    langkah: [
+      <>Buka <strong>{DOMAIN_SITUS}</strong> lewat browser <strong>Safari</strong> (bukan Chrome).</>,
+      <>Tap ikon <strong>Share</strong> <Share size={14} className="ios-inline-icon" /> di bagian bawah layar.</>,
+      <>Scroll lalu pilih <strong>Tambah ke Layar Utama</strong> <SquarePlus size={14} className="ios-inline-icon" />, lalu tap <strong>Tambah</strong>.</>,
+    ],
+    catatan: 'Setelah itu, ikon SIMAK akan muncul di layar utama seperti aplikasi biasa.',
+  },
+  windows: {
+    judul: 'Cara instal di Windows',
+    sub: 'Tanpa file installer dan tanpa izin administrator. Cukup pasang lewat Microsoft Edge atau Google Chrome.',
+    langkah: [
+      <>Buka <strong>{DOMAIN_SITUS}</strong> lewat <strong>Microsoft Edge</strong> atau <strong>Google Chrome</strong> (bukan Firefox).</>,
+      <>Klik ikon <strong>Instal</strong> <Download size={14} className="ios-inline-icon" /> di ujung kanan kolom alamat. Kalau tidak terlihat, buka menu titik tiga di pojok kanan atas lalu pilih <strong>Instal</strong> (di Edge: <strong>Aplikasi → Instal situs ini sebagai aplikasi</strong>).</>,
+      <>Klik <strong>Instal</strong>. Ikon SIMAK akan muncul di menu Start dan bisa disematkan ke taskbar.</>,
+    ],
+    catatan: 'Aplikasi memperbarui dirinya sendiri, jadi tidak perlu mengunduh ulang.',
+  },
+}
+
 function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 72 }) {
   return (
     <svg className="batik-overlay" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
@@ -330,20 +372,75 @@ export default function Beranda() {
   // host (misal lewat WhatsApp). Menerima link penuh (.../rapat/xxxx) atau
   // kode ruangan saja.
   const [kodeRapat, setKodeRapat] = useState('')
-  // Panduan instal untuk iPhone/iPad — Apple tidak punya file installer
-  // seperti APK/MSIX, jadi guru pengguna iOS dituntun lewat panduan manual
-  // (Safari > Share > Tambah ke Layar Utama) alih-alih tombol download.
-  const [showIosGuide, setShowIosGuide] = useState(false)
+  // Panduan instal manual yang sedang terbuka: 'ios', 'windows', atau null
+  // (tertutup). Isinya ada di PANDUAN_INSTAL di atas.
+  const [panduan, setPanduan] = useState(null)
+  const isiPanduan = panduan ? PANDUAN_INSTAL[panduan] : null
 
-  // Tekan Esc untuk menutup panduan iOS.
+  // Browser berbasis Chromium (Edge/Chrome) memberi tahu kapan situs ini
+  // bisa dipasang sebagai aplikasi. Kejadiannya disimpan supaya tombol
+  // "Windows" bisa langsung memunculkan kotak instal bawaan browser.
+  const [promptInstal, setPromptInstal] = useState(null)
+  // Bila aplikasi sedang dibuka sebagai aplikasi terpasang, tombol instal
+  // tidak perlu ditampilkan lagi.
+  const [sudahTerpasang, setSudahTerpasang] = useState(() => {
+    try {
+      return (
+        window.matchMedia('(display-mode: standalone)').matches ||
+        window.navigator.standalone === true
+      )
+    } catch {
+      return false
+    }
+  })
   useEffect(() => {
-    if (!showIosGuide) return
+    // Event bisa saja sudah terjadi sebelum halaman ini tampil; kalau
+    // index.html menyimpannya di window.__promptInstal, ambil dari sana.
+    if (window.__promptInstal) setPromptInstal(window.__promptInstal)
+    function saatBisaInstal(e) {
+      e.preventDefault()
+      setPromptInstal(e)
+    }
+    function saatTerpasang() {
+      setPromptInstal(null)
+      setPanduan(null)
+      setSudahTerpasang(true)
+    }
+    window.addEventListener('beforeinstallprompt', saatBisaInstal)
+    window.addEventListener('appinstalled', saatTerpasang)
+    return () => {
+      window.removeEventListener('beforeinstallprompt', saatBisaInstal)
+      window.removeEventListener('appinstalled', saatTerpasang)
+    }
+  }, [])
+
+  // Satu pintu untuk semua tombol instal. Kalau browser sudah siap memasang
+  // aplikasi (Chrome/Edge di Android & Windows), langsung munculkan kotak
+  // instal yang SAMA dengan menu titik tiga browser — pengunjung tidak perlu
+  // mencari menunya. Kalau belum, jalankan cadangan (unduh APK / panduan).
+  async function instalAplikasi(cadangan) {
+    if (promptInstal) {
+      promptInstal.prompt()
+      try {
+        await promptInstal.userChoice
+      } catch {
+        // pengguna menutup kotak — tidak perlu ditangani
+      }
+      setPromptInstal(null)
+      return
+    }
+    cadangan()
+  }
+
+  // Tekan Esc untuk menutup panduan instal.
+  useEffect(() => {
+    if (!panduan) return
     function saatTombol(e) {
-      if (e.key === 'Escape') setShowIosGuide(false)
+      if (e.key === 'Escape') setPanduan(null)
     }
     window.addEventListener('keydown', saatTombol)
     return () => window.removeEventListener('keydown', saatTombol)
-  }, [showIosGuide])
+  }, [panduan])
 
   // Menu pilihan kontak (WhatsApp / Live Chat) dari tombol mengambang.
   const [showFabMenu, setShowFabMenu] = useState(false)
@@ -536,25 +633,45 @@ export default function Beranda() {
                   )}
                 </div>
 
-                <div className="install-row">
-                  <span className="install-label">Instal aplikasi:</span>
-                  <a href="/simak-app.apk" download className="install-chip">
-                    <Download size={14} strokeWidth={2.4} />
-                    Android
-                  </a>
-                  <a href="/simak-app-windows.msix" download className="install-chip">
-                    <Monitor size={14} strokeWidth={2.4} />
-                    Windows
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => setShowIosGuide(true)}
-                    className="install-chip"
-                  >
-                    <Apple size={14} strokeWidth={2.4} />
-                    iPhone/iPad
-                  </button>
-                </div>
+                {!sudahTerpasang && (
+                  <div className="install-row">
+                    <span className="install-label">Instal aplikasi:</span>
+                    {promptInstal && (
+                      <button
+                        type="button"
+                        onClick={() => instalAplikasi(() => {})}
+                        className="install-chip install-chip-utama"
+                      >
+                        <Download size={14} strokeWidth={2.6} />
+                        Instal sekarang (1 klik)
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => instalAplikasi(unduhApk)}
+                      className="install-chip"
+                    >
+                      <Download size={14} strokeWidth={2.4} />
+                      Android
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => instalAplikasi(() => setPanduan('windows'))}
+                      className="install-chip"
+                    >
+                      <Monitor size={14} strokeWidth={2.4} />
+                      Windows
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPanduan('ios')}
+                      className="install-chip"
+                    >
+                      <Apple size={14} strokeWidth={2.4} />
+                      iPhone/iPad
+                    </button>
+                  </div>
+                )}
               </div>
 
               {fotoHeroAda && (
@@ -778,11 +895,11 @@ export default function Beranda() {
         </div>
       </div>
 
-      {/* Modal panduan instal untuk iPhone/iPad, muncul saat tombol
-          "iPhone/iPad" diklik. Bisa ditutup dengan tombol X, klik di luar
+      {/* Modal panduan instal (iPhone/iPad dan Windows), muncul saat tombol
+          platform-nya diklik. Bisa ditutup dengan tombol X, klik di luar
           kotak, atau tombol Esc. */}
-      {showIosGuide && (
-        <div className="ios-overlay" onClick={() => setShowIosGuide(false)}>
+      {isiPanduan && (
+        <div className="ios-overlay" onClick={() => setPanduan(null)}>
           <div
             className="ios-modal"
             role="dialog"
@@ -791,10 +908,10 @@ export default function Beranda() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="ios-modal-header">
-              <h3 className="ios-modal-title" id="ios-modal-judul">Cara instal di iPhone/iPad</h3>
+              <h3 className="ios-modal-title" id="ios-modal-judul">{isiPanduan.judul}</h3>
               <button
                 type="button"
-                onClick={() => setShowIosGuide(false)}
+                onClick={() => setPanduan(null)}
                 className="ios-modal-close"
                 aria-label="Tutup"
                 autoFocus
@@ -802,24 +919,16 @@ export default function Beranda() {
                 <X size={18} />
               </button>
             </div>
-            <p className="ios-modal-sub">
-              Apple belum mengizinkan instal 1 klik seperti Android/Windows, jadi ikuti 3 langkah singkat ini lewat Safari.
-            </p>
+            <p className="ios-modal-sub">{isiPanduan.sub}</p>
             <ol className="ios-steps">
-              <li>
-                <span className="ios-step-num">1</span>
-                <span>Buka <strong>{DOMAIN_SITUS}</strong> lewat browser <strong>Safari</strong> (bukan Chrome).</span>
-              </li>
-              <li>
-                <span className="ios-step-num">2</span>
-                <span>Tap ikon <strong>Share</strong> <Share size={14} className="ios-inline-icon" /> di bagian bawah layar.</span>
-              </li>
-              <li>
-                <span className="ios-step-num">3</span>
-                <span>Scroll lalu pilih <strong>Tambah ke Layar Utama</strong> <SquarePlus size={14} className="ios-inline-icon" />, lalu tap <strong>Tambah</strong>.</span>
-              </li>
+              {isiPanduan.langkah.map((teks, i) => (
+                <li key={i}>
+                  <span className="ios-step-num">{i + 1}</span>
+                  <span>{teks}</span>
+                </li>
+              ))}
             </ol>
-            <p className="ios-modal-note">Setelah itu, ikon SIMAK akan muncul di layar utama seperti aplikasi biasa.</p>
+            <p className="ios-modal-note">{isiPanduan.catatan}</p>
           </div>
         </div>
       )}
@@ -1170,6 +1279,14 @@ export default function Beranda() {
           text-decoration: none;
           white-space: nowrap;
         }
+
+        .install-chip-utama {
+          background: #3E82F1;
+          border-color: #3E82F1;
+          color: #fff;
+          font-weight: 700;
+        }
+        .install-chip-utama:hover { background: #5A96F5; border-color: #5A96F5; }
 
         .contact-fab-wrap {
           position: fixed;
