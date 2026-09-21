@@ -2,13 +2,15 @@ import { useState, useEffect, useRef } from 'react'
 import { Link, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
-import { Loader2, LogIn } from 'lucide-react'
+import { Loader2, LogIn, Eye, EyeOff, Send, Check, ArrowLeft } from 'lucide-react'
 
 // Latar belakang "kain merah putih" yang bergelombang seperti kain sungguhan
 // tertiup angin. Dibangun dari 2 lapis path SVG per warna (fase & amplitudo
 // berbeda) supaya terlihat seperti lipatan kain, bukan garis kaku tunggal.
+//
+// Hemat baterai: animasi dijalankan ±30 fps (bukan 60) dan berhenti total
+// bila perangkat meminta "kurangi gerakan" — cukup satu gambar diam.
 function WavyClothBackground() {
-  const svgRef = useRef(null)
   const redTopRef = useRef(null)
   const redTop2Ref = useRef(null)
   const whiteBottomRef = useRef(null)
@@ -21,7 +23,6 @@ function WavyClothBackground() {
     const W = 1000
     const H = 1000
     let animationId
-    let t = 0
 
     function wavePathTop(baseY, amp, waves, phase) {
       const N = 48
@@ -45,8 +46,10 @@ function WavyClothBackground() {
       return `M0,${H} L0,${pts[0].split(',')[1]} L${pts.join(' L')} L${W},${H} Z`
     }
 
-    function frame() {
-      t += 0.014
+    // Gelombang putih diturunkan ke ±85% tinggi layar (sebelumnya ±76%)
+    // supaya tautan "Daftar" dan kredit di bawah formulir tetap berada di
+    // latar gelap, bukan di atas kain abu-abu yang membuat teksnya pudar.
+    function gambar(t) {
       if (redTopRef.current) {
         redTopRef.current.setAttribute('d', wavePathTop(260, 32, 2.5, t))
       }
@@ -54,21 +57,33 @@ function WavyClothBackground() {
         redTop2Ref.current.setAttribute('d', wavePathTop(266, 24, 2.5, t * 1.3 + 1.5))
       }
       if (whiteBottomRef.current) {
-        whiteBottomRef.current.setAttribute('d', wavePathBottom(760, 32, 2.5, -t * 1.1))
+        whiteBottomRef.current.setAttribute('d', wavePathBottom(850, 32, 2.5, -t * 1.1))
       }
       if (whiteBottom2Ref.current) {
-        whiteBottom2Ref.current.setAttribute('d', wavePathBottom(754, 24, 2.5, -t * 1.4 + 2))
+        whiteBottom2Ref.current.setAttribute('d', wavePathBottom(844, 24, 2.5, -t * 1.4 + 2))
+      }
+    }
+
+    const kurangiGerak = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (kurangiGerak) {
+      gambar(0.5)
+      return
+    }
+
+    let terakhir = 0
+    function frame(now) {
+      if (now - terakhir >= 33) {
+        terakhir = now
+        gambar(now * 0.00084)
       }
       animationId = requestAnimationFrame(frame)
     }
-
     animationId = requestAnimationFrame(frame)
     return () => cancelAnimationFrame(animationId)
   }, [])
 
   return (
     <svg
-      ref={svgRef}
       viewBox="0 0 1000 1000"
       preserveAspectRatio="none"
       className="wavy-cloth-svg"
@@ -82,16 +97,62 @@ function WavyClothBackground() {
   )
 }
 
+// Kolom kata sandi dengan tombol "lihat/sembunyikan".
+function PasswordField({ id, label, value, onChange, tampil, onToggle, autoComplete, placeholder }) {
+  return (
+    <div>
+      <label htmlFor={id} className="login-eyebrow mb-1.5 block">{label}</label>
+      <div className="login-field-wrap">
+        <input
+          id={id}
+          name={id}
+          type={tampil ? 'text' : 'password'}
+          required
+          className="login-field login-field-pw w-full transition-shadow duration-200"
+          placeholder={placeholder}
+          autoComplete={autoComplete}
+          value={value}
+          onChange={onChange}
+        />
+        <button
+          type="button"
+          className="login-eye"
+          onClick={onToggle}
+          aria-label={tampil ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
+          aria-pressed={tampil}
+        >
+          {tampil ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function Login() {
   const { session, signIn } = useAuth()
   const location = useLocation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [info, setInfo] = useState('')
   const [loading, setLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [shake, setShake] = useState(0)
-  const [namaSekolah, setNamaSekolah] = useState('SD Negeri Waria')
+  const [tampilSandi, setTampilSandi] = useState(false)
+
+  // Tiga tampilan dalam satu halaman:
+  //  'masuk' -> formulir login biasa
+  //  'lupa'  -> minta tautan atur-ulang kata sandi lewat email
+  //  'baru'  -> pengguna datang dari tautan di email, buat kata sandi baru
+  // Tautan atur-ulang dari Supabase membawa "type=recovery" di bagian hash
+  // URL. Dibaca sekali saat pertama render (sebelum Supabase merapikan URL)
+  // supaya pengguna tidak langsung dialihkan ke dasbor tanpa sempat
+  // mengganti kata sandi.
+  const [mode, setMode] = useState(() =>
+    typeof window !== 'undefined' && /type=recovery/.test(window.location.hash) ? 'baru' : 'masuk'
+  )
+  const [passwordBaru, setPasswordBaru] = useState('')
+  const [konfirmasi, setKonfirmasi] = useState('')
 
   useEffect(() => {
     // Memicu animasi masuk sesaat setelah komponen ter-render
@@ -99,15 +160,13 @@ export default function Login() {
     return () => cancelAnimationFrame(t)
   }, [])
 
+  // Cadangan: bila hash sudah terlanjur dirapikan, Supabase tetap
+  // mengirim kejadian PASSWORD_RECOVERY.
   useEffect(() => {
-    supabase
-      .from('profil_sekolah')
-      .select('nama_sekolah')
-      .limit(1)
-      .single()
-      .then(({ data }) => {
-        if (data?.nama_sekolah) setNamaSekolah(data.nama_sekolah)
-      })
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') setMode('baru')
+    })
+    return () => data.subscription.unsubscribe()
   }, [])
 
   // Halaman yang tadinya mau diakses sebelum dialihkan ke sini (dikirim lewat
@@ -121,19 +180,87 @@ export default function Login() {
     ? location.state.from.pathname + (location.state.from.search || '')
     : '/dashboard'
 
-  if (session) return <Navigate to={from} replace />
+  // Selama mode 'baru', sesi dari tautan email jangan memicu pengalihan.
+  if (session && mode !== 'baru') return <Navigate to={from} replace />
+
+  function gagal(pesan) {
+    setError(pesan)
+    setShake((s) => s + 1) // ganti key supaya animasi shake bisa diulang
+  }
+
+  function gantiMode(m) {
+    setMode(m)
+    setError('')
+    setInfo('')
+    setTampilSandi(false)
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
     setLoading(true)
-    const { error } = await signIn(email, password)
+    const { error } = await signIn(email.trim(), password)
+    setLoading(false)
+    if (error) gagal('Email atau kata sandi salah. Silakan coba lagi.')
+  }
+
+  async function handleLupa(e) {
+    e.preventDefault()
+    setError('')
+    setInfo('')
+    setLoading(true)
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/login`,
+    })
     setLoading(false)
     if (error) {
-      setError('Email atau kata sandi salah. Silakan coba lagi.')
-      setShake((s) => s + 1) // ganti key supaya animasi shake bisa diulang
+      gagal(
+        error.status === 429
+          ? 'Terlalu banyak permintaan. Tunggu beberapa menit lalu coba lagi.'
+          : 'Permintaan belum terkirim. Periksa koneksi internet lalu coba lagi.'
+      )
+      return
     }
+    // Pesan sengaja tidak memastikan apakah email terdaftar atau tidak.
+    setInfo(
+      'Jika email itu terdaftar, tautan untuk membuat kata sandi baru sudah dikirim. Periksa kotak masuk dan folder spam.'
+    )
   }
+
+  async function handleBaru(e) {
+    e.preventDefault()
+    setError('')
+    if (passwordBaru.length < 6) {
+      gagal('Kata sandi minimal 6 karakter.')
+      return
+    }
+    if (passwordBaru !== konfirmasi) {
+      gagal('Konfirmasi kata sandi tidak sama.')
+      return
+    }
+    setLoading(true)
+    const { error } = await supabase.auth.updateUser({ password: passwordBaru })
+    setLoading(false)
+    if (error) {
+      gagal('Kata sandi gagal diubah. Tautan mungkin sudah kedaluwarsa — minta tautan baru.')
+      return
+    }
+    // Berhasil: rapikan URL lalu kembali ke mode biasa. Karena sesi sudah
+    // aktif, pengguna otomatis diteruskan ke dasbor.
+    window.history.replaceState(null, '', window.location.pathname)
+    setPasswordBaru('')
+    setKonfirmasi('')
+    setMode('masuk')
+  }
+
+  const subjudul =
+    mode === 'lupa'
+      ? 'Atur ulang kata sandi'
+      : mode === 'baru'
+        ? 'Buat kata sandi baru'
+        : 'Selamat datang'
+
+  const onSubmit = mode === 'lupa' ? handleLupa : mode === 'baru' ? handleBaru : handleSubmit
 
   return (
     <div className="login-shell min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
@@ -166,78 +293,149 @@ export default function Login() {
             </div>
           </div>
           <h1 className="login-title text-2xl font-semibold">SIMAK</h1>
-          <p className="login-tagline text-[11px] font-medium uppercase tracking-[0.2em] mt-2">
-            Personnel Management Information System
+          <p className="login-tagline text-xs font-medium uppercase tracking-[0.16em] mt-2">
+            Sistem informasi untuk Sekolah &amp; KUA
           </p>
-          <p className="login-school text-sm font-medium mt-1.5">WELCOME</p>
+          <p className="login-school text-sm font-medium mt-1.5">{subjudul}</p>
         </div>
 
         <form
-          onSubmit={handleSubmit}
+          onSubmit={onSubmit}
           className={`login-card p-6 space-y-4 transition-all duration-700 ease-out delay-150 ${
             mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
           }`}
         >
-          <div
-            className={`transition-all duration-500 ease-out delay-300 ${
-              mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
-            }`}
-          >
-            <label className="login-eyebrow mb-1.5 block">Email</label>
-            <input
-              type="email"
-              required
-              className="login-field w-full transition-shadow duration-200"
-              placeholder="kepsek@sekolah.sch.id"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-          <div
-            className={`transition-all duration-500 ease-out delay-[400ms] ${
-              mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
-            }`}
-          >
-            <label className="login-eyebrow mb-1.5 block">Kata Sandi</label>
-            <input
-              type="password"
-              required
-              className="login-field w-full transition-shadow duration-200"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
+          {mode === 'lupa' && (
+            <p className="login-hint">
+              Masukkan email akun Anda. Kami akan mengirim tautan untuk membuat kata sandi baru.
+            </p>
+          )}
+          {mode === 'baru' && (
+            <p className="login-hint">
+              Tautan valid. Buat kata sandi baru untuk akun Anda (minimal 6 karakter).
+            </p>
+          )}
+
+          {mode !== 'baru' && (
+            <div>
+              <label htmlFor="login-email" className="login-eyebrow mb-1.5 block">Email</label>
+              <input
+                id="login-email"
+                name="email"
+                type="email"
+                required
+                inputMode="email"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                className="login-field w-full transition-shadow duration-200"
+                placeholder="nama@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+          )}
+
+          {mode === 'masuk' && (
+            <>
+              <PasswordField
+                id="login-password"
+                label="Kata Sandi"
+                placeholder="••••••••"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                tampil={tampilSandi}
+                onToggle={() => setTampilSandi((v) => !v)}
+              />
+              <div className="text-right -mt-2">
+                <button type="button" className="login-link-btn" onClick={() => gantiMode('lupa')}>
+                  Lupa kata sandi?
+                </button>
+              </div>
+            </>
+          )}
+
+          {mode === 'baru' && (
+            <>
+              <PasswordField
+                id="login-password-baru"
+                label="Kata Sandi Baru"
+                placeholder="Minimal 6 karakter"
+                autoComplete="new-password"
+                value={passwordBaru}
+                onChange={(e) => setPasswordBaru(e.target.value)}
+                tampil={tampilSandi}
+                onToggle={() => setTampilSandi((v) => !v)}
+              />
+              <PasswordField
+                id="login-konfirmasi"
+                label="Ulangi Kata Sandi Baru"
+                placeholder="Ketik ulang kata sandi"
+                autoComplete="new-password"
+                value={konfirmasi}
+                onChange={(e) => setKonfirmasi(e.target.value)}
+                tampil={tampilSandi}
+                onToggle={() => setTampilSandi((v) => !v)}
+              />
+            </>
+          )}
 
           {error && (
             <p
               key={shake}
+              role="alert"
               className="login-error text-sm animate-[shake_0.4s_ease-in-out]"
             >
               {error}
+            </p>
+          )}
+          {info && (
+            <p role="status" className="login-info text-sm">
+              {info}
             </p>
           )}
 
           <button
             type="submit"
             disabled={loading}
+            aria-busy={loading}
             className="login-btn w-full transition-transform duration-150 active:scale-[0.98] hover:scale-[1.01]"
           >
-            {loading ? <Loader2 size={16} className="animate-spin" /> : <LogIn size={16} />}
-            Masuk
+            {loading ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : mode === 'lupa' ? (
+              <Send size={16} />
+            ) : mode === 'baru' ? (
+              <Check size={16} />
+            ) : (
+              <LogIn size={16} />
+            )}
+            {mode === 'lupa' ? 'Kirim tautan' : mode === 'baru' ? 'Simpan kata sandi' : 'Masuk'}
           </button>
+
+          {mode === 'lupa' && (
+            <div className="text-center">
+              <button type="button" className="login-link-btn" onClick={() => gantiMode('masuk')}>
+                <ArrowLeft size={14} className="inline -mt-0.5 mr-1" />
+                Kembali ke halaman masuk
+              </button>
+            </div>
+          )}
         </form>
 
-        <p
-          className={`login-register text-center text-sm mt-5 transition-all duration-700 ease-out delay-500 ${
-            mounted ? 'opacity-100' : 'opacity-0'
-          }`}
-        >
-          Belum punya akun?{' '}
-          <Link to="/register" className="login-register-link font-medium">
-            Daftar
-          </Link>
-        </p>
+        {mode === 'masuk' && (
+          <p
+            className={`login-register text-center text-sm mt-5 transition-all duration-700 ease-out delay-500 ${
+              mounted ? 'opacity-100' : 'opacity-0'
+            }`}
+          >
+            Belum punya akun?{' '}
+            <Link to="/register" className="login-register-link font-medium">
+              Daftar
+            </Link>
+          </p>
+        )}
 
         <p
           className={`login-credit text-center text-xs italic mt-3 tracking-wide transition-all duration-700 ease-out delay-500 ${
@@ -262,8 +460,22 @@ export default function Login() {
           --ring-soft: rgba(59, 130, 246, 0.12);
           --text-primary: #eaf2ff;
           --text-accent: #60a5fa;
-          --code-text: rgba(147, 197, 253, 0.55);
+          /* dinaikkan dari .55 supaya label, tagline, dan kredit terbaca */
+          --code-text: rgba(170, 208, 255, 0.86);
           background: #05061a;
+          /* ruang untuk semboyan di atas & bawah supaya tidak menabrak
+             formulir di layar pendek / ponsel */
+          padding-top: 120px;
+          padding-bottom: 130px;
+        }
+        @media (max-width: 480px) {
+          .login-shell { padding-top: 150px; padding-bottom: 150px; }
+        }
+
+        .login-shell a:focus-visible,
+        .login-shell button:focus-visible {
+          outline: 2px solid #bfdbfe;
+          outline-offset: 2px;
         }
 
         .wavy-cloth-svg {
@@ -294,29 +506,42 @@ export default function Login() {
         }
         .cloth-text p {
           margin: 0 0 6px;
-          font-size: 13px;
+          font-size: 13.5px;
           line-height: 1.5;
           letter-spacing: 0.01em;
         }
         .cloth-text p:last-child { margin-bottom: 0; }
 
         .cloth-text-top {
-          top: 8%;
+          top: 5%;
         }
         .cloth-text-top p {
           color: #fdecec;
           text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
         }
 
+        /* PERBAIKAN: sebelumnya teks merah tua di atas kain yang sudah
+           digelapkan overlay (kontras sekitar 2,6:1, hampir tak terbaca).
+           Sekarang teks terang dengan alas gelap tipis (kontras > 7:1). */
         .cloth-text-bottom {
-          bottom: 8%;
+          bottom: 4%;
+          left: 50%;
+          right: auto;
+          transform: translateX(-50%);
+          width: max-content;
+          max-width: min(540px, calc(100% - 32px));
+          padding: 10px 16px;
+          border-radius: 14px;
+          background: rgba(5, 6, 26, 0.55);
+          backdrop-filter: blur(3px);
         }
         .cloth-text-bottom p {
-          color: #7a1414;
+          color: #fff5f5;
+          text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
         }
 
         @media (max-width: 480px) {
-          .cloth-text p { font-size: 11px; }
+          .cloth-text p { font-size: 11.5px; }
         }
 
         .login-badge-glow {
@@ -336,7 +561,7 @@ export default function Login() {
           text-shadow: 0 0 14px rgba(59, 130, 246, 0.35);
         }
         .login-tagline { color: var(--code-text); }
-        .login-school { color: var(--text-accent); }
+        .login-school { color: #93c5fd; }
 
         .login-card {
           position: relative;
@@ -360,35 +585,74 @@ export default function Login() {
         }
 
         .login-eyebrow {
-          font-size: 11px;
+          font-size: 12px;
           font-weight: 600;
-          letter-spacing: 0.14em;
+          letter-spacing: 0.12em;
           text-transform: uppercase;
+          color: var(--code-text);
+        }
+        .login-hint {
+          margin: 0;
+          font-size: 13.5px;
+          line-height: 1.55;
           color: var(--code-text);
         }
 
         .login-field {
           background: rgba(59, 130, 246, 0.06);
-          border: 1px solid var(--ring-soft);
+          border: 1px solid var(--ring);
           border-radius: 10px;
           padding: 10px 12px;
+          min-height: 44px;
+          font-size: 16px;
           color: var(--text-primary);
           outline: none;
         }
-        .login-field::placeholder { color: rgba(234, 242, 255, 0.35); }
+        .login-field::placeholder { color: rgba(234, 242, 255, 0.5); }
         .login-field:focus {
           border-color: var(--accent);
           box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
         }
+        .login-field-wrap { position: relative; }
+        .login-field-pw { padding-right: 46px; }
+        .login-eye {
+          position: absolute;
+          top: 50%;
+          right: 3px;
+          transform: translateY(-50%);
+          width: 40px;
+          height: 40px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: none;
+          border: none;
+          border-radius: 8px;
+          color: var(--code-text);
+          cursor: pointer;
+        }
+        .login-eye:hover { color: #fff; }
 
-        .login-error { color: #ff9d9d; }
+        .login-link-btn {
+          background: none;
+          border: none;
+          padding: 6px 2px;
+          font-size: 13.5px;
+          font-weight: 500;
+          color: #93c5fd;
+          cursor: pointer;
+        }
+        .login-link-btn:hover { color: #fff; text-decoration: underline; }
+
+        .login-error { color: #ffb4b4; }
+        .login-info { color: #86efac; line-height: 1.5; }
 
         .login-register { color: var(--code-text); }
         .login-register-link {
-          color: var(--text-accent);
+          color: #93c5fd;
           text-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
         }
-        .login-register-link:hover { color: var(--accent-strong); }
+        .login-register-link:hover { color: #fff; }
 
         .login-btn {
           display: flex;
@@ -396,6 +660,7 @@ export default function Login() {
           justify-content: center;
           gap: 8px;
           padding: 11px 16px;
+          min-height: 44px;
           border-radius: 10px;
           font-weight: 600;
           color: #071233;
@@ -408,7 +673,7 @@ export default function Login() {
 
         .login-credit { color: var(--code-text); }
         .login-credit span {
-          color: var(--text-accent);
+          color: #93c5fd;
           text-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
         }
 
@@ -424,7 +689,6 @@ export default function Login() {
           80% { transform: translateX(3px); }
         }
         @media (prefers-reduced-motion: reduce) {
-          .wavy-cloth-svg path { transition: none; }
           * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
         }
       `}</style>
