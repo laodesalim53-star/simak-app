@@ -52,6 +52,9 @@ const KeteranganMelaksanakanTugas = lazy(() => import('./pages/KeteranganMelaksa
 const SKWaliKelas = lazy(() => import('./pages/SKWaliKelas'))
 const SKPembinaEkstrakurikuler = lazy(() => import('./pages/SKPembinaEkstrakurikuler'))
 const SKPetugasPerpustakaan = lazy(() => import('./pages/SKPetugasPerpustakaan'))
+const SKPanitiaUjian = lazy(() => import('./pages/SKPanitiaUjian'))
+const SKPanitiaPPDB = lazy(() => import('./pages/SKPanitiaPPDB'))
+const SKTimBOS = lazy(() => import('./pages/SKTimBOS'))
 // Cetak Sampul Laporan (generik, kop otomatis dari profil_sekolah) — satu
 // halaman dengan sidebar menu, menggantikan file terpisah CetakSampul.jsx /
 // CetakSampulSemester.jsx / CetakSampul8355.jsx.
@@ -343,6 +346,9 @@ export default function App() {
           <Route path="/gudang-sk/wali-kelas" element={<SKWaliKelas />} />
           <Route path="/gudang-sk/pembina-ekstrakurikuler" element={<SKPembinaEkstrakurikuler />} />
           <Route path="/gudang-sk/petugas-perpustakaan" element={<SKPetugasPerpustakaan />} />
+          <Route path="/gudang-sk/panitia-ujian" element={<SKPanitiaUjian />} />
+          <Route path="/gudang-sk/panitia-ppdb" element={<SKPanitiaPPDB />} />
+          <Route path="/gudang-sk/tim-bos" element={<SKTimBOS />} />
           {/* Cetak Sampul Laporan — satu halaman dengan sidebar menu berisi
               semua jenis laporan (Bulanan, Semester, 8355, LPJ BOS, dst).
               Dikunci adminOnly — dulu ada versi kedua tanpa adminOnly di bagian
