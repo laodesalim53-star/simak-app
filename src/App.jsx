@@ -59,6 +59,7 @@ const SKHonorGuru = lazy(() => import('./pages/SKHonorGuru'))
 const SKTenagaKebersihan = lazy(() => import('./pages/SKTenagaKebersihan'))
 const SKOperatorDapodik = lazy(() => import('./pages/SKOperatorDapodik'))
 const SKBendaharaBOS = lazy(() => import('./pages/SKBendaharaBOS'))
+const SKPengawasAsesmen = lazy(() => import('./pages/SKPengawasAsesmen'))
 const DaftarHonorLiterasiNumerasi = lazy(() => import('./pages/DaftarHonorLiterasiNumerasi'))
 const DaftarHonorPengawasAsesmen = lazy(() => import('./pages/DaftarHonorPengawasAsesmen'))
 const DaftarHonorPanitiaUjian = lazy(() => import('./pages/DaftarHonorPanitiaUjian'))
@@ -360,6 +361,7 @@ export default function App() {
           <Route path="/gudang-sk/tenaga-kebersihan" element={<SKTenagaKebersihan />} />
           <Route path="/gudang-sk/operator-dapodik" element={<SKOperatorDapodik />} />
           <Route path="/gudang-sk/bendahara-bos" element={<SKBendaharaBOS />} />
+          <Route path="/gudang-sk/pengawas-asesmen" element={<ProtectedRoute adminOnly><SKPengawasAsesmen /></ProtectedRoute>} />
           <Route path="/gudang-sk/daftar-honor-literasi-numerasi" element={<DaftarHonorLiterasiNumerasi />} />
           <Route path="/gudang-sk/daftar-honor-pengawas-asesmen" element={<DaftarHonorPengawasAsesmen />} />
           <Route path="/gudang-sk/daftar-honor-panitia-ujian" element={<DaftarHonorPanitiaUjian />} />
