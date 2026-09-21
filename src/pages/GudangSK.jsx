@@ -17,6 +17,8 @@ import {
   Lock,
   Search,
   X,
+  Receipt,
+  Coins,
 } from 'lucide-react'
 import Layout from '../components/Layout'
 
@@ -215,7 +217,26 @@ const daftarSK = [
     warna: 'indigo',
     siap: true,
   },
-
+ {
+   id: 'daftar-honor-literasi-numerasi',
+   kategori: 'honor',
+   judul: 'Daftar Honor Literasi & Numerasi',
+   deskripsi: 'Daftar penerimaan honorarium guru yang mengikuti kegiatan literasi dan numerasi, lengkap dengan potongan PPh 21 dan kolom paraf.',
+   icon: Receipt,
+   path: '/gudang-sk/daftar-honor-literasi-numerasi',
+   warna: 'rose',
+   siap: true,
+  },
+   {
+   id: 'bendahara-bos',
+   kategori: 'kegiatan',
+   judul: 'SK Bendahara BOS',
+   deskripsi: 'Penetapan bendahara pengelola dana BOS beserta uraian tugas dan tanggung jawabnya.',
+   icon: Coins,
+   path: '/gudang-sk/bendahara-bos',
+   warna: 'amber',
+   siap: true,
+ },
   // ---- Asesmen & Kegiatan Sekolah ----
   {
     id: 'mengawas-asesmen',
