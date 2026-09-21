@@ -92,7 +92,7 @@ function NotificationBell() {
       <button
         onClick={() => setOpen((o) => !o)}
         title="Notifikasi"
-        className="relative w-10 h-10 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors"
+        className="relative w-10 h-10 rounded-lg flex items-center justify-center text-slate-500 hover:bg-blue-50 hover:text-blue-900 transition-colors"
       >
         <Bell size={19} strokeWidth={2} />
         {belumDibaca > 0 && (
@@ -237,15 +237,24 @@ export default function Layout({ children, title, subtitle, actions }) {
               {subtitle && <p className="text-xs sm:text-sm text-slate-500 mt-0.5 truncate">{subtitle}</p>}
             </div>
           </div>
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            {/* Tombol Toko — dipindah dari sidebar ke header */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Tombol Toko — dipindah dari sidebar ke header. Warna hover
+                disamakan dengan NotificationBell (biru navy, bukan abu-abu
+                polos) supaya kedua ikon terasa satu keluarga, bukan dua
+                komponen dari template berbeda. */}
             <Link
               to="/toko"
-              className="flex items-center gap-2 px-3 h-10 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+              title="Toko"
+              className="flex items-center gap-2 px-3 h-10 rounded-lg text-sm font-medium text-slate-600 hover:bg-blue-50 hover:text-blue-900 transition-colors"
             >
               <Store size={18} strokeWidth={2} />
               <span className="hidden sm:inline">Toko</span>
             </Link>
+
+            {/* Pemisah halus antara ikon-ikon topbar & area actions
+                (kalau ada), senada dengan gaya "kertas melayang" yang
+                lebih rapi. */}
+            <span className="hidden sm:block w-px h-6 bg-slate-200 mx-1" aria-hidden="true" />
 
             <NotificationBell />
             {actions && <div className="flex items-center gap-2 sm:gap-3">{actions}</div>}
