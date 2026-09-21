@@ -58,6 +58,11 @@ const SKTimBOS = lazy(() => import('./pages/SKTimBOS'))
 const SKHonorGuru = lazy(() => import('./pages/SKHonorGuru'))
 const SKTenagaKebersihan = lazy(() => import('./pages/SKTenagaKebersihan'))
 const SKOperatorDapodik = lazy(() => import('./pages/SKOperatorDapodik'))
+const SKBendaharaBOS = lazy(() => import('./pages/SKBendaharaBOS'))
+const DaftarHonorLiterasiNumerasi = lazy(() => import('./pages/DaftarHonorLiterasiNumerasi'))
+const DaftarHonorPengawasAsesmen = lazy(() => import('./pages/DaftarHonorPengawasAsesmen'))
+const DaftarHonorPanitiaUjian = lazy(() => import('./pages/DaftarHonorPanitiaUjian'))
+const DaftarHonorPanitiaPPDB = lazy(() => import('./pages/DaftarHonorPanitiaPPDB'))
 // Cetak Sampul Laporan (generik, kop otomatis dari profil_sekolah) — satu
 // halaman dengan sidebar menu, menggantikan file terpisah CetakSampul.jsx /
 // CetakSampulSemester.jsx / CetakSampul8355.jsx.
@@ -354,6 +359,11 @@ export default function App() {
           <Route path="/gudang-sk/honor-guru" element={<SKHonorGuru />} />
           <Route path="/gudang-sk/tenaga-kebersihan" element={<SKTenagaKebersihan />} />
           <Route path="/gudang-sk/operator-dapodik" element={<SKOperatorDapodik />} />
+          <Route path="/gudang-sk/bendahara-bos" element={<SKBendaharaBOS />} />
+          <Route path="/gudang-sk/daftar-honor-literasi-numerasi" element={<DaftarHonorLiterasiNumerasi />} />
+          <Route path="/gudang-sk/daftar-honor-pengawas-asesmen" element={<DaftarHonorPengawasAsesmen />} />
+          <Route path="/gudang-sk/daftar-honor-panitia-ujian" element={<DaftarHonorPanitiaUjian />} />
+          <Route path="/gudang-sk/daftar-honor-panitia-ppdb" element={<DaftarHonorPanitiaPPDB />} />
           {/* Cetak Sampul Laporan — satu halaman dengan sidebar menu berisi
               semua jenis laporan (Bulanan, Semester, 8355, LPJ BOS, dst).
               Dikunci adminOnly — dulu ada versi kedua tanpa adminOnly di bagian
