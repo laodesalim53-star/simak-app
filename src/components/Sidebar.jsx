@@ -63,6 +63,7 @@ import {
   LayoutGrid,
   CalendarCheck,
   BookMarked,
+  ChevronDown,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
@@ -556,6 +557,19 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
     }
   }, [open])
 
+  // PERBAIKAN TAMPILAN: sidebar admin punya ~20 menu ditumpuk vertikal,
+  // sulit di-scan. Grup berlabel (Akademik, Keuangan & Aset, Administrasi,
+  // dst) sekarang bisa di-collapse/expand per grup lewat header grup yang
+  // bisa diklik. Grup tanpa label (menu utama paling atas) selalu terbuka.
+  // Default semua grup terbuka (tidak ada yang tertutup) supaya perilaku
+  // awal tidak berubah drastis — pengguna tinggal ciutkan grup yang jarang
+  // dipakai.
+  const [grupTertutup, setGrupTertutup] = useState({})
+
+  function toggleGrup(label) {
+    setGrupTertutup((prev) => ({ ...prev, [label]: !prev[label] }))
+  }
+
   // Notifikasi real-time: jumlah pendaftaran akun yang masih menunggu persetujuan.
   // Hanya relevan untuk admin utama / superadmin yang punya menu "Persetujuan Akun".
   const [jumlahMenunggu, setJumlahMenunggu] = useState(0)
@@ -895,10 +909,10 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
             <img
               src={fotoUrl}
               alt={namaTampil}
-              className="w-11 h-11 rounded-full object-cover shrink-0 border-2 border-white/20"
+              className="w-11 h-11 rounded-full object-cover shrink-0 border-2 border-amber-400/60 ring-2 ring-amber-400/15"
             />
           ) : (
-            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-indigo-400 flex items-center justify-center font-display font-bold text-white text-sm shrink-0 border-2 border-white/20">
+            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-indigo-400 flex items-center justify-center font-display font-bold text-white text-sm shrink-0 border-2 border-amber-400/60 ring-2 ring-amber-400/15">
               {getInisial(namaTampil)}
             </div>
           )}
@@ -959,20 +973,33 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
           className="relative h-full overflow-y-auto overscroll-contain pt-4 px-3"
         >
         {isAdmin ? (
-          groupsAdmin.map((group, i) => (
-            <div key={group.label ?? `top-${i}`} className={i > 0 ? 'mt-5' : ''}>
-              {group.label && (
-                <p className="px-3 mb-1.5 text-[11px] font-semibold tracking-wider uppercase text-white/50">
-                  {group.label}
-                </p>
-              )}
-              <div className="space-y-1">
-                {group.links.map((link) => (
-                  <NavItem key={link.to} {...link} onNavigate={onClose} />
-                ))}
+          groupsAdmin.map((group, i) => {
+            const tertutup = group.label ? !!grupTertutup[group.label] : false
+            return (
+              <div key={group.label ?? `top-${i}`} className={i > 0 ? 'mt-5' : ''}>
+                {group.label && (
+                  <button
+                    type="button"
+                    onClick={() => toggleGrup(group.label)}
+                    className="w-full flex items-center justify-between px-3 mb-1.5 py-1 text-[11px] font-semibold tracking-wider uppercase text-white/50 hover:text-white/80 transition-colors touch-manipulation"
+                  >
+                    <span>{group.label}</span>
+                    <ChevronDown
+                      size={13}
+                      className={`transition-transform duration-200 ${tertutup ? '-rotate-90' : ''}`}
+                    />
+                  </button>
+                )}
+                {!tertutup && (
+                  <div className="space-y-1">
+                    {group.links.map((link) => (
+                      <NavItem key={link.to} {...link} onNavigate={onClose} />
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
-          ))
+            )
+          })
         ) : isOrangTua ? (
           <div className="space-y-1">
             {linksOrangTua.map((link) => (
