@@ -1,16 +1,34 @@
 import { useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { Link } from 'react-router-dom'
-import { ArrowLeft, Loader2, Plus, Printer, RefreshCw, Trash2 } from 'lucide-react'
-import Layout from '../components/Layout'
+import { useNavigate } from 'react-router-dom'
+import { Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
+import {
+  AreaLembar,
+  BagianSK as Bagian,
+  BarAtasCetak,
+  FieldSK as Field,
+  GayaCetakSK,
+  HalamanKeputusan,
+  HalamanLampiran,
+  SEKOLAH_KOSONG,
+  ambilProfilSekolah,
+  inputSK as inputCls,
+  isi,
+  isoHariIni,
+  pecahBaris,
+  tahunPelajaranSekarang,
+} from '../components/CetakSK'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SK Beban Mengajar — halaman anak dari GudangSK (route: /gudang-sk/beban-mengajar)
 //
-// Data diimpor otomatis (pola sama dengan LaporanKepangkatanGuru.jsx dan Kelas.jsx):
-//   • profil_sekolah → kop, alamat, kepala sekolah, NIP kepala sekolah, logo
+// Sistem cetaknya mengikuti pola LaporanKepangkatanGuru.jsx (toolbar no-print,
+// lembar-cetak print-only, @page) dan disatukan di components/CetakSK.jsx supaya
+// SK lain (honor guru, tenaga kebersihan, dst) tinggal memakai ulang.
+//
+// Data diimpor otomatis:
+//   • profil_sekolah → kop, alamat, kepala sekolah, NIP, logo, tempat penetapan
 //   • guru (status aktif) → nama, NIP, tugas tambahan
 //   • kelas → wali kelas tiap guru (kolom wali_kelas_id)
 //
@@ -39,36 +57,6 @@ const barisBaru = () => ({
   ket: '',
 })
 
-function tahunPelajaranSekarang() {
-  const t = new Date()
-  const y = t.getFullYear()
-  return t.getMonth() + 1 >= 7 ? `${y}/${y + 1}` : `${y - 1}/${y}`
-}
-
-function isoHariIni() {
-  const t = new Date()
-  const p = (n) => String(n).padStart(2, '0')
-  return `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())}`
-}
-
-function formatTanggal(iso) {
-  if (!iso) return '…………'
-  const [y, m, d] = iso.split('-').map(Number)
-  return new Date(y, m - 1, d).toLocaleDateString('id-ID', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
-}
-
-const pecahBaris = (teks) =>
-  teks
-    .split('\n')
-    .map((s) => s.trim())
-    .filter(Boolean)
-
-const isi = (v, pengganti = '…………') => (v && String(v).trim() ? v : pengganti)
-
 // {tahun} diganti otomatis dengan isi kolom "Tahun pelajaran" saat dokumen dirender,
 // jadi mengubah tahun pelajaran ikut mengubah teks Menimbang/Mengingat.
 const MENIMBANG_AWAL = [
@@ -87,7 +75,7 @@ const MENGINGAT_AWAL = [
   'Kalender pendidikan dan struktur kurikulum sekolah Tahun Pelajaran {tahun}.',
 ].join('\n')
 
-// ─── Impor data ──────────────────────────────────────────────────────────────
+// ─── Impor guru & kelas ──────────────────────────────────────────────────────
 // Deteksi & urutan disalin dari LaporanKepangkatanGuru.jsx supaya konsisten.
 function isKepalaSekolah(g) {
   const jabatan = `${g.tugas_tambahan || ''} ${g.jenis_ptk || ''}`.toLowerCase()
@@ -114,17 +102,8 @@ function urutkanGuru(daftar) {
   })
 }
 
-function formatKabupaten(teks) {
-  if (!teks) return ''
-  return teks
-    .replace(/^PEMERINTAH\s+KABUPATEN\s+/i, '')
-    .replace(/^KABUPATEN\s+/i, '')
-    .trim()
-}
-
-async function ambilDataSekolah(sekolahId) {
-  const [rs, rg, rk] = await Promise.all([
-    supabase.from('profil_sekolah').select('*').eq('sekolah_id', sekolahId).maybeSingle(),
+async function ambilGuruDanKelas(sekolahId) {
+  const [rg, rk] = await Promise.all([
     supabase
       .from('guru')
       .select('id, nip, nama_lengkap, pangkat_golongan, tugas_tambahan, jenis_ptk, status')
@@ -136,17 +115,9 @@ async function ambilDataSekolah(sekolahId) {
       .eq('sekolah_id', sekolahId)
       .order('nama_kelas'),
   ])
-
-  const galat = rs.error || rg.error || rk.error
+  const galat = rg.error || rk.error
   if (galat) throw galat
-
-  let logoUrl = ''
-  if (rs.data?.logo_path) {
-    const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(rs.data.logo_path)
-    logoUrl = pub?.publicUrl || ''
-  }
-
-  return { profil: rs.data || null, guru: rg.data || [], kelas: rk.data || [], logoUrl }
+  return { guru: rg.data || [], kelas: rk.data || [] }
 }
 
 function susunBaris(guru, kelas, profil, jam) {
@@ -198,326 +169,13 @@ function susunBaris(guru, kelas, profil, jam) {
   return baris.length ? baris : [barisBaru(), barisBaru(), barisBaru()]
 }
 
-// ─── CSS dokumen + cetak ─────────────────────────────────────────────────────
-// Saat cetak, semua anak langsung <body> disembunyikan kecuali portal dokumen.
-// Cara ini tahan terhadap Layout yang punya sidebar / tinggi layar tetap, yang
-// biasanya membuat hasil cetak terpotong di halaman pertama.
-const CSS = `
-.area-cetak-portal { display: none; }
-
-.kertas {
-  width: 210mm;
-  min-height: 297mm;
-  margin: 0 auto 16px;
-  padding: 20mm 22mm;
-  background: #fff;
-  color: #000;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.18), 0 8px 24px rgba(15, 23, 42, 0.08);
-  font-family: 'Times New Roman', Times, serif;
-  font-size: 12pt;
-  line-height: 1.45;
-  box-sizing: border-box;
-}
-.kertas p { margin: 0; }
-
-.sk-kop { display: flex; align-items: center; gap: 12px; border-bottom: 3px double #000; padding-bottom: 6px; margin-bottom: 14px; }
-.sk-kop-logo { width: 20mm; height: 20mm; object-fit: contain; flex: none; }
-.sk-kop-teks { flex: 1; text-align: center; }
-.sk-kop-atas { font-size: 12pt; font-weight: 700; text-transform: uppercase; }
-.sk-kop-nama { font-size: 15pt; font-weight: 700; text-transform: uppercase; line-height: 1.25; }
-.sk-kop-alamat { font-size: 10.5pt; }
-
-.sk-judul { text-align: center; font-weight: 700; text-transform: uppercase; margin-bottom: 12px; }
-.sk-judul .tentang { margin: 4px 0; }
-
-.sk-def { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
-.sk-def td { vertical-align: top; padding: 0 0 4px; }
-.sk-def td.k { width: 30mm; }
-.sk-def td.t { width: 5mm; }
-.sk-def tr { page-break-inside: avoid; }
-
-.sk-item { display: flex; }
-.sk-item .no { width: 8mm; flex: none; }
-.sk-item .isi { text-align: justify; }
-.sk-justify { text-align: justify; }
-
-.sk-tengah { text-align: center; font-weight: 700; text-transform: uppercase; margin: 10px 0; }
-
-.sk-ttd { margin-left: 52%; margin-top: 18px; page-break-inside: avoid; }
-.sk-ttd table { border-collapse: collapse; }
-.sk-ttd td { padding: 0 6px 0 0; vertical-align: top; }
-.sk-ttd .ruang { height: 20mm; }
-
-.sk-meta { border-collapse: collapse; margin-left: 50%; margin-bottom: 14px; font-size: 11pt; }
-.sk-meta td { vertical-align: top; padding: 0 6px 0 0; }
-
-.sk-tabel { width: 100%; border-collapse: collapse; font-size: 11pt; }
-.sk-tabel th, .sk-tabel td { border: 1px solid #000; padding: 5px 6px; vertical-align: top; }
-.sk-tabel th { text-align: center; font-weight: 700; vertical-align: middle; }
-.sk-tabel thead { display: table-header-group; }
-.sk-tabel tr { page-break-inside: avoid; }
-.sk-tabel td.c { text-align: center; }
-.sk-tabel .nip { font-size: 10pt; }
-
-@media print {
-  @page { size: A4; margin: 18mm 20mm; }
-  html, body { background: #fff !important; height: auto !important; overflow: visible !important; }
-  body > *:not(.area-cetak-portal) { display: none !important; }
-  .area-cetak-portal { display: block !important; }
-  .kertas {
-    width: auto;
-    min-height: 0;
-    margin: 0;
-    padding: 0;
-    box-shadow: none;
-  }
-  .kertas:not(:last-child) { page-break-after: always; }
-}
-`
-
-// ─── Dokumen (dipakai untuk pratinjau layar DAN portal cetak) ────────────────
-function Daftar({ items, gaya }) {
-  return items.map((teks, i) => (
-    <div key={i} className="sk-item">
-      <span className="no">{gaya === 'huruf' ? `${String.fromCharCode(97 + i)}.` : `${i + 1}.`}</span>
-      <span className="isi">{teks}</span>
-    </div>
-  ))
-}
-
-function BlokTTD({ sk, sekolah }) {
-  return (
-    <div className="sk-ttd">
-      <table>
-        <tbody>
-          <tr>
-            <td>Ditetapkan di</td>
-            <td>: {isi(sk.tempat)}</td>
-          </tr>
-          <tr>
-            <td>Pada tanggal</td>
-            <td>: {formatTanggal(sk.tanggal)}</td>
-          </tr>
-        </tbody>
-      </table>
-      <p style={{ marginTop: 6 }}>Kepala {isi(sekolah.nama, 'Sekolah')},</p>
-      <div className="ruang" />
-      <p>
-        <strong>
-          <u>{isi(sekolah.kepala, 'Nama Kepala Sekolah')}</u>
-        </strong>
-      </p>
-      <p>NIP. {isi(sekolah.nipKepala)}</p>
-    </div>
-  )
-}
-
-function DokumenSK({ sk, sekolah, baris, menimbang, mengingat }) {
-  const namaSekolah = isi(sekolah.nama, 'NAMA SEKOLAH')
-  const tp = isi(sk.tahunPelajaran)
-  const gantiTahun = (teks) => teks.replace(/\{tahun\}/g, tp)
-  const total = baris.reduce((a, r) => a + (parseFloat(String(r.jam).replace(',', '.')) || 0), 0)
-  const totalTeks = Number.isInteger(total) ? String(total) : total.toFixed(1)
-  const judulPanjang = `Pembagian Tugas Mengajar Guru pada ${namaSekolah} Tahun Pelajaran ${tp}`
-  const barisKop = pecahBaris(sekolah.kopAtas || '')
-
-  const diktum = [
-    ['KESATU', `Menugaskan guru yang namanya tercantum dalam Lampiran Keputusan ini untuk melaksanakan tugas mengajar pada ${namaSekolah} Tahun Pelajaran ${tp} sesuai dengan mata pelajaran, kelas, dan jumlah jam pelajaran sebagaimana tercantum dalam Lampiran.`],
-    ['KEDUA', `Beban kerja guru sebagaimana dimaksud pada diktum KESATU paling sedikit ${isi(sk.minimalJam, '24')} (jam tatap muka) per minggu, termasuk tugas tambahan yang diakui sebagai ekuivalen jam mengajar.`],
-    ['KETIGA', 'Dalam melaksanakan tugasnya, guru wajib merencanakan, melaksanakan, dan menilai pembelajaran, membimbing peserta didik, serta melaporkan pelaksanaan tugasnya kepada Kepala Sekolah.'],
-    ['KEEMPAT', `Segala biaya yang timbul akibat ditetapkannya Keputusan ini dibebankan pada ${isi(sk.sumberDana, 'anggaran sekolah')}.`],
-    ['KELIMA', 'Keputusan ini mulai berlaku pada tanggal ditetapkan, dengan ketentuan apabila di kemudian hari terdapat kekeliruan akan diadakan perbaikan sebagaimana mestinya.'],
-  ]
-
-  return (
-    <>
-      {/* ── Halaman 1: Keputusan ── */}
-      <div className="kertas">
-        <div className="sk-kop">
-          {sekolah.logoUrl && <img src={sekolah.logoUrl} alt="Logo sekolah" className="sk-kop-logo" />}
-          <div className="sk-kop-teks">
-            {barisKop.map((teks, i) => (
-              <div key={i} className="sk-kop-atas">
-                {teks}
-              </div>
-            ))}
-            <div className="sk-kop-nama">{namaSekolah}</div>
-            {sekolah.npsn && <div className="sk-kop-alamat">NPSN: {sekolah.npsn}</div>}
-            {sekolah.alamat && <div className="sk-kop-alamat">{sekolah.alamat}</div>}
-          </div>
-        </div>
-
-        <div className="sk-judul">
-          <p>Keputusan Kepala {namaSekolah}</p>
-          <p>Nomor: {isi(sk.nomor)}</p>
-          <p className="tentang">Tentang</p>
-          <p>{judulPanjang}</p>
-        </div>
-
-        <p className="sk-tengah" style={{ marginTop: 4 }}>
-          Kepala {namaSekolah},
-        </p>
-
-        <table className="sk-def">
-          <tbody>
-            <tr>
-              <td className="k">Menimbang</td>
-              <td className="t">:</td>
-              <td>
-                <Daftar items={pecahBaris(menimbang).map(gantiTahun)} gaya="huruf" />
-              </td>
-            </tr>
-            <tr>
-              <td className="k">Mengingat</td>
-              <td className="t">:</td>
-              <td>
-                <Daftar items={pecahBaris(mengingat).map(gantiTahun)} gaya="angka" />
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        <p className="sk-tengah">Memutuskan:</p>
-
-        <table className="sk-def">
-          <tbody>
-            <tr>
-              <td className="k">Menetapkan</td>
-              <td className="t">:</td>
-              <td className="sk-justify">
-                KEPUTUSAN KEPALA {namaSekolah.toUpperCase()} TENTANG {judulPanjang.toUpperCase()}.
-              </td>
-            </tr>
-            {diktum.map(([label, teks]) => (
-              <tr key={label}>
-                <td className="k">{label}</td>
-                <td className="t">:</td>
-                <td className="sk-justify">{teks}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <BlokTTD sk={sk} sekolah={sekolah} />
-      </div>
-
-      {/* ── Halaman 2: Lampiran ── */}
-      <div className="kertas">
-        <table className="sk-meta">
-          <tbody>
-            <tr>
-              <td>LAMPIRAN</td>
-              <td>: Keputusan Kepala {namaSekolah}</td>
-            </tr>
-            <tr>
-              <td>NOMOR</td>
-              <td>: {isi(sk.nomor)}</td>
-            </tr>
-            <tr>
-              <td>TANGGAL</td>
-              <td>: {formatTanggal(sk.tanggal)}</td>
-            </tr>
-          </tbody>
-        </table>
-
-        <div className="sk-judul">
-          <p>Pembagian Tugas Mengajar Guru</p>
-          <p>Tahun Pelajaran {tp}</p>
-        </div>
-
-        <table className="sk-tabel">
-          <thead>
-            <tr>
-              <th style={{ width: '8mm' }}>No</th>
-              <th>Nama / NIP</th>
-              <th>Mata Pelajaran / Tugas</th>
-              <th style={{ width: '16mm' }}>Kelas</th>
-              <th style={{ width: '16mm' }}>Jam / Minggu</th>
-              <th>Tugas Tambahan</th>
-              <th>Ket.</th>
-            </tr>
-          </thead>
-          <tbody>
-            {baris.map((r, i) => (
-              <tr key={r.id}>
-                <td className="c">{i + 1}</td>
-                <td>
-                  {r.nama || '\u00A0'}
-                  {r.nip && (
-                    <>
-                      <br />
-                      <span className="nip">NIP. {r.nip}</span>
-                    </>
-                  )}
-                </td>
-                <td>{r.mapel}</td>
-                <td className="c">{r.kelas}</td>
-                <td className="c">{r.jam}</td>
-                <td>{r.tambahan}</td>
-                <td>{r.ket}</td>
-              </tr>
-            ))}
-            <tr>
-              <td colSpan={4} style={{ textAlign: 'right', fontWeight: 700 }}>
-                Jumlah jam
-              </td>
-              <td className="c" style={{ fontWeight: 700 }}>
-                {totalTeks}
-              </td>
-              <td colSpan={2} />
-            </tr>
-          </tbody>
-        </table>
-
-        <BlokTTD sk={sk} sekolah={sekolah} />
-      </div>
-    </>
-  )
-}
-
-// ─── Komponen formulir kecil (di luar komponen utama agar input tidak
-// kehilangan fokus setiap kali state berubah) ────────────────────────────────
-const inputCls =
-  'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-300'
-
-function Field({ label, className = '', children }) {
-  return (
-    <label className={`block ${className}`}>
-      <span className="block text-xs font-medium text-slate-600 mb-1">{label}</span>
-      {children}
-    </label>
-  )
-}
-
-function Bagian({ judul, keterangan, aksi, children }) {
-  return (
-    <section className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 mb-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <h3 className="font-display text-sm sm:text-[15px] font-semibold text-slate-900">{judul}</h3>
-          {keterangan && <p className="text-xs sm:text-[13px] text-slate-500 mt-0.5">{keterangan}</p>}
-        </div>
-        {aksi}
-      </div>
-      <div className="mt-3">{children}</div>
-    </section>
-  )
-}
-
 // ─── Halaman ─────────────────────────────────────────────────────────────────
 export default function SKBebanMengajar() {
+  const navigate = useNavigate()
   const { sekolahId } = useAuth()
   const tpAwal = tahunPelajaranSekarang()
 
-  const [sekolah, setSekolah] = useState({
-    kopAtas: '',
-    nama: '',
-    npsn: '',
-    alamat: '',
-    kepala: '',
-    nipKepala: '',
-    logoUrl: '',
-  })
+  const [sekolah, setSekolah] = useState(SEKOLAH_KOSONG)
   const [sk, setSk] = useState({
     nomor: '',
     tahunPelajaran: tpAwal,
@@ -543,31 +201,18 @@ export default function SKBebanMengajar() {
     setMemuat(true)
     setGalat('')
     try {
-      const { profil, guru, kelas, logoUrl } = await ambilDataSekolah(sekolahId)
-      const kepsekGuru = guru.find(isKepalaSekolah)
-      const kab = formatKabupaten(profil?.kabupaten)
+      const [ps, gk] = await Promise.all([ambilProfilSekolah(sekolahId), ambilGuruDanKelas(sekolahId)])
+      const kepsekGuru = gk.guru.find(isKepalaSekolah)
 
       setSekolah({
-        kopAtas: [kab ? `Pemerintah Kabupaten ${kab}` : '', profil?.dinas_pendidikan || 'Dinas Pendidikan']
-          .filter(Boolean)
-          .join('\n'),
-        nama: profil?.nama_sekolah || '',
-        npsn: profil?.npsn || '',
-        alamat:
-          [profil?.alamat, profil?.kecamatan, profil?.kabupaten, profil?.provinsi].filter(Boolean).join(', ') +
-          (profil?.kode_pos ? ` ${profil.kode_pos}` : ''),
-        kepala: profil?.kepala_sekolah || kepsekGuru?.nama_lengkap || '',
-        nipKepala: profil?.nip_kepala_sekolah || kepsekGuru?.nip || '',
-        logoUrl,
+        ...ps.sekolah,
+        kepala: ps.sekolah.kepala || kepsekGuru?.nama_lengkap || '',
+        nipKepala: ps.sekolah.nipKepala || kepsekGuru?.nip || '',
       })
+      if (ps.tempat) setSk((s) => ({ ...s, tempat: s.tempat || ps.tempat }))
 
-      // Hanya tempat_ttd — kolom kecamatan berisi teks kop lengkap ("KECAMATAN ..."),
-      // kurang pantas dipakai sebagai "Ditetapkan di".
-      const tempatBaru = profil?.tempat_ttd || ''
-      if (tempatBaru) setSk((s) => ({ ...s, tempat: s.tempat || tempatBaru }))
-
-      setBaris(susunBaris(guru, kelas, profil, jam))
-      setRingkas(`${guru.length} guru aktif dan ${kelas.length} kelas terbaca.`)
+      setBaris(susunBaris(gk.guru, gk.kelas, ps.profil, jam))
+      setRingkas(`${gk.guru.length} guru aktif dan ${gk.kelas.length} kelas terbaca.`)
     } catch (e) {
       console.error('Gagal memuat data SK Beban Mengajar:', e)
       setGalat(e?.message || 'Data tidak dapat dibaca.')
@@ -595,25 +240,28 @@ export default function SKBebanMengajar() {
   const tambahBaris = () => setBaris((list) => [...list, barisBaru()])
   const hapusBaris = (id) => setBaris((list) => (list.length > 1 ? list.filter((r) => r.id !== id) : list))
 
-  const dokumen = (
-    <DokumenSK sk={sk} sekolah={sekolah} baris={baris} menimbang={menimbang} mengingat={mengingat} />
-  )
+  // ── Bahan dokumen ──
+  const namaSekolah = isi(sekolah.nama, 'NAMA SEKOLAH')
+  const tp = isi(sk.tahunPelajaran)
+  const gantiTahun = (teks) => teks.replace(/\{tahun\}/g, tp)
+  const total = baris.reduce((a, r) => a + (parseFloat(String(r.jam).replace(',', '.')) || 0), 0)
+  const totalTeks = Number.isInteger(total) ? String(total) : total.toFixed(1)
+
+  const diktum = [
+    ['KESATU', `Menugaskan guru yang namanya tercantum dalam Lampiran Keputusan ini untuk melaksanakan tugas mengajar pada ${namaSekolah} Tahun Pelajaran ${tp} sesuai dengan mata pelajaran, kelas, dan jumlah jam pelajaran sebagaimana tercantum dalam Lampiran.`],
+    ['KEDUA', `Beban kerja guru sebagaimana dimaksud pada diktum KESATU paling sedikit ${isi(sk.minimalJam, '24')} (jam tatap muka) per minggu, termasuk tugas tambahan yang diakui sebagai ekuivalen jam mengajar.`],
+    ['KETIGA', 'Dalam melaksanakan tugasnya, guru wajib merencanakan, melaksanakan, dan menilai pembelajaran, membimbing peserta didik, serta melaporkan pelaksanaan tugasnya kepada Kepala Sekolah.'],
+    ['KEEMPAT', `Segala biaya yang timbul akibat ditetapkannya Keputusan ini dibebankan pada ${isi(sk.sumberDana, 'anggaran sekolah')}.`],
+    ['KELIMA', 'Keputusan ini mulai berlaku pada tanggal ditetapkan, dengan ketentuan apabila di kemudian hari terdapat kekeliruan akan diadakan perbaikan sebagaimana mestinya.'],
+  ]
 
   return (
-    <Layout
-      title="SK Beban Mengajar"
-      subtitle="Data sekolah, guru, dan wali kelas diambil otomatis. Periksa isiannya, lalu cetak. Dokumen terdiri dari Keputusan dan Lampiran."
-    >
-      <style>{CSS}</style>
+    <div className="min-h-screen bg-slate-100">
+      <GayaCetakSK />
+      <BarAtasCetak onKembali={() => navigate('/gudang-sk')} judul="SK Beban Mengajar" />
 
-      <div>
-        <Link
-          to="/gudang-sk"
-          className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 mb-4"
-        >
-          <ArrowLeft size={15} /> Kembali ke Gudang SK
-        </Link>
-
+      {/* ── Panel isian (tidak ikut tercetak) ── */}
+      <div className="no-print max-w-3xl mx-auto px-3 pt-4">
         {memuat && (
           <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800 mb-4">
             <Loader2 size={16} className="animate-spin" /> Mengambil data sekolah, guru, dan kelas…
@@ -757,25 +405,72 @@ export default function SKBebanMengajar() {
           </button>
         </Bagian>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-          <div>
-            <p className="font-display text-sm sm:text-[15px] font-semibold text-slate-900">Pratinjau</p>
-            <p className="text-xs text-slate-500">Saat mencetak, matikan opsi "Header dan footer" di dialog cetak agar bersih.</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="inline-flex items-center gap-2 rounded-xl bg-blue-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-800"
-          >
-            <Printer size={16} /> Cetak / Simpan PDF
-          </button>
-        </div>
-
-        <div className="overflow-x-auto rounded-xl bg-slate-200/70 p-3 sm:p-6">{dokumen}</div>
+        <p className="text-xs text-slate-500 mb-2">
+          Pratinjau di bawah. Saat mencetak, matikan opsi "Header dan footer" di dialog cetak agar bersih.
+        </p>
       </div>
 
-      {/* Salinan dokumen khusus cetak — lihat komentar di CSS */}
-      {createPortal(<div className="area-cetak-portal">{dokumen}</div>, document.body)}
-    </Layout>
+      {/* ── Lembar cetak: halaman 1 Keputusan, halaman 2 Lampiran ── */}
+      <AreaLembar>
+        <HalamanKeputusan
+          sk={sk}
+          sekolah={sekolah}
+          tentang={`Pembagian Tugas Mengajar Guru pada ${namaSekolah} Tahun Pelajaran ${tp}`}
+          menimbang={pecahBaris(menimbang).map(gantiTahun)}
+          mengingat={pecahBaris(mengingat).map(gantiTahun)}
+          diktum={diktum}
+        />
+
+        <HalamanLampiran
+          sk={sk}
+          sekolah={sekolah}
+          judul={['Pembagian Tugas Mengajar Guru', `Tahun Pelajaran ${tp}`]}
+        >
+          <table className="sk-tabel">
+            <thead>
+              <tr>
+                <th style={{ width: '8mm' }}>No</th>
+                <th>Nama / NIP</th>
+                <th>Mata Pelajaran / Tugas</th>
+                <th style={{ width: '16mm' }}>Kelas</th>
+                <th style={{ width: '16mm' }}>Jam / Minggu</th>
+                <th>Tugas Tambahan</th>
+                <th>Ket.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {baris.map((r, i) => (
+                <tr key={r.id}>
+                  <td className="c">{i + 1}</td>
+                  <td>
+                    {r.nama || '\u00A0'}
+                    {r.nip && (
+                      <>
+                        <br />
+                        <span className="nip">NIP. {r.nip}</span>
+                      </>
+                    )}
+                  </td>
+                  <td>{r.mapel}</td>
+                  <td className="c">{r.kelas}</td>
+                  <td className="c">{r.jam}</td>
+                  <td>{r.tambahan}</td>
+                  <td>{r.ket}</td>
+                </tr>
+              ))}
+              <tr>
+                <td colSpan={4} style={{ textAlign: 'right', fontWeight: 700 }}>
+                  Jumlah jam
+                </td>
+                <td className="c" style={{ fontWeight: 700 }}>
+                  {totalTeks}
+                </td>
+                <td colSpan={2} />
+              </tr>
+            </tbody>
+          </table>
+        </HalamanLampiran>
+      </AreaLembar>
+    </div>
   )
 }
