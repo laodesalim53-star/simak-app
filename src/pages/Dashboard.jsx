@@ -27,13 +27,21 @@ const KATEGORI_STYLE = {
   Akademik: 'bg-sage-500/15 text-sage-500',
 }
 
+// PERBAIKAN TAMPILAN: palet kartu statistik sebelumnya campur-campur
+// (biru/hijau/teal/ungu/oranye/rose — kesan template generik, tidak
+// senada dengan identitas navy+emas di banner & sidebar). Sekarang
+// diturunkan dari 2 warna utama tema aplikasi (navy & emas) plus sage
+// sebagai aksen, supaya satu keluarga desain. rose/emerald tetap dipakai
+// khusus untuk kartu status (ada yang menunggu / tidak ada yang menunggu)
+// karena maknanya memang semantik (peringatan vs aman), bukan dekoratif.
 const CARD_THEME = {
-  blue: { gradient: 'from-blue-500 to-blue-600' },
-  green: { gradient: 'from-emerald-500 to-emerald-600' },
-  teal: { gradient: 'from-teal-500 to-teal-600' },
-  purple: { gradient: 'from-purple-500 to-purple-600' },
-  orange: { gradient: 'from-orange-500 to-orange-600' },
+  navy: { gradient: 'from-blue-900 to-indigo-950' },
+  indigo: { gradient: 'from-blue-800 to-indigo-900' },
+  sage: { gradient: 'from-sage-600 to-sage-700' },
+  gold: { gradient: 'from-amber-600 to-amber-700' },
+  slate: { gradient: 'from-slate-700 to-slate-800' },
   rose: { gradient: 'from-rose-500 to-rose-600' },
+  emerald: { gradient: 'from-emerald-600 to-emerald-700' },
 }
 
 function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 72 }) {
@@ -93,6 +101,16 @@ function formatRelativeDate(iso) {
   return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
 }
 
+// Tanggal hari ini dalam format panjang Indonesia, dipakai di banner.
+function formatTanggalHariIni() {
+  return new Date().toLocaleDateString('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+}
+
 // Generik: bisa dipakai untuk presensi_siswa MAUPUN presensi_pegawai,
 // selama baris punya kolom tanggal & status.
 function aggregateAttendance(rows) {
@@ -138,6 +156,8 @@ function DashboardSekolah({ sekolahId }) {
   const [pengajuanMenunggu, setPengajuanMenunggu] = useState(0)
   const [loading, setLoading] = useState(true)
   const [storyRefreshKey, setStoryRefreshKey] = useState(0)
+
+  const hariIni = formatTanggalHariIni()
 
   useEffect(() => {
     async function load() {
@@ -220,23 +240,23 @@ function DashboardSekolah({ sekolahId }) {
   }, [sekolahId])
 
   const cards = [
-    { label: 'Total Siswa', value: stats.siswa, icon: Users, theme: 'blue' },
-    { label: 'Total Guru', value: stats.guru, icon: GraduationCap, theme: 'green' },
-    { label: 'Jumlah Kelas', value: stats.kelas, icon: DoorOpen, theme: 'teal' },
-    { label: 'Pengumuman', value: stats.pengumuman, icon: Megaphone, theme: 'purple' },
+    { label: 'Total Siswa', value: stats.siswa, icon: Users, theme: 'navy' },
+    { label: 'Total Guru', value: stats.guru, icon: GraduationCap, theme: 'sage' },
+    { label: 'Jumlah Kelas', value: stats.kelas, icon: DoorOpen, theme: 'indigo' },
+    { label: 'Pengumuman', value: stats.pengumuman, icon: Megaphone, theme: 'gold' },
     {
       label: 'Presensi Hari Ini',
       value: `${presensiHariIni.terisi}/${stats.siswa}`,
       sublabel: `${presensiHariIni.hadir} hadir · ${presensiHariIni.izin} izin · ${presensiHariIni.alpa} alpa`,
       icon: ClipboardCheck,
-      theme: 'orange',
+      theme: 'slate',
     },
     {
       label: 'Pengajuan Menunggu',
       value: pengajuanMenunggu,
       sublabel: pengajuanMenunggu > 0 ? 'menunggu persetujuan Anda' : 'tidak ada yang menunggu',
       icon: FileClock,
-      theme: pengajuanMenunggu > 0 ? 'rose' : 'green',
+      theme: pengajuanMenunggu > 0 ? 'rose' : 'emerald',
     },
   ]
 
@@ -260,9 +280,16 @@ function DashboardSekolah({ sekolahId }) {
           <div className="relative w-12 h-12 rounded-full bg-white/10 ring-2 ring-white/20 text-white flex items-center justify-center shrink-0">
             <LayoutDashboard size={22} />
           </div>
-          <div className="relative">
+          <div className="relative flex-1 min-w-0">
             <p className="font-display font-semibold text-lg text-white">Selamat datang kembali di SIMAK</p>
-            <p className="text-sm text-blue-200/70">Semua ringkasan data sekolah ada di bawah ini.</p>
+            <p className="text-sm text-blue-200/70">
+              {!loading && pengajuanMenunggu > 0
+                ? `${pengajuanMenunggu} pengajuan izin menunggu persetujuan Anda.`
+                : 'Semua ringkasan data sekolah ada di bawah ini.'}
+            </p>
+          </div>
+          <div className="relative hidden sm:block text-right shrink-0">
+            <p className="text-xs text-blue-200/60 capitalize">{hariIni}</p>
           </div>
         </div>
 
@@ -431,6 +458,8 @@ function DashboardKantor({ sekolahId }) {
   const [loading, setLoading] = useState(true)
   const [storyRefreshKey, setStoryRefreshKey] = useState(0)
 
+  const hariIni = formatTanggalHariIni()
+
   useEffect(() => {
     async function load() {
       if (!sekolahId) {
@@ -495,21 +524,21 @@ function DashboardKantor({ sekolahId }) {
   }, [sekolahId])
 
   const cards = [
-    { label: 'Total Pegawai', value: stats.pegawai, icon: Briefcase, theme: 'blue' },
-    { label: 'Pengumuman', value: stats.pengumuman, icon: Megaphone, theme: 'purple' },
+    { label: 'Total Pegawai', value: stats.pegawai, icon: Briefcase, theme: 'navy' },
+    { label: 'Pengumuman', value: stats.pengumuman, icon: Megaphone, theme: 'gold' },
     {
       label: 'Presensi Hari Ini',
       value: `${presensiHariIni.terisi}/${stats.pegawai}`,
       sublabel: `${presensiHariIni.hadir} hadir · ${presensiHariIni.izin} izin · ${presensiHariIni.alpa} alpa`,
       icon: ClipboardCheck,
-      theme: 'orange',
+      theme: 'slate',
     },
     {
       label: 'Akun Menunggu',
       value: akunMenunggu,
       sublabel: akunMenunggu > 0 ? 'menunggu persetujuan Anda' : 'tidak ada yang menunggu',
       icon: UserCheck,
-      theme: akunMenunggu > 0 ? 'rose' : 'green',
+      theme: akunMenunggu > 0 ? 'rose' : 'emerald',
     },
   ]
 
@@ -533,9 +562,16 @@ function DashboardKantor({ sekolahId }) {
           <div className="relative w-12 h-12 rounded-full bg-white/10 ring-2 ring-white/20 text-white flex items-center justify-center shrink-0">
             <LayoutDashboard size={22} />
           </div>
-          <div className="relative">
+          <div className="relative flex-1 min-w-0">
             <p className="font-display font-semibold text-lg text-white">Selamat datang kembali</p>
-            <p className="text-sm text-blue-200/70">Semua ringkasan data kantor ada di bawah ini.</p>
+            <p className="text-sm text-blue-200/70">
+              {!loading && akunMenunggu > 0
+                ? `${akunMenunggu} akun menunggu persetujuan Anda.`
+                : 'Semua ringkasan data kantor ada di bawah ini.'}
+            </p>
+          </div>
+          <div className="relative hidden sm:block text-right shrink-0">
+            <p className="text-xs text-blue-200/60 capitalize">{hariIni}</p>
           </div>
         </div>
 
