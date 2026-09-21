@@ -171,7 +171,7 @@ const daftarSK = [
     icon: Trophy,
     path: '/gudang-sk/pembina-ekstrakurikuler',
     warna: 'orange',
-    siap: false,
+    siap: true,  
   },
   {
     id: 'petugas-perpustakaan',
@@ -181,7 +181,7 @@ const daftarSK = [
     icon: Library,
     path: '/gudang-sk/petugas-perpustakaan',
     warna: 'violet',
-    siap: false,
+    siap: true,   
   },
 
   // ---- Honorarium & Tenaga Pendukung ----
