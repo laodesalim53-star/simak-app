@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Loader2, Trash2, ArrowDownToLine, CheckSquare, Square } from 'lucide-react'
+import { Loader2, Trash2, ArrowDownToLine, CheckSquare, Square, Users, Search } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import {
@@ -25,13 +25,15 @@ import {
 // kegiatan (bukan Surat Keputusan): tabel Nama/NIP, Pangkat/Gol, Dibayarkan,
 // Pajak PPh 21, Diterima, dan kolom Paraf untuk ditandatangani manual.
 //
-// ALUR (diubah): Daftar Honor TIDAK LAGI membuat kuitansi baru. Sebaliknya,
-// Daftar Honor MENARIK baris-baris dari kuitansi jasa yang sudah ada
-// (tabel `kuitansi`, jenis='kuitansi_jasa') lewat panel pemilih manual —
-// user mencentang kuitansi jasa mana saja yang mau dimasukkan ke daftar.
-// Nama/nominal terisi otomatis dari kuitansi terpilih; NIP & Pangkat/Gol
-// dicoba dicocokkan otomatis dari Data Guru berdasarkan nama, dan tetap
-// bisa diedit manual kalau tidak cocok atau kosong.
+// ALUR: Daftar Honor tidak membuat data baru — baris penerima ditarik dari
+// sumber yang sudah ada, lewat dua panel pemilih (checkbox):
+//   1) "Tarik dari Kuitansi Jasa" — dari tabel `kuitansi` (jenis=
+//      'kuitansi_jasa') yang sudah dibuat; nominal ikut nominal kuitansi.
+//   2) "Tarik dari Data Guru" — dari Data Guru & Kelas; nominal dikosongkan
+//      dan diisi manual (dipakai kalau belum ada kuitansinya, mis. untuk
+//      menyusun daftar pengawas/panitia dulu sebelum kuitansi dibuat).
+// NIP & Pangkat/Gol pada baris hasil tarik kuitansi dicoba dicocokkan
+// otomatis dari Data Guru berdasarkan nama; semua field tetap bisa diedit.
 //
 // Dipakai misalnya oleh:
 //   • Daftar Honor Literasi & Numerasi (pages/DaftarHonorLiterasiNumerasi.jsx)
@@ -70,7 +72,8 @@ export default function DaftarHonor({ konfig }) {
   })
 
   const [guru, setGuru] = useState([])
-  const [baris, setBaris] = useState([]) // hasil tarik dari kuitansi jasa
+  const [kelas, setKelas] = useState([]) // dipakai untuk memetakan wali_kelas_id -> nama_kelas
+  const [baris, setBaris] = useState([]) // hasil tarik dari kuitansi jasa / data guru
 
   const [memuat, setMemuat] = useState(true)
   const [galat, setGalat] = useState('')
@@ -82,6 +85,11 @@ export default function DaftarHonor({ konfig }) {
   const [memuatKuitansi, setMemuatKuitansi] = useState(false)
   const [galatKuitansi, setGalatKuitansi] = useState('')
   const [pilihanTarik, setPilihanTarik] = useState(() => new Set())
+
+  // --- Panel pemilih Data Guru (per kelas) ---
+  const [tampilkanPemilihGuru, setTampilkanPemilihGuru] = useState(false)
+  const [pilihanGuru, setPilihanGuru] = useState(() => new Set())
+  const [carianGuru, setCarianGuru] = useState('')
 
   async function muatDariData() {
     if (!sekolahId) {
@@ -102,6 +110,7 @@ export default function DaftarHonor({ konfig }) {
       })
       if (ps.tempat) setSk((s) => ({ ...s, tempat: s.tempat || ps.tempat }))
       setGuru(urut)
+      setKelas(gk.kelas || [])
       sudahMuat.current = true
     } catch (e) {
       console.error(`Gagal memuat data ${konfig.judulBar}:`, e)
@@ -141,11 +150,9 @@ export default function DaftarHonor({ konfig }) {
     setPilihanTarik(new Set())
     muatDaftarKuitansi()
   }
-
   function tutupPemilih() {
     setTampilkanPemilih(false)
   }
-
   function toggleCentang(id) {
     setPilihanTarik((prev) => {
       const baru = new Set(prev)
@@ -155,7 +162,7 @@ export default function DaftarHonor({ konfig }) {
     })
   }
 
-  const idSudahDitarik = new Set(baris.map((b) => b.kuitansiId))
+  const idSudahDitarik = new Set(baris.map((b) => b.kuitansiId).filter(Boolean))
   const kuitansiBisaDitarik = daftarKuitansi.filter((k) => !idSudahDitarik.has(k.id))
   const semuaTercentang = kuitansiBisaDitarik.length > 0 && kuitansiBisaDitarik.every((k) => pilihanTarik.has(k.id))
 
@@ -176,6 +183,7 @@ export default function DaftarHonor({ konfig }) {
       return {
         id: `k-${k.id}`,
         kuitansiId: k.id,
+        guruId: null,
         nomorKuitansi: k.nomor || k.no_bukti || '',
         nama,
         nip: cocok?.nip || '',
@@ -189,6 +197,97 @@ export default function DaftarHonor({ konfig }) {
     setRingkas(`${barisBaru.length} orang ditarik dari Kuitansi Jasa.`)
     setTampilkanPemilih(false)
     setPilihanTarik(new Set())
+  }
+
+  // --- Data Guru: grup per kelas (kalau field kelas tersedia) ---
+  const idGuruSudahDitarik = new Set(baris.map((b) => b.guruId).filter(Boolean))
+  const guruBisaDitarik = useMemo(() => {
+    const kata = carianGuru.trim().toLowerCase()
+    return guru
+      .filter((g) => !idGuruSudahDitarik.has(g.id))
+      .filter((g) => !kata || String(g.nama_lengkap || '').toLowerCase().includes(kata))
+  }, [guru, carianGuru, baris])
+
+  // wali_kelas_id -> nama_kelas, dari tabel `kelas` (satu guru = wali dari
+  // satu kelas). Guru yang bukan wali kelas manapun (mis. guru mapel) tidak
+  // akan punya kecocokan di sini dan masuk grup "Tanpa kelas".
+  const kelasPerGuru = useMemo(() => {
+    const peta = new Map()
+    kelas.forEach((k) => {
+      if (k.wali_kelas_id) peta.set(k.wali_kelas_id, k.nama_kelas)
+    })
+    return peta
+  }, [kelas])
+
+  const kelompokGuru = useMemo(() => {
+    const peta = new Map()
+    guruBisaDitarik.forEach((g) => {
+      const label = kelasPerGuru.get(g.id) || 'Tanpa kelas'
+      if (!peta.has(label)) peta.set(label, [])
+      peta.get(label).push(g)
+    })
+    return Array.from(peta.entries())
+      .sort((a, b) => {
+        if (a[0] === 'Tanpa kelas') return 1
+        if (b[0] === 'Tanpa kelas') return -1
+        return a[0].localeCompare(b[0], 'id')
+      })
+      .map(([label, anggota]) => ({ label, anggota }))
+  }, [guruBisaDitarik, kelasPerGuru])
+
+  const semuaGuruTercentang = guruBisaDitarik.length > 0 && guruBisaDitarik.every((g) => pilihanGuru.has(g.id))
+
+  function bukaPemilihGuru() {
+    setTampilkanPemilihGuru(true)
+    setPilihanGuru(new Set())
+    setCarianGuru('')
+  }
+  function tutupPemilihGuru() {
+    setTampilkanPemilihGuru(false)
+  }
+  function toggleCentangGuru(id) {
+    setPilihanGuru((prev) => {
+      const baru = new Set(prev)
+      if (baru.has(id)) baru.delete(id)
+      else baru.add(id)
+      return baru
+    })
+  }
+  function toggleSemuaGuru() {
+    setPilihanGuru((prev) => {
+      if (semuaGuruTercentang) return new Set()
+      return new Set(guruBisaDitarik.map((g) => g.id))
+    })
+  }
+  function toggleSemuaKelompok(anggota) {
+    setPilihanGuru((prev) => {
+      const baru = new Set(prev)
+      const semuaAdaDiKelompok = anggota.every((g) => baru.has(g.id))
+      anggota.forEach((g) => (semuaAdaDiKelompok ? baru.delete(g.id) : baru.add(g.id)))
+      return baru
+    })
+  }
+
+  function tarikGuruTerpilih() {
+    const terpilih = guru.filter((g) => pilihanGuru.has(g.id))
+    if (terpilih.length === 0) return
+
+    const barisBaru = terpilih.map((g) => ({
+      id: `g-${g.id}`,
+      kuitansiId: null,
+      guruId: g.id,
+      nomorKuitansi: '',
+      nama: g.nama_lengkap || '',
+      nip: g.nip || '',
+      pangkat: g.pangkat_golongan || '',
+      dibayarkan: '',
+      pph21: '0',
+    }))
+
+    setBaris((d) => [...d, ...barisBaru])
+    setRingkas(`${barisBaru.length} orang ditarik dari Data Guru. Isi nominal "Dibayarkan" secara manual.`)
+    setTampilkanPemilihGuru(false)
+    setPilihanGuru(new Set())
   }
 
   const ubahSekolah = (k) => (e) => setSekolah((s) => ({ ...s, [k]: e.target.value }))
@@ -208,6 +307,7 @@ export default function DaftarHonor({ konfig }) {
     return {
       key: b.id,
       nomorKuitansi: b.nomorKuitansi,
+      guruId: b.guruId,
       nama: b.nama,
       nip: b.nip,
       pangkat: b.pangkat,
@@ -233,7 +333,7 @@ export default function DaftarHonor({ konfig }) {
         )}
         {!memuat && galat && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 mb-4">
-            Data guru belum bisa dibaca ({galat}). Pencocokan NIP/Pangkat otomatis mungkin tidak lengkap.
+            Data guru belum bisa dibaca ({galat}). Pencocokan NIP/Pangkat otomatis dan "Tarik dari Data Guru" mungkin tidak lengkap.
           </div>
         )}
         {!memuat && !galat && ringkas && (
@@ -258,20 +358,29 @@ export default function DaftarHonor({ konfig }) {
 
         <Bagian
           judul="Penerima"
-          keterangan="Daftar ini ditarik dari Kuitansi Jasa yang sudah dibuat sebelumnya. Buat kuitansi jasa dulu di menu Kuitansi Jasa, baru tarik ke sini."
+          keterangan="Tarik dari Kuitansi Jasa yang sudah dibuat, atau tarik langsung dari Data Guru kalau kuitansinya belum ada."
           aksi={
-            <button
-              type="button"
-              onClick={bukaPemilih}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
-            >
-              <ArrowDownToLine size={13} /> Tarik dari Kuitansi Jasa
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={bukaPemilihGuru}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50"
+              >
+                <Users size={13} /> Tarik dari Data Guru
+              </button>
+              <button
+                type="button"
+                onClick={bukaPemilih}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+              >
+                <ArrowDownToLine size={13} /> Tarik dari Kuitansi Jasa
+              </button>
+            </div>
           }
         >
           {baris.length === 0 ? (
             <p className="text-sm text-slate-500">
-              Belum ada penerima. Klik "Tarik dari Kuitansi Jasa" untuk memilih dari kuitansi yang sudah dibuat.
+              Belum ada penerima. Klik "Tarik dari Data Guru" atau "Tarik dari Kuitansi Jasa" di atas untuk mulai mengisi daftar.
             </p>
           ) : (
             <div className="space-y-3">
@@ -283,6 +392,11 @@ export default function DaftarHonor({ konfig }) {
                       {b.nomorKuitansi && (
                         <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500">
                           dari kuitansi {b.nomorKuitansi}
+                        </span>
+                      )}
+                      {!b.nomorKuitansi && b.guruId && (
+                        <span className="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] text-blue-600">
+                          dari Data Guru
                         </span>
                       )}
                     </span>
@@ -391,12 +505,7 @@ export default function DaftarHonor({ konfig }) {
                         key={k.id}
                         className={`flex items-start gap-3 px-3 py-2.5 cursor-pointer hover:bg-slate-50 ${dicentang ? 'bg-blue-50' : ''}`}
                       >
-                        <input
-                          type="checkbox"
-                          className="mt-1"
-                          checked={dicentang}
-                          onChange={() => toggleCentang(k.id)}
-                        />
+                        <input type="checkbox" className="mt-1" checked={dicentang} onChange={() => toggleCentang(k.id)} />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-sm font-medium text-slate-800 truncate">
@@ -427,6 +536,102 @@ export default function DaftarHonor({ konfig }) {
               >
                 <ArrowDownToLine size={15} />
                 Tarik {pilihanTarik.size > 0 ? `${pilihanTarik.size} orang` : ''}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Panel pemilih Data Guru (per kelas) */}
+      {tampilkanPemilihGuru && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 no-print">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl p-5 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-slate-800">Tarik dari Data Guru</h3>
+              <button type="button" onClick={tutupPemilihGuru} className="text-slate-400 hover:text-slate-600 text-sm">
+                Tutup
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 mb-3">
+              <div className="relative flex-1">
+                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  className={`${inputCls} pl-8`}
+                  placeholder="Cari nama guru/pegawai…"
+                  value={carianGuru}
+                  onChange={(e) => setCarianGuru(e.target.value)}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={toggleSemuaGuru}
+                className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-blue-700 hover:text-blue-900"
+              >
+                {semuaGuruTercentang ? <CheckSquare size={14} /> : <Square size={14} />}
+                Pilih semua
+              </button>
+            </div>
+
+            {guruBisaDitarik.length === 0 ? (
+              <p className="text-sm text-slate-500 py-6 text-center">
+                {guru.length === 0
+                  ? 'Data guru belum bisa dibaca.'
+                  : 'Tidak ada nama yang cocok, atau semua guru sudah ada di daftar.'}
+              </p>
+            ) : (
+              <div className="overflow-y-auto flex-1 border border-slate-200 rounded-lg">
+                {kelompokGuru.map(({ label, anggota }) => (
+                  <div key={label} className="border-b border-slate-100 last:border-b-0">
+                    <div className="flex items-center justify-between bg-slate-50 px-3 py-1.5">
+                      <span className="text-xs font-semibold text-slate-500">
+                        {label === 'Tanpa kelas' ? label : `Wali Kelas ${label}`}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => toggleSemuaKelompok(anggota)}
+                        className="text-[11px] font-medium text-blue-700 hover:text-blue-900"
+                      >
+                        Pilih semua di grup ini
+                      </button>
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                      {anggota.map((g) => {
+                        const dicentang = pilihanGuru.has(g.id)
+                        return (
+                          <label
+                            key={g.id}
+                            className={`flex items-start gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50 ${dicentang ? 'bg-blue-50' : ''}`}
+                          >
+                            <input type="checkbox" className="mt-1" checked={dicentang} onChange={() => toggleCentangGuru(g.id)} />
+                            <div className="flex-1 min-w-0">
+                              <span className="text-sm font-medium text-slate-800 truncate block">{g.nama_lengkap || '(tanpa nama)'}</span>
+                              <span className="text-xs text-slate-500 truncate block">
+                                {g.nip ? `NIP. ${g.nip}` : 'Tanpa NIP'}
+                                {g.pangkat_golongan ? ` · ${g.pangkat_golongan}` : ''}
+                              </span>
+                            </div>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 pt-4">
+              <button type="button" className="rounded-lg border border-slate-200 px-3.5 py-2 text-sm text-slate-600" onClick={tutupPemilihGuru}>
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={tarikGuruTerpilih}
+                disabled={pilihanGuru.size === 0}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                <Users size={15} />
+                Tarik {pilihanGuru.size > 0 ? `${pilihanGuru.size} orang` : ''}
               </button>
             </div>
           </div>
