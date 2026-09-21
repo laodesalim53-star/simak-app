@@ -185,6 +185,17 @@ const CSS = `
 .sk-tabel td.c { text-align: center; }
 .sk-tabel .nip { font-size: 10pt; }
 
+/* ── Format surat keterangan ── */
+.sk-surat-judul { text-align: center; margin-bottom: 14px; }
+.sk-surat-judul .judul { font-weight: 700; text-decoration: underline; text-transform: uppercase; font-size: 13pt; }
+.sk-data { border-collapse: collapse; margin: 4px 0 10px 8mm; }
+.sk-data td { vertical-align: top; padding: 1px 0; }
+.sk-data td.k { width: 44mm; }
+.sk-data td.t { width: 5mm; }
+.sk-paragraf { text-align: justify; text-indent: 12mm; margin-bottom: 8px; }
+.sk-ttd-surat { margin-left: 55%; margin-top: 22px; page-break-inside: avoid; }
+.sk-ttd-surat .ruang { height: 22mm; }
+
 @media print {
   .no-print { display: none !important; }
   body { background: white; }
@@ -420,4 +431,117 @@ export function BagianSK({ judul, keterangan, aksi, children }) {
       <div className="mt-3">{children}</div>
     </section>
   )
+}
+
+// ─── Format SURAT (surat keterangan, dst) ────────────────────────────────────
+// Beda dari Keputusan: tanpa Menimbang/Mengingat/diktum; tanda tangan berformat
+// "Tempat, tanggal / Jabatan / nama / NIP".
+export function TabelData({ baris }) {
+  return (
+    <table className="sk-data">
+      <tbody>
+        {baris.map(([label, nilai]) => (
+          <tr key={label}>
+            <td className="k">{label}</td>
+            <td className="t">:</td>
+            <td>{nilai}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+export function BlokTTDSurat({ tempat, tanggal, jabatan, nama, nip }) {
+  return (
+    <div className="sk-ttd-surat">
+      <p>
+        {isi(tempat)}, {formatTanggalSK(tanggal)}
+      </p>
+      <p>{jabatan},</p>
+      <div className="ruang" />
+      <p>
+        <strong>
+          <u>{isi(nama, 'Nama Penandatangan')}</u>
+        </strong>
+      </p>
+      <p>NIP. {isi(nip)}</p>
+    </div>
+  )
+}
+
+// Satu lembar surat lengkap: kop, judul bergaris bawah, nomor, isi (children), tanda tangan.
+//   ttd: { tempat, tanggal, jabatan, nama, nip }
+export function HalamanSurat({ sekolah, judul, nomor, ttd, children }) {
+  return (
+    <LembarSK>
+      <KopSK sekolah={sekolah} />
+      <div className="sk-surat-judul">
+        <p className="judul">{judul}</p>
+        <p>Nomor: {isi(nomor)}</p>
+      </div>
+      {children}
+      <BlokTTDSurat {...ttd} />
+    </LembarSK>
+  )
+}
+
+// Nomor berurutan untuk cetak banyak surat sekaligus: angka di awal nomor
+// dinaikkan sesuai urutan ("001/SK/2026" → "002/SK/2026"). Kalau nomor tidak
+// diawali angka, semua surat memakai nomor yang sama.
+export function nomorKe(nomor, indeks) {
+  const cocok = String(nomor || '').match(/^(\d+)(.*)$/)
+  if (!cocok || indeks === 0) return nomor
+  return String(Number(cocok[1]) + indeks).padStart(cocok[1].length, '0') + cocok[2]
+}
+
+// Ganti penanda {nama}, {tugas}, dst di template teks dengan nilainya.
+export function isiTemplate(template, nilai) {
+  return (template || '').replace(/\{(\w+)\}/g, (semua, kunci) => (kunci in nilai ? nilai[kunci] : semua))
+}
+
+// ─── Data guru & kelas (dipakai halaman SK yang butuh daftar guru) ───────────
+// Deteksi & urutan sama dengan LaporanKepangkatanGuru.jsx.
+export function isKepalaSekolah(g) {
+  const jabatan = `${g.tugas_tambahan || ''} ${g.jenis_ptk || ''}`.toLowerCase()
+  return jabatan.includes('kepala sekolah')
+}
+
+function peringkatGolongan(teks) {
+  if (!teks) return 0
+  const cocok = teks.toUpperCase().match(/(IX|VIII|VII|VI|IV|III|II|I|V)[\s./-]?([A-D])?/)
+  if (!cocok) return 0
+  const romawi = { I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9 }
+  const huruf = cocok[2] ? cocok[2].charCodeAt(0) - 64 : 0
+  return (romawi[cocok[1]] || 0) * 10 + huruf
+}
+
+// Kepala Sekolah paling atas, lalu golongan tertinggi, lalu abjad.
+export function urutkanGuru(daftar) {
+  return [...daftar].sort((a, b) => {
+    const aKS = isKepalaSekolah(a) ? 0 : 1
+    const bKS = isKepalaSekolah(b) ? 0 : 1
+    if (aKS !== bKS) return aKS - bKS
+    const selisih = peringkatGolongan(b.pangkat_golongan) - peringkatGolongan(a.pangkat_golongan)
+    if (selisih !== 0) return selisih
+    return (a.nama_lengkap || '').localeCompare(b.nama_lengkap || '')
+  })
+}
+
+export async function ambilGuruDanKelas(sekolahId) {
+  const [rg, rk] = await Promise.all([
+    supabase
+      .from('guru')
+      .select('id, nip, nama_lengkap, pangkat_golongan, tugas_tambahan, jenis_ptk, tmt_pengangkatan, tmt_pns, status')
+      .eq('sekolah_id', sekolahId)
+      .eq('status', 'aktif'),
+    supabase
+      .from('kelas')
+      .select('id, nama_kelas, tingkat, wali_kelas_id')
+      .eq('sekolah_id', sekolahId)
+      .order('nama_kelas'),
+  ])
+  const galat = rg.error || rk.error
+  if (galat) throw galat
+  return { guru: rg.data || [], kelas: rk.data || [] }
 }
