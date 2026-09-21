@@ -37,7 +37,54 @@ import Layout from '../components/Layout'
 //     { judul: 'Penjumlahan dan pengurangan sederhana' },
 //   ],
 const MATERI = {
-  // Tambahkan materi di sini.
+  // ---------------------------------------------------------------
+  // SD KELAS 1
+  // ---------------------------------------------------------------
+  'SD-1-agama': [
+    { judul: 'Mengenal Allah melalui Asmaul Husna' },
+    { judul: 'Rukun Iman dan Rukun Islam' },
+    { judul: 'Bacaan dan gerakan salat' },
+    { judul: 'Kisah keteladanan Nabi' },
+    { judul: 'Perilaku terpuji sehari-hari' },
+  ],
+  'SD-1-pancasila': [
+    { judul: 'Simbol dan lambang Pancasila' },
+    { judul: 'Mengenal aturan di rumah dan sekolah' },
+    { judul: 'Sikap saling menghormati perbedaan' },
+    { judul: 'Gotong royong di lingkungan sekitar' },
+  ],
+  'SD-1-indonesia': [
+    { judul: 'Mengenal huruf abjad A-Z' },
+    { judul: 'Membaca suku kata sederhana' },
+    { judul: 'Menyusun kata menjadi kalimat' },
+    { judul: 'Bercerita tentang diri sendiri' },
+    { judul: 'Mendengarkan dan memahami dongeng' },
+  ],
+  'SD-1-matematika': [
+    { judul: 'Bilangan 1 sampai 10' },
+    { judul: 'Bilangan 11 sampai 20' },
+    { judul: 'Penjumlahan bilangan sampai 20' },
+    { judul: 'Pengurangan bilangan sampai 20' },
+    { judul: 'Mengenal bangun datar' },
+    { judul: 'Mengukur panjang benda' },
+  ],
+  'SD-1-pjok': [
+    { judul: 'Gerak dasar lokomotor (jalan, lari, lompat)' },
+    { judul: 'Gerak dasar non-lokomotor (menekuk, memutar)' },
+    { judul: 'Permainan bola sederhana' },
+    { judul: 'Pola hidup sehat dan kebersihan diri' },
+  ],
+  'SD-1-seni': [
+    { judul: 'Mengenal warna dan bentuk dasar' },
+    { judul: 'Menggambar bebas dengan krayon' },
+    { judul: 'Menyanyikan lagu anak sederhana' },
+    { judul: 'Mengenal alat musik ritmis' },
+  ],
+  'SD-1-mulok': [
+    { judul: 'Pengenalan bahasa daerah sehari-hari' },
+    { judul: 'Mengenal budaya dan tradisi setempat' },
+    { judul: 'Permainan tradisional daerah' },
+  ],
 }
 
 // =====================================================================
