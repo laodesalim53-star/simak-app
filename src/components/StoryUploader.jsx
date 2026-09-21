@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Plus, X } from 'lucide-react'
 import { createStory } from '../lib/storyApi'
 import { useAuth } from '../lib/AuthContext'
 
@@ -20,6 +21,7 @@ function getVideoDuration(file) {
 
 export default function StoryUploader({ onPosted }) {
   const { profil, sekolahId, isSuperAdmin } = useAuth()
+  const [terbuka, setTerbuka] = useState(false)
   const [content, setContent] = useState('')
   const [file, setFile] = useState(null)
   const [previewUrl, setPreviewUrl] = useState(null)
@@ -27,6 +29,19 @@ export default function StoryUploader({ onPosted }) {
   const [posting, setPosting] = useState(false)
   const [error, setError] = useState(null)
   const [checkingVideo, setCheckingVideo] = useState(false)
+
+  function resetForm() {
+    setContent('')
+    setFile(null)
+    setPreviewUrl(null)
+    setError(null)
+    setVisibility('sekolah')
+  }
+
+  function handleBatal() {
+    resetForm()
+    setTerbuka(false)
+  }
 
   async function handleFileChange(e) {
     const selected = e.target.files?.[0]
@@ -81,9 +96,8 @@ export default function StoryUploader({ onPosted }) {
         sekolahId: isSuperAdmin ? null : sekolahId,
       })
 
-      setContent('')
-      setFile(null)
-      setPreviewUrl(null)
+      resetForm()
+      setTerbuka(false)
       onPosted?.()
     } catch (err) {
       setError(err.message)
@@ -92,14 +106,43 @@ export default function StoryUploader({ onPosted }) {
     }
   }
 
+  // Tampilan tertutup: hanya tombol kecil "+ Buat Story"
+  if (!terbuka) {
+    return (
+      <button
+        type="button"
+        onClick={() => setTerbuka(true)}
+        className="w-full card p-3 mb-6 flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-colors rounded-lg"
+      >
+        <span className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0">
+          <Plus size={16} />
+        </span>
+        Buat Story baru...
+      </button>
+    )
+  }
+
   return (
     <form onSubmit={handleSubmit} className="card p-4 space-y-3 mb-6">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">Buat Story baru</p>
+        <button
+          type="button"
+          onClick={handleBatal}
+          className="text-slate-400 hover:text-slate-600"
+          aria-label="Tutup"
+        >
+          <X size={18} />
+        </button>
+      </div>
+
       <textarea
         value={content}
         onChange={(e) => setContent(e.target.value)}
         placeholder="Apa yang ingin dibagikan?"
         className="w-full border rounded-lg p-2 text-sm"
         rows={3}
+        autoFocus
       />
 
       <input
@@ -138,13 +181,23 @@ export default function StoryUploader({ onPosted }) {
 
       {error && <p className="text-red-500 text-sm">{error}</p>}
 
-      <button
-        type="submit"
-        disabled={posting || checkingVideo || (!content && !file)}
-        className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50"
-      >
-        {posting ? 'Mengunggah...' : 'Bagikan Story'}
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          type="submit"
+          disabled={posting || checkingVideo || (!content && !file)}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50"
+        >
+          {posting ? 'Mengunggah...' : 'Bagikan Story'}
+        </button>
+        <button
+          type="button"
+          onClick={handleBatal}
+          disabled={posting}
+          className="px-4 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+        >
+          Batal
+        </button>
+      </div>
     </form>
   )
 }
