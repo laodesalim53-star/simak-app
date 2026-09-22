@@ -1,20 +1,23 @@
-import SKPenugasan from '../components/SKPenugasan'
+import SKPenugasanTunggal from '../components/SKPenugasanTunggal'
 
 // SK Honor Guru — route: /gudang-sk/honor-guru
-// Semua logika ada di components/SKPenugasan.jsx; berkas ini hanya berisi teks awal.
-
+// Satu guru honorer per SK, satu halaman, tanpa Lampiran/tabel — data guru dan
+// nominal honor ditulis langsung di diktum. Sebelumnya memakai SKPenugasan.jsx
+// (format banyak-orang + Lampiran); diganti mengikuti pola SK Bendahara BOS.
 const KONFIG = {
   judulBar: 'SK Honor Guru',
+  labelTentang: 'PENETAPAN GURU HONORER DAN HONORARIUM',
+  jabatan: 'Guru Honorer',
+  placeholderNomor: 'mis. 421.2/020/SD/2026',
+  tipePeriode: 'pelajaran',
   objek: 'Guru Honorer dan Honorarium',
   tampilHonor: true,
   sumberAwal: 'Dana Bantuan Operasional Sekolah (BOS)',
-  isiOtomatis: true,
-  jabatanAwal: 'Guru Honorer',
-  placeholderNomor: 'mis. 421.2/020/SD/2026',
+  masaAwal: 'selama Tahun Pelajaran {tp}',
   menimbang: [
     'bahwa untuk kelancaran kegiatan pembelajaran pada {sekolah} Tahun Pelajaran {tp}, diperlukan guru honorer yang melaksanakan tugas mengajar;',
-    'bahwa guru honorer yang namanya tercantum dalam lampiran keputusan ini dipandang mampu dan bersedia melaksanakan tugas tersebut;',
-    'bahwa berdasarkan pertimbangan sebagaimana dimaksud pada huruf a dan huruf b, perlu menetapkan Keputusan Kepala {sekolah} tentang Penetapan {objek} Tahun Pelajaran {tp}.',
+    'bahwa Saudara yang namanya tercantum dalam Keputusan ini dipandang mampu dan bersedia melaksanakan tugas tersebut;',
+    'bahwa berdasarkan pertimbangan sebagaimana dimaksud, perlu menetapkan Keputusan Kepala {sekolah} tentang Penetapan {objek} Tahun Pelajaran {tp}.',
   ].join('\n'),
   mengingat: [
     'Undang-Undang Nomor 20 Tahun 2003 tentang Sistem Pendidikan Nasional;',
@@ -23,14 +26,13 @@ const KONFIG = {
     'Peraturan Menteri yang mengatur petunjuk teknis pengelolaan dana BOS yang berlaku (sesuaikan nomor dan tahunnya);',
     'Rencana Kegiatan dan Anggaran Sekolah (RKAS) {sekolah} Tahun Pelajaran {tp}.',
   ].join('\n'),
-  diktum: [
-    'Menetapkan guru honorer yang namanya tercantum dalam Lampiran Keputusan ini sebagai Guru Honorer pada {sekolah} Tahun Pelajaran {tp}.',
-    'Kepada guru honorer sebagaimana dimaksud dalam diktum KESATU diberikan honorarium setiap bulan sebesar yang tercantum dalam Lampiran Keputusan ini, yang dibebankan pada {sumber}.',
+  memperhatikan: 'Keputusan Rapat Kepala Sekolah dengan staf Guru {sekolah}.',
+  diktumLain: [
+    'Kepada Guru Honorer sebagaimana dimaksud dalam diktum Pertama diberikan honorarium setiap bulan sebesar {honor}, yang dibebankan pada {sumber}.',
     'Keputusan ini berlaku {masa}, dengan ketentuan apabila di kemudian hari terdapat kekeliruan akan diadakan perbaikan sebagaimana mestinya.',
   ].join('\n'),
-  tugas: '',
 }
 
 export default function SKHonorGuru() {
-  return <SKPenugasan konfig={KONFIG} />
+  return <SKPenugasanTunggal konfig={KONFIG} />
 }
