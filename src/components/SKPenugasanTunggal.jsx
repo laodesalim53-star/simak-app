@@ -22,6 +22,7 @@ import {
   isiTemplate,
   isoHariIni,
   pecahBaris,
+  tahunPelajaranSekarang,
   urutkanGuru,
 } from './CetakSK'
 
@@ -33,11 +34,15 @@ import {
 // Memperhatikan, diktum berlabel Pertama/Kedua/Ketiga/… bukan KESATU/KEDUA).
 //
 // Dipakai oleh:
-//   • SK Bendahara BOS   (pages/SKBendaharaBOS.jsx)
+//   • SK Bendahara BOS        (pages/SKBendaharaBOS.jsx)
+//   • SK Honor Guru           (pages/SKHonorGuru.jsx)
+//   • SK Tenaga Kebersihan    (pages/SKTenagaKebersihan.jsx)
+//   • SK Operator Dapodik     (pages/SKOperatorDapodik.jsx)
 //
-// Sengaja file TERPISAH dari SKPenugasan.jsx (format banyak-orang + lampiran +
-// honor, dipakai SK Honor Guru/Tenaga Kebersihan/Operator Dapodik) supaya SK
-// itu semua tidak ikut berubah.
+// Semua di atas dulunya dua-halaman (Keputusan + Lampiran tabel banyak-orang)
+// lewat SKPenugasan.jsx. Atas permintaan, keempatnya sekarang satu-orang,
+// satu halaman, tanpa tabel — SKPenugasan.jsx masih ada sebagai referensi
+// tapi tidak lagi dipakai oleh keempat halaman ini.
 //
 // Catatan spasi cetak: lembar ini punya CSS pemadatan khusus (lihat blok
 // <style> di bawah, di-scope lewat class "sk-print-compact" yang HANYA
@@ -51,13 +56,32 @@ import {
 //     labelTentang,         // baris "TENTANG …", huruf besar, mis. 'PENETAPAN BENDAHARA BOS'
 //     jabatan,              // dipakai di "Untuk menjadi {jabatan} pada {sekolah}"
 //     placeholderNomor,
+//     tipePeriode,          // 'anggaran' (default, dipakai Bendahara BOS — field "Tahun
+//                           //   anggaran", label "TAHUN ANGGARAN {tahun}") atau 'pelajaran'
+//                           //   (Honor Guru/Kebersihan/Dapodik — field "Tahun pelajaran"
+//                           //   otomatis format 2026/2027, label "TAHUN PELAJARAN {tp}").
+//                           //   Penanda {tahun} dan {tp} sama-sama tersedia apa pun mode-nya.
+//     objek,                // opsional, isi penanda {objek} (mis. dipakai di kalimat
+//                           //   "…Penetapan {objek} Tahun Pelajaran {tp}.")
 //     menimbang,            // string, SATU alinea (boleh lebih dari satu baris kalau perlu, tanpa huruf a/b/c)
 //     mengingat,            // string, satu butir per baris → tercetak bernomor 1. 2. 3.
 //     memperhatikan,        // string, satu baris
+//     tampilHonor,          // boolean, opsional. Kalau true, menampilkan 2 field tambahan
+//                           //   ("Honorarium per bulan", "Sumber dana") yang isinya masuk
+//                           //   ke penanda {honor} dan {sumber} di teks.
+//     sumberAwal,           // opsional, nilai awal field "Sumber dana" (hanya dipakai kalau tampilHonor)
+//     masaAwal,             // string, opsional. Kalau diisi (boleh string kosong ''),
+//                           //   menampilkan field "Masa berlaku" yang isinya masuk ke
+//                           //   penanda {masa} di teks (mis. "berlaku {masa}, dengan…").
+//     tugas,                // string, opsional, satu butir per baris. Kalau diisi, jadi
+//                           //   SATU diktum tersendiri berisi sub-poin huruf a. b. c. …
+//     tugasSetelahBaris,    // angka, opsional (default 1) — diktum "tugas" disisipkan
+//                           //   setelah baris ke-berapa dari diktumLain (0 = paling awal).
 //     diktumLain,           // string, satu butir per baris → jadi diktum Kedua, Ketiga, dst.
-//                           //   (diktum "Pertama" dibuat otomatis dari data Personel di bawah)
+//                           //   (diktum "Pertama" dibuat otomatis dari data Personel di bawah;
+//                           //   penomoran menyesuaikan otomatis kalau ada diktum "tugas" di atas)
 //   }
-// Penanda di teks: {sekolah}, {tahun}, {jabatan}.
+// Penanda di teks: {sekolah}, {tahun}, {tp}, {objek}, {jabatan}, {honor}, {sumber}, {masa}.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const URUTAN_DIKTUM = [
@@ -90,6 +114,16 @@ function DaftarAngka({ items }) {
   return items.map((teks, i) => (
     <div key={i} className="sk-item">
       <span className="no">{i + 1}.</span>
+      <span className="isi">{teks}</span>
+    </div>
+  ))
+}
+
+// Daftar berhuruf (a. b. c. …) — dipakai untuk diktum "uraian tugas".
+function DaftarHuruf({ items }) {
+  return items.map((teks, i) => (
+    <div key={i} className="sk-item">
+      <span className="no">{String.fromCharCode(97 + i)}.</span>
       <span className="isi">{teks}</span>
     </div>
   ))
@@ -193,17 +227,23 @@ export default function SKPenugasanTunggal({ konfig }) {
   const { sekolahId } = useAuth()
   const sudahMuat = useRef(false)
 
+  const periodePelajaran = konfig.tipePeriode === 'pelajaran'
+
   const [sekolah, setSekolah] = useState(SEKOLAH_KOSONG)
   const [sk, setSk] = useState({
     nomor: '',
     tempat: '',
     tanggal: isoHariIni(),
-    tahun: tahunAnggaranSekarang(),
+    tahun: periodePelajaran ? tahunPelajaranSekarang() : tahunAnggaranSekarang(),
   })
   const [menimbang, setMenimbang] = useState(konfig.menimbang)
   const [mengingat, setMengingat] = useState(konfig.mengingat)
   const [memperhatikan, setMemperhatikan] = useState(konfig.memperhatikan || '')
   const [diktumLain, setDiktumLain] = useState(konfig.diktumLain || '')
+  const [tugas, setTugas] = useState(konfig.tugas || '')
+  const [honor, setHonor] = useState('')
+  const [sumber, setSumber] = useState(konfig.sumberAwal || '')
+  const [masa, setMasa] = useState(konfig.masaAwal || '')
 
   const [guru, setGuru] = useState([])
   const [orang, setOrang] = useState({ guruId: '', nama: '', nip: '', pangkatGol: '' })
@@ -263,15 +303,39 @@ export default function SKPenugasanTunggal({ konfig }) {
   const namaSekolah = isi(sekolah.nama, 'NAMA SEKOLAH')
   const tahun = isi(sk.tahun)
 
-  const nilai = { sekolah: namaSekolah, tahun, jabatan: isi(jabatanTugas) }
+  const nilaiDasar = {
+    sekolah: namaSekolah,
+    tahun,
+    tp: tahun, // alias: {tahun} dan {tp} sama-sama merujuk field periode di atas
+    objek: konfig.objek || '',
+    jabatan: isi(jabatanTugas),
+    honor: isi(honor),
+    sumber: isi(sumber, konfig.sumberAwal || '…………'),
+  }
+  // {masa} boleh berisi penanda lain (mis. "selama Tahun Pelajaran {tp}"), jadi
+  // diproses dulu dengan nilaiDasar sebelum dipakai untuk menggantikan {masa}
+  // di teks menimbang/mengingat/diktum.
+  const nilai = { ...nilaiDasar, masa: isiTemplate(masa, nilaiDasar) }
 
-  const tentangBaris = [konfig.labelTentang, `TAHUN ANGGARAN ${tahun}`]
+  const labelPeriode = periodePelajaran ? 'TAHUN PELAJARAN' : 'TAHUN ANGGARAN'
+  const tentangBaris = [konfig.labelTentang, `${labelPeriode} ${tahun}`]
   const daftarMenimbang = pecahBaris(menimbang).map((t) => isiTemplate(t, nilai))
   const daftarMengingat = pecahBaris(mengingat).map((t) => isiTemplate(t, nilai))
   const teksMemperhatikan = isiTemplate(memperhatikan, nilai)
-  const daftarDiktumLain = pecahBaris(diktumLain)
-    .slice(0, URUTAN_DIKTUM.length - 1)
-    .map((t) => isiTemplate(t, nilai))
+
+  // Gabungkan diktumLain (teks biasa) dengan diktum "tugas" (sub-list huruf a/b/c),
+  // disisipkan pada posisi konfig.tugasSetelahBaris (default: setelah baris pertama).
+  const barisTugas = konfig.tugas !== undefined ? pecahBaris(tugas).map((t) => isiTemplate(t, nilai)) : []
+  let entriesDiktum = pecahBaris(diktumLain).map((t) => ({ tipe: 'teks', isi: isiTemplate(t, nilai) }))
+  if (barisTugas.length) {
+    const posisi = Math.min(konfig.tugasSetelahBaris ?? 1, entriesDiktum.length)
+    entriesDiktum = [
+      ...entriesDiktum.slice(0, posisi),
+      { tipe: 'sublist', isi: barisTugas },
+      ...entriesDiktum.slice(posisi),
+    ]
+  }
+  entriesDiktum = entriesDiktum.slice(0, URUTAN_DIKTUM.length - 1)
 
   const skCetak = { nomor: sk.nomor, tempat: sk.tempat, tanggal: sk.tanggal }
   const namaOrang = isi(orang.nama)
@@ -297,13 +361,18 @@ export default function SKPenugasanTunggal({ konfig }) {
           </div>
         )}
 
-        <Bagian judul="Data SK" keterangan="Nomor, tempat, tanggal penetapan, dan tahun anggaran.">
+        <Bagian judul="Data SK" keterangan={`Nomor, tempat, tanggal penetapan, dan ${periodePelajaran ? 'tahun pelajaran' : 'tahun anggaran'}.`}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Nomor SK">
               <input className={inputCls} value={sk.nomor} onChange={ubahSk('nomor')} placeholder={konfig.placeholderNomor || 'mis. 421.2/020/SD/2026'} />
             </Field>
-            <Field label="Tahun anggaran">
-              <input className={inputCls} value={sk.tahun} onChange={ubahSk('tahun')} placeholder="mis. 2026" />
+            <Field label={periodePelajaran ? 'Tahun pelajaran' : 'Tahun anggaran'}>
+              <input
+                className={inputCls}
+                value={sk.tahun}
+                onChange={ubahSk('tahun')}
+                placeholder={periodePelajaran ? 'mis. 2026/2027' : 'mis. 2026'}
+              />
             </Field>
             <Field label="Ditetapkan di">
               <input className={inputCls} value={sk.tempat} onChange={ubahSk('tempat')} placeholder="Nama kota/kabupaten" />
@@ -344,7 +413,7 @@ export default function SKPenugasanTunggal({ konfig }) {
 
         <Bagian
           judul="Isi keputusan"
-          keterangan="Menimbang: satu alinea (tanpa huruf a/b/c). Mengingat & diktum lain: satu baris = satu butir. Penanda otomatis: {sekolah}, {tahun}, {jabatan}."
+          keterangan="Menimbang: satu alinea (tanpa huruf a/b/c). Mengingat & diktum lain: satu baris = satu butir. Penanda otomatis: {sekolah}, {tahun}/{tp}, {objek}, {jabatan}, {honor}, {sumber}, {masa}."
         >
           <div className="grid grid-cols-1 gap-3">
             <Field label="Menimbang">
@@ -356,7 +425,36 @@ export default function SKPenugasanTunggal({ konfig }) {
             <Field label="Memperhatikan">
               <input className={inputCls} value={memperhatikan} onChange={(e) => setMemperhatikan(e.target.value)} />
             </Field>
-            <Field label="Diktum Kedua dan seterusnya (diktum Pertama dibuat otomatis dari data Personel)">
+
+            {konfig.tugas !== undefined && (
+              <Field label="Uraian tugas (jadi satu diktum tersendiri, bersub-poin a. b. c. …)">
+                <textarea className={inputCls} rows={5} value={tugas} onChange={(e) => setTugas(e.target.value)} />
+              </Field>
+            )}
+
+            {konfig.tampilHonor && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Field label="Honorarium per bulan">
+                  <input
+                    className={inputCls}
+                    value={honor}
+                    onChange={(e) => setHonor(e.target.value)}
+                    placeholder="mis. Rp500.000,00"
+                  />
+                </Field>
+                <Field label="Sumber dana">
+                  <input className={inputCls} value={sumber} onChange={(e) => setSumber(e.target.value)} />
+                </Field>
+              </div>
+            )}
+
+            {konfig.masaAwal !== undefined && (
+              <Field label="Masa berlaku">
+                <input className={inputCls} value={masa} onChange={(e) => setMasa(e.target.value)} />
+              </Field>
+            )}
+
+            <Field label="Diktum Kedua dan seterusnya (diktum Pertama dibuat otomatis dari data Personel; penomoran menyesuaikan otomatis kalau ada Uraian tugas di atas)">
               <textarea className={inputCls} rows={6} value={diktumLain} onChange={(e) => setDiktumLain(e.target.value)} />
             </Field>
           </div>
@@ -461,11 +559,13 @@ export default function SKPenugasanTunggal({ konfig }) {
                     </p>
                   </td>
                 </tr>
-                {daftarDiktumLain.map((teks, i) => (
+                {entriesDiktum.map((entri, i) => (
                   <tr key={i}>
                     <td className="k">{URUTAN_DIKTUM[i + 1]}</td>
                     <td className="t">:</td>
-                    <td className="sk-justify">{teks}</td>
+                    <td className={entri.tipe === 'teks' ? 'sk-justify' : undefined}>
+                      {entri.tipe === 'teks' ? entri.isi : <DaftarHuruf items={entri.isi} />}
+                    </td>
                   </tr>
                 ))}
               </tbody>
