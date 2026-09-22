@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Heart, Coins, Landmark, LayoutDashboard, Sparkles, Scale, Handshake, ClipboardList, BookOpen, CalendarCheck, Users } from 'lucide-react'
+import { Heart, Coins, Landmark, LayoutDashboard, Sparkles, Scale, Handshake, ClipboardList, BookOpen, CalendarCheck, Users, HeartHandshake } from 'lucide-react'
 import Layout from '../components/Layout'
 
 // Palet warna per kartu — pola sama seperti PusatLaporanGuru.jsx, supaya
