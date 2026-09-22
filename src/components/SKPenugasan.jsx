@@ -30,9 +30,18 @@ import {
 //   • SK Honor Guru          (pages/SKHonorGuru.jsx)
 //   • SK Tenaga Kebersihan   (pages/SKTenagaKebersihan.jsx)
 //   • SK Operator Dapodik    (pages/SKOperatorDapodik.jsx)
+//   • SK Pengawas Asesmen    (pages/SKPengawasAsesmen.jsx)
 //
-// Format KEPUTUSAN: HalamanKeputusan (halaman 1) + HalamanLampiran (tabel
-// personel, kolom honor kalau `tampilHonor`, dan uraian tugas kalau diisi).
+// Format KEPUTUSAN: HalamanKeputusan (halaman 1, potret) + HalamanLampiran
+// (halaman 2, lanskap A4 — tabel personel, kolom honor kalau `tampilHonor`,
+// dan uraian tugas kalau diisi).
+//
+// Catatan spasi cetak: sama seperti SKPenugasanTunggal.jsx, lembar di sini
+// dibungkus class "sk-print-compact" (lihat <GayaPadatCetak> di bawah) supaya
+// tabel personel + BlokTTD tidak terdorong ke halaman ke-3. Ini SENGAJA
+// di-scope di sini, bukan ditaruh di CetakSK.jsx, supaya halaman SK lain yang
+// memakai HalamanKeputusan/HalamanLampiran langsung (di luar komponen ini)
+// tidak ikut berubah spasinya.
 //
 // Bentuk `konfig`:
 //   {
@@ -68,6 +77,69 @@ const rupiah = (n) => (n ? `Rp ${Number(n).toLocaleString('id-ID')}` : '……�
 // Guru honorer di sini dikenali dari: bukan Kepala Sekolah, tidak punya NIP,
 // dan tidak punya pangkat/golongan. Hanya tebakan awal — bisa diubah manual.
 const adalahHonorer = (g) => !isKepalaSekolah(g) && !g.nip && !g.pangkat_golongan
+
+// CSS pemadatan khusus lembar cetak SKPenugasan (Keputusan + Lampiran).
+// Di-scope lewat ".sk-print-compact" (dibungkus hanya di sekitar <AreaLembar>
+// bagian cetak) supaya panel isian (no-print) dan halaman SK lain yang
+// memakai CetakSK.jsx langsung tidak ikut berubah. Tujuannya: kurangi jarak
+// antar-baris/paragraf dan padding tabel personel secukupnya agar tabel +
+// BlokTTD di halaman Lampiran tidak terdorong ke halaman ke-3.
+function GayaPadatCetak() {
+  return (
+    <style>{`
+      .sk-print-compact .lembar-sk {
+        font-size: 11pt;
+        line-height: 1.25;
+      }
+
+      /* Kop sekolah */
+      .sk-print-compact .sk-kop {
+        padding-bottom: 4px;
+        margin-bottom: 8px;
+      }
+      .sk-print-compact .sk-kop-logo {
+        width: 16mm;
+        height: 16mm;
+      }
+      .sk-print-compact .sk-kop-atas { font-size: 10.5pt; }
+      .sk-print-compact .sk-kop-nama { font-size: 13pt; line-height: 1.15; }
+      .sk-print-compact .sk-kop-alamat { font-size: 9.5pt; }
+
+      /* Judul SK dan blok LAMPIRAN/NOMOR/TANGGAL */
+      .sk-print-compact .sk-judul { margin-bottom: 6px; }
+      .sk-print-compact .sk-judul p { margin: 1px 0; }
+      .sk-print-compact .sk-judul .tentang { margin: 2px 0; }
+      .sk-print-compact .sk-meta { margin-bottom: 6px; font-size: 10pt; }
+
+      /* "Kepala …," dan "MEMUTUSKAN" */
+      .sk-print-compact .sk-tengah { margin: 4px 0; }
+
+      /* Tabel Menimbang/Mengingat dan Menetapkan/KESATU…dst */
+      .sk-print-compact table.sk-def {
+        margin-top: 3px;
+        margin-bottom: 3px;
+      }
+      .sk-print-compact table.sk-def > tbody > tr > td {
+        padding: 0 0 2px;
+      }
+      .sk-print-compact .sk-item { margin: 0; }
+      .sk-print-compact .sk-justify { margin: 0; }
+
+      /* Tabel personel di halaman Lampiran */
+      .sk-print-compact .sk-tabel { font-size: 10pt; }
+      .sk-print-compact .sk-tabel th,
+      .sk-print-compact .sk-tabel td {
+        padding: 3px 5px;
+      }
+
+      /* Blok tanda tangan — ruang kosong dipangkas secukupnya, masih cukup
+         untuk tanda tangan fisik tapi tidak mendorong ke halaman baru */
+      .sk-print-compact .sk-ttd { margin-top: 8px; }
+      .sk-print-compact .sk-ttd table { margin-bottom: 2px; }
+      .sk-print-compact .sk-ttd .ruang { height: 14mm; }
+    `}</style>
+  )
+}
 
 export default function SKPenugasan({ konfig }) {
   const navigate = useNavigate()
@@ -207,6 +279,7 @@ export default function SKPenugasan({ konfig }) {
   return (
     <div className="min-h-screen bg-slate-100">
       <GayaCetakSK />
+      <GayaPadatCetak />
       <BarAtasCetak onKembali={() => navigate('/gudang-sk')} judul={konfig.judulBar} />
 
       {/* ── Panel isian (tidak ikut tercetak) ── */}
@@ -428,83 +501,85 @@ export default function SKPenugasan({ konfig }) {
         </Bagian>
 
         <p className="text-xs text-slate-500 mb-2">
-          Pratinjau di bawah: halaman 1 Keputusan, halaman 2 Lampiran. Saat mencetak, matikan opsi "Header dan footer" di dialog cetak agar bersih.
+          Pratinjau di bawah: halaman 1 Keputusan, halaman 2 Lampiran (lanskap). Saat mencetak, matikan opsi "Header dan footer" di dialog cetak agar bersih.
         </p>
       </div>
 
       {/* ── Lembar cetak: Keputusan + Lampiran ── */}
       <AreaLembar>
-        <HalamanKeputusan
-          sk={skCetak}
-          sekolah={sekolah}
-          tentang={tentang}
-          menimbang={daftarMenimbang}
-          mengingat={daftarMengingat}
-          diktum={daftarDiktum}
-        />
+        <div className="sk-print-compact">
+          <HalamanKeputusan
+            sk={skCetak}
+            sekolah={sekolah}
+            tentang={tentang}
+            menimbang={daftarMenimbang}
+            mengingat={daftarMengingat}
+            diktum={daftarDiktum}
+          />
 
-        <HalamanLampiran
-          sk={skCetak}
-          sekolah={sekolah}
-          judul={[`Daftar ${konfig.objek}`, namaSekolah, `Tahun Pelajaran ${tp}`]}
-        >
-          <table className="sk-tabel">
-            <thead>
-              <tr>
-                <th style={{ width: '7%' }}>No</th>
-                <th>Nama</th>
-                {adaNip && <th style={{ width: '24%' }}>NIP</th>}
-                <th style={{ width: '24%' }}>Jabatan/Tugas</th>
-                {konfig.tampilHonor && <th style={{ width: '22%' }}>Honorarium per Bulan</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {barisTabel.length === 0 ? (
+          <HalamanLampiran
+            sk={skCetak}
+            sekolah={sekolah}
+            judul={[`Daftar ${konfig.objek}`, namaSekolah, `Tahun Pelajaran ${tp}`]}
+          >
+            <table className="sk-tabel">
+              <thead>
                 <tr>
-                  <td className="c">1</td>
-                  <td>…………</td>
-                  {adaNip && <td className="c">-</td>}
-                  <td className="c">…………</td>
-                  {konfig.tampilHonor && <td className="c">…………</td>}
+                  <th style={{ width: '7%' }}>No</th>
+                  <th>Nama</th>
+                  {adaNip && <th style={{ width: '24%' }}>NIP</th>}
+                  <th style={{ width: '24%' }}>Jabatan/Tugas</th>
+                  {konfig.tampilHonor && <th style={{ width: '22%' }}>Honorarium per Bulan</th>}
                 </tr>
-              ) : (
-                barisTabel.map((b, i) => (
-                  <tr key={b.key}>
-                    <td className="c">{i + 1}</td>
-                    <td>{isi(b.nama)}</td>
-                    {adaNip && <td className="c nip">{isi(b.nip, '-')}</td>}
-                    <td className="c">{isi(b.jabatan)}</td>
-                    {konfig.tampilHonor && <td className="c">{rupiah(b.honor)}</td>}
+              </thead>
+              <tbody>
+                {barisTabel.length === 0 ? (
+                  <tr>
+                    <td className="c">1</td>
+                    <td>…………</td>
+                    {adaNip && <td className="c">-</td>}
+                    <td className="c">…………</td>
+                    {konfig.tampilHonor && <td className="c">…………</td>}
                   </tr>
-                ))
-              )}
-              {konfig.tampilHonor && barisTabel.length > 1 && (
-                <tr>
-                  <td colSpan={kolomSebelumHonor} className="c">
-                    <strong>Jumlah</strong>
-                  </td>
-                  <td className="c">
-                    <strong>{rupiah(totalHonor)}</strong>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  barisTabel.map((b, i) => (
+                    <tr key={b.key}>
+                      <td className="c">{i + 1}</td>
+                      <td>{isi(b.nama)}</td>
+                      {adaNip && <td className="c nip">{isi(b.nip, '-')}</td>}
+                      <td className="c">{isi(b.jabatan)}</td>
+                      {konfig.tampilHonor && <td className="c">{rupiah(b.honor)}</td>}
+                    </tr>
+                  ))
+                )}
+                {konfig.tampilHonor && barisTabel.length > 1 && (
+                  <tr>
+                    <td colSpan={kolomSebelumHonor} className="c">
+                      <strong>Jumlah</strong>
+                    </td>
+                    <td className="c">
+                      <strong>{rupiah(totalHonor)}</strong>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
 
-          {daftarTugas.length > 0 && (
-            <>
-              <p className="sk-tengah" style={{ marginTop: 14 }}>
-                Uraian Tugas
-              </p>
-              {daftarTugas.map((teks, i) => (
-                <div key={i} className="sk-item">
-                  <span className="no">{i + 1}.</span>
-                  <span className="isi">{teks}</span>
-                </div>
-              ))}
-            </>
-          )}
-        </HalamanLampiran>
+            {daftarTugas.length > 0 && (
+              <>
+                <p className="sk-tengah" style={{ marginTop: 14 }}>
+                  Uraian Tugas
+                </p>
+                {daftarTugas.map((teks, i) => (
+                  <div key={i} className="sk-item">
+                    <span className="no">{i + 1}.</span>
+                    <span className="isi">{teks}</span>
+                  </div>
+                ))}
+              </>
+            )}
+          </HalamanLampiran>
+        </div>
       </AreaLembar>
     </div>
   )
