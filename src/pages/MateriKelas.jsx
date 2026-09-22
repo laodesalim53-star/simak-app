@@ -22,18 +22,23 @@ export default function MateriKelas() {
   // Menyimpan item materi (tanpa link) mana saja yang sedang di-expand,
   // per mapel, supaya tidak bentrok antar kartu. Bentuk: { [idMapel]: Set(indeks) }
   const [materiTerbuka, setMateriTerbuka] = useState({})
+  // Menyimpan soal mana saja yang kunci jawabannya sedang ditampilkan.
+  // Kunci berupa string unik "idMapel-indeksMateri-indeksSoal".
+  const [kunciTerbuka, setKunciTerbuka] = useState(new Set())
 
   const pilihJenjang = (j) => {
     setJenjang(j)
     setKelas(1)
     setTerbuka(null)
     setMateriTerbuka({})
+    setKunciTerbuka(new Set())
   }
 
   const pilihKelas = (k) => {
     setKelas(k)
     setTerbuka(null)
     setMateriTerbuka({})
+    setKunciTerbuka(new Set())
   }
 
   const toggleMateri = (idMapel, indeks) => {
@@ -45,6 +50,18 @@ export default function MateriKelas() {
         set.add(indeks)
       }
       return { ...prev, [idMapel]: set }
+    })
+  }
+
+  const toggleKunci = (kunciKey) => {
+    setKunciTerbuka((prev) => {
+      const next = new Set(prev)
+      if (next.has(kunciKey)) {
+        next.delete(kunciKey)
+      } else {
+        next.add(kunciKey)
+      }
+      return next
     })
   }
 
@@ -224,7 +241,8 @@ export default function MateriKelas() {
                     ) : (
                       <ul className="border-t border-slate-100 pt-2 divide-y divide-slate-100">
                         {m.materi.map((x, i) => {
-                          const punyaRingkasan = Boolean(x.ringkasan)
+                          const punyaSoal = Array.isArray(x.soal) && x.soal.length > 0
+                          const bisaDibuka = Boolean(x.ringkasan) || Boolean(x.materi) || punyaSoal
                           const itemTerbuka = setMateriTerbukaMapel.has(i)
                           const idIsi = `${idPanel}-materi-${i}`
 
@@ -245,7 +263,7 @@ export default function MateriKelas() {
                             )
                           }
 
-                          if (punyaRingkasan) {
+                          if (bisaDibuka) {
                             return (
                               <li key={`${x.judul}-${i}`}>
                                 <button
@@ -265,12 +283,63 @@ export default function MateriKelas() {
                                   />
                                 </button>
                                 {itemTerbuka && (
-                                  <p
-                                    id={idIsi}
-                                    className="pb-3 pl-[1.65rem] pr-2 text-[13px] leading-relaxed text-slate-600"
-                                  >
-                                    {x.ringkasan}
-                                  </p>
+                                  <div id={idIsi} className="pb-3 pl-[1.65rem] pr-2">
+                                    {x.materi ? (
+                                      <div className="text-[13px] leading-relaxed text-slate-600 whitespace-pre-line">
+                                        {x.materi}
+                                      </div>
+                                    ) : x.ringkasan ? (
+                                      <p className="text-[13px] leading-relaxed text-slate-600">{x.ringkasan}</p>
+                                    ) : null}
+
+                                    {punyaSoal && (
+                                      <div className="mt-3 space-y-2.5">
+                                        <p className="text-xs font-semibold text-slate-700">Latihan Soal</p>
+                                        {x.soal.map((s, si) => {
+                                          const kunciKey = `${m.id}-${i}-${si}`
+                                          const kunciDibuka = kunciTerbuka.has(kunciKey)
+                                          return (
+                                            <div
+                                              key={si}
+                                              className="rounded-lg border border-slate-100 bg-slate-50/60 p-3"
+                                            >
+                                              <p className="text-[13px] font-medium text-slate-800 mb-1.5">
+                                                {si + 1}. {s.pertanyaan}
+                                              </p>
+                                              <ul className="space-y-1 mb-2">
+                                                {s.pilihan.map((opt, oi) => (
+                                                  <li key={oi} className="text-[13px] text-slate-600">
+                                                    <span className="font-semibold mr-1">
+                                                      {String.fromCharCode(65 + oi)}.
+                                                    </span>
+                                                    {opt}
+                                                  </li>
+                                                ))}
+                                              </ul>
+                                              <button
+                                                type="button"
+                                                onClick={() => toggleKunci(kunciKey)}
+                                                className="text-xs font-semibold text-blue-700 hover:text-blue-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded"
+                                              >
+                                                {kunciDibuka ? 'Sembunyikan Kunci Jawaban' : 'Lihat Kunci Jawaban'}
+                                              </button>
+                                              {kunciDibuka && (
+                                                <p className="mt-1.5 text-[13px] font-medium text-emerald-700">
+                                                  Jawaban benar: {String.fromCharCode(65 + s.kunci)}.{' '}
+                                                  {s.pilihan[s.kunci]}
+                                                  {s.pembahasan && (
+                                                    <span className="block mt-0.5 font-normal text-slate-600">
+                                                      {s.pembahasan}
+                                                    </span>
+                                                  )}
+                                                </p>
+                                              )}
+                                            </div>
+                                          )
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
                                 )}
                               </li>
                             )
