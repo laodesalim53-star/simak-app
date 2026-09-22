@@ -15,6 +15,11 @@ import { supabase } from '../lib/supabaseClient'
 //     menyembunyikannya di layar
 //   • `@page` + `@media print` di <style> halaman itu sendiri
 //
+// Halaman Keputusan dicetak potret (A4), halaman Lampiran (tabel personel)
+// dicetak lanskap (A4 landscape) secara otomatis lewat CSS Paged Media
+// bernama (`page: lampiran`), supaya kolom tabel lebih lega dan barisnya
+// tidak gampang membelah ke halaman berikutnya.
+//
 // Cara memakai di halaman SK baru:
 //
 //   <div className="min-h-screen bg-slate-100">
@@ -122,16 +127,21 @@ const CSS = `
 .lembar-sk {
   width: 210mm;
   margin: 0 auto 16px;
-  padding: 20mm 22mm;
+  padding: 15mm 18mm;
   background: #fff;
   color: #000;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.18), 0 8px 24px rgba(15, 23, 42, 0.08);
   font-family: 'Times New Roman', Times, serif;
-  font-size: 12pt;
-  line-height: 1.45;
+  font-size: 11.5pt;
+  line-height: 1.35;
   box-sizing: border-box;
 }
 .lembar-sk p { margin: 0; }
+
+/* Halaman lampiran (tabel): lebih lebar, dicetak A4 landscape (lihat @page "lampiran" di bawah) */
+.lembar-sk.landscape {
+  width: 297mm;
+}
 
 /* Override pola laporan guru: position static + tampil di layar */
 .lembar-cetak.print-only {
@@ -144,57 +154,58 @@ const CSS = `
 }
 @media screen {
   .lembar-cetak.print-only { display: block !important; min-height: 297mm; }
+  .lembar-cetak.print-only.landscape { min-height: 210mm; }
 }
 
-.sk-kop { display: flex; align-items: center; gap: 12px; border-bottom: 3px double #000; padding-bottom: 6px; margin-bottom: 14px; }
-.sk-kop-logo { width: 20mm; height: 20mm; object-fit: contain; flex: none; }
+.sk-kop { display: flex; align-items: center; gap: 10px; border-bottom: 3px double #000; padding-bottom: 5px; margin-bottom: 10px; }
+.sk-kop-logo { width: 18mm; height: 18mm; object-fit: contain; flex: none; }
 .sk-kop-teks { flex: 1; text-align: center; }
-.sk-kop-atas { font-size: 12pt; font-weight: 700; text-transform: uppercase; }
-.sk-kop-nama { font-size: 15pt; font-weight: 700; text-transform: uppercase; line-height: 1.25; }
-.sk-kop-alamat { font-size: 10.5pt; }
+.sk-kop-atas { font-size: 11.5pt; font-weight: 700; text-transform: uppercase; }
+.sk-kop-nama { font-size: 14pt; font-weight: 700; text-transform: uppercase; line-height: 1.2; }
+.sk-kop-alamat { font-size: 10pt; }
 
-.sk-judul { text-align: center; font-weight: 700; text-transform: uppercase; margin-bottom: 12px; }
-.sk-judul .tentang { margin: 4px 0; }
+.sk-judul { text-align: center; font-weight: 700; text-transform: uppercase; margin-bottom: 10px; }
+.sk-judul .tentang { margin: 3px 0; }
 
-.sk-def { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
-.sk-def td { vertical-align: top; padding: 0 0 4px; }
+.sk-def { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+.sk-def td { vertical-align: top; padding: 0 0 3px; }
 .sk-def td.k { width: 30mm; }
 .sk-def td.t { width: 5mm; }
 .sk-def tr { page-break-inside: avoid; }
 
-.sk-item { display: flex; }
+.sk-item { display: flex; page-break-inside: avoid; }
 .sk-item .no { width: 8mm; flex: none; }
 .sk-item .isi { text-align: justify; }
 .sk-justify { text-align: justify; }
 
-.sk-tengah { text-align: center; font-weight: 700; text-transform: uppercase; margin: 10px 0; }
+.sk-tengah { text-align: center; font-weight: 700; text-transform: uppercase; margin: 8px 0; }
 
-.sk-ttd { margin-left: 52%; margin-top: 18px; page-break-inside: avoid; }
+.sk-ttd { margin-left: 52%; margin-top: 14px; page-break-inside: avoid; }
 .sk-ttd table { border-collapse: collapse; }
 .sk-ttd td { padding: 0 6px 0 0; vertical-align: top; }
-.sk-ttd .ruang { height: 20mm; }
+.sk-ttd .ruang { height: 18mm; }
 
-.sk-meta { border-collapse: collapse; margin-left: 50%; margin-bottom: 14px; font-size: 11pt; }
+.sk-meta { border-collapse: collapse; margin-left: 50%; margin-bottom: 10px; font-size: 10.5pt; }
 .sk-meta td { vertical-align: top; padding: 0 6px 0 0; }
 
-.sk-tabel { width: 100%; border-collapse: collapse; font-size: 11pt; }
-.sk-tabel th, .sk-tabel td { border: 1px solid #000; padding: 5px 6px; vertical-align: top; }
+.sk-tabel { width: 100%; border-collapse: collapse; font-size: 10.5pt; }
+.sk-tabel th, .sk-tabel td { border: 1px solid #000; padding: 4px 6px; vertical-align: top; }
 .sk-tabel th { text-align: center; font-weight: 700; vertical-align: middle; }
 .sk-tabel thead { display: table-header-group; }
 .sk-tabel tr { page-break-inside: avoid; }
 .sk-tabel td.c { text-align: center; }
-.sk-tabel .nip { font-size: 10pt; }
+.sk-tabel .nip { font-size: 9.5pt; }
 
 /* ── Format surat keterangan ── */
-.sk-surat-judul { text-align: center; margin-bottom: 14px; }
+.sk-surat-judul { text-align: center; margin-bottom: 12px; }
 .sk-surat-judul .judul { font-weight: 700; text-decoration: underline; text-transform: uppercase; font-size: 13pt; }
-.sk-data { border-collapse: collapse; margin: 4px 0 10px 8mm; }
+.sk-data { border-collapse: collapse; margin: 4px 0 8px 8mm; }
 .sk-data td { vertical-align: top; padding: 1px 0; }
 .sk-data td.k { width: 44mm; }
 .sk-data td.t { width: 5mm; }
-.sk-paragraf { text-align: justify; text-indent: 12mm; margin-bottom: 8px; }
-.sk-ttd-surat { margin-left: 55%; margin-top: 22px; page-break-inside: avoid; }
-.sk-ttd-surat .ruang { height: 22mm; }
+.sk-paragraf { text-align: justify; text-indent: 12mm; margin-bottom: 6px; }
+.sk-ttd-surat { margin-left: 55%; margin-top: 18px; page-break-inside: avoid; }
+.sk-ttd-surat .ruang { height: 20mm; }
 
 @media print {
   .no-print { display: none !important; }
@@ -207,10 +218,17 @@ const CSS = `
   }
   .lembar-sk { padding: 0 !important; min-height: 0 !important; }
   .lembar-sk + .lembar-sk { page-break-before: always; }
+
+  /* Halaman berkelas "landscape" (Lampiran) memakai definisi @page "lampiran" di bawah */
+  .lembar-sk.landscape { page: lampiran; }
 }
 @page {
   size: A4;
-  margin: 18mm 20mm;
+  margin: 15mm 18mm;
+}
+@page lampiran {
+  size: A4 landscape;
+  margin: 13mm 15mm;
 }
 `
 
@@ -244,8 +262,9 @@ export function AreaLembar({ children }) {
   return <div className="pembungkus-lembar overflow-x-auto p-3 sm:p-6">{children}</div>
 }
 
-export function LembarSK({ children }) {
-  return <div className="lembar-cetak print-only lembar-sk">{children}</div>
+// `landscape`: true untuk halaman yang dicetak A4 lanskap (dipakai HalamanLampiran).
+export function LembarSK({ children, landscape = false }) {
+  return <div className={`lembar-cetak print-only lembar-sk${landscape ? ' landscape' : ''}`}>{children}</div>
 }
 
 // ─── Bagian dokumen ──────────────────────────────────────────────────────────
@@ -304,6 +323,7 @@ function Daftar({ items, gaya }) {
 }
 
 // Halaman 1: Keputusan (kop, judul, Menimbang, Mengingat, Memutuskan, diktum, TTD).
+// Selalu potret A4.
 //   tentang  : string, judul lengkap setelah kata "TENTANG"
 //   menimbang: string[]   mengingat: string[]   diktum: [label, teks][]
 export function HalamanKeputusan({ sk, sekolah, tentang, menimbang, mengingat, diktum }) {
@@ -369,11 +389,13 @@ export function HalamanKeputusan({ sk, sekolah, tentang, menimbang, mengingat, d
 }
 
 // Halaman 2: Lampiran (blok LAMPIRAN/NOMOR/TANGGAL, judul, isi bebas, TTD).
+// Dicetak A4 landscape secara default (lebih lega untuk tabel personel).
 //   judul: string[] — baris judul lampiran di atas isi.
-export function HalamanLampiran({ sk, sekolah, judul, children }) {
+//   landscape: boolean — set false kalau lampiran ini justru ingin tetap potret.
+export function HalamanLampiran({ sk, sekolah, judul, children, landscape = true }) {
   const namaSekolah = isi(sekolah.nama, 'NAMA SEKOLAH')
   return (
-    <LembarSK>
+    <LembarSK landscape={landscape}>
       <table className="sk-meta">
         <tbody>
           <tr>
