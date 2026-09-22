@@ -5,7 +5,7 @@ import Layout from '../components/Layout'
 import StoryBar from '../components/StoryBar'
 import StoryUploader from '../components/StoryUploader'
 import PintasanKUA from '../components/PintasanKUA'
-import { Users, GraduationCap, DoorOpen, Megaphone, LayoutDashboard, ClipboardCheck, FileClock, Briefcase, UserCheck } from 'lucide-react'
+import { Users, GraduationCap, DoorOpen, Megaphone, LayoutDashboard, ClipboardCheck, FileClock, Briefcase, UserCheck, AlertTriangle } from 'lucide-react'
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -27,19 +27,6 @@ const KATEGORI_STYLE = {
   Akademik: 'bg-sage-500/15 text-sage-500',
 }
 
-// PERBAIKAN TAMPILAN: palet kartu statistik sebelumnya campur-campur
-// (biru/hijau/teal/ungu/oranye/rose — kesan template generik, tidak
-// senada dengan identitas navy+emas di banner & sidebar). Sekarang
-// diturunkan dari 2 warna utama tema aplikasi (navy & emas) plus sage
-// sebagai aksen, supaya satu keluarga desain. rose/emerald tetap dipakai
-// khusus untuk kartu status (ada yang menunggu / tidak ada yang menunggu)
-// karena maknanya memang semantik (peringatan vs aman), bukan dekoratif.
-//
-// FIX: 'sage' sebelumnya pakai `from-sage-600 to-sage-700` — shade itu
-// kemungkinan tidak terdaftar di tailwind.config (hanya sage-500 yang
-// dipakai di tempat lain), sehingga Tailwind tidak menghasilkan class-nya
-// dan kartu tampil putih polos. Diganti ke nilai hex langsung (arbitrary
-// value) supaya selalu render terlepas dari isi tailwind.config.
 const CARD_THEME = {
   navy: { gradient: 'from-blue-900 to-indigo-950' },
   indigo: { gradient: 'from-blue-800 to-indigo-900' },
@@ -50,7 +37,12 @@ const CARD_THEME = {
   emerald: { gradient: 'from-emerald-600 to-emerald-700' },
 }
 
-function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 72 }) {
+// PERBAIKAN: opacity default diturunkan dari 1 -> 0.4. Sebelumnya banner
+// "Selamat datang..." memanggil <BatikOverlay> tanpa prop opacity, jadi
+// pakai default 1 (motif penuh), yang menurunkan kontras teks putih di
+// atasnya. Kartu statistik tidak terdampak karena mereka selalu mengirim
+// opacity secara eksplisit (0.5).
+function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 0.4, size = 72 }) {
   return (
     <svg
       className="absolute inset-0 w-full h-full pointer-events-none"
@@ -98,9 +90,6 @@ function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 
   )
 }
 
-// BARU: hitung angka dari 0 naik ke nilai aslinya dengan easing halus.
-// Cuma aktif untuk value bertipe number (mis. 72), value string seperti
-// "41/72" ditampilkan apa adanya tanpa animasi.
 function useCountUp(target, duration = 800) {
   const [value, setValue] = useState(0)
   useEffect(() => {
@@ -129,7 +118,6 @@ function formatRelativeDate(iso) {
   return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
 }
 
-// Tanggal hari ini dalam format panjang Indonesia, dipakai di banner.
 function formatTanggalHariIni() {
   return new Date().toLocaleDateString('id-ID', {
     weekday: 'long',
@@ -139,8 +127,6 @@ function formatTanggalHariIni() {
   })
 }
 
-// Generik: bisa dipakai untuk presensi_siswa MAUPUN presensi_pegawai,
-// selama baris punya kolom tanggal & status.
 function aggregateAttendance(rows) {
   const map = {}
   rows.forEach((r) => {
@@ -170,12 +156,38 @@ function aggregateNilai(rows) {
     .slice(0, 8)
 }
 
-// BARU: kartu statistik diekstrak jadi komponen sendiri supaya bisa
-// pakai hook (useCountUp) per-kartu tanpa melanggar Rules of Hooks di
-// dalam .map(), sekaligus menambahkan:
-//  - skeleton shimmer saat loading (ganti tanda "—")
-//  - shine sweep halus saat hover
-//  - cincin ping pada ikon untuk kartu "urgent" (theme rose)
+// BARU: dipakai untuk mengganti pesan "Belum ada data" saat state masih
+// loading, supaya tidak ada kedipan pesan kosong yang keliru (lihat
+// catatan PERBAIKAN di DashboardSekolah/DashboardKantor).
+function ChartSkeleton({ height = 220 }) {
+  return <div className="animate-pulse rounded-lg bg-ink-900/[0.06]" style={{ height }} />
+}
+
+// BARU: cek field `.error` dari setiap respons Supabase dalam sebuah
+// Promise.all. Sebelumnya semua hasil query langsung dipakai lewat
+// `.count || 0` / `.data || []`, jadi kalau query gagal (RLS, koneksi,
+// dll) dashboard diam-diam menampilkan 0 / kosong seolah memang tidak
+// ada data — padahal sebenarnya gagal dimuat. Ini menimbulkan risiko
+// admin salah baca data sekolah sebagai "benar-benar kosong".
+function logSupabaseErrors(scope, resultsByName) {
+  const failed = Object.entries(resultsByName).filter(([, r]) => r?.error)
+  failed.forEach(([name, r]) => {
+    console.error(`[Dashboard:${scope}] gagal memuat "${name}":`, r.error)
+  })
+  return failed.length > 0
+}
+
+// BARU: banner kecil yang muncul kalau salah satu query gagal, supaya
+// user tahu sebagian data mungkin tidak akurat, bukan cuma diam saja.
+function DataErrorBanner() {
+  return (
+    <div className="dash-fade-in opacity-0 mb-4 flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+      <AlertTriangle size={16} className="shrink-0" />
+      <span>Sebagian data gagal dimuat. Coba muat ulang halaman; jika masih terjadi, hubungi admin sistem.</span>
+    </div>
+  )
+}
+
 function StatCard({ label, value, icon: Icon, theme, sublabel, loading, delay, patternId }) {
   const t = CARD_THEME[theme]
   const isNumeric = typeof value === 'number'
@@ -190,7 +202,6 @@ function StatCard({ label, value, icon: Icon, theme, sublabel, loading, delay, p
     >
       <BatikOverlay patternId={patternId} strokeColor="#ffffff" opacity={0.5} size={56} />
 
-      {/* shine sweep saat hover */}
       <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />
 
       <div className="relative flex items-start justify-between mb-4">
@@ -215,7 +226,7 @@ function StatCard({ label, value, icon: Icon, theme, sublabel, loading, delay, p
 }
 
 /* ================================================================
-   ==================  DASBOR SEKOLAH (tidak berubah)  =============
+   ==================  DASBOR SEKOLAH  ================================
    ================================================================ */
 function DashboardSekolah({ sekolahId }) {
   const [stats, setStats] = useState({ siswa: 0, guru: 0, kelas: 0, pengumuman: 0 })
@@ -227,6 +238,7 @@ function DashboardSekolah({ sekolahId }) {
   const [presensiHariIni, setPresensiHariIni] = useState({ terisi: 0, hadir: 0, izin: 0, alpa: 0 })
   const [pengajuanMenunggu, setPengajuanMenunggu] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [storyRefreshKey, setStoryRefreshKey] = useState(0)
 
   const hariIni = formatTanggalHariIni()
@@ -279,6 +291,14 @@ function DashboardSekolah({ sekolahId }) {
         supabase.from('pengajuan_izin').select('*', { count: 'exact', head: true })
           .eq('sekolah_id', sekolahId).eq('status', 'diajukan'),
       ])
+
+      // PERBAIKAN: cek error sebelum dipakai, jangan langsung `.count || 0`.
+      const gagal = logSupabaseErrors('Sekolah', {
+        siswaCount, guruCount, kelasCount, pengumumanCount, lakiCount, perempuanCount,
+        pengumumanRecent, presensiRows, nilaiRows, rppMenunggu, rppDisetujui, rppDitolak,
+        presensiHariIniRows, pengajuanMenungguCount,
+      })
+      setLoadError(gagal)
 
       setStats({
         siswa: siswaCount.count || 0,
@@ -365,6 +385,8 @@ function DashboardSekolah({ sekolahId }) {
           </div>
         </div>
 
+        {loadError && <DataErrorBanner />}
+
         <StoryBar key={storyRefreshKey} />
         <StoryUploader onPosted={() => setStoryRefreshKey((k) => k + 1)} />
 
@@ -387,7 +409,9 @@ function DashboardSekolah({ sekolahId }) {
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
           <div className="dash-fade-in opacity-0 card p-6 lg:col-span-2" style={{ animationDelay: '540ms' }}>
             <h3 className="font-display text-lg font-semibold mb-4">Komposisi Siswa</h3>
-            {stats.siswa === 0 ? (
+            {loading ? (
+              <ChartSkeleton height={220} />
+            ) : stats.siswa === 0 ? (
               <p className="text-sm text-ink-700/50">Belum ada data siswa.</p>
             ) : (
               <div className="relative">
@@ -412,7 +436,9 @@ function DashboardSekolah({ sekolahId }) {
 
           <div className="dash-fade-in opacity-0 card p-6 lg:col-span-3" style={{ animationDelay: '600ms' }}>
             <h3 className="font-display text-lg font-semibold mb-4">Pengumuman Terbaru</h3>
-            {pengumuman.length === 0 ? (
+            {loading ? (
+              <ChartSkeleton height={180} />
+            ) : pengumuman.length === 0 ? (
               <p className="text-sm text-ink-700/50">Belum ada pengumuman.</p>
             ) : (
               <ul className="divide-y divide-ink-900/[0.06]">
@@ -440,7 +466,9 @@ function DashboardSekolah({ sekolahId }) {
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
           <div className="dash-fade-in opacity-0 card p-6 lg:col-span-3" style={{ animationDelay: '660ms' }}>
             <h3 className="font-display text-lg font-semibold mb-4">Tren Kehadiran Siswa (14 Hari Terakhir)</h3>
-            {attendanceTrend.length === 0 ? (
+            {loading ? (
+              <ChartSkeleton height={220} />
+            ) : attendanceTrend.length === 0 ? (
               <p className="text-sm text-ink-700/50">Belum ada data presensi.</p>
             ) : (
               <ResponsiveContainer width="100%" height={220}>
@@ -457,7 +485,9 @@ function DashboardSekolah({ sekolahId }) {
 
           <div className="dash-fade-in opacity-0 card p-6 lg:col-span-2" style={{ animationDelay: '720ms' }}>
             <h3 className="font-display text-lg font-semibold mb-4">Status RPP</h3>
-            {rppStatus.menunggu + rppStatus.disetujui + rppStatus.ditolak === 0 ? (
+            {loading ? (
+              <ChartSkeleton height={140} />
+            ) : rppStatus.menunggu + rppStatus.disetujui + rppStatus.ditolak === 0 ? (
               <p className="text-sm text-ink-700/50">Belum ada RPP diupload.</p>
             ) : (
               <div className="space-y-3 pt-1">
@@ -485,7 +515,9 @@ function DashboardSekolah({ sekolahId }) {
 
           <div className="dash-fade-in opacity-0 card p-6 lg:col-span-5" style={{ animationDelay: '780ms' }}>
             <h3 className="font-display text-lg font-semibold mb-4">Rata-rata Nilai per Mata Pelajaran</h3>
-            {nilaiPerMapel.length === 0 ? (
+            {loading ? (
+              <ChartSkeleton height={240} />
+            ) : nilaiPerMapel.length === 0 ? (
               <p className="text-sm text-ink-700/50">Belum ada data nilai.</p>
             ) : (
               <ResponsiveContainer width="100%" height={240}>
@@ -506,9 +538,7 @@ function DashboardSekolah({ sekolahId }) {
 }
 
 /* ================================================================
-   ==================  DASBOR KANTOR (baru)  ========================
-   Tidak ada siswa/kelas/guru/RPP/nilai — cuma pegawai, presensi
-   pegawai, pengumuman, dan akun yang menunggu persetujuan.
+   ==================  DASBOR KANTOR  =================================
    ================================================================ */
 function DashboardKantor({ sekolahId }) {
   const [stats, setStats] = useState({ pegawai: 0, pengumuman: 0 })
@@ -517,6 +547,7 @@ function DashboardKantor({ sekolahId }) {
   const [presensiHariIni, setPresensiHariIni] = useState({ terisi: 0, hadir: 0, izin: 0, alpa: 0 })
   const [akunMenunggu, setAkunMenunggu] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [storyRefreshKey, setStoryRefreshKey] = useState(0)
 
   const hariIni = formatTanggalHariIni()
@@ -552,8 +583,6 @@ function DashboardKantor({ sekolahId }) {
 
       const pegawaiIds = (pegawaiRows.data || []).map((p) => p.id)
 
-      // presensi_pegawai tidak punya kolom sekolah_id langsung, jadi
-      // di-scope lewat daftar id pegawai tenant ini.
       const [presensiTrenRows, presensiHariIniRows] = await Promise.all([
         pegawaiIds.length
           ? supabase.from('presensi_pegawai').select('tanggal, status')
@@ -564,6 +593,13 @@ function DashboardKantor({ sekolahId }) {
               .in('pegawai_id', pegawaiIds).eq('tanggal', todayStr)
           : Promise.resolve({ data: [] }),
       ])
+
+      // PERBAIKAN: sama seperti DashboardSekolah — cek error sebelum dipakai.
+      const gagal = logSupabaseErrors('Kantor', {
+        pegawaiCount, pengumumanCount, pengumumanRecent, pegawaiRows, akunMenungguCount,
+        presensiTrenRows, presensiHariIniRows,
+      })
+      setLoadError(gagal)
 
       setStats({
         pegawai: pegawaiCount.count || 0,
@@ -636,6 +672,8 @@ function DashboardKantor({ sekolahId }) {
           </div>
         </div>
 
+        {loadError && <DataErrorBanner />}
+
         <StoryBar key={storyRefreshKey} />
         <StoryUploader onPosted={() => setStoryRefreshKey((k) => k + 1)} />
 
@@ -659,7 +697,9 @@ function DashboardKantor({ sekolahId }) {
 
         <div className="dash-fade-in opacity-0 card p-6 mb-8" style={{ animationDelay: '450ms' }}>
           <h3 className="font-display text-lg font-semibold mb-4">Pengumuman Terbaru</h3>
-          {pengumuman.length === 0 ? (
+          {loading ? (
+            <ChartSkeleton height={180} />
+          ) : pengumuman.length === 0 ? (
             <p className="text-sm text-ink-700/50">Belum ada pengumuman.</p>
           ) : (
             <ul className="divide-y divide-ink-900/[0.06]">
@@ -685,7 +725,9 @@ function DashboardKantor({ sekolahId }) {
         <h2 className="font-display text-xl font-semibold text-ink-950 mt-8 mb-4">Analitik</h2>
         <div className="dash-fade-in opacity-0 card p-6" style={{ animationDelay: '520ms' }}>
           <h3 className="font-display text-lg font-semibold mb-4">Tren Kehadiran Pegawai (14 Hari Terakhir)</h3>
-          {attendanceTrend.length === 0 ? (
+          {loading ? (
+            <ChartSkeleton height={240} />
+          ) : attendanceTrend.length === 0 ? (
             <p className="text-sm text-ink-700/50">Belum ada data presensi.</p>
           ) : (
             <ResponsiveContainer width="100%" height={240}>
