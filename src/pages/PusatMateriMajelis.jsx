@@ -163,6 +163,14 @@ const daftarMateri = [
     path: '/pembinaan-generasi-muda',
     warna: 'cyan',
   },
+  {
+  id: 'pembinaan-konsultasi-pendampingan',
+  judul: 'Pembinaan Keagamaan, Konsultasi & Pendampingan Kelompok',
+  deskripsi: 'Laporan kegiatan pembinaan keagamaan, konsultasi, dan pendampingan kelompok binaan.',
+  icon: HeartHandshake,
+  path: '/laporan-pembinaan-konsultasi-pendampingan',
+  warna: 'indigo', // atau warna lain yang belum dipakai
+},
 ]
 // Sama seperti BatikOverlay di PusatLaporanGuru.jsx — dipakai di banner
 // atas supaya identitas visual (motif batik + gradasi) konsisten dengan
