@@ -132,6 +132,7 @@ const RencanaKerjaTahunan = lazy(() => import('./pages/RencanaKerjaTahunan'))
 const MateriMajelisTaklim = lazy(() => import('./pages/MateriMajelisTaklim'))
 const PusatKelompokBinaan = lazy(() => import('./pages/PusatKelompokBinaan'))
 const KelolaKelompokBinaan = lazy(() => import('./pages/KelolaKelompokBinaan'))
+const MateriPembinaanGenerasiMuda = lazy(() => import('./pages/MateriPembinaanGenerasiMuda'))
 // ...
 const AdminLiveChat = lazy(() => import('./pages/AdminLiveChat'))
 const ScanDokumen = lazy(() => import('./pages/ScanDokumen'))
@@ -321,6 +322,7 @@ export default function App() {
           <Route path="/materi-majelis-taklim" element={<ProtectedRoute adminOnly><MateriMajelisTaklim /></ProtectedRoute>} />
           <Route path="/pusat-kelompok-binaan" element={<ProtectedRoute><PusatKelompokBinaan /></ProtectedRoute>} />
           <Route path="/kelompok-binaan/:slug" element={<ProtectedRoute><KelolaKelompokBinaan /></ProtectedRoute>} />
+          <Route path="/pembinaan-generasi-muda" element={<MateriPembinaanGenerasiMuda />} />
           {/* Pendaftaran Nikah: bisa diakses semua pengguna kantor yang login
               (jamaah/pegawai), bukan hanya admin — sesuai link di Sidebar.jsx
               (getLinksKantorPegawai). Verifikasinya ada di /verifikasi-nikah
