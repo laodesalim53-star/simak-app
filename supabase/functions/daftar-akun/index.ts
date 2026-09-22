@@ -30,6 +30,78 @@ class HttpError extends Error {
   }
 }
 
+// ---------- Notifikasi email ke superadmin ----------
+// Best-effort: kalau gagal (API key belum diset, Resend error, dll),
+// pendaftaran TETAP dianggap sukses — cuma dicatat di log function.
+async function kirimNotifikasiSuperadmin(
+  adminClient: ReturnType<typeof createClient>,
+  info: { namaLengkap: string; email: string; jenisOrganisasi: string; namaOrganisasi: string; mode: string }
+) {
+  try {
+    const resendKey = Deno.env.get('RESEND_API_KEY')
+    const fromEmail = Deno.env.get('RESEND_FROM_EMAIL')
+    if (!resendKey || !fromEmail) {
+      console.warn('RESEND_API_KEY / RESEND_FROM_EMAIL belum diset, notifikasi email dilewati.')
+      return
+    }
+
+    const { data: superadmins, error } = await adminClient
+      .from('profil')
+      .select('email_pendaftar')
+      .eq('role', 'superadmin')
+      .eq('status_akun', 'aktif')
+
+    if (error) {
+      console.error('Gagal mengambil daftar superadmin:', error.message)
+      return
+    }
+
+    const tujuan = (superadmins || [])
+      .map((s) => s.email_pendaftar)
+      .filter((e): e is string => Boolean(e))
+
+    if (tujuan.length === 0) {
+      console.warn('Tidak ada email superadmin ditemukan, notifikasi dilewati.')
+      return
+    }
+
+    const labelJenis = info.jenisOrganisasi === 'kantor' ? 'Kantor (KUA)' : 'Sekolah'
+    const judul =
+      info.mode === 'baru'
+        ? `Pendaftar baru: ${labelJenis} "${info.namaOrganisasi}" (organisasi baru)`
+        : `Pendaftar baru bergabung ke "${info.namaOrganisasi}"`
+
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${resendKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: fromEmail,
+        to: tujuan,
+        subject: judul,
+        html: `
+          <p>Ada pendaftaran akun baru yang menunggu persetujuan Anda.</p>
+          <ul>
+            <li><b>Nama:</b> ${info.namaLengkap}</li>
+            <li><b>Email:</b> ${info.email}</li>
+            <li><b>Jenis:</b> ${labelJenis}</li>
+            <li><b>${info.mode === 'baru' ? 'Organisasi baru yang didaftarkan' : 'Bergabung ke'}:</b> ${info.namaOrganisasi}</li>
+          </ul>
+          <p>Silakan buka halaman Persetujuan Akun untuk meninjau.</p>
+        `,
+      }),
+    })
+
+    if (!res.ok) {
+      console.error('Resend gagal kirim email:', res.status, await res.text())
+    }
+  } catch (e) {
+    console.error('Gagal mengirim notifikasi superadmin:', e instanceof Error ? e.message : e)
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'Method tidak diizinkan' }, 405)
@@ -150,8 +222,10 @@ Deno.serve(async (req) => {
             ? 'pegawai'
             : 'guru'
 
-    // Pembuat organisasi langsung aktif; pendaftar 'gabung' menunggu persetujuan admin.
-    const statusAkun = mode === 'baru' ? 'aktif' : 'menunggu'
+    // PERBAIKAN: semua pendaftaran (baru maupun gabung) menunggu persetujuan
+    // superadmin. Sebelumnya mode 'baru' langsung 'aktif', sehingga siapa pun
+    // bisa mendaftarkan organisasi baru (mis. kantor palsu) tanpa disaring.
+    const statusAkun = 'menunggu'
 
     // ---------- 4. pegawai_kantor (khusus kantor) ----------
     if (jenisOrganisasi === 'kantor') {
@@ -195,6 +269,15 @@ Deno.serve(async (req) => {
       })
       if (error) throw new HttpError(500, 'Gagal menyimpan relasi siswa: ' + error.message)
     }
+
+    // ---------- 7. Notifikasi email ke superadmin (best-effort) ----------
+    await kirimNotifikasiSuperadmin(adminClient, {
+      namaLengkap,
+      email,
+      jenisOrganisasi,
+      namaOrganisasi: mode === 'baru' ? namaSekolah : namaLengkap /* diganti di bawah */,
+      mode,
+    })
 
     return json({ success: true }, 200)
   } catch (e) {
