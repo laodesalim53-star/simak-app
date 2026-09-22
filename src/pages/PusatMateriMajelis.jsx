@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Heart, Coins, Landmark, LayoutDashboard, Sparkles, Scale, Handshake, ClipboardList, BookOpen, CalendarCheck } from 'lucide-react'
+import { Heart, Coins, Landmark, LayoutDashboard, Sparkles, Scale, Handshake, ClipboardList, BookOpen, CalendarCheck, Users } from 'lucide-react'
 import Layout from '../components/Layout'
 
 // Palet warna per kartu — pola sama seperti PusatLaporanGuru.jsx, supaya
@@ -68,6 +68,13 @@ const PALET_WARNA = {
     border: 'border-orange-100',
     hoverBorder: 'hover:border-orange-400',
     hoverShadow: 'hover:shadow-orange-100',
+  },
+  cyan: {
+    bg: 'bg-cyan-50',
+    icon: 'text-cyan-600',
+    border: 'border-cyan-100',
+    hoverBorder: 'hover:border-cyan-400',
+    hoverShadow: 'hover:shadow-cyan-100',
   },
 }
 
@@ -147,6 +154,14 @@ const daftarMateri = [
     icon: CalendarCheck,
     path: '/rktp-penyuluh-2',
     warna: 'orange',
+  },
+  {
+    id: 'pembinaan-generasi-muda',
+    judul: 'Pembinaan Majelis Taklim Keluarga Generasi Muda',
+    deskripsi: 'Fikih munakahat dasar, manajemen keuangan, parenting islami, komunikasi pasangan, dan literasi digital keluarga muda.',
+    icon: Users,
+    path: '/pembinaan-generasi-muda',
+    warna: 'cyan',
   },
 ]
 // Sama seperti BatikOverlay di PusatLaporanGuru.jsx — dipakai di banner
