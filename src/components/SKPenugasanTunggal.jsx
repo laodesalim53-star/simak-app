@@ -103,35 +103,86 @@ function DaftarAngka({ items }) {
 function GayaPadatSatuHalaman() {
   return (
     <style>{`
+      /* Ukuran & jarak dasar lembar — ini yang paling besar pengaruhnya:
+         line-height 1.45 di CetakSK.jsx cukup lega untuk SK pendek dua
+         halaman (Keputusan + Lampiran), tapi kepanjangan untuk SK satu
+         halaman yang semua isinya (Menimbang…Keempat + TTD) harus muat
+         di satu lembar bersama blok tanda tangan. */
+      .sk-print-compact .lembar-sk {
+        font-size: 11pt;
+        line-height: 1.22;
+      }
+
+      /* Kop sekolah: logo dan jarak bawah dipadatkan */
+      .sk-print-compact .sk-kop {
+        padding-bottom: 4px;
+        margin-bottom: 8px;
+      }
+      .sk-print-compact .sk-kop-logo {
+        width: 16mm;
+        height: 16mm;
+      }
+      .sk-print-compact .sk-kop-atas {
+        font-size: 10.5pt;
+      }
+      .sk-print-compact .sk-kop-nama {
+        font-size: 13pt;
+        line-height: 1.15;
+      }
+      .sk-print-compact .sk-kop-alamat {
+        font-size: 9.5pt;
+      }
+
+      /* Judul SK (Surat Keputusan…/Nomor/Tentang/…) */
+      .sk-print-compact .sk-judul {
+        margin-bottom: 6px;
+      }
       .sk-print-compact .sk-judul p {
+        margin: 1px 0;
+      }
+      .sk-print-compact .sk-judul .tentang {
         margin: 2px 0;
-        line-height: 1.3;
       }
+
+      /* "Kepala …," dan "M E M U T U S K A N" */
       .sk-print-compact .sk-tengah {
-        margin: 6px 0;
+        margin: 4px 0;
       }
+
+      /* Tabel Menimbang/Mengingat/Memperhatikan dan Menetapkan/Pertama…Keempat */
       .sk-print-compact table.sk-def {
-        margin-top: 4px;
-        margin-bottom: 4px;
+        margin-top: 3px;
+        margin-bottom: 3px;
       }
       .sk-print-compact table.sk-def > tbody > tr > td {
-        padding-top: 3px;
-        padding-bottom: 3px;
+        padding: 0 0 2px;
         vertical-align: top;
-        line-height: 1.35;
-      }
-      .sk-print-compact .sk-justify {
-        margin: 2px 0;
-        line-height: 1.35;
       }
       .sk-print-compact .sk-item {
-        margin: 1px 0;
-        line-height: 1.35;
+        margin: 0;
       }
-      @media print {
-        .sk-print-compact {
-          font-size: 11.5pt;
-        }
+      .sk-print-compact .sk-justify {
+        margin: 0;
+      }
+
+      /* Tabel Nama/NIP/Pangkat-Golongan di dalam diktum Pertama (TabelData) */
+      .sk-print-compact .sk-data {
+        margin: 2px 0 4px 8mm;
+      }
+      .sk-print-compact .sk-data td {
+        padding: 0;
+      }
+
+      /* Blok tanda tangan — ruang kosong untuk ttd fisik dipangkas secukupnya,
+         masih cukup untuk tanda tangan tapi tidak makan banyak halaman */
+      .sk-print-compact .sk-ttd {
+        margin-top: 8px;
+      }
+      .sk-print-compact .sk-ttd table {
+        margin-bottom: 2px;
+      }
+      .sk-print-compact .sk-ttd .ruang {
+        height: 14mm;
       }
     `}</style>
   )
