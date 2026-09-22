@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Heart, Coins, Landmark, LayoutDashboard, Sparkles, Scale, Handshake, ClipboardList, BookOpen, CalendarCheck, Users, HeartHandshake } from 'lucide-react'
+import { Heart, Coins, Landmark, LayoutDashboard, Sparkles, Scale, Handshake, ClipboardList, BookOpen, CalendarCheck, Users, HeartHandshake, Sprout } from 'lucide-react'
 import Layout from '../components/Layout'
 
 // Palet warna per kartu — pola sama seperti PusatLaporanGuru.jsx, supaya
@@ -170,6 +170,14 @@ const daftarMateri = [
   icon: HeartHandshake,
   path: '/laporan-pembinaan-konsultasi-pendampingan',
   warna: 'indigo', // atau warna lain yang belum dipakai
+},
+  {
+  id: 'laporan-pembinaan-keluarga-generasi-muda',
+  judul: 'Laporan Pembinaan Keluarga Majelis Taklim Generasi Muda',
+  deskripsi: 'Fikih munakahat, keuangan keluarga, parenting islami, komunikasi pasangan & literasi digital — dilengkapi ayat Al-Qur\'an.',
+  icon: Sprout,
+  path: '/laporan-pembinaan-keluarga-generasi-muda',
+  warna: 'emerald', // pilih warna yang belum dipakai kartu lain
 },
 ]
 // Sama seperti BatikOverlay di PusatLaporanGuru.jsx — dipakai di banner
