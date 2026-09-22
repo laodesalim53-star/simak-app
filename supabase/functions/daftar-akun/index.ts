@@ -223,8 +223,9 @@ Deno.serve(async (req) => {
             : 'guru'
 
     // PERBAIKAN: semua pendaftaran (baru maupun gabung) menunggu persetujuan
-    // superadmin. Sebelumnya mode 'baru' langsung 'aktif', sehingga siapa pun
-    // bisa mendaftarkan organisasi baru (mis. kantor palsu) tanpa disaring.
+    // superadmin. Sebelumnya mode 'baru' langsung 'aktif', sehingga pendaftar
+    // organisasi baru (mis. kantor palsu) tidak pernah muncul di halaman
+    // Persetujuan Akun dan langsung bisa login tanpa disaring.
     const statusAkun = 'menunggu'
 
     // ---------- 4. pegawai_kantor (khusus kantor) ----------
@@ -270,12 +271,25 @@ Deno.serve(async (req) => {
       if (error) throw new HttpError(500, 'Gagal menyimpan relasi siswa: ' + error.message)
     }
 
+    // Nama organisasi yang ditampilkan di email notifikasi: untuk mode 'baru'
+    // pakai nama yang baru didaftarkan, untuk mode 'gabung' ambil nama
+    // organisasi tujuan dari tabel sekolah (bukan nama pendaftar).
+    let namaOrganisasiTampil = namaSekolah
+    if (mode === 'gabung' && targetSekolahId) {
+      const { data: org } = await adminClient
+        .from('sekolah')
+        .select('nama_sekolah')
+        .eq('id', targetSekolahId)
+        .maybeSingle()
+      namaOrganisasiTampil = org?.nama_sekolah || '(tidak diketahui)'
+    }
+
     // ---------- 7. Notifikasi email ke superadmin (best-effort) ----------
     await kirimNotifikasiSuperadmin(adminClient, {
       namaLengkap,
       email,
       jenisOrganisasi,
-      namaOrganisasi: mode === 'baru' ? namaSekolah : namaLengkap /* diganti di bawah */,
+      namaOrganisasi: namaOrganisasiTampil,
       mode,
     })
 
