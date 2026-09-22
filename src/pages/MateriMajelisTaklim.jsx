@@ -15,17 +15,23 @@ function formatTanggalIndonesia(date) {
 }
 
 export default function MateriMajelisTaklim() {
-  const { profil } = useAuth()
+  const { profil, sekolahId } = useAuth()
   const [profilKantor, setProfilKantor] = useState(null)
 
+  // Query profil_kantor di-scope per kantor lewat sekolah_id (bukan lagi
+  // id=1 yang hardcode), sama seperti ProfilKantor.jsx dan KopSurat.jsx.
   useEffect(() => {
+    if (!sekolahId) {
+      setProfilKantor(null)
+      return
+    }
     supabase
       .from('profil_kantor')
       .select('nama_kantor, alamat, kabupaten, kecamatan, telepon, email, kepala_kua, nip_kepala_kua, tempat_ttd, logo_path, ttd_kepala_kua_path')
-      .eq('id', 1)
+      .eq('sekolah_id', sekolahId)
       .maybeSingle()
       .then(({ data }) => setProfilKantor(data))
-  }, [])
+  }, [sekolahId])
 
   const ttdKepalaKuaUrl = profilKantor?.ttd_kepala_kua_path
     ? supabase.storage.from(LOGO_BUCKET).getPublicUrl(profilKantor.ttd_kepala_kua_path).data.publicUrl
@@ -171,19 +177,21 @@ export default function MateriMajelisTaklim() {
         </div>
 
         <div className="hadir-cetak">
-          <DaftarHadirCetak jumlahBaris={15} />
+          {/* Jumlah baris kosong dikurangi (dari 15 -> 2) supaya tabel + ttd
+             tidak meluber ke halaman ke-3. Sesuaikan lagi jika perlu. */}
+          <DaftarHadirCetak jumlahBaris={2} />
 
           {/* === TANDA TANGAN OTOMATIS DARI PROFIL KANTOR === */}
-          <div className="ttd-block flex justify-between mt-10 text-sm text-slate-700">
+          <div className="ttd-block flex justify-between mt-6 text-sm text-slate-700">
             <div className="text-center w-48">
               <p>Mengetahui,</p>
               <p>Kepala KUA</p>
-              <div className="h-20 flex items-end justify-center">
+              <div className="h-14 flex items-end justify-center">
                 {ttdKepalaKuaUrl && (
                   <img
                     src={ttdKepalaKuaUrl}
                     alt="Tanda Tangan Kepala KUA"
-                    className="max-h-20 object-contain"
+                    className="max-h-14 object-contain"
                   />
                 )}
               </div>
@@ -197,7 +205,7 @@ export default function MateriMajelisTaklim() {
             <div className="text-center w-48">
               <p>{tempatTtd ? `${tempatTtd}, ${tanggalCetak}` : '\u00A0'}</p>
               <p>Penyuluh Agama Islam</p>
-              <div className="h-20" />
+              <div className="h-14" />
               <p className="font-semibold border-t border-slate-400 pt-1">
                 ({profil?.nama_lengkap || '..............................'})
               </p>
@@ -240,6 +248,13 @@ export default function MateriMajelisTaklim() {
           }
           .hadir-cetak table {
             page-break-inside: auto;
+            font-size: 10px;
+            border-collapse: collapse;
+          }
+          .hadir-cetak th,
+          .hadir-cetak td {
+            padding: 2px 4px !important;
+            line-height: 1.25 !important;
           }
           .hadir-cetak tr {
             page-break-inside: avoid;
@@ -248,11 +263,12 @@ export default function MateriMajelisTaklim() {
           .ttd-block {
             page-break-inside: avoid;
             break-inside: avoid;
+            margin-top: 16px !important;
           }
         }
         @page {
           size: A4;
-          margin: 15mm;
+          margin: 10mm;
         }
       `}</style>
     </Layout>
