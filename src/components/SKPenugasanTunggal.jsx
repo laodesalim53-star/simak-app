@@ -39,6 +39,12 @@ import {
 // honor, dipakai SK Honor Guru/Tenaga Kebersihan/Operator Dapodik) supaya SK
 // itu semua tidak ikut berubah.
 //
+// Catatan spasi cetak: lembar ini punya CSS pemadatan khusus (lihat blok
+// <style> di bawah, di-scope lewat class "sk-print-compact" yang HANYA
+// membungkus <LembarSK>) supaya isi + blok tanda tangan (BlokTTD) muat di
+// satu halaman A4. Ini sengaja tidak diletakkan di CetakSK.jsx supaya SK lain
+// yang memakai komponen sama tidak ikut berubah spasinya.
+//
 // Bentuk `konfig`:
 //   {
 //     judulBar,            // judul di BarAtasCetak
@@ -87,6 +93,48 @@ function DaftarAngka({ items }) {
       <span className="isi">{teks}</span>
     </div>
   ))
+}
+
+// CSS pemadatan khusus lembar cetak SK satu-orang. Di-scope lewat
+// ".sk-print-compact" (dibungkus hanya di sekitar <LembarSK>) supaya panel
+// isian (no-print) dan komponen SK lain yang memakai CetakSK.jsx tidak
+// ikut berubah. Tujuannya: kurangi jarak antar-paragraf/baris secukupnya
+// agar BlokTTD tidak terdorong ke halaman 2.
+function GayaPadatSatuHalaman() {
+  return (
+    <style>{`
+      .sk-print-compact .sk-judul p {
+        margin: 2px 0;
+        line-height: 1.3;
+      }
+      .sk-print-compact .sk-tengah {
+        margin: 6px 0;
+      }
+      .sk-print-compact table.sk-def {
+        margin-top: 4px;
+        margin-bottom: 4px;
+      }
+      .sk-print-compact table.sk-def > tbody > tr > td {
+        padding-top: 3px;
+        padding-bottom: 3px;
+        vertical-align: top;
+        line-height: 1.35;
+      }
+      .sk-print-compact .sk-justify {
+        margin: 2px 0;
+        line-height: 1.35;
+      }
+      .sk-print-compact .sk-item {
+        margin: 1px 0;
+        line-height: 1.35;
+      }
+      @media print {
+        .sk-print-compact {
+          font-size: 11.5pt;
+        }
+      }
+    `}</style>
+  )
 }
 
 export default function SKPenugasanTunggal({ konfig }) {
@@ -182,6 +230,7 @@ export default function SKPenugasanTunggal({ konfig }) {
   return (
     <div className="min-h-screen bg-slate-100">
       <GayaCetakSK />
+      <GayaPadatSatuHalaman />
       <BarAtasCetak onKembali={() => navigate('/gudang-sk')} judul={konfig.judulBar} />
 
       {/* ── Panel isian (tidak ikut tercetak) ── */}
@@ -292,86 +341,88 @@ export default function SKPenugasanTunggal({ konfig }) {
 
       {/* ── Lembar cetak ── */}
       <AreaLembar>
-        <LembarSK>
-          <KopSK sekolah={sekolah} />
+        <div className="sk-print-compact">
+          <LembarSK>
+            <KopSK sekolah={sekolah} />
 
-          <div className="sk-judul">
-            <p style={{ textDecoration: 'underline' }}>Surat Keputusan Kepala {namaSekolah}</p>
-            <p>Nomor: {isi(sk.nomor)}</p>
-            <p className="tentang">Tentang</p>
-            {tentangBaris.map((baris, i) => (
-              <p key={i}>{baris}</p>
-            ))}
-          </div>
-
-          <p className="sk-tengah" style={{ marginTop: 4 }}>
-            Kepala {namaSekolah},
-          </p>
-
-          <table className="sk-def">
-            <tbody>
-              <tr>
-                <td className="k">Menimbang</td>
-                <td className="t">:</td>
-                <td>
-                  <DaftarPolos items={daftarMenimbang} />
-                </td>
-              </tr>
-              <tr>
-                <td className="k">Mengingat</td>
-                <td className="t">:</td>
-                <td>
-                  <DaftarAngka items={daftarMengingat} />
-                </td>
-              </tr>
-              {teksMemperhatikan && (
-                <tr>
-                  <td className="k">Memperhatikan</td>
-                  <td className="t">:</td>
-                  <td className="sk-justify">{teksMemperhatikan}</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-
-          <p className="sk-tengah">M E M U T U S K A N</p>
-
-          <table className="sk-def">
-            <tbody>
-              <tr>
-                <td className="k">Menetapkan</td>
-                <td className="t">:</td>
-                <td></td>
-              </tr>
-              <tr>
-                <td className="k">Pertama</td>
-                <td className="t">:</td>
-                <td className="sk-justify">
-                  <p style={{ margin: 0 }}>Mengangkat Saudara :</p>
-                  <TabelData
-                    baris={[
-                      ['Nama', namaOrang],
-                      ['NIP', nipOrang],
-                      ['Pangkat/Golongan', pangkatGolOrang],
-                    ]}
-                  />
-                  <p style={{ margin: 0 }}>
-                    Untuk menjadi {isi(jabatanTugas)} pada {namaSekolah}.
-                  </p>
-                </td>
-              </tr>
-              {daftarDiktumLain.map((teks, i) => (
-                <tr key={i}>
-                  <td className="k">{URUTAN_DIKTUM[i + 1]}</td>
-                  <td className="t">:</td>
-                  <td className="sk-justify">{teks}</td>
-                </tr>
+            <div className="sk-judul">
+              <p style={{ textDecoration: 'underline' }}>Surat Keputusan Kepala {namaSekolah}</p>
+              <p>Nomor: {isi(sk.nomor)}</p>
+              <p className="tentang">Tentang</p>
+              {tentangBaris.map((baris, i) => (
+                <p key={i}>{baris}</p>
               ))}
-            </tbody>
-          </table>
+            </div>
 
-          <BlokTTD sk={skCetak} sekolah={sekolah} />
-        </LembarSK>
+            <p className="sk-tengah" style={{ marginTop: 4 }}>
+              Kepala {namaSekolah},
+            </p>
+
+            <table className="sk-def">
+              <tbody>
+                <tr>
+                  <td className="k">Menimbang</td>
+                  <td className="t">:</td>
+                  <td>
+                    <DaftarPolos items={daftarMenimbang} />
+                  </td>
+                </tr>
+                <tr>
+                  <td className="k">Mengingat</td>
+                  <td className="t">:</td>
+                  <td>
+                    <DaftarAngka items={daftarMengingat} />
+                  </td>
+                </tr>
+                {teksMemperhatikan && (
+                  <tr>
+                    <td className="k">Memperhatikan</td>
+                    <td className="t">:</td>
+                    <td className="sk-justify">{teksMemperhatikan}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+
+            <p className="sk-tengah">M E M U T U S K A N</p>
+
+            <table className="sk-def">
+              <tbody>
+                <tr>
+                  <td className="k">Menetapkan</td>
+                  <td className="t">:</td>
+                  <td></td>
+                </tr>
+                <tr>
+                  <td className="k">Pertama</td>
+                  <td className="t">:</td>
+                  <td className="sk-justify">
+                    <p style={{ margin: 0 }}>Mengangkat Saudara :</p>
+                    <TabelData
+                      baris={[
+                        ['Nama', namaOrang],
+                        ['NIP', nipOrang],
+                        ['Pangkat/Golongan', pangkatGolOrang],
+                      ]}
+                    />
+                    <p style={{ margin: 0 }}>
+                      Untuk menjadi {isi(jabatanTugas)} pada {namaSekolah}.
+                    </p>
+                  </td>
+                </tr>
+                {daftarDiktumLain.map((teks, i) => (
+                  <tr key={i}>
+                    <td className="k">{URUTAN_DIKTUM[i + 1]}</td>
+                    <td className="t">:</td>
+                    <td className="sk-justify">{teks}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <BlokTTD sk={skCetak} sekolah={sekolah} />
+          </LembarSK>
+        </div>
       </AreaLembar>
     </div>
   )
