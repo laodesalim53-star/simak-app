@@ -34,10 +34,16 @@ const KATEGORI_STYLE = {
 // sebagai aksen, supaya satu keluarga desain. rose/emerald tetap dipakai
 // khusus untuk kartu status (ada yang menunggu / tidak ada yang menunggu)
 // karena maknanya memang semantik (peringatan vs aman), bukan dekoratif.
+//
+// FIX: 'sage' sebelumnya pakai `from-sage-600 to-sage-700` — shade itu
+// kemungkinan tidak terdaftar di tailwind.config (hanya sage-500 yang
+// dipakai di tempat lain), sehingga Tailwind tidak menghasilkan class-nya
+// dan kartu tampil putih polos. Diganti ke nilai hex langsung (arbitrary
+// value) supaya selalu render terlepas dari isi tailwind.config.
 const CARD_THEME = {
   navy: { gradient: 'from-blue-900 to-indigo-950' },
   indigo: { gradient: 'from-blue-800 to-indigo-900' },
-  sage: { gradient: 'from-sage-600 to-sage-700' },
+  sage: { gradient: 'from-[#6B9C8D] to-[#4C7A6E]' },
   gold: { gradient: 'from-amber-600 to-amber-700' },
   slate: { gradient: 'from-slate-700 to-slate-800' },
   rose: { gradient: 'from-rose-500 to-rose-600' },
@@ -92,6 +98,28 @@ function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 
   )
 }
 
+// BARU: hitung angka dari 0 naik ke nilai aslinya dengan easing halus.
+// Cuma aktif untuk value bertipe number (mis. 72), value string seperti
+// "41/72" ditampilkan apa adanya tanpa animasi.
+function useCountUp(target, duration = 800) {
+  const [value, setValue] = useState(0)
+  useEffect(() => {
+    if (typeof target !== 'number') return
+    let raf
+    let start = null
+    function step(ts) {
+      if (start === null) start = ts
+      const progress = Math.min((ts - start) / duration, 1)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      setValue(Math.round(target * eased))
+      if (progress < 1) raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [target, duration])
+  return value
+}
+
 function formatRelativeDate(iso) {
   const date = new Date(iso)
   const today = new Date()
@@ -140,6 +168,50 @@ function aggregateNilai(rows) {
     .map(([mapel, v]) => ({ mapel, rata: Math.round((v.total / v.count) * 10) / 10 }))
     .sort((a, b) => b.rata - a.rata)
     .slice(0, 8)
+}
+
+// BARU: kartu statistik diekstrak jadi komponen sendiri supaya bisa
+// pakai hook (useCountUp) per-kartu tanpa melanggar Rules of Hooks di
+// dalam .map(), sekaligus menambahkan:
+//  - skeleton shimmer saat loading (ganti tanda "—")
+//  - shine sweep halus saat hover
+//  - cincin ping pada ikon untuk kartu "urgent" (theme rose)
+function StatCard({ label, value, icon: Icon, theme, sublabel, loading, delay, patternId }) {
+  const t = CARD_THEME[theme]
+  const isNumeric = typeof value === 'number'
+  const animated = useCountUp(isNumeric ? value : 0)
+  const display = isNumeric ? animated : value
+  const urgent = theme === 'rose'
+
+  return (
+    <div
+      className={`dash-fade-in opacity-0 group relative overflow-hidden rounded-2xl p-5 text-white shadow-md bg-gradient-to-br ${t.gradient} transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl`}
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      <BatikOverlay patternId={patternId} strokeColor="#ffffff" opacity={0.5} size={56} />
+
+      {/* shine sweep saat hover */}
+      <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />
+
+      <div className="relative flex items-start justify-between mb-4">
+        <p className="text-sm font-medium text-white/90">{label}</p>
+        <div className="relative w-9 h-9 rounded-full bg-white/20 flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6">
+          {urgent && <span className="absolute inset-0 rounded-full bg-white/40 animate-ping" />}
+          <Icon size={18} className="relative" />
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="h-8 w-16 rounded-md bg-white/20 animate-pulse" />
+      ) : (
+        <p className="relative text-3xl font-display font-bold tabular-nums">{display}</p>
+      )}
+
+      {sublabel && !loading && (
+        <p className="relative text-xs text-white/80 mt-1.5">{sublabel}</p>
+      )}
+    </div>
+  )
 }
 
 /* ================================================================
@@ -297,34 +369,23 @@ function DashboardSekolah({ sekolahId }) {
         <StoryUploader onPosted={() => setStoryRefreshKey((k) => k + 1)} />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
-          {cards.map(({ label, value, icon: Icon, theme, sublabel }, i) => {
-            const t = CARD_THEME[theme]
-            return (
-              <div
-                key={label}
-                className={`dash-fade-in opacity-0 relative overflow-hidden rounded-2xl p-5 text-white shadow-md bg-gradient-to-br ${t.gradient} transition-transform duration-300 ease-out hover:-translate-y-1`}
-                style={{ animationDelay: `${i * 90}ms` }}
-              >
-                <BatikOverlay patternId={`batikCard-${theme}-${i}`} strokeColor="#ffffff" opacity={0.5} size={56} />
-                <div className="relative flex items-start justify-between mb-4">
-                  <p className="text-sm font-medium text-white/90">{label}</p>
-                  <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center shrink-0">
-                    <Icon size={18} />
-                  </div>
-                </div>
-                <p className="relative text-3xl font-display font-bold">
-                  {loading ? '—' : value}
-                </p>
-                {sublabel && !loading && (
-                  <p className="relative text-xs text-white/80 mt-1.5">{sublabel}</p>
-                )}
-              </div>
-            )
-          })}
+          {cards.map(({ label, value, icon, theme, sublabel }, i) => (
+            <StatCard
+              key={label}
+              label={label}
+              value={value}
+              icon={icon}
+              theme={theme}
+              sublabel={sublabel}
+              loading={loading}
+              delay={i * 90}
+              patternId={`batikCard-${theme}-${i}`}
+            />
+          ))}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
-          <div className="card p-6 lg:col-span-2">
+          <div className="dash-fade-in opacity-0 card p-6 lg:col-span-2" style={{ animationDelay: '540ms' }}>
             <h3 className="font-display text-lg font-semibold mb-4">Komposisi Siswa</h3>
             {stats.siswa === 0 ? (
               <p className="text-sm text-ink-700/50">Belum ada data siswa.</p>
@@ -349,7 +410,7 @@ function DashboardSekolah({ sekolahId }) {
             )}
           </div>
 
-          <div className="card p-6 lg:col-span-3">
+          <div className="dash-fade-in opacity-0 card p-6 lg:col-span-3" style={{ animationDelay: '600ms' }}>
             <h3 className="font-display text-lg font-semibold mb-4">Pengumuman Terbaru</h3>
             {pengumuman.length === 0 ? (
               <p className="text-sm text-ink-700/50">Belum ada pengumuman.</p>
@@ -377,7 +438,7 @@ function DashboardSekolah({ sekolahId }) {
 
         <h2 className="font-display text-xl font-semibold text-ink-950 mt-8 mb-4">Analitik</h2>
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
-          <div className="card p-6 lg:col-span-3">
+          <div className="dash-fade-in opacity-0 card p-6 lg:col-span-3" style={{ animationDelay: '660ms' }}>
             <h3 className="font-display text-lg font-semibold mb-4">Tren Kehadiran Siswa (14 Hari Terakhir)</h3>
             {attendanceTrend.length === 0 ? (
               <p className="text-sm text-ink-700/50">Belum ada data presensi.</p>
@@ -394,7 +455,7 @@ function DashboardSekolah({ sekolahId }) {
             )}
           </div>
 
-          <div className="card p-6 lg:col-span-2">
+          <div className="dash-fade-in opacity-0 card p-6 lg:col-span-2" style={{ animationDelay: '720ms' }}>
             <h3 className="font-display text-lg font-semibold mb-4">Status RPP</h3>
             {rppStatus.menunggu + rppStatus.disetujui + rppStatus.ditolak === 0 ? (
               <p className="text-sm text-ink-700/50">Belum ada RPP diupload.</p>
@@ -411,7 +472,7 @@ function DashboardSekolah({ sekolahId }) {
                       </div>
                       <div className="h-2 rounded-full bg-ink-900/[0.06] overflow-hidden">
                         <div
-                          className="h-full rounded-full"
+                          className="h-full rounded-full transition-all duration-700 ease-out"
                           style={{ width: `${pct}%`, backgroundColor: RPP_STATUS_COLOR[key] }}
                         />
                       </div>
@@ -422,7 +483,7 @@ function DashboardSekolah({ sekolahId }) {
             )}
           </div>
 
-          <div className="card p-6 lg:col-span-5">
+          <div className="dash-fade-in opacity-0 card p-6 lg:col-span-5" style={{ animationDelay: '780ms' }}>
             <h3 className="font-display text-lg font-semibold mb-4">Rata-rata Nilai per Mata Pelajaran</h3>
             {nilaiPerMapel.length === 0 ? (
               <p className="text-sm text-ink-700/50">Belum ada data nilai.</p>
@@ -579,35 +640,24 @@ function DashboardKantor({ sekolahId }) {
         <StoryUploader onPosted={() => setStoryRefreshKey((k) => k + 1)} />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {cards.map(({ label, value, icon: Icon, theme, sublabel }, i) => {
-            const t = CARD_THEME[theme]
-            return (
-              <div
-                key={label}
-                className={`dash-fade-in opacity-0 relative overflow-hidden rounded-2xl p-5 text-white shadow-md bg-gradient-to-br ${t.gradient} transition-transform duration-300 ease-out hover:-translate-y-1`}
-                style={{ animationDelay: `${i * 90}ms` }}
-              >
-                <BatikOverlay patternId={`batikCardKantor-${theme}-${i}`} strokeColor="#ffffff" opacity={0.5} size={56} />
-                <div className="relative flex items-start justify-between mb-4">
-                  <p className="text-sm font-medium text-white/90">{label}</p>
-                  <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center shrink-0">
-                    <Icon size={18} />
-                  </div>
-                </div>
-                <p className="relative text-3xl font-display font-bold">
-                  {loading ? '—' : value}
-                </p>
-                {sublabel && !loading && (
-                  <p className="relative text-xs text-white/80 mt-1.5">{sublabel}</p>
-                )}
-              </div>
-            )
-          })}
+          {cards.map(({ label, value, icon, theme, sublabel }, i) => (
+            <StatCard
+              key={label}
+              label={label}
+              value={value}
+              icon={icon}
+              theme={theme}
+              sublabel={sublabel}
+              loading={loading}
+              delay={i * 90}
+              patternId={`batikCardKantor-${theme}-${i}`}
+            />
+          ))}
         </div>
 
         <PintasanKUA />
 
-        <div className="card p-6 mb-8">
+        <div className="dash-fade-in opacity-0 card p-6 mb-8" style={{ animationDelay: '450ms' }}>
           <h3 className="font-display text-lg font-semibold mb-4">Pengumuman Terbaru</h3>
           {pengumuman.length === 0 ? (
             <p className="text-sm text-ink-700/50">Belum ada pengumuman.</p>
@@ -633,7 +683,7 @@ function DashboardKantor({ sekolahId }) {
         </div>
 
         <h2 className="font-display text-xl font-semibold text-ink-950 mt-8 mb-4">Analitik</h2>
-        <div className="card p-6">
+        <div className="dash-fade-in opacity-0 card p-6" style={{ animationDelay: '520ms' }}>
           <h3 className="font-display text-lg font-semibold mb-4">Tren Kehadiran Pegawai (14 Hari Terakhir)</h3>
           {attendanceTrend.length === 0 ? (
             <p className="text-sm text-ink-700/50">Belum ada data presensi.</p>
