@@ -5,18 +5,22 @@
 //   siswa yang sudah punya No. Peserta Ujian, filter ruang.
 // - FOTO SISWA: kolom `foto_path` di tabel siswa + bucket Storage "foto-siswa"
 //   (public), sama persis dengan fitur "Foto" di Siswa.jsx.
+// - PENGATURAN RUANG: tombol "Pengaturan Ruang" membuka modal untuk mengisi
+//   kolom `ruang_ujian` per siswa (manual, bagi otomatis per kapasitas, atau
+//   samakan semua), lalu disimpan ke tabel siswa.
 //
 // CATATAN SKEMA:
 // - "No. Induk" di kartu diambil dari kolom `nisn` di tabel siswa.
 // - Ruang ujian diambil dari kolom `ruang_ujian` di tabel siswa. Kalau kolom
-//   ini belum ada:
-//     alter table siswa add column ruang_ujian text;
+//   ini belum ada, jalankan di Supabase SQL Editor:
+//     alter table siswa add column if not exists ruang_ujian text;
 //   Selama kolom ini kosong, kartu menampilkan "-" pada Ruang Ujian dan siswa
 //   itu tidak muncul di filter dropdown ruang.
+// - Menyimpan ruang butuh policy UPDATE pada tabel siswa untuk admin (biasanya
+//   sudah ada karena halaman Data Siswa juga mengedit data).
 //
-// UKURAN KARTU: 8 cm x 10,7 cm (sebelumnya sekitar 9 cm x 11,7 cm), ditetapkan
-// lewat style={{ width, height }} di KartuUjian supaya semua kartu sama besar
-// dan ukuran cetaknya pasti. Kalau mau diubah lagi, ganti dua angka itu saja.
+// UKURAN KARTU: 8 cm x 10,7 cm, ditetapkan lewat style={{ width, height }} di
+// KartuUjian supaya semua kartu sama besar dan ukuran cetaknya pasti.
 // Nama siswa dan nama sekolah dibatasi maksimal 2 baris supaya isi kartu
 // tidak melebihi tinggi tetap tersebut.
 
@@ -24,7 +28,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
-import { GraduationCap, Loader2, Printer, User } from 'lucide-react'
+import { GraduationCap, Loader2, Printer, User, Settings, X, Save } from 'lucide-react'
 
 // Kelas 6 bisa ditulis dengan angka ("6A", "Kelas 6") atau angka Romawi
 // ("VIA", "Kelas VI"), jadi kecocokan dicek dari kedua kemungkinan itu.
@@ -204,6 +208,198 @@ function Baris({ label, nilai }) {
   )
 }
 
+// Modal untuk mengisi ruang ujian setiap peserta.
+function ModalPengaturanRuang({ siswaList, onClose, onSimpan }) {
+  // Urutkan berdasarkan No. Peserta supaya pembagian ruang berurutan.
+  const urut = useMemo(
+    () =>
+      [...siswaList].sort((a, b) =>
+        String(a.noPeserta).localeCompare(String(b.noPeserta), undefined, { numeric: true })
+      ),
+    [siswaList]
+  )
+
+  const [nilai, setNilai] = useState(() =>
+    Object.fromEntries(siswaList.map((s) => [s.id, s.ruangUjian || '']))
+  )
+  const [kapasitas, setKapasitas] = useState(20)
+  const [semuaRuang, setSemuaRuang] = useState('')
+  const [menyimpan, setMenyimpan] = useState(false)
+  const [pesanError, setPesanError] = useState('')
+
+  function isiOtomatis() {
+    const k = Math.max(1, parseInt(kapasitas, 10) || 1)
+    const baru = {}
+    urut.forEach((s, i) => {
+      baru[s.id] = String(Math.floor(i / k) + 1)
+    })
+    setNilai(baru)
+  }
+
+  function isiSemua() {
+    const v = semuaRuang.trim()
+    setNilai(Object.fromEntries(urut.map((s) => [s.id, v])))
+  }
+
+  function kosongkanSemua() {
+    setNilai(Object.fromEntries(urut.map((s) => [s.id, ''])))
+  }
+
+  async function simpan() {
+    setPesanError('')
+    const berubah = urut.filter((s) => (nilai[s.id] || '').trim() !== (s.ruangUjian || ''))
+    if (berubah.length === 0) {
+      onClose()
+      return
+    }
+
+    setMenyimpan(true)
+    const hasil = await Promise.all(
+      berubah.map((s) =>
+        supabase
+          .from('siswa')
+          .update({ ruang_ujian: (nilai[s.id] || '').trim() || null })
+          .eq('id', s.id)
+      )
+    )
+    setMenyimpan(false)
+
+    const gagal = hasil.filter((h) => h.error)
+    if (gagal.length > 0) {
+      console.error('Gagal menyimpan ruang ujian:', gagal[0].error)
+      setPesanError(
+        `${gagal.length} data gagal disimpan: ${gagal[0].error.message}. Pastikan kolom ruang_ujian sudah ada di tabel siswa.`
+      )
+      return
+    }
+
+    onClose()
+    onSimpan()
+  }
+
+  return (
+    <div className="print:hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-xl">
+        <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4">
+          <div>
+            <h2 className="font-display text-lg font-bold text-slate-900">Pengaturan Ruang Ujian</h2>
+            <p className="text-xs text-slate-500">
+              Isi ruang untuk setiap peserta. Contoh: 1, 2, 3 atau A, B.
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-1 text-slate-500 hover:bg-slate-100">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Alat bantu pengisian cepat */}
+        <div className="flex flex-wrap items-end gap-x-6 gap-y-3 border-b border-slate-200 bg-slate-50 px-5 py-3">
+          <div className="flex items-end gap-2">
+            <label className="text-xs text-slate-600">
+              Siswa per ruang
+              <input
+                type="number"
+                min="1"
+                value={kapasitas}
+                onChange={(e) => setKapasitas(e.target.value)}
+                className="mt-1 block w-24 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={isiOtomatis}
+              className="rounded-lg bg-teal-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-800"
+            >
+              Bagi otomatis
+            </button>
+          </div>
+
+          <div className="flex items-end gap-2">
+            <label className="text-xs text-slate-600">
+              Samakan semua
+              <input
+                type="text"
+                value={semuaRuang}
+                onChange={(e) => setSemuaRuang(e.target.value)}
+                placeholder="mis. 1"
+                className="mt-1 block w-24 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={isiSemua}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
+            >
+              Terapkan
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={kosongkanSemua}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
+          >
+            Kosongkan
+          </button>
+        </div>
+
+        {/* Daftar siswa */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-slate-500">
+                <th className="w-8 py-1.5">No</th>
+                <th className="py-1.5">Nama</th>
+                <th className="py-1.5">No. Peserta</th>
+                <th className="w-24 py-1.5">Ruang</th>
+              </tr>
+            </thead>
+            <tbody>
+              {urut.map((s, i) => (
+                <tr key={s.id} className="border-t border-slate-100">
+                  <td className="py-1.5 text-slate-500">{i + 1}</td>
+                  <td className="py-1.5 font-medium text-slate-900">{s.nama}</td>
+                  <td className="py-1.5 text-slate-600">{s.noPeserta}</td>
+                  <td className="py-1.5">
+                    <input
+                      type="text"
+                      value={nilai[s.id] ?? ''}
+                      onChange={(e) => setNilai((prev) => ({ ...prev, [s.id]: e.target.value }))}
+                      className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="border-t border-slate-200 px-5 py-3">
+          {pesanError && <p className="mb-2 text-xs text-red-600">{pesanError}</p>}
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+            >
+              Batal
+            </button>
+            <button
+              type="button"
+              onClick={simpan}
+              disabled={menyimpan}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-900 px-4 py-2 text-sm font-medium text-white hover:bg-blue-950 disabled:opacity-60"
+            >
+              {menyimpan ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              Simpan
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function KartuPesertaUjian() {
   const { profil, isAdmin } = useAuth()
   const sekolahId = profil?.sekolah_id
@@ -213,6 +409,7 @@ export default function KartuPesertaUjian() {
   const [jumlahKelas6, setJumlahKelas6] = useState(0)
   const [ruangFilter, setRuangFilter] = useState('semua')
   const [identitasSekolah, setIdentitasSekolah] = useState(IDENTITAS_SEKOLAH_DEFAULT)
+  const [modalRuang, setModalRuang] = useState(false)
 
   useEffect(() => {
     if (isAdmin) {
@@ -309,6 +506,13 @@ export default function KartuPesertaUjian() {
     [siswaList, ruangFilter]
   )
 
+  // Kalau ruang yang sedang difilter hilang setelah pengaturan ulang, kembalikan ke "semua".
+  useEffect(() => {
+    if (ruangFilter !== 'semua' && !daftarRuang.includes(ruangFilter)) {
+      setRuangFilter('semua')
+    }
+  }, [daftarRuang, ruangFilter])
+
   const jumlahBelumTerdaftar = jumlahKelas6 - siswaList.length
 
   if (!isAdmin) {
@@ -372,13 +576,23 @@ export default function KartuPesertaUjian() {
           </select>
         </div>
 
-        <button
-          type="button"
-          onClick={() => window.print()}
-          className="inline-flex items-center gap-2 rounded-lg bg-blue-900 px-4 py-2 text-sm font-medium text-white hover:bg-blue-950"
-        >
-          <Printer size={16} /> Cetak Kartu
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setModalRuang(true)}
+            disabled={siswaList.length === 0}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            <Settings size={16} /> Pengaturan Ruang
+          </button>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-900 px-4 py-2 text-sm font-medium text-white hover:bg-blue-950"
+          >
+            <Printer size={16} /> Cetak Kartu
+          </button>
+        </div>
       </div>
 
       {jumlahBelumTerdaftar > 0 && (
@@ -395,6 +609,9 @@ export default function KartuPesertaUjian() {
       <p className="print:hidden mb-1 text-xs text-slate-500">
         Foto siswa diambil dari fitur Foto di halaman Data Siswa. Siswa yang belum punya foto tampil dengan ikon
         placeholder.
+      </p>
+      <p className="print:hidden mb-1 text-xs text-slate-500">
+        Ruang ujian diisi lewat tombol Pengaturan Ruang (manual, bagi otomatis per kapasitas, atau samakan semua).
       </p>
       <p className="print:hidden mb-4 text-xs text-slate-500">
         Agar warna kartu ikut tercetak: buka dialog Print → "More settings" / "Lainnya" → centang
@@ -416,6 +633,14 @@ export default function KartuPesertaUjian() {
             <KartuUjian key={siswa.id} siswa={siswa} sekolah={identitasSekolah} />
           ))}
         </div>
+      )}
+
+      {modalRuang && (
+        <ModalPengaturanRuang
+          siswaList={siswaList}
+          onClose={() => setModalRuang(false)}
+          onSimpan={muatData}
+        />
       )}
     </Layout>
   )
