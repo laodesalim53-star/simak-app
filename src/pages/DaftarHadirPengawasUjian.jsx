@@ -18,7 +18,7 @@ import {
   isoHariIni,
   tahunPelajaranSekarang,
   urutkanGuru,
-} from './CetakSK'
+} from '../components/CetakSK'
 
 function isKelasEnam(k) {
   const t = String(k?.tingkat ?? '').trim().toUpperCase()
