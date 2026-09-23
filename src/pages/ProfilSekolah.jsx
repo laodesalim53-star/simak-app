@@ -57,6 +57,10 @@ function getTeks(isKantor) {
     hintLogo: isKantor
       ? 'Format PNG/JPG, dipakai di kop surat & dokumen resmi.'
       : 'Format PNG/JPG, dipakai di kop rapor & dokumen resmi.',
+    labelLogoKabupaten: 'Logo Kabupaten',
+    hintLogoKabupaten: isKantor
+      ? 'Format PNG/JPG, dipakai di kop surat di samping logo kantor.'
+      : 'Format PNG/JPG, dipakai di kop surat/rapor di samping logo sekolah.',
     judulTtd: isKantor ? 'Tanda Tangan Elektronik Kepala Kantor' : 'Tanda Tangan Elektronik Kepala Sekolah',
     altTtd: isKantor ? 'Tanda tangan kepala kantor' : 'Tanda tangan kepala sekolah',
     hintTtd: isKantor
@@ -200,7 +204,9 @@ export default function ProfilSekolah() {
     setForm((f) => ({ ...f, logo_path: path }))
     setUploadingLogo(false)
   }
-    // ↓↓↓ SISIPKAN FUNGSI BARU INI DI SINI ↓↓↓
+
+  // Upload logo kabupaten — dipakai di kop surat/rapor di samping logo
+  // sekolah/kantor.
   async function handleLogoKabupatenChange(e) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -223,6 +229,26 @@ export default function ProfilSekolah() {
     setLogoKabupatenUrl(pub.publicUrl)
     setForm((f) => ({ ...f, logo_kabupaten_path: path }))
     setUploadingLogoKabupaten(false)
+  }
+
+  // Hapus logo kabupaten — menghapus file dari storage (kalau ada) lalu
+  // mengosongkan state & field form terkait.
+  async function handleLogoKabupatenDelete() {
+    if (!confirm('Hapus logo kabupaten?')) return
+
+    if (form.logo_kabupaten_path) {
+      const { error } = await supabase.storage
+        .from('profil-sekolah')
+        .remove([form.logo_kabupaten_path])
+
+      if (error) {
+        alert('Gagal menghapus logo kabupaten: ' + error.message)
+        return
+      }
+    }
+
+    setLogoKabupatenUrl('')
+    setForm((f) => ({ ...f, logo_kabupaten_path: '' }))
   }
 
   // Upload gambar tanda tangan elektronik kepala sekolah/kantor — dipakai
@@ -315,6 +341,48 @@ export default function ProfilSekolah() {
                 <input type="file" accept="image/*" className="hidden" onChange={handleLogoChange} disabled={uploadingLogo} />
               </label>
               <p className="text-xs text-ink-700/50 mt-1.5">{teks.hintLogo}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* LOGO KABUPATEN: kartu upload logo kabupaten (dipakai di kop surat).
+            Path tersimpan di kolom profil_sekolah.logo_kabupaten_path. */}
+        <div className="card p-6">
+          <h3 className="font-display font-semibold text-ink-950 mb-4">{teks.labelLogoKabupaten}</h3>
+          <div className="flex items-center gap-4">
+            <div className="w-20 h-20 rounded-lg border border-ink-900/[0.1] flex items-center justify-center overflow-hidden bg-ink-900/[0.02] shrink-0">
+              {logoKabupatenUrl ? (
+                <img src={logoKabupatenUrl} alt={teks.labelLogoKabupaten} className="w-full h-full object-contain" />
+              ) : (
+                <ImagePlus size={24} className="text-ink-700/30" />
+              )}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <label className="btn-secondary cursor-pointer inline-flex">
+                  {uploadingLogoKabupaten ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />}
+                  {uploadingLogoKabupaten ? 'Mengunggah...' : 'Upload Logo Kabupaten'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleLogoKabupatenChange}
+                    disabled={uploadingLogoKabupaten}
+                  />
+                </label>
+
+                {logoKabupatenUrl && (
+                  <button
+                    type="button"
+                    onClick={handleLogoKabupatenDelete}
+                    className="btn-secondary inline-flex items-center gap-1.5 text-red-600"
+                  >
+                    <Trash2 size={16} />
+                    Hapus
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-ink-700/50 mt-1.5">{teks.hintLogoKabupaten}</p>
             </div>
           </div>
         </div>
