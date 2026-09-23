@@ -13,7 +13,6 @@ import {
   SEKOLAH_KOSONG,
   ambilGuruDanKelas,
   ambilProfilSekolah,
-  formatTanggalSK,
   inputSK as inputCls,
   isi,
   isoHariIni,
@@ -26,8 +25,19 @@ function isKelasEnam(k) {
   return t === '6' || t === 'VI'
 }
 
+// Format lengkap dengan nama hari: "Rabu, 23 September 2026".
+function formatHariTanggal(iso) {
+  if (!iso) return '…………'
+  return new Date(`${iso}T00:00:00`).toLocaleDateString('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+}
+
 const idBaru = () => Math.random().toString(36).slice(2, 9)
-const barisBaru = () => ({ id: idBaru(), guruId: '', kelasId: '', jamJaga: '08.00 – 10.00' })
+const barisBaru = (kelasId = '') => ({ id: idBaru(), guruId: '', kelasId, jamJaga: '08.00 – 10.00' })
 
 export default function DaftarHadirPengawasUjian() {
   const { sekolahId } = useAuth()
@@ -80,20 +90,45 @@ export default function DaftarHadirPengawasUjian() {
   }, [guru])
 
   const ubahBaris = (id, k, v) => setBaris((d) => d.map((b) => (b.id === id ? { ...b, [k]: v } : b)))
-  const tambahBaris = () => setBaris((d) => [...d, barisBaru()])
+
+  // Baris baru langsung memakai ruang pertama, sama seperti yang tampil di dropdown.
+  const tambahBaris = () => setBaris((d) => [...d, barisBaru(kelasEnam[0]?.id || '')])
   const hapusBaris = (id) => setBaris((d) => d.filter((b) => b.id !== id))
+
+  // Ganti ruang: kalau guru yang sudah dipilih ternyata wali kelas ruang baru, kosongkan.
+  const ubahRuang = (id, kelasId) =>
+    setBaris((d) =>
+      d.map((b) => {
+        if (b.id !== id) return b
+        const wali = kelasPerId[kelasId]?.wali_kelas_id
+        return { ...b, kelasId, guruId: wali && b.guruId === wali ? '' : b.guruId }
+      })
+    )
 
   const namaSekolah = isi(sekolah.nama, 'NAMA SEKOLAH')
   const tapel = tahunPelajaranSekarang()
-  const hariTanggal = formatTanggalSK(tanggal)
+  const hariTanggal = formatHariTanggal(tanggal)
 
   return (
     <Layout title="Daftar Hadir Pengawas" subtitle="Daftar hadir pengawas ruang ujian, siap cetak.">
       <style>{`
+        @page { size: A4; margin: 15mm 18mm; }
         @media print {
           body * { visibility: hidden; }
           #area-cetak-pengawas, #area-cetak-pengawas * { visibility: visible; }
-          #area-cetak-pengawas { position: absolute; left: 0; top: 0; width: 100%; }
+          #area-cetak-pengawas {
+            position: absolute; left: 0; top: 0; width: 100%;
+            border: 0 !important; border-radius: 0 !important; padding: 0 !important;
+            max-width: none !important; margin: 0 !important;
+            font-family: 'Times New Roman', Times, serif;
+            color: #000 !important;
+          }
+          #area-cetak-pengawas table, #area-cetak-pengawas th, #area-cetak-pengawas td { border-color: #000 !important; }
+          #area-cetak-pengawas thead { display: table-header-group; }
+          #area-cetak-pengawas tr { page-break-inside: avoid; }
+          #area-cetak-pengawas thead tr { background: #fff !important; }
+          #area-cetak-pengawas .ttd-blok { page-break-inside: avoid; }
+          #area-cetak-pengawas .garis-nama { text-decoration-color: #000 !important; }
         }
       `}</style>
 
@@ -147,7 +182,8 @@ export default function DaftarHadirPengawasUjian() {
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <Field label="Ruang">
-                      <select className={inputCls} value={b.kelasId} onChange={(e) => ubahBaris(b.id, 'kelasId', e.target.value)}>
+                      <select className={inputCls} value={b.kelasId} onChange={(e) => ubahRuang(b.id, e.target.value)}>
+                        {kelasEnam.length === 0 && <option value="">— tidak ada kelas VI —</option>}
                         {kelasEnam.map((k) => (
                           <option key={k.id} value={k.id}>{k.nama_kelas}</option>
                         ))}
@@ -212,10 +248,13 @@ export default function DaftarHadirPengawasUjian() {
           </tbody>
         </table>
 
-        <div className="mt-10 flex justify-end text-[13px]">
+        <div className="ttd-blok mt-10 flex justify-end text-[13px]">
           <div className="text-center">
             <p className="mb-16">Kepala Sekolah</p>
-            <p className="font-semibold underline decoration-slate-300 underline-offset-4">({isi(sekolah.kepala, '________________________')})</p>
+            <p className="garis-nama font-semibold underline decoration-slate-400 underline-offset-4">
+              {isi(sekolah.kepala, '________________________')}
+            </p>
+            {sekolah.nipKepala && <p>NIP. {sekolah.nipKepala}</p>}
           </div>
         </div>
       </div>
