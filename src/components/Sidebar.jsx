@@ -158,6 +158,7 @@ function getGroupsAdmin(
         { to: '/buat-ujian', label: 'Buat Ujian', icon: FilePlus },
         { to: '/hasil-ujian', label: 'Hasil Ujian', icon: ClipboardList },
         { to: '/bank-soal', label: 'Bank Soal', icon: Database },
+        { to: '/materi-kelas', label: 'Materi Pembelajaran', icon: BookMarked }, 
         { to: '/buat-kuis-seru', label: 'Kuis Seru (Kls 1-3)', icon: Gamepad2 },
       ],
     },
