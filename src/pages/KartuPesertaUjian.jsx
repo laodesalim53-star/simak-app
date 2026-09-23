@@ -4,15 +4,25 @@
 // Saat ini datanya masih contoh (`SISWA_CONTOH`) — ganti dengan data asli
 // (misalnya hasil fetch dari tabel siswa/rombel) sebelum dipakai produksi.
 //
-// Perlu paket QR code, install salah satu dulu:
-//   npm install qrcode.react
-//
-// Kalau paket lain sudah dipakai di proyek Anda (mis. react-qr-code),
-// tinggal ganti import di bawah.
+// QR code di sini pakai layanan publik (api.qrserver.com) lewat <img> biasa
+// — TIDAK perlu install paket apa pun, supaya tidak ada risiko build gagal
+// lagi karena dependensi belum ter-install (lihat komponen QRImg di bawah).
+// Kalau nanti mau QR digenerate lokal/offline, install `qrcode.react`
+// (`npm install qrcode.react`, lalu commit package-lock.json juga) dan
+// ganti <QRImg value={qrValue} size={60} /> jadi
+// <QRCodeSVG value={qrValue} size={60} /> dari 'qrcode.react'.
 
 import { useMemo, useState } from 'react'
-import { QRCodeSVG } from 'qrcode.react'
 import { GraduationCap, Printer, User } from 'lucide-react'
+
+// Opsi tanpa dependensi tambahan: render QR lewat layanan publik QR Server
+// (tidak perlu `npm install` apa pun). Kalau lebih suka QR digenerate
+// lokal/offline, install `qrcode.react` dan pakai <QRCodeSVG value={...} size={60} />
+// sebagai gantinya.
+function QRImg({ value, size = 60 }) {
+  const src = `https://api.qrserver.com/v1/create-qr-code/?size=${size * 3}x${size * 3}&data=${encodeURIComponent(value)}`
+  return <img src={src} alt="QR peserta" width={size} height={size} style={{ display: 'block' }} />
+}
 import Layout from '../components/Layout'
 
 // TODO: ganti dengan data sekolah & siswa yang sebenarnya.
@@ -103,7 +113,7 @@ function KartuUjian({ siswa, sekolah }) {
             <p className="text-[11px] text-slate-500">Kepala Sekolah</p>
           </div>
           <div className="shrink-0 rounded-[10px] border border-slate-200 bg-white p-1.5">
-            <QRCodeSVG value={qrValue} size={60} />
+            <QRImg value={qrValue} size={60} />
           </div>
         </div>
       </div>
