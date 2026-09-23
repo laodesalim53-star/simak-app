@@ -20,7 +20,7 @@ import {
   isoHariIni,
   tahunPelajaranSekarang,
   urutkanGuru,
-} from './CetakSK'
+} from '../components/CetakSK'
 
 // Sesuaikan kalau format `tingkat` di tabel kelas Anda berbeda (mis. "Kelas 6").
 function isKelasEnam(k) {
