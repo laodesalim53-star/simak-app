@@ -19,6 +19,7 @@ const emptyForm = {
   pengawas: '',
   nip_pengawas: '',
   logo_path: '',
+  logo_kabupaten_path: '',
   ttd_kepala_sekolah_path: '',
   tahun_berdiri: '',
   akreditasi: '',
@@ -102,6 +103,9 @@ export default function ProfilSekolah() {
   const [uploadingTtd, setUploadingTtd] = useState(false)
   const [tersimpan, setTersimpan] = useState(false)
   const [logoUrl, setLogoUrl] = useState('')
+  const [logoUrl, setLogoUrl] = useState('')
+  const [uploadingLogoKabupaten, setUploadingLogoKabupaten] = useState(false)
+  const [logoKabupatenUrl, setLogoKabupatenUrl] = useState('')
   const [ttdUrl, setTtdUrl] = useState('')
 
   async function muatData() {
@@ -125,6 +129,10 @@ export default function ProfilSekolah() {
       if (data.logo_path) {
         const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(data.logo_path)
         setLogoUrl(pub.publicUrl)
+      }
+      if (data.logo_kabupaten_path) {
+        const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(data.logo_kabupaten_path)
+        setLogoKabupatenUrl(pub.publicUrl)
       }
       if (data.ttd_kepala_sekolah_path) {
         const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(data.ttd_kepala_sekolah_path)
@@ -192,6 +200,30 @@ export default function ProfilSekolah() {
     setLogoUrl(pub.publicUrl)
     setForm((f) => ({ ...f, logo_path: path }))
     setUploadingLogo(false)
+  }
+    // ↓↓↓ SISIPKAN FUNGSI BARU INI DI SINI ↓↓↓
+  async function handleLogoKabupatenChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingLogoKabupaten(true)
+
+    const ext = file.name.split('.').pop()
+    const path = `logo-kabupaten-${Date.now()}.${ext}`
+
+    const { error: uploadError } = await supabase.storage.from('profil-sekolah').upload(path, file, {
+      upsert: true,
+    })
+
+    if (uploadError) {
+      alert('Gagal upload logo kabupaten: ' + uploadError.message)
+      setUploadingLogoKabupaten(false)
+      return
+    }
+
+    const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(path)
+    setLogoKabupatenUrl(pub.publicUrl)
+    setForm((f) => ({ ...f, logo_kabupaten_path: path }))
+    setUploadingLogoKabupaten(false)
   }
 
   // Upload gambar tanda tangan elektronik kepala sekolah/kantor — dipakai
