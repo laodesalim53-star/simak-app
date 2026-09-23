@@ -203,6 +203,7 @@ function getGroupsAdmin(
         { to: '/perbaikan-data-siswa', label: 'Perbaikan Data Siswa', icon: UserCog },
         { to: '/surat', label: 'Surat Masuk/Keluar', icon: Mail },
         { to: '/gudang-sk', label: 'Gudang SK', icon: FileStack },
+        { to: '/gudang-sk/portal-ujian', label: 'Portal Ujian', icon: ClipboardCheck }, 
         { to: '/ppdb-admin', label: 'PPDB Siswa Baru', icon: UserPlus },
         // Laporan Kepegawaian Guru: satu pintu untuk semua laporan guru,
         // TERMASUK Laporan Bulanan, Cetak Sampul, Data Ujian 8355 & Cetak
