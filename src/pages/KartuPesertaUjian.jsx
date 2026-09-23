@@ -40,11 +40,29 @@ function formatTanggalIndonesia(tanggalIso) {
   return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
-// TODO: kalau sekolah Anda sudah punya tabel profil sekolah (mis.
-// `profil_sekolah`) dengan nama sekolah/kepala sekolah/tahun pelajaran,
-// ganti ini jadi hasil fetch dari tabel itu. Untuk sekarang masih statis
-// supaya berkas ini tidak menebak nama kolom yang belum dikonfirmasi.
-const IDENTITAS_SEKOLAH = {
+// Tahun pelajaran tidak disimpan di tabel profil_sekolah, jadi dihitung
+// otomatis dari tanggal hari ini. Asumsi umum: tahun ajaran baru dimulai
+// bulan Juli (Juli-Des = tahun ini/tahun depan, Jan-Jun = tahun lalu/tahun ini).
+function tahunAjaranBerjalan() {
+  const sekarang = new Date()
+  const tahun = sekarang.getFullYear()
+  const bulan = sekarang.getMonth() + 1
+  return bulan >= 7 ? `${tahun}/${tahun + 1}` : `${tahun - 1}/${tahun}`
+}
+
+// Menggabungkan `tempat_ttd` dari profil sekolah dengan tanggal hari ini,
+// mengikuti format yang sama dipakai di ProfilSekolah.jsx, mis. "Masidang, 30 Juni 2026".
+function formatTempatTanggalHariIni(tempat) {
+  if (!tempat) return null
+  const tanggal = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+  return `${tempat}, ${tanggal}`
+}
+
+// Identitas sekolah default — dipakai sebagai fallback kalau tabel/kolom
+// profil sekolah belum ada di database Anda, atau datanya masih kosong.
+// Begitu tabel profil sekolah tersambung dengan benar (lihat muatProfilSekolah
+// di bawah), nilai-nilai ini otomatis ditimpa oleh data asli.
+const IDENTITAS_SEKOLAH_DEFAULT = {
   namaSekolah: 'SD Negeri Waria',
   tapel: '2024/2025',
   tempatTanggal: 'Waria, 5 Mei 2025',
@@ -148,12 +166,56 @@ export default function KartuPesertaUjian() {
   const [siswaList, setSiswaList] = useState([])
   const [jumlahKelas6, setJumlahKelas6] = useState(0)
   const [ruangFilter, setRuangFilter] = useState('semua')
+  const [identitasSekolah, setIdentitasSekolah] = useState(IDENTITAS_SEKOLAH_DEFAULT)
 
   useEffect(() => {
-    if (isAdmin) muatData()
-    else setLoading(false)
+    if (isAdmin) {
+      muatData()
+      muatProfilSekolah()
+    } else {
+      setLoading(false)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sekolahId, isAdmin])
+
+  // Diambil dari halaman ProfilSekolah.jsx: profil sekolah disimpan di tabel
+  // `profil_sekolah`, satu baris per `sekolah_id`, dengan kolom (antara lain)
+  // nama_sekolah, kepala_sekolah, nip_kepala_sekolah, tempat_ttd.
+  //
+  // CATATAN: tidak ada kolom "tahun pelajaran" di profil_sekolah, jadi badge
+  // "TP 2024/2025" di kartu dihitung OTOMATIS dari tanggal hari ini lewat
+  // tahunAjaranBerjalan() di bawah (asumsi tahun ajaran mulai bulan Juli).
+  // Kalau aturan sekolah Anda beda, atau Anda mau ini bisa diedit manual per
+  // tahun (bukan otomatis), beri tahu saya — saya tambahkan field-nya di
+  // halaman Profil Sekolah.
+  //
+  // Kalau baris profil_sekolah untuk sekolah ini belum ada / gagal dimuat,
+  // otomatis balik ke IDENTITAS_SEKOLAH_DEFAULT supaya kartu tetap bisa
+  // dicetak.
+  async function muatProfilSekolah() {
+    if (!sekolahId) return
+    try {
+      const { data, error } = await supabase
+        .from('profil_sekolah')
+        .select('nama_sekolah, kepala_sekolah, nip_kepala_sekolah, tempat_ttd')
+        .eq('sekolah_id', sekolahId)
+        .maybeSingle()
+
+      if (error || !data) {
+        console.warn('Profil sekolah belum tersedia, memakai identitas default:', error?.message)
+        return
+      }
+
+      setIdentitasSekolah({
+        namaSekolah: data.nama_sekolah || IDENTITAS_SEKOLAH_DEFAULT.namaSekolah,
+        tapel: tahunAjaranBerjalan(),
+        tempatTanggal: formatTempatTanggalHariIni(data.tempat_ttd) || IDENTITAS_SEKOLAH_DEFAULT.tempatTanggal,
+        kepalaSekolah: data.kepala_sekolah || IDENTITAS_SEKOLAH_DEFAULT.kepalaSekolah,
+      })
+    } catch (err) {
+      console.warn('Gagal memuat profil sekolah, memakai identitas default:', err)
+    }
+  }
 
   async function muatData() {
     if (!sekolahId) {
@@ -235,6 +297,19 @@ export default function KartuPesertaUjian() {
           #area-cetak-kartu, #area-cetak-kartu * { visibility: visible; }
           #area-cetak-kartu { position: absolute; left: 0; top: 0; width: 100%; }
           .kartu-ujian { break-inside: avoid; }
+
+          /* PENTING untuk warna: browser secara default sering TIDAK mencetak
+             warna latar (background-color) dan gradient, walau tampilan di
+             layar berwarna. Baris di bawah ini memaksa browser mencetak
+             warna apa adanya. Ini hanya bekerja KALAU opsi "Background
+             graphics" / "Grafik latar belakang" di dialog Print (biasanya
+             ada di bagian "More settings" / "Lainnya") juga dicentang —
+             CSS ini tidak bisa menyalakan opsi itu untuk Anda. */
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+          }
         }
       `}</style>
 
@@ -274,9 +349,13 @@ export default function KartuPesertaUjian() {
         </p>
       )}
 
+      <p className="print:hidden mb-1 text-xs text-slate-500">
+        Nama sekolah, kepala sekolah, dan tempat/tanggal diambil otomatis dari halaman Profil Sekolah. Tahun
+        pelajaran dihitung otomatis dari tanggal hari ini.
+      </p>
       <p className="print:hidden mb-4 text-xs text-slate-500">
-        Identitas sekolah (nama sekolah, kepala sekolah, tahun pelajaran) masih statis di berkas ini — sambungkan
-        ke data Profil Sekolah Anda kalau sudah tersedia.
+        Agar warna kartu ikut tercetak: buka dialog Print → "More settings" / "Lainnya" → centang
+        "Background graphics" / "Grafik latar belakang", baru klik Print.
       </p>
 
       {siswaList.length === 0 ? (
@@ -288,7 +367,7 @@ export default function KartuPesertaUjian() {
       ) : (
         <div id="area-cetak-kartu" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 place-items-center">
           {siswaTampil.map((siswa) => (
-            <KartuUjian key={siswa.id} siswa={siswa} sekolah={IDENTITAS_SEKOLAH} />
+            <KartuUjian key={siswa.id} siswa={siswa} sekolah={identitasSekolah} />
           ))}
         </div>
       )}
