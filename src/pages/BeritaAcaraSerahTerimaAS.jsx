@@ -7,17 +7,20 @@
 // ada (CetakSK, ambilProfilSekolah, ambilGuruDanKelas, useAuth).
 //
 // CATATAN:
-// - Field kop surat (kabupaten, dinas, kecamatan) belum tentu ada di tabel
-//   profil_sekolah yang sekarang, jadi dibuat sebagai input manual dengan
-//   nilai kosong sebagai default — sesuaikan/​hapus prefilling-nya kalau
-//   field itu sebenarnya sudah tersedia di ambilProfilSekolah().
+// - Field kop surat (kabupaten, dinas, kecamatan) dan alamat kantor otomatis
+//   diisi dari tabel profil_sekolah (kolom kabupaten, dinas_pendidikan,
+//   kecamatan, alamat) begitu halaman dibuka. Tetap bisa diubah manual di
+//   form; perubahan manual TIDAK menimpa isian yang sudah diketik.
 // - Logo kiri/kanan pada dokumen asli tidak disertakan (butuh berkas gambar);
-//   kalau perlu, tambahkan <img src="..." /> di dalam blok .kop-logo.
+//   kalau perlu, tambahkan <img src="..." /> di dalam blok .kop-surat.
 // - Bagian saksi-saksi pada dokumen contoh dibiarkan kosong (diisi tangan),
-//   jadi di sini pengawas boleh dipilih dari data guru ATAU dibiarkan kosong.
+//   jadi di sini saksi boleh dipilih dari data guru ATAU dibiarkan kosong.
+// - sekolahId diambil dari useAuth().sekolahId, dan kalau tidak tersedia
+//   memakai useAuth().profil.sekolah_id (dua-duanya dicoba supaya aman).
 
 import { useEffect, useMemo, useState } from 'react'
 import { Loader2, Printer } from 'lucide-react'
+import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
 import {
@@ -61,7 +64,10 @@ function uraikanTanggal(iso) {
 }
 
 export default function BeritaAcaraSerahTerimaAS() {
-  const { sekolahId } = useAuth()
+  // Aman untuk dua bentuk AuthContext: ada `sekolahId` langsung, atau hanya
+  // lewat profil.sekolah_id (seperti di ProfilSekolah.jsx).
+  const { sekolahId: sekolahIdCtx, profil } = useAuth()
+  const sekolahId = sekolahIdCtx || profil?.sekolah_id
 
   const [sekolah, setSekolah] = useState(SEKOLAH_KOSONG)
   const [tempatSekolah, setTempatSekolah] = useState('')
@@ -94,14 +100,26 @@ export default function BeritaAcaraSerahTerimaAS() {
     setMemuat(true)
     setGalat('')
     try {
-      const [ps, gk] = await Promise.all([ambilProfilSekolah(sekolahId), ambilGuruDanKelas(sekolahId)])
+      const [ps, gk, profRes] = await Promise.all([
+        ambilProfilSekolah(sekolahId),
+        ambilGuruDanKelas(sekolahId),
+        supabase
+          .from('profil_sekolah')
+          .select('kabupaten, dinas_pendidikan, kecamatan, alamat')
+          .eq('sekolah_id', sekolahId)
+          .maybeSingle(),
+      ])
+      const prof = profRes?.data || {}
       setSekolah(ps.sekolah)
       setTempatSekolah(ps.tempat)
       setGuru(urutkanGuru(gk.guru))
       setForm((f) => ({
         ...f,
         tempat: f.tempat || ps.tempat || '',
-        alamatKantor: f.alamatKantor || (ps.sekolah?.nama ? `Jl. Pendidikan, ${ps.sekolah.nama}` : ''),
+        kabupaten: f.kabupaten || prof.kabupaten || '',
+        dinas: prof.dinas_pendidikan || f.dinas,
+        kecamatan: f.kecamatan || prof.kecamatan || '',
+        alamatKantor: f.alamatKantor || prof.alamat || '',
       }))
     } catch (e) {
       console.error('Gagal memuat data Berita Acara Serah Terima AS:', e)
@@ -171,7 +189,7 @@ export default function BeritaAcaraSerahTerimaAS() {
           </div>
         )}
 
-        <Bagian judul="Kop surat" keterangan="Isi sekali saja; kosongkan yang tidak perlu ditampilkan.">
+        <Bagian judul="Kop surat" keterangan="Terisi otomatis dari Profil Sekolah; bisa diubah di sini, kosongkan yang tidak perlu ditampilkan.">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Pemerintah Kabupaten/Kota">
               <input className={inputCls} value={form.kabupaten} onChange={ubah('kabupaten')} placeholder="PEMERINTAH KABUPATEN …" />
