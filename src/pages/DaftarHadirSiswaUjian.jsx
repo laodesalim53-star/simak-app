@@ -2,24 +2,37 @@
 //
 // Daftar hadir peserta ujian per ruang, mengikuti format kop surat resmi:
 // Pemerintah Kabupaten > Dinas Pendidikan > Nama Sekolah > Kecamatan.
-// Pola data & komponen mengikuti BeritaAcaraSerahTerimaAS.jsx yang sudah ada
-// (CetakSK, ambilProfilSekolah, ambilGuruDanKelas, useAuth).
 //
-// CATATAN:
+// Dua sumber pola dipakai:
+// - Kop surat, form editor, pengawas ruang (dipilih dari guru), dan CSS cetak
+//   satu-halaman: mengikuti BeritaAcaraSerahTerimaAS.jsx (CetakSK,
+//   ambilProfilSekolah, ambilGuruDanKelas, useAuth).
+// - Daftar peserta ditarik OTOMATIS dari Supabase, mengikuti logika di
+//   KartuPesertaUjian.jsx: tabel `siswa`, filter Kelas 6 (isKelas6), hanya
+//   siswa yang `no_peserta_ujian`-nya sudah terisi (sudahTerdaftarPeserta),
+//   lalu difilter lagi per `ruang_ujian` sesuai ruang yang dipilih. Tidak ada
+//   input/tempel manual lagi untuk daftar utama — data selalu sinkron dengan
+//   halaman Kartu Peserta Ujian / Pengaturan Ruang.
+//
+// CATATAN SKEMA (sama dengan KartuPesertaUjian.jsx):
+// - "No. Peserta" & status "terdaftar" diambil dari kolom `no_peserta_ujian`.
+// - Ruang ujian diambil dari kolom `ruang_ujian` (diisi lewat halaman Kartu
+//   Peserta Ujian > Pengaturan Ruang). Selama siswa belum punya ruang, dia
+//   tidak akan muncul di daftar ruang mana pun di halaman ini.
+// - Kelas 6 dikenali baik penomoran angka ("6A") maupun Romawi ("VIA").
+//
+// CATATAN LAIN:
 // - Field kop surat (kabupaten, dinas, kecamatan) dan alamat kantor otomatis
-//   diisi dari tabel profil_sekolah (kolom kabupaten, dinas_pendidikan,
-//   kecamatan, alamat) begitu halaman dibuka. Tetap bisa diubah manual di
-//   form; perubahan manual TIDAK menimpa isian yang sudah diketik.
+//   diisi dari tabel profil_sekolah begitu halaman dibuka. Tetap bisa diubah
+//   manual di form; perubahan manual TIDAK menimpa isian yang sudah diketik.
 // - Logo kop: logo kabupaten (kiri) dan logo sekolah (kanan) diambil otomatis
 //   dari profil_sekolah (kolom logo_kabupaten_path & logo_path, bucket
-//   storage 'profil-sekolah'). Kalau belum diunggah di Profil Sekolah, sisi
-//   itu kosong.
+//   storage 'profil-sekolah').
 // - Pengawas I & II dipilih dari data guru (opsional, boleh dikosongkan dan
-//   diisi tangan saat pelaksanaan), mengikuti pola pihak1/pihak2 pada berita
-//   acara.
-// - Daftar peserta diisi manual: bisa ditambah/dihapus baris satu-satu, atau
-//   ditempel sekaligus lewat "Isi cepat" (format: No Peserta;Nama, satu
-//   baris per peserta).
+//   diisi tangan saat pelaksanaan).
+// - Kalau ada peserta yang belum sempat masuk sistem, masih bisa ditambahkan
+//   satu-satu lewat "Tambah peserta manual" di bagian bawah daftar — baris
+//   ini murni tampilan tambahan dan tidak diambil dari database.
 // - sekolahId diambil dari useAuth().sekolahId, dan kalau tidak tersedia
 //   memakai useAuth().profil.sekolah_id (dua-duanya dicoba supaya aman).
 
@@ -41,10 +54,30 @@ import {
   urutkanGuru,
 } from '../components/CetakSK'
 
-const JUMLAH_BARIS_AWAL = 20
+// --- Dipinjam dari KartuPesertaUjian.jsx: pengenal Kelas 6 & status peserta ---
 
-function barisKosong(n) {
-  return Array.from({ length: n }, () => ({ noPeserta: '', nama: '' }))
+// Kelas 6 bisa ditulis dengan angka ("6A", "Kelas 6") atau angka Romawi
+// ("VIA", "Kelas VI"), jadi kecocokan dicek dari kedua kemungkinan itu.
+function isKelas6(namaKelas) {
+  const nama = (namaKelas || '').trim().toUpperCase()
+  if (!nama) return false
+  if (/^6\b/.test(nama)) return true
+  if (/KELAS\s*6\b/.test(nama)) return true
+  if (/^VI([^I]|$)/.test(nama)) return true
+  if (/KELAS\s*VI([^I]|$)/.test(nama)) return true
+  return false
+}
+
+// Hanya siswa yang No. Peserta Ujian-nya sudah terisi yang dianggap "peserta"
+// resmi dan boleh muncul di daftar hadir.
+function sudahTerdaftarPeserta(siswa) {
+  const nilai = siswa?.no_peserta_ujian
+  return nilai !== null && nilai !== undefined && String(nilai).trim() !== ''
+}
+
+// Urut alami berdasarkan No. Peserta (mis. "...-9" sebelum "...-10").
+function urutkanNoPeserta(a, b) {
+  return String(a.noPeserta).localeCompare(String(b.noPeserta), undefined, { numeric: true })
 }
 
 // Path file di bucket 'profil-sekolah' -> URL publik (kosong kalau tidak ada).
@@ -56,7 +89,7 @@ function urlLogo(path) {
 
 export default function DaftarHadirSiswaUjian() {
   // Aman untuk dua bentuk AuthContext: ada `sekolahId` langsung, atau hanya
-  // lewat profil.sekolah_id (seperti di ProfilSekolah.jsx).
+  // lewat profil.sekolah_id (seperti di ProfilSekolah.jsx / KartuPesertaUjian.jsx).
   const { sekolahId: sekolahIdCtx, profil } = useAuth()
   const sekolahId = sekolahIdCtx || profil?.sekolah_id
 
@@ -67,6 +100,13 @@ export default function DaftarHadirSiswaUjian() {
   const [logoSekolahUrl, setLogoSekolahUrl] = useState('')
   const [logoKabupatenUrl, setLogoKabupatenUrl] = useState('')
 
+  // --- Daftar peserta (ditarik otomatis dari tabel siswa) ---
+  const [siswaSemua, setSiswaSemua] = useState([])
+  const [jumlahKelas6, setJumlahKelas6] = useState(0)
+  const [memuatSiswa, setMemuatSiswa] = useState(true)
+  const [galatSiswa, setGalatSiswa] = useState('')
+  const [siswaManual, setSiswaManual] = useState([])
+
   const [form, setForm] = useState({
     kabupaten: '',
     dinas: 'DINAS PENDIDIKAN DAN KEBUDAYAAN',
@@ -76,13 +116,10 @@ export default function DaftarHadirSiswaUjian() {
     pukulMulai: '',
     pukulSelesai: '',
     mataPelajaran: '',
-    ruang: '1 (Satu)',
+    ruang: '',
     pengawas1Id: '',
     pengawas2Id: '',
   })
-
-  const [siswa, setSiswa] = useState(barisKosong(JUMLAH_BARIS_AWAL))
-  const [tempelCepat, setTempelCepat] = useState('')
 
   async function muat() {
     if (!sekolahId) {
@@ -120,8 +157,48 @@ export default function DaftarHadirSiswaUjian() {
     }
   }
 
+  // Sama seperti muatData() di KartuPesertaUjian.jsx: ambil semua siswa
+  // sekolah (join kelas), filter Kelas 6 di sisi client, lalu filter lagi
+  // hanya yang sudah punya No. Peserta Ujian.
+  async function muatSiswa() {
+    if (!sekolahId) {
+      setMemuatSiswa(false)
+      return
+    }
+    setMemuatSiswa(true)
+    setGalatSiswa('')
+    try {
+      const { data, error } = await supabase
+        .from('siswa')
+        .select('id, nama_lengkap, nisn, no_peserta_ujian, ruang_ujian, kelas(nama_kelas)')
+        .eq('sekolah_id', sekolahId)
+        .order('nama_lengkap')
+
+      if (error) throw error
+
+      const kelas6 = (data || []).filter((s) => isKelas6(s.kelas?.nama_kelas))
+      setJumlahKelas6(kelas6.length)
+
+      const peserta = kelas6.filter(sudahTerdaftarPeserta).map((s) => ({
+        id: s.id,
+        nama: s.nama_lengkap,
+        noPeserta: s.no_peserta_ujian,
+        noInduk: s.nisn,
+        ruangUjian: s.ruang_ujian || '',
+      }))
+      setSiswaSemua(peserta)
+    } catch (e) {
+      console.error('Gagal memuat daftar peserta ujian:', e)
+      setGalatSiswa(e?.message || 'Daftar peserta tidak dapat dibaca.')
+      setSiswaSemua([])
+    } finally {
+      setMemuatSiswa(false)
+    }
+  }
+
   useEffect(() => {
     muat()
+    muatSiswa()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sekolahId])
 
@@ -155,28 +232,41 @@ export default function DaftarHadirSiswaUjian() {
     ? `${form.pukulMulai} - ${form.pukulSelesai} WIT`
     : ''
 
-  // --- Kelola baris peserta ---
-  const ubahSiswa = (idx, k) => (e) => {
-    const nilai = e.target.value
-    setSiswa((arr) => arr.map((s, i) => (i === idx ? { ...s, [k]: nilai } : s)))
-  }
-  const tambahBaris = () => setSiswa((arr) => [...arr, { noPeserta: '', nama: '' }])
-  const hapusBaris = (idx) => setSiswa((arr) => arr.filter((_, i) => i !== idx))
+  // Daftar ruang = nilai ruang_ujian unik yang sudah diisi lewat halaman
+  // Kartu Peserta Ujian > Pengaturan Ruang, diurutkan alami (1, 2, 10, ...).
+  const daftarRuang = useMemo(
+    () =>
+      [...new Set(siswaSemua.map((s) => s.ruangUjian).filter(Boolean))].sort((a, b) =>
+        String(a).localeCompare(String(b), undefined, { numeric: true })
+      ),
+    [siswaSemua]
+  )
 
-  function terapkanTempelCepat() {
-    const baris = tempelCepat
-      .split('\n')
-      .map((b) => b.trim())
-      .filter(Boolean)
-      .map((b) => {
-        const [noPeserta, ...sisa] = b.split(';')
-        return { noPeserta: (noPeserta || '').trim(), nama: sisa.join(';').trim() }
-      })
-    if (baris.length) {
-      setSiswa(baris)
-      setTempelCepat('')
+  // Begitu daftar ruang termuat, otomatis pilih ruang pertama kalau form
+  // belum punya pilihan (atau pilihan lama sudah tidak ada lagi).
+  useEffect(() => {
+    if (daftarRuang.length === 0) return
+    if (!form.ruang || !daftarRuang.includes(form.ruang)) {
+      setForm((f) => ({ ...f, ruang: daftarRuang[0] }))
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [daftarRuang])
+
+  // Peserta pada ruang yang sedang dipilih, terurut sesuai No. Peserta.
+  const siswaRuang = useMemo(
+    () => siswaSemua.filter((s) => s.ruangUjian === form.ruang).sort(urutkanNoPeserta),
+    [siswaSemua, form.ruang]
+  )
+
+  const jumlahBelumTerdaftar = jumlahKelas6 - siswaSemua.length
+
+  // --- Kelola baris peserta tambahan (manual, di luar data sistem) ---
+  const ubahManual = (idx, k) => (e) => {
+    const nilai = e.target.value
+    setSiswaManual((arr) => arr.map((s, i) => (i === idx ? { ...s, [k]: nilai } : s)))
   }
+  const tambahBarisManual = () => setSiswaManual((arr) => [...arr, { noPeserta: '', nama: '' }])
+  const hapusBarisManual = (idx) => setSiswaManual((arr) => arr.filter((_, i) => i !== idx))
 
   return (
     <Layout title="Daftar Hadir Peserta Ujian" subtitle="Daftar hadir peserta ujian per ruang, siap cetak.">
@@ -225,6 +315,23 @@ export default function DaftarHadirSiswaUjian() {
             Data belum bisa dibaca ({galat}).
           </div>
         )}
+        {!memuatSiswa && galatSiswa && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 mb-4">
+            Daftar peserta belum bisa dibaca ({galatSiswa}).
+          </div>
+        )}
+        {!memuatSiswa && !galatSiswa && jumlahBelumTerdaftar > 0 && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 mb-4">
+            Ada {jumlahBelumTerdaftar} siswa Kelas 6 yang belum punya No. Peserta Ujian, jadi belum muncul di
+            daftar hadir. Isi dulu No. Peserta-nya di halaman Data Siswa / Data Ujian.
+          </div>
+        )}
+        {!memuatSiswa && !galatSiswa && jumlahKelas6 > 0 && daftarRuang.length === 0 && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 mb-4">
+            Belum ada siswa yang diisi Ruang Ujian-nya. Atur dulu lewat halaman Kartu Peserta Ujian &gt;
+            Pengaturan Ruang.
+          </div>
+        )}
 
         <Bagian judul="Kop surat" keterangan="Terisi otomatis dari Profil Sekolah; bisa diubah di sini, kosongkan yang tidak perlu ditampilkan.">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -257,8 +364,13 @@ export default function DaftarHadirSiswaUjian() {
             <Field label="Pukul selesai">
               <input type="time" className={inputCls} value={form.pukulSelesai} onChange={ubah('pukulSelesai')} />
             </Field>
-            <Field label="Ruang">
-              <input className={inputCls} value={form.ruang} onChange={ubah('ruang')} placeholder="mis. 1 (Satu)" />
+            <Field label="Ruang" keterangan="Daftar diambil dari ruang yang sudah diisi lewat Pengaturan Ruang.">
+              <select className={inputCls} value={form.ruang} onChange={ubah('ruang')} disabled={daftarRuang.length === 0}>
+                {daftarRuang.length === 0 && <option value="">— belum ada ruang —</option>}
+                {daftarRuang.map((r) => (
+                  <option key={r} value={r}>Ruang {r}</option>
+                ))}
+              </select>
             </Field>
           </div>
         </Bagian>
@@ -284,57 +396,59 @@ export default function DaftarHadirSiswaUjian() {
           </div>
         </Bagian>
 
-        <Bagian judul="Daftar peserta" keterangan="Tambah/hapus baris satu-satu, atau tempel sekaligus (format: No Peserta;Nama, satu baris per peserta).">
-          <div className="mb-3">
-            <textarea
-              className={`${inputCls} min-h-[80px]`}
-              value={tempelCepat}
-              onChange={(e) => setTempelCepat(e.target.value)}
-              placeholder={'09-0038-0001-8;Abdul Rahman Djutay\n09-0038-0002-7;Marda Surey'}
-            />
-            <button
-              type="button"
-              onClick={terapkanTempelCepat}
-              className="mt-2 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              Terapkan tempelan ke daftar
-            </button>
-          </div>
+        <Bagian
+          judul="Daftar peserta"
+          keterangan={`Ditarik otomatis dari data siswa Kelas 6 (Ruang ${form.ruang || '…'}) — ${memuatSiswa ? 'memuat…' : `${siswaRuang.length} peserta`}. Ubah lewat halaman Data Siswa / Pengaturan Ruang, bukan di sini.`}
+        >
+          {memuatSiswa ? (
+            <p className="flex items-center gap-2 text-sm text-slate-500">
+              <Loader2 size={14} className="animate-spin" /> Memuat daftar peserta…
+            </p>
+          ) : siswaRuang.length === 0 ? (
+            <p className="text-sm text-slate-500">Belum ada peserta terdaftar di ruang ini.</p>
+          ) : (
+            <ol className="ml-5 list-decimal space-y-0.5 text-sm text-slate-700">
+              {siswaRuang.map((s) => (
+                <li key={s.id}>{s.nama} <span className="text-slate-400">— {s.noPeserta}</span></li>
+              ))}
+            </ol>
+          )}
 
-          <div className="space-y-2">
-            {siswa.map((s, idx) => (
-              <div key={idx} className="grid grid-cols-[2.5rem_1fr_2fr_auto] items-center gap-2">
-                <span className="text-sm text-slate-500 text-center">{idx + 1}</span>
-                <input
-                  className={inputCls}
-                  value={s.noPeserta}
-                  onChange={ubahSiswa(idx, 'noPeserta')}
-                  placeholder="No. Peserta"
-                />
-                <input
-                  className={inputCls}
-                  value={s.nama}
-                  onChange={ubahSiswa(idx, 'nama')}
-                  placeholder="Nama peserta"
-                />
-                <button
-                  type="button"
-                  onClick={() => hapusBaris(idx)}
-                  className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                  aria-label="Hapus baris"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            ))}
-          </div>
+          {siswaManual.length > 0 && (
+            <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+              {siswaManual.map((s, idx) => (
+                <div key={idx} className="grid grid-cols-[1fr_2fr_auto] items-center gap-2">
+                  <input
+                    className={inputCls}
+                    value={s.noPeserta}
+                    onChange={ubahManual(idx, 'noPeserta')}
+                    placeholder="No. Peserta"
+                  />
+                  <input
+                    className={inputCls}
+                    value={s.nama}
+                    onChange={ubahManual(idx, 'nama')}
+                    placeholder="Nama peserta"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => hapusBarisManual(idx)}
+                    className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                    aria-label="Hapus baris"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
           <button
             type="button"
-            onClick={tambahBaris}
+            onClick={tambahBarisManual}
             className="mt-3 inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
-            <Plus size={14} /> Tambah baris
+            <Plus size={14} /> Tambah peserta manual
           </button>
         </Bagian>
 
@@ -401,8 +515,8 @@ export default function DaftarHadirSiswaUjian() {
             </tr>
           </thead>
           <tbody>
-            {siswa.map((s, i) => (
-              <tr key={i}>
+            {[...siswaRuang, ...siswaManual].map((s, i) => (
+              <tr key={s.id ?? `manual-${i}`}>
                 <Td className="text-center">{i + 1}</Td>
                 <Td>{isi(s.noPeserta, '')}</Td>
                 <Td>{isi(s.nama, '')}</Td>
