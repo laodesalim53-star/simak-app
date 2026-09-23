@@ -11,8 +11,9 @@
 //   diisi dari tabel profil_sekolah (kolom kabupaten, dinas_pendidikan,
 //   kecamatan, alamat) begitu halaman dibuka. Tetap bisa diubah manual di
 //   form; perubahan manual TIDAK menimpa isian yang sudah diketik.
-// - Logo kiri/kanan pada dokumen asli tidak disertakan (butuh berkas gambar);
-//   kalau perlu, tambahkan <img src="..." /> di dalam blok .kop-surat.
+// - Logo kop: logo kabupaten (kiri) dan logo sekolah (kanan) diambil otomatis
+//   dari profil_sekolah (kolom logo_kabupaten_path & logo_path, bucket storage
+//   'profil-sekolah'). Kalau belum diunggah di Profil Sekolah, sisi itu kosong.
 // - Bagian saksi-saksi pada dokumen contoh dibiarkan kosong (diisi tangan),
 //   jadi di sini saksi boleh dipilih dari data guru ATAU dibiarkan kosong.
 // - sekolahId diambil dari useAuth().sekolahId, dan kalau tidak tersedia
@@ -63,6 +64,13 @@ function uraikanTanggal(iso) {
   }
 }
 
+// Path file di bucket 'profil-sekolah' -> URL publik (kosong kalau tidak ada).
+function urlLogo(path) {
+  if (!path) return ''
+  const { data } = supabase.storage.from('profil-sekolah').getPublicUrl(path)
+  return data?.publicUrl || ''
+}
+
 export default function BeritaAcaraSerahTerimaAS() {
   // Aman untuk dua bentuk AuthContext: ada `sekolahId` langsung, atau hanya
   // lewat profil.sekolah_id (seperti di ProfilSekolah.jsx).
@@ -74,6 +82,8 @@ export default function BeritaAcaraSerahTerimaAS() {
   const [guru, setGuru] = useState([])
   const [memuat, setMemuat] = useState(true)
   const [galat, setGalat] = useState('')
+  const [logoSekolahUrl, setLogoSekolahUrl] = useState('')
+  const [logoKabupatenUrl, setLogoKabupatenUrl] = useState('')
 
   const [form, setForm] = useState({
     namaPekerjaan: 'Asesmen Sumatif',
@@ -105,11 +115,13 @@ export default function BeritaAcaraSerahTerimaAS() {
         ambilGuruDanKelas(sekolahId),
         supabase
           .from('profil_sekolah')
-          .select('kabupaten, dinas_pendidikan, kecamatan, alamat')
+          .select('kabupaten, dinas_pendidikan, kecamatan, alamat, logo_path, logo_kabupaten_path')
           .eq('sekolah_id', sekolahId)
           .maybeSingle(),
       ])
       const prof = profRes?.data || {}
+      setLogoSekolahUrl(urlLogo(prof.logo_path))
+      setLogoKabupatenUrl(urlLogo(prof.logo_kabupaten_path))
       setSekolah(ps.sekolah)
       setTempatSekolah(ps.tempat)
       setGuru(urutkanGuru(gk.guru))
@@ -174,6 +186,12 @@ export default function BeritaAcaraSerahTerimaAS() {
           #area-cetak-btas .garis-nama { text-decoration-color: #000 !important; }
           #area-cetak-btas .ttd-blok { page-break-inside: avoid; }
           #area-cetak-btas .kop-surat { border-bottom-color: #000 !important; }
+          #area-cetak-btas * { color: #000 !important; }
+        }
+        /* Kunci gambar kop supaya tidak kebawa aturan CSS global (position:fixed dll). */
+        #area-cetak-btas .kop-logo img {
+          position: static !important; float: none !important;
+          display: block; max-width: 100%; max-height: 100%; object-fit: contain;
         }
       `}</style>
 
@@ -291,11 +309,33 @@ export default function BeritaAcaraSerahTerimaAS() {
       </div>
 
       <div id="area-cetak-btas" className="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-8 text-[13.5px] leading-relaxed text-slate-800">
-        <div className="kop-surat text-center border-b-2 border-slate-800 pb-3 mb-6">
-          {form.kabupaten && <p className="font-bold uppercase tracking-wide">{form.kabupaten}</p>}
-          {form.dinas && <p className="font-bold uppercase tracking-wide">{form.dinas}</p>}
-          <p className="font-bold uppercase tracking-wide text-base">{namaSekolah}</p>
-          {form.kecamatan && <p className="font-bold uppercase tracking-wide">{form.kecamatan}</p>}
+        <div className="kop-surat flex items-center gap-3 border-b-2 border-slate-800 pb-3 mb-6">
+          {/* Logo kiri: kabupaten. Kotak tetap ada walau kosong supaya teks tetap di tengah. */}
+          <div className="kop-logo w-[76px] h-[76px] shrink-0 flex items-center justify-center">
+            {logoKabupatenUrl && (
+              <img
+                src={logoKabupatenUrl}
+                alt="Logo kabupaten"
+                onError={(e) => { e.currentTarget.style.display = 'none' }}
+              />
+            )}
+          </div>
+          <div className="flex-1 text-center">
+            {form.kabupaten && <p className="font-bold uppercase tracking-wide">{form.kabupaten}</p>}
+            {form.dinas && <p className="font-bold uppercase tracking-wide">{form.dinas}</p>}
+            <p className="font-bold uppercase tracking-wide text-base">{namaSekolah}</p>
+            {form.kecamatan && <p className="font-bold uppercase tracking-wide">{form.kecamatan}</p>}
+          </div>
+          {/* Logo kanan: sekolah. */}
+          <div className="kop-logo w-[76px] h-[76px] shrink-0 flex items-center justify-center">
+            {logoSekolahUrl && (
+              <img
+                src={logoSekolahUrl}
+                alt="Logo sekolah"
+                onError={(e) => { e.currentTarget.style.display = 'none' }}
+              />
+            )}
+          </div>
         </div>
 
         <div className="text-center mb-6">
@@ -365,29 +405,47 @@ export default function BeritaAcaraSerahTerimaAS() {
           </div>
 
           <p className="text-center font-medium mb-4">SAKSI-SAKSI</p>
-          <div className="grid grid-cols-2 gap-6 text-center">
-            <div>
-              <table className="w-full">
-                <tbody>
-                  <Baris label="1. Tanda Tangan" nilai="" />
-                  <Baris label="Nama" nilai={isi(saksi1?.nama_lengkap, '')} />
-                  <Baris label="NIP" nilai={isi(saksi1?.nip, '')} />
-                </tbody>
-              </table>
-            </div>
-            <div>
-              <table className="w-full">
-                <tbody>
-                  <Baris label="2. Tanda Tangan" nilai="" />
-                  <Baris label="Nama" nilai={isi(saksi2?.nama_lengkap, '')} />
-                  <Baris label="NIP" nilai={isi(saksi2?.nip, '')} />
-                </tbody>
-              </table>
-            </div>
+          <div className="grid grid-cols-2 gap-8">
+            <BlokSaksi nomor={1} saksi={saksi1} />
+            <BlokSaksi nomor={2} saksi={saksi2} />
           </div>
         </div>
       </div>
     </Layout>
+  )
+}
+
+// Satu blok saksi: tiga kolom tetap (label | titik dua | isi) dan rata kiri,
+// jadi teks panjang membungkus di kolom isi saja dan tidak menggeser baris lain.
+function BlokSaksi({ nomor, saksi }) {
+  return (
+    <table className="w-full table-fixed text-left">
+      <colgroup>
+        <col style={{ width: '104px' }} />
+        <col style={{ width: '12px' }} />
+        <col />
+      </colgroup>
+      <tbody>
+        <tr>
+          <td className="py-1 align-top">{nomor}. Tanda Tangan</td>
+          <td className="py-1 align-top">:</td>
+          <td className="py-1 align-top">
+            {/* ruang untuk tanda tangan tangan */}
+            <div className="h-12 border-b border-dotted border-slate-400" />
+          </td>
+        </tr>
+        <tr>
+          <td className="py-0.5 align-top">Nama</td>
+          <td className="py-0.5 align-top">:</td>
+          <td className="py-0.5 align-top break-words">{isi(saksi?.nama_lengkap, '')}</td>
+        </tr>
+        <tr>
+          <td className="py-0.5 align-top">NIP</td>
+          <td className="py-0.5 align-top">:</td>
+          <td className="py-0.5 align-top break-words">{isi(saksi?.nip, '')}</td>
+        </tr>
+      </tbody>
+    </table>
   )
 }
 
