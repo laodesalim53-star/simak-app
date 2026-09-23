@@ -103,7 +103,6 @@ export default function ProfilSekolah() {
   const [uploadingTtd, setUploadingTtd] = useState(false)
   const [tersimpan, setTersimpan] = useState(false)
   const [logoUrl, setLogoUrl] = useState('')
-  const [logoUrl, setLogoUrl] = useState('')
   const [uploadingLogoKabupaten, setUploadingLogoKabupaten] = useState(false)
   const [logoKabupatenUrl, setLogoKabupatenUrl] = useState('')
   const [ttdUrl, setTtdUrl] = useState('')
