@@ -5,7 +5,7 @@
 // cukup dengan menambah objek di `daftarDokumen`.
 
 import { Link } from 'react-router-dom'
-import { IdCard, FileText, ClipboardList, ShieldCheck, GraduationCap } from 'lucide-react'
+import { IdCard, FileText, ClipboardList, ShieldCheck, GraduationCap, ArrowLeftRight } from 'lucide-react'
 import Layout from '../components/Layout'
 import { PALET_WARNA, BatikOverlay, IsiKartuHub } from '../components/hub'
 
@@ -46,7 +46,16 @@ const daftarDokumen = [
     warna: 'purple',
     siap: true,
   },
-]
+  {
+    id: 'serah-terima-as',
+    judul: 'Berita Acara Serah Terima AS',
+    deskripsi: 'Berita acara serah terima hasil pekerjaan asesmen antar-guru, lengkap dengan saksi dan tanda tangan.',
+    icon: ArrowLeftRight,
+    path: '/gudang-sk/portal-ujian/berita-acara-serah-terima-as',
+    warna: 'teal',
+    siap: true,
+  },
+  ]
 
 export default function PortalUjian() {
   return (
