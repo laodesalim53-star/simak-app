@@ -15,7 +15,6 @@ import {
   SEKOLAH_KOSONG,
   ambilGuruDanKelas,
   ambilProfilSekolah,
-  formatTanggalSK,
   inputSK as inputCls,
   isi,
   isoHariIni,
@@ -27,6 +26,17 @@ import {
 function isKelasEnam(k) {
   const t = String(k?.tingkat ?? '').trim().toUpperCase()
   return t === '6' || t === 'VI'
+}
+
+// Format lengkap dengan nama hari: "Rabu, 23 September 2026".
+function formatHariTanggal(iso) {
+  if (!iso) return '…………'
+  return new Date(`${iso}T00:00:00`).toLocaleDateString('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
 }
 
 export default function BeritaAcaraUjian() {
@@ -45,7 +55,6 @@ export default function BeritaAcaraUjian() {
     ruangId: '',
     jumlahPeserta: '',
     jumlahHadir: '',
-    jumlahTidakHadir: '',
     pengawas1Id: '',
     pengawas2Id: '',
     catatanKejadian: 'Ujian berlangsung tertib, tidak ada kejadian khusus.',
@@ -81,6 +90,18 @@ export default function BeritaAcaraUjian() {
 
   const ubah = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
+  // Ganti ruang: kalau guru yang sudah dipilih ternyata wali kelas ruang baru, kosongkan.
+  const ubahRuang = (e) => {
+    const ruangId = e.target.value
+    const wali = kelasEnam.find((k) => k.id === ruangId)?.wali_kelas_id
+    setForm((f) => ({
+      ...f,
+      ruangId,
+      pengawas1Id: wali && f.pengawas1Id === wali ? '' : f.pengawas1Id,
+      pengawas2Id: wali && f.pengawas2Id === wali ? '' : f.pengawas2Id,
+    }))
+  }
+
   const guruPerId = useMemo(() => {
     const m = {}
     guru.forEach((g) => { m[g.id] = g })
@@ -95,21 +116,40 @@ export default function BeritaAcaraUjian() {
     [guru, ruang]
   )
 
+  // Tidak hadir dihitung otomatis dari terdaftar - hadir.
+  const tidakHadir = useMemo(() => {
+    if (form.jumlahPeserta === '' || form.jumlahHadir === '') return ''
+    return String(Math.max(0, Number(form.jumlahPeserta) - Number(form.jumlahHadir)))
+  }, [form.jumlahPeserta, form.jumlahHadir])
+
+  const hadirMelebihi =
+    form.jumlahPeserta !== '' && form.jumlahHadir !== '' && Number(form.jumlahHadir) > Number(form.jumlahPeserta)
+
   const namaSekolah = isi(sekolah.nama, 'NAMA SEKOLAH')
   const tapel = tahunPelajaranSekarang()
   const namaRuang = ruang?.nama_kelas || '…………'
   const pengawas1 = guruPerId[form.pengawas1Id]?.nama_lengkap || '…………'
   const pengawas2 = guruPerId[form.pengawas2Id]?.nama_lengkap || '…………'
-  const hariTanggal = formatTanggalSK(form.tanggal)
+  const hariTanggal = formatHariTanggal(form.tanggal)
   const tempatTanggal = `${isi(tempatSekolah, '…………')}, ${hariTanggal}`
 
   return (
     <Layout title="Berita Acara Ujian" subtitle="Berita acara pelaksanaan ujian per ruang, siap cetak.">
       <style>{`
+        @page { size: A4; margin: 15mm 18mm; }
         @media print {
           body * { visibility: hidden; }
           #area-cetak-ba, #area-cetak-ba * { visibility: visible; }
-          #area-cetak-ba { position: absolute; left: 0; top: 0; width: 100%; }
+          #area-cetak-ba {
+            position: absolute; left: 0; top: 0; width: 100%;
+            border: 0 !important; border-radius: 0 !important; padding: 0 !important;
+            max-width: none !important; margin: 0 !important;
+            font-family: 'Times New Roman', Times, serif;
+            color: #000 !important;
+          }
+          #area-cetak-ba .catatan-kejadian { background: #fff !important; border-color: #000 !important; }
+          #area-cetak-ba .garis-nama { text-decoration-color: #000 !important; }
+          #area-cetak-ba .ttd-blok { page-break-inside: avoid; }
         }
       `}</style>
 
@@ -128,7 +168,7 @@ export default function BeritaAcaraUjian() {
         <Bagian judul="Ruang & mata pelajaran">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Ruang ujian (kelas VI)">
-              <select className={inputCls} value={form.ruangId} onChange={ubah('ruangId')}>
+              <select className={inputCls} value={form.ruangId} onChange={ubahRuang}>
                 {kelasEnam.length === 0 && <option value="">— tidak ada kelas VI —</option>}
                 {kelasEnam.map((k) => (
                   <option key={k.id} value={k.id}>{k.nama_kelas}</option>
@@ -144,7 +184,7 @@ export default function BeritaAcaraUjian() {
           </div>
         </Bagian>
 
-        <Bagian judul="Jumlah peserta">
+        <Bagian judul="Jumlah peserta" keterangan="Jumlah tidak hadir dihitung otomatis dari terdaftar dikurangi hadir.">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Field label="Terdaftar">
               <input className={inputCls} inputMode="numeric" value={form.jumlahPeserta} onChange={ubah('jumlahPeserta')} />
@@ -152,10 +192,13 @@ export default function BeritaAcaraUjian() {
             <Field label="Hadir">
               <input className={inputCls} inputMode="numeric" value={form.jumlahHadir} onChange={ubah('jumlahHadir')} />
             </Field>
-            <Field label="Tidak hadir">
-              <input className={inputCls} inputMode="numeric" value={form.jumlahTidakHadir} onChange={ubah('jumlahTidakHadir')} />
+            <Field label="Tidak hadir (otomatis)">
+              <input className={`${inputCls} bg-slate-50`} value={tidakHadir} readOnly tabIndex={-1} />
             </Field>
           </div>
+          {hadirMelebihi && (
+            <p className="mt-2 text-xs text-amber-700">Jumlah hadir melebihi jumlah terdaftar, mohon dicek.</p>
+          )}
         </Bagian>
 
         <Bagian judul="Pengawas ruang" keterangan="Guru wali kelas ruang ini tidak ditampilkan (pengawasan silang).">
@@ -163,17 +206,21 @@ export default function BeritaAcaraUjian() {
             <Field label="Pengawas I">
               <select className={inputCls} value={form.pengawas1Id} onChange={ubah('pengawas1Id')}>
                 <option value="">— pilih guru —</option>
-                {pilihanPengawas.map((g) => (
-                  <option key={g.id} value={g.id}>{g.nama_lengkap}</option>
-                ))}
+                {pilihanPengawas
+                  .filter((g) => g.id !== form.pengawas2Id)
+                  .map((g) => (
+                    <option key={g.id} value={g.id}>{g.nama_lengkap}</option>
+                  ))}
               </select>
             </Field>
             <Field label="Pengawas II">
               <select className={inputCls} value={form.pengawas2Id} onChange={ubah('pengawas2Id')}>
                 <option value="">— pilih guru —</option>
-                {pilihanPengawas.map((g) => (
-                  <option key={g.id} value={g.id}>{g.nama_lengkap}</option>
-                ))}
+                {pilihanPengawas
+                  .filter((g) => g.id !== form.pengawas1Id)
+                  .map((g) => (
+                    <option key={g.id} value={g.id}>{g.nama_lengkap}</option>
+                  ))}
               </select>
             </Field>
           </div>
@@ -211,30 +258,43 @@ export default function BeritaAcaraUjian() {
           <tbody>
             <Baris label="Jumlah peserta terdaftar" nilai={isi(form.jumlahPeserta)} />
             <Baris label="Jumlah peserta hadir" nilai={isi(form.jumlahHadir)} />
-            <Baris label="Jumlah peserta tidak hadir" nilai={isi(form.jumlahTidakHadir)} />
+            <Baris label="Jumlah peserta tidak hadir" nilai={isi(tidakHadir)} />
             <Baris label="Pengawas ruang" nilai={`${pengawas1} & ${pengawas2}`} />
           </tbody>
         </table>
 
         <p className="mb-1 font-medium">Catatan kejadian selama ujian:</p>
-        <p className="mb-6 rounded-lg border border-slate-200 bg-slate-50 p-3">{isi(form.catatanKejadian)}</p>
+        <p className="catatan-kejadian mb-6 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          {isi(form.catatanKejadian)}
+        </p>
 
-        <p className="mb-10">
+        <p className="mb-6">
           Demikian berita acara ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.
         </p>
 
-        <div className="grid grid-cols-2 gap-6 text-center">
-          <div>
-            <p className="mb-16">Pengawas Ruang I</p>
-            <p className="font-semibold underline decoration-slate-300 underline-offset-4">{pengawas1}</p>
+        <div className="ttd-blok">
+          <p className="text-right mb-4">{tempatTanggal}</p>
+
+          <div className="grid grid-cols-2 gap-6 text-center">
+            <div>
+              <p className="mb-16">Pengawas Ruang I</p>
+              <p className="garis-nama font-semibold underline decoration-slate-400 underline-offset-4">{pengawas1}</p>
+            </div>
+            <div>
+              <p className="mb-16">Pengawas Ruang II</p>
+              <p className="garis-nama font-semibold underline decoration-slate-400 underline-offset-4">{pengawas2}</p>
+            </div>
           </div>
-          <div>
-            <p className="mb-16">Pengawas Ruang II</p>
-            <p className="font-semibold underline decoration-slate-300 underline-offset-4">{pengawas2}</p>
+
+          <div className="mt-8 text-center">
+            <p>Mengetahui,</p>
+            <p className="mb-16">Kepala {namaSekolah}</p>
+            <p className="garis-nama font-semibold underline decoration-slate-400 underline-offset-4">
+              {isi(sekolah.kepala, 'Nama Kepala Sekolah')}
+            </p>
+            {sekolah.nipKepala && <p>NIP. {sekolah.nipKepala}</p>}
           </div>
         </div>
-
-        <p className="mt-10 text-right">{tempatTanggal}</p>
       </div>
     </Layout>
   )
