@@ -172,7 +172,7 @@ export default function BeritaAcaraSerahTerimaAS() {
   return (
     <Layout title="Berita Acara Serah Terima AS" subtitle="Serah terima hasil pekerjaan asesmen antar-guru, siap cetak.">
       <style>{`
-        @page { size: A4; margin: 15mm 18mm; }
+        @page { size: A4; margin: 12mm 16mm; }
         @media print {
           body * { visibility: hidden; }
           #area-cetak-btas, #area-cetak-btas * { visibility: visible; }
@@ -187,6 +187,17 @@ export default function BeritaAcaraSerahTerimaAS() {
           #area-cetak-btas .ttd-blok { page-break-inside: avoid; }
           #area-cetak-btas .kop-surat { border-bottom-color: #000 !important; }
           #area-cetak-btas * { color: #000 !important; }
+
+          /* === MODE SATU HALAMAN === */
+          /* Ukuran huruf cetak: turunkan ke 10.5pt / 10pt kalau isi masih meluber. */
+          #area-cetak-btas { font-size: 11pt !important; line-height: 1.35 !important; break-inside: avoid; }
+          #area-cetak-btas .kop-surat { padding-bottom: 6px !important; margin-bottom: 12px !important; }
+          #area-cetak-btas .kop-logo { width: 64px !important; height: 64px !important; }
+          #area-cetak-btas .judul-blok { margin-bottom: 12px !important; }
+          #area-cetak-btas .isi-blok { margin-bottom: 8px !important; }
+          #area-cetak-btas .ttd-jarak { margin-bottom: 44px !important; }
+          #area-cetak-btas .ttd-grid { margin-bottom: 14px !important; }
+          #area-cetak-btas .saksi-ttd { height: 36px !important; }
         }
         /* Kunci gambar kop supaya tidak kebawa aturan CSS global (position:fixed dll). */
         #area-cetak-btas .kop-logo img {
@@ -338,20 +349,20 @@ export default function BeritaAcaraSerahTerimaAS() {
           </div>
         </div>
 
-        <div className="text-center mb-6">
+        <div className="judul-blok text-center mb-6">
           <p className="font-display text-base font-bold uppercase">Berita Acara</p>
           <p className="font-bold uppercase">Serah Terima Hasil Pekerjaan {form.namaPekerjaan}</p>
           <p>Tahun Pelajaran {tapel}</p>
         </div>
 
-        <p className="mb-4">
+        <p className="isi-blok mb-4">
           Pada hari ini <strong>{hari}</strong>, Tanggal <strong>{tanggal}</strong> Bulan{' '}
           <strong>{bulan}</strong> Tahun <strong>{tahunKata}</strong> bertempat di{' '}
           <strong>{isi(form.tempat, '…………')}</strong>, telah dilakukan serah terima hasil pekerjaan{' '}
           {form.namaPekerjaan} oleh:
         </p>
 
-        <div className="mb-3">
+        <div className="isi-blok mb-3">
           <table className="w-full">
             <tbody>
               <Baris label="1. Nama" nilai={isi(pihak1?.nama_lengkap)} />
@@ -363,7 +374,7 @@ export default function BeritaAcaraSerahTerimaAS() {
           <p className="mt-1 ml-4">Selanjutnya disebut <strong>PIHAK PERTAMA</strong></p>
         </div>
 
-        <div className="mb-4">
+        <div className="isi-blok mb-4">
           <table className="w-full">
             <tbody>
               <Baris label="2. Nama" nilai={isi(pihak2?.nama_lengkap)} />
@@ -376,7 +387,7 @@ export default function BeritaAcaraSerahTerimaAS() {
         </div>
 
         <p className="mb-1 font-medium">Dengan ketentuan bahwa:</p>
-        <ol className="list-decimal ml-5 mb-6 space-y-1">
+        <ol className="isi-blok list-decimal ml-5 mb-6 space-y-1">
           <li>Pihak pertama menyerahkan kepada pihak kedua hasil pekerjaan {form.namaPekerjaan} sebagai rincian terlampir.</li>
           <li>
             Pihak kedua menerima hasil pekerjaan {form.namaPekerjaan} tersebut dengan penuh rasa tanggung jawab, untuk di{' '}
@@ -385,10 +396,10 @@ export default function BeritaAcaraSerahTerimaAS() {
         </ol>
 
         <div className="ttd-blok">
-          <div className="grid grid-cols-2 gap-6 text-center mb-8">
+          <div className="ttd-grid grid grid-cols-2 gap-6 text-center mb-8">
             <div>
               <p>PIHAK KEDUA</p>
-              <p className="mb-16">Yang menerima</p>
+              <p className="ttd-jarak mb-16">Yang menerima</p>
               <p className="garis-nama font-semibold underline decoration-slate-400 underline-offset-4">
                 {isi(pihak2?.nama_lengkap, '…………')}
               </p>
@@ -396,7 +407,7 @@ export default function BeritaAcaraSerahTerimaAS() {
             </div>
             <div>
               <p>PIHAK PERTAMA</p>
-              <p className="mb-16">Yang Menyerahkan</p>
+              <p className="ttd-jarak mb-16">Yang Menyerahkan</p>
               <p className="garis-nama font-semibold underline decoration-slate-400 underline-offset-4">
                 {isi(pihak1?.nama_lengkap, '…………')}
               </p>
@@ -431,7 +442,7 @@ function BlokSaksi({ nomor, saksi }) {
           <td className="py-1 align-top">:</td>
           <td className="py-1 align-top">
             {/* ruang untuk tanda tangan tangan */}
-            <div className="h-12 border-b border-dotted border-slate-400" />
+            <div className="saksi-ttd h-12 border-b border-dotted border-slate-400" />
           </td>
         </tr>
         <tr>
