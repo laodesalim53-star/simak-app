@@ -77,12 +77,25 @@ function QRImg({ value, size = 20 }) {
   return <img src={src} alt="QR peserta" width={size} height={size} style={{ display: 'block' }} />
 }
 
+// Bucket & kolom foto sama persis dengan Siswa.jsx (fitur "Foto" di tabel
+// Data Siswa): kolom `foto_path` di tabel siswa, bucket Storage "foto-siswa"
+// (public), path disimpan sebagai "{siswa_id}/foto.{ext}".
+function fotoUrl(path) {
+  if (!path) return null
+  return supabase.storage.from('foto-siswa').getPublicUrl(path).data.publicUrl
+}
+
 // Ukuran kartu disamakan dengan kartu ID standar (kartu pelajar/ATM, CR80)
 // 85.6mm x 54mm — ukuran fisik yang sama juga dipakai kartu peserta ujian
 // pada umumnya. Karena ruangnya jadi jauh lebih kecil dari versi sebelumnya,
 // tanda tangan kepala sekolah dan tempat/tanggal ditampilkan ringkas di
 // footer (tanpa spasi tanda tangan basah — kalau perlu itu, sebaiknya jadi
 // halaman terpisah, bukan di kartu sekecil ini).
+//
+// FOTO SISWA: diambil dari kolom `foto_path` di tabel siswa + bucket Storage
+// "foto-siswa" (sama persis dengan fitur upload foto di halaman Data Siswa /
+// Siswa.jsx). Kalau siswa belum punya foto, kotak foto otomatis menampilkan
+// ikon placeholder seperti sebelumnya.
 function KartuUjian({ siswa, sekolah }) {
   const qrValue = `PESERTA:${siswa.noPeserta}|NAMA:${siswa.nama}|SEKOLAH:${sekolah.namaSekolah}`
 
@@ -106,7 +119,11 @@ function KartuUjian({ siswa, sekolah }) {
       {/* Body */}
       <div className="flex flex-1 gap-[2mm] px-[2.5mm] py-[1.5mm]">
         <div className="flex h-[19mm] w-[15mm] shrink-0 items-center justify-center overflow-hidden rounded-[1.5mm] border border-slate-200 bg-slate-50">
-          <User size={16} className="text-slate-300" />
+          {siswa.fotoUrl ? (
+            <img src={siswa.fotoUrl} alt={siswa.nama} className="h-full w-full object-cover" />
+          ) : (
+            <User size={16} className="text-slate-300" />
+          )}
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col justify-between">
@@ -222,7 +239,7 @@ export default function KartuPesertaUjian() {
     // ikut kena), lalu filter lagi hanya yang sudah punya No. Peserta Ujian.
     const { data, error } = await supabase
       .from('siswa')
-      .select('id, nama_lengkap, nisn, tanggal_lahir, no_peserta_ujian, ruang_ujian, kelas(nama_kelas)')
+      .select('id, nama_lengkap, nisn, tanggal_lahir, no_peserta_ujian, ruang_ujian, foto_path, kelas(nama_kelas)')
       .eq('sekolah_id', sekolahId)
       .order('nama_lengkap')
 
@@ -244,6 +261,7 @@ export default function KartuPesertaUjian() {
       noInduk: s.nisn,
       tanggalLahir: formatTanggalIndonesia(s.tanggal_lahir),
       ruangUjian: s.ruang_ujian,
+      fotoUrl: fotoUrl(s.foto_path),
     }))
 
     setSiswaList(peserta)
