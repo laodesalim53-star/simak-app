@@ -1,9 +1,10 @@
 // src/pages/KartuPesertaUjian.jsx
 //
-// Gabungan:
-// - TEMPLATE kartu (model panjang/potret) dari versi React yang sudah disetujui.
-// - LOGIKA pengambilan data (Supabase, profil sekolah, filter Kelas 6, peserta
-//   yang sudah punya No. Peserta Ujian, filter ruang) dari versi sebelumnya.
+// - TEMPLATE kartu: model panjang (potret) yang sudah disetujui.
+// - LOGIKA data: Supabase (siswa + profil_sekolah), filter Kelas 6, hanya
+//   siswa yang sudah punya No. Peserta Ujian, filter ruang.
+// - FOTO SISWA: kolom `foto_path` di tabel siswa + bucket Storage "foto-siswa"
+//   (public), sama persis dengan fitur "Foto" di Siswa.jsx.
 //
 // CATATAN SKEMA:
 // - "No. Induk" di kartu diambil dari kolom `nisn` di tabel siswa.
@@ -13,16 +14,11 @@
 //   Selama kolom ini kosong, kartu menampilkan "-" pada Ruang Ujian dan siswa
 //   itu tidak muncul di filter dropdown ruang.
 //
-// PERUBAHAN UKURAN (tinggi kartu berkurang sekitar 2,5 cm / 94 px):
-//   - baris "Sekolah Asal" dihapus (sudah ada di header)       -32 px
-//   - baris "Tahun Pelajaran" di header dihapus (sudah ada di
-//     badge TP)                                                -16 px
-//   - garis pemisah my-5 -> my-3                                -16 px
-//   - padding header pt-5/pb-4 -> pt-4/pb-3                      -8 px
-//   - padding body py-5 -> py-4                                  -8 px
-//   - jarak antarbaris data gap-3 -> gap-2                       -8 px
-//   - jarak tempat/tanggal ke nama kepsek mb-6 -> mb-4           -5 px
-//   Lebar kartu tidak berubah (max 340 px).
+// UKURAN KARTU: 8 cm x 10,7 cm (sebelumnya sekitar 9 cm x 11,7 cm), ditetapkan
+// lewat style={{ width, height }} di KartuUjian supaya semua kartu sama besar
+// dan ukuran cetaknya pasti. Kalau mau diubah lagi, ganti dua angka itu saja.
+// Nama siswa dan nama sekolah dibatasi maksimal 2 baris supaya isi kartu
+// tidak melebihi tinggi tetap tersebut.
 
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
@@ -84,6 +80,22 @@ const IDENTITAS_SEKOLAH_DEFAULT = {
   kepalaSekolah: 'La Ode Salim, S.Pd',
 }
 
+// Bucket & kolom foto sama persis dengan Siswa.jsx (fitur "Foto" di tabel
+// Data Siswa): kolom `foto_path` di tabel siswa, bucket Storage "foto-siswa"
+// (public), path disimpan sebagai "{siswa_id}/foto.{ext}".
+function fotoUrl(path) {
+  if (!path) return null
+  return supabase.storage.from('foto-siswa').getPublicUrl(path).data.publicUrl
+}
+
+// Batasi teks maksimal 2 baris (tanpa perlu plugin line-clamp Tailwind).
+const BATAS_2_BARIS = {
+  display: '-webkit-box',
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: 'vertical',
+  overflow: 'hidden',
+}
+
 // QR code lewat layanan publik QR Server (tanpa dependensi tambahan).
 // Untuk versi offline: `npm install qrcode.react` lalu ganti jadi
 // <QRCodeSVG value={qrValue} size={60} />.
@@ -93,58 +105,79 @@ function QRImg({ value, size = 60 }) {
 }
 
 function KartuUjian({ siswa, sekolah }) {
+  // Kalau foto gagal dimuat (file terhapus / URL salah), balik ke ikon placeholder.
+  const [fotoGagal, setFotoGagal] = useState(false)
   const qrValue = `PESERTA:${siswa.noPeserta}|NAMA:${siswa.nama}|SEKOLAH:${sekolah.namaSekolah}`
 
   return (
-    <div className="kartu-ujian w-full max-w-[340px] rounded-[22px] border border-teal-900/10 bg-white shadow-lg shadow-teal-900/10 overflow-hidden relative">
+    <div
+      className="kartu-ujian relative flex shrink-0 flex-col overflow-hidden rounded-[22px] border border-teal-900/10 bg-white shadow-lg shadow-teal-900/10"
+      style={{ width: '8cm', height: '10.7cm' }}
+    >
       <div
-        className="h-1.5 w-full"
+        className="h-1.5 w-full shrink-0"
         style={{ backgroundImage: 'linear-gradient(90deg, #0f6e5e 0%, #0f6e5e 65%, #e8a33d 65%, #e8a33d 100%)' }}
       />
 
-      {/* Header */}
-      <div className="relative px-5 pt-4 pb-3 text-white bg-gradient-to-br from-[#0a4a40] to-[#0f6e5e]">
-        <span className="absolute top-4 right-5 rounded-full bg-amber-400 px-2.5 py-1 text-[11px] font-semibold text-amber-950">
-          TP {sekolah.tapel}
-        </span>
-        <div className="flex items-center gap-3 pr-16">
+      {/* Header — badge TP ditaruh sejajar label "Kartu Peserta" supaya tidak
+          menimpa nama sekolah yang panjang. */}
+      <div className="shrink-0 bg-gradient-to-br from-[#0a4a40] to-[#0f6e5e] px-4 py-3 text-white">
+        <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-white/15">
             <GraduationCap size={20} />
           </div>
-          <div className="min-w-0">
-            <p className="text-[10.5px] uppercase tracking-wide text-white/70">Kartu Peserta</p>
-            <p className="font-display text-[17px] font-bold leading-tight">Asesmen {sekolah.namaSekolah}</p>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10.5px] uppercase tracking-wide text-white/70">Kartu Peserta</p>
+              <span className="shrink-0 rounded-full bg-amber-400 px-2 py-0.5 text-[10.5px] font-semibold leading-4 text-amber-950">
+                TP {sekolah.tapel}
+              </span>
+            </div>
+            <p className="font-display text-[16px] font-bold leading-tight" style={BATAS_2_BARIS}>
+              Asesmen {sekolah.namaSekolah}
+            </p>
           </div>
         </div>
       </div>
 
       {/* Body */}
-      <div className="px-5 py-4">
-        <div className="flex items-start gap-4">
-          <div className="flex h-[110px] w-[88px] shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-            <User size={44} className="text-slate-300" />
+      <div className="flex min-h-0 flex-1 flex-col justify-between px-4 py-3">
+        <div className="flex items-start gap-3">
+          <div className="flex h-[100px] w-[75px] shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+            {siswa.fotoUrl && !fotoGagal ? (
+              <img
+                src={siswa.fotoUrl}
+                alt={siswa.nama}
+                className="h-full w-full object-cover"
+                onError={() => setFotoGagal(true)}
+              />
+            ) : (
+              <User size={36} className="text-slate-300" />
+            )}
           </div>
-          <div className="min-w-0 pt-0.5">
+          <div className="min-w-0 flex-1 pt-0.5">
             <p className="text-[10.5px] tracking-wide text-slate-500">Nama Peserta</p>
-            <p className="font-display text-[18px] font-bold leading-snug mb-2.5">{siswa.nama}</p>
-            <div className="inline-flex items-baseline gap-1.5 rounded-[9px] border border-slate-200 bg-slate-50 px-2.5 py-1.5">
+            <p className="mb-2 font-display text-[16px] font-bold leading-snug" style={BATAS_2_BARIS}>
+              {siswa.nama}
+            </p>
+            <div className="inline-flex items-baseline gap-1.5 rounded-[9px] border border-slate-200 bg-slate-50 px-2.5 py-1">
               <span className="font-display text-[15px] font-bold text-teal-700">{siswa.ruangUjian || '-'}</span>
               <span className="text-[10.5px] text-slate-500">Ruang Ujian</span>
             </div>
           </div>
         </div>
 
-        <div className="my-3 h-px bg-slate-200" />
-
-        <div className="flex flex-col gap-2">
-          <Baris label="No. Peserta" nilai={siswa.noPeserta} />
-          <Baris label="No. Induk" nilai={siswa.noInduk || '-'} />
-          <Baris label="Tanggal Lahir" nilai={siswa.tanggalLahir} />
+        <div className="mt-2.5 border-t border-slate-200 pt-2.5">
+          <div className="flex flex-col gap-1">
+            <Baris label="No. Peserta" nilai={siswa.noPeserta} />
+            <Baris label="No. Induk" nilai={siswa.noInduk || '-'} />
+            <Baris label="Tanggal Lahir" nilai={siswa.tanggalLahir} />
+          </div>
         </div>
 
-        <div className="mt-5 flex items-end justify-between gap-3">
-          <div className="text-[11.5px] leading-relaxed text-slate-500">
-            <p className="mb-4">{sekolah.tempatTanggal}</p>
+        <div className="mt-2 flex items-end justify-between gap-3">
+          <div className="min-w-0 text-[11.5px] leading-relaxed text-slate-500">
+            <p className="mb-3">{sekolah.tempatTanggal}</p>
             <p className="font-semibold text-slate-900">{sekolah.kepalaSekolah}</p>
             <p className="text-[11px] text-slate-500">Kepala Sekolah</p>
           </div>
@@ -155,7 +188,7 @@ function KartuUjian({ siswa, sekolah }) {
       </div>
 
       <div
-        className="h-2.5 w-full opacity-90"
+        className="h-2 w-full shrink-0 opacity-90"
         style={{ backgroundImage: 'repeating-linear-gradient(90deg, #0f6e5e 0 16px, #e8a33d 16px 32px)' }}
       />
     </div>
@@ -164,7 +197,7 @@ function KartuUjian({ siswa, sekolah }) {
 
 function Baris({ label, nilai }) {
   return (
-    <div className="grid grid-cols-[118px_1fr] items-baseline gap-2.5">
+    <div className="grid grid-cols-[104px_1fr] items-baseline gap-2.5">
       <span className="text-[11.5px] text-slate-500">{label}</span>
       <span className="text-[13.5px] font-semibold text-slate-900">{nilai}</span>
     </div>
@@ -237,7 +270,7 @@ export default function KartuPesertaUjian() {
     // yang sudah punya No. Peserta Ujian.
     const { data, error } = await supabase
       .from('siswa')
-      .select('id, nama_lengkap, nisn, tanggal_lahir, no_peserta_ujian, ruang_ujian, kelas(nama_kelas)')
+      .select('id, nama_lengkap, nisn, tanggal_lahir, no_peserta_ujian, ruang_ujian, foto_path, kelas(nama_kelas)')
       .eq('sekolah_id', sekolahId)
       .order('nama_lengkap')
 
@@ -259,6 +292,7 @@ export default function KartuPesertaUjian() {
       noInduk: s.nisn,
       tanggalLahir: formatTanggalIndonesia(s.tanggal_lahir),
       ruangUjian: s.ruang_ujian,
+      fotoUrl: fotoUrl(s.foto_path),
     }))
 
     setSiswaList(peserta)
@@ -358,6 +392,10 @@ export default function KartuPesertaUjian() {
         Nama sekolah, kepala sekolah, dan tempat/tanggal diambil otomatis dari halaman Profil Sekolah. Tahun
         pelajaran dihitung otomatis dari tanggal hari ini.
       </p>
+      <p className="print:hidden mb-1 text-xs text-slate-500">
+        Foto siswa diambil dari fitur Foto di halaman Data Siswa. Siswa yang belum punya foto tampil dengan ikon
+        placeholder.
+      </p>
       <p className="print:hidden mb-4 text-xs text-slate-500">
         Agar warna kartu ikut tercetak: buka dialog Print → "More settings" / "Lainnya" → centang
         "Background graphics" / "Grafik latar belakang", baru klik Print.
@@ -372,7 +410,7 @@ export default function KartuPesertaUjian() {
       ) : (
         <div
           id="area-cetak-kartu"
-          className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 place-items-center print:grid-cols-2 print:gap-4"
+          className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 justify-items-center print:grid-cols-2 print:gap-4"
         >
           {siswaTampil.map((siswa) => (
             <KartuUjian key={siswa.id} siswa={siswa} sekolah={identitasSekolah} />
