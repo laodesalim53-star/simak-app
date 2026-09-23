@@ -72,88 +72,81 @@ const IDENTITAS_SEKOLAH_DEFAULT = {
 // QR code lewat layanan publik (tanpa dependensi tambahan) — lihat catatan
 // di percakapan sebelumnya kalau mau ganti ke qrcode.react untuk versi
 // offline.
-function QRImg({ value, size = 60 }) {
+function QRImg({ value, size = 20 }) {
   const src = `https://api.qrserver.com/v1/create-qr-code/?size=${size * 3}x${size * 3}&data=${encodeURIComponent(value)}`
   return <img src={src} alt="QR peserta" width={size} height={size} style={{ display: 'block' }} />
 }
 
+// Ukuran kartu disamakan dengan kartu ID standar (kartu pelajar/ATM, CR80)
+// 85.6mm x 54mm — ukuran fisik yang sama juga dipakai kartu peserta ujian
+// pada umumnya. Karena ruangnya jadi jauh lebih kecil dari versi sebelumnya,
+// tanda tangan kepala sekolah dan tempat/tanggal ditampilkan ringkas di
+// footer (tanpa spasi tanda tangan basah — kalau perlu itu, sebaiknya jadi
+// halaman terpisah, bukan di kartu sekecil ini).
 function KartuUjian({ siswa, sekolah }) {
   const qrValue = `PESERTA:${siswa.noPeserta}|NAMA:${siswa.nama}|SEKOLAH:${sekolah.namaSekolah}`
 
   return (
-    <div className="kartu-ujian w-full max-w-[340px] rounded-[22px] border border-teal-900/10 bg-white shadow-lg shadow-teal-900/10 overflow-hidden relative">
-      <div
-        className="h-1.5 w-full"
-        style={{ backgroundImage: 'linear-gradient(90deg, #0f6e5e 0%, #0f6e5e 65%, #e8a33d 65%, #e8a33d 100%)' }}
-      />
-
+    <div
+      className="kartu-ujian shrink-0 flex flex-col overflow-hidden rounded-[3mm] border border-teal-900/10 bg-white shadow-md shadow-teal-900/10"
+      style={{ width: '85.6mm', height: '54mm' }}
+    >
       {/* Header */}
-      <div className="relative px-5 pt-5 pb-4 text-white bg-gradient-to-br from-[#0a4a40] to-[#0f6e5e]">
-        <span className="absolute top-5 right-5 rounded-full bg-amber-400 px-2.5 py-1 text-[11px] font-semibold text-amber-950">
+      <div className="flex items-center gap-1.5 bg-gradient-to-r from-[#0a4a40] to-[#0f6e5e] px-[2.5mm] py-[1.3mm] text-white">
+        <GraduationCap size={11} className="shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[6.5px] font-bold leading-tight">{sekolah.namaSekolah}</p>
+          <p className="text-[5.5px] uppercase tracking-wide text-white/70 leading-tight">Kartu Peserta Asesmen</p>
+        </div>
+        <span className="shrink-0 rounded-full bg-amber-400 px-[1.5mm] py-[0.3mm] text-[5.5px] font-semibold text-amber-950">
           TP {sekolah.tapel}
         </span>
-        <div className="flex items-center gap-3 pr-16">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-white/15">
-            <GraduationCap size={20} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[10.5px] uppercase tracking-wide text-white/70">Kartu Peserta</p>
-            <p className="font-display text-[17px] font-bold leading-tight">Asesmen {sekolah.namaSekolah}</p>
-            <p className="text-xs text-white/80">Tahun Pelajaran {sekolah.tapel}</p>
-          </div>
-        </div>
       </div>
 
       {/* Body */}
-      <div className="px-5 py-5">
-        <div className="flex items-start gap-4">
-          <div className="flex h-[110px] w-[88px] shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-            <User size={44} className="text-slate-300" />
-          </div>
-          <div className="pt-0.5">
-            <p className="text-[10.5px] tracking-wide text-slate-500">Nama Peserta</p>
-            <p className="font-display text-[18px] font-bold leading-snug mb-2.5">{siswa.nama}</p>
-            <div className="inline-flex items-baseline gap-1.5 rounded-[9px] border border-slate-200 bg-slate-50 px-2.5 py-1.5">
-              <span className="font-display text-[15px] font-bold text-teal-700">{siswa.ruangUjian || '-'}</span>
-              <span className="text-[10.5px] text-slate-500">Ruang Ujian</span>
+      <div className="flex flex-1 gap-[2mm] px-[2.5mm] py-[1.5mm]">
+        <div className="flex h-[19mm] w-[15mm] shrink-0 items-center justify-center overflow-hidden rounded-[1.5mm] border border-slate-200 bg-slate-50">
+          <User size={16} className="text-slate-300" />
+        </div>
+
+        <div className="flex min-w-0 flex-1 flex-col justify-between">
+          <div>
+            <p className="truncate text-[8px] font-bold leading-tight text-slate-900">{siswa.nama}</p>
+            <div className="mt-[0.8mm] flex items-center gap-[1mm]">
+              <span className="rounded-[1mm] bg-teal-50 px-[1.2mm] py-[0.3mm] text-[6px] font-semibold text-teal-700">
+                No. {siswa.noPeserta}
+              </span>
+              <span className="rounded-[1mm] bg-amber-50 px-[1.2mm] py-[0.3mm] text-[6px] font-semibold text-amber-700">
+                Ruang {siswa.ruangUjian || '-'}
+              </span>
             </div>
           </div>
+
+          <div className="grid grid-cols-2 gap-x-[1.5mm] text-[6px] leading-tight">
+            <BarisKecil label="No. Induk" nilai={siswa.noInduk || '-'} />
+            <BarisKecil label="Tgl Lahir" nilai={siswa.tanggalLahir} />
+          </div>
         </div>
 
-        <div className="my-5 h-px bg-slate-200" />
-
-        <div className="flex flex-col gap-3">
-          <Baris label="No. Peserta" nilai={siswa.noPeserta} />
-          <Baris label="No. Induk" nilai={siswa.noInduk || '-'} />
-          <Baris label="Tanggal Lahir" nilai={siswa.tanggalLahir} />
-          <Baris label="Sekolah Asal" nilai={sekolah.namaSekolah} />
-        </div>
-
-        <div className="mt-5 flex items-end justify-between gap-3">
-          <div className="text-[11.5px] leading-relaxed text-slate-500">
-            <p className="mb-6">{sekolah.tempatTanggal}</p>
-            <p className="font-semibold text-slate-900">{sekolah.kepalaSekolah}</p>
-            <p className="text-[11px] text-slate-500">Kepala Sekolah</p>
-          </div>
-          <div className="shrink-0 rounded-[10px] border border-slate-200 bg-white p-1.5">
-            <QRImg value={qrValue} size={60} />
-          </div>
+        <div className="shrink-0 self-end rounded-[1mm] border border-slate-200 bg-white p-[0.5mm]">
+          <QRImg value={qrValue} size={19} />
         </div>
       </div>
 
-      <div
-        className="h-2.5 w-full opacity-90"
-        style={{ backgroundImage: 'repeating-linear-gradient(90deg, #0f6e5e 0 16px, #e8a33d 16px 32px)' }}
-      />
+      {/* Footer */}
+      <div className="flex items-center justify-between gap-[2mm] border-t border-slate-100 px-[2.5mm] py-[1mm] text-[5.5px] text-slate-500">
+        <span className="truncate">{sekolah.tempatTanggal}</span>
+        <span className="shrink-0 truncate font-semibold text-slate-700">{sekolah.kepalaSekolah}</span>
+      </div>
     </div>
   )
 }
 
-function Baris({ label, nilai }) {
+function BarisKecil({ label, nilai }) {
   return (
-    <div className="grid grid-cols-[118px_1fr] items-baseline gap-2.5">
-      <span className="text-[11.5px] text-slate-500">{label}</span>
-      <span className="text-[13.5px] font-semibold text-slate-900">{nilai}</span>
+    <div className="truncate">
+      <span className="text-slate-400">{label}: </span>
+      <span className="font-semibold text-slate-800">{nilai}</span>
     </div>
   )
 }
@@ -353,6 +346,11 @@ export default function KartuPesertaUjian() {
         Nama sekolah, kepala sekolah, dan tempat/tanggal diambil otomatis dari halaman Profil Sekolah. Tahun
         pelajaran dihitung otomatis dari tanggal hari ini.
       </p>
+      <p className="print:hidden mb-1 text-xs text-slate-500">
+        Ukuran kartu sekarang mengikuti standar kartu ID (85,6mm x 54mm, seukuran kartu ATM/kartu pelajar) —
+        cocok untuk dicetak di kertas kartu/PVC lalu digunting per kartu, atau dilaminasi dan dipasang di
+        gantungan ID card.
+      </p>
       <p className="print:hidden mb-4 text-xs text-slate-500">
         Agar warna kartu ikut tercetak: buka dialog Print → "More settings" / "Lainnya" → centang
         "Background graphics" / "Grafik latar belakang", baru klik Print.
@@ -365,7 +363,7 @@ export default function KartuPesertaUjian() {
             : 'Belum ada siswa Kelas 6 yang No. Peserta Ujian-nya terisi.'}
         </div>
       ) : (
-        <div id="area-cetak-kartu" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 place-items-center">
+        <div id="area-cetak-kartu" className="flex flex-wrap justify-center gap-[3mm] print:justify-start">
           {siswaTampil.map((siswa) => (
             <KartuUjian key={siswa.id} siswa={siswa} sekolah={identitasSekolah} />
           ))}
