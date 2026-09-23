@@ -64,6 +64,12 @@ const DaftarHonorLiterasiNumerasi = lazy(() => import('./pages/DaftarHonorLitera
 const DaftarHonorPengawasAsesmen = lazy(() => import('./pages/DaftarHonorPengawasAsesmen'))
 const DaftarHonorPanitiaUjian = lazy(() => import('./pages/DaftarHonorPanitiaUjian'))
 const DaftarHonorPanitiaPPDB = lazy(() => import('./pages/DaftarHonorPanitiaPPDB'))
+// Portal Ujian — kelengkapan ujian: kartu peserta, berita acara, daftar hadir.
+const PortalUjian = lazy(() => import('./pages/PortalUjian'))
+const KartuPesertaUjian = lazy(() => import('./pages/KartuPesertaUjian'))
+const BeritaAcaraUjian = lazy(() => import('./pages/BeritaAcaraUjian'))
+const DaftarHadirSiswaUjian = lazy(() => import('./pages/DaftarHadirSiswaUjian'))
+const DaftarHadirPengawasUjian = lazy(() => import('./pages/DaftarHadirPengawasUjian'))
 // Cetak Sampul Laporan (generik, kop otomatis dari profil_sekolah) — satu
 // halaman dengan sidebar menu, menggantikan file terpisah CetakSampul.jsx /
 // CetakSampulSemester.jsx / CetakSampul8355.jsx.
@@ -373,6 +379,11 @@ export default function App() {
           <Route path="/gudang-sk/daftar-honor-pengawas-asesmen" element={<DaftarHonorPengawasAsesmen />} />
           <Route path="/gudang-sk/daftar-honor-panitia-ujian" element={<DaftarHonorPanitiaUjian />} />
           <Route path="/gudang-sk/daftar-honor-panitia-ppdb" element={<DaftarHonorPanitiaPPDB />} />
+          <Route path="/gudang-sk/portal-ujian" element={<ProtectedRoute adminOnly><PortalUjian /></ProtectedRoute>} />
+          <Route path="/gudang-sk/portal-ujian/kartu-peserta" element={<ProtectedRoute adminOnly><KartuPesertaUjian /></ProtectedRoute>} />
+          <Route path="/gudang-sk/portal-ujian/berita-acara" element={<ProtectedRoute adminOnly><BeritaAcaraUjian /></ProtectedRoute>} />
+          <Route path="/gudang-sk/portal-ujian/daftar-hadir-siswa" element={<ProtectedRoute adminOnly><DaftarHadirSiswaUjian /></ProtectedRoute>} />
+          <Route path="/gudang-sk/portal-ujian/daftar-hadir-pengawas" element={<ProtectedRoute adminOnly><DaftarHadirPengawasUjian /></ProtectedRoute>} />
           {/* Cetak Sampul Laporan — satu halaman dengan sidebar menu berisi
               semua jenis laporan (Bulanan, Semester, 8355, LPJ BOS, dst).
               Dikunci adminOnly — dulu ada versi kedua tanpa adminOnly di bagian
