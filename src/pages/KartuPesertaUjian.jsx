@@ -16,8 +16,22 @@
 //     alter table siswa add column if not exists ruang_ujian text;
 //   Selama kolom ini kosong, kartu menampilkan "-" pada Ruang Ujian dan siswa
 //   itu tidak muncul di filter dropdown ruang.
-// - Menyimpan ruang butuh policy UPDATE pada tabel siswa untuk admin (biasanya
-//   sudah ada karena halaman Data Siswa juga mengedit data).
+// - Menyimpan ruang memakai fungsi SQL `set_ruang_ujian(p_data jsonb)` (satu
+//   request per batch 200 siswa). Buat dulu di Supabase SQL Editor:
+//     create or replace function public.set_ruang_ujian(p_data jsonb)
+//     returns integer language plpgsql security invoker as $$
+//     declare jumlah integer;
+//     begin
+//       update public.siswa s set ruang_ujian = nullif(trim(d.ruang), '')
+//       from jsonb_to_recordset(p_data) as d(id text, ruang text)
+//       where s.id::text = d.id;
+//       get diagnostics jumlah = row_count;
+//       return jumlah;
+//     end; $$;
+//     grant execute on function public.set_ruang_ujian(jsonb) to authenticated;
+//     notify pgrst, 'reload schema';
+// - Butuh policy UPDATE pada tabel siswa untuk admin (biasanya sudah ada
+//   karena halaman Data Siswa juga mengedit data).
 //
 // UKURAN KARTU: 8 cm x 10,7 cm, ditetapkan lewat style={{ width, height }} di
 // KartuUjian supaya semua kartu sama besar dan ukuran cetaknya pasti.
@@ -254,22 +268,28 @@ function ModalPengaturanRuang({ siswaList, onClose, onSimpan }) {
     }
 
     setMenyimpan(true)
-    const hasil = await Promise.all(
-      berubah.map((s) =>
-        supabase
-          .from('siswa')
-          .update({ ruang_ujian: (nilai[s.id] || '').trim() || null })
-          .eq('id', s.id)
-      )
-    )
+
+    // Simpan lewat fungsi SQL set_ruang_ujian: satu request per batch, bukan
+    // satu request per siswa, supaya tetap stabil untuk jumlah siswa besar.
+    const payload = berubah.map((s) => ({ id: String(s.id), ruang: (nilai[s.id] || '').trim() }))
+    const UKURAN_BATCH = 200
+    let error = null
+
+    for (let i = 0; i < payload.length; i += UKURAN_BATCH) {
+      const { error: err } = await supabase.rpc('set_ruang_ujian', {
+        p_data: payload.slice(i, i + UKURAN_BATCH),
+      })
+      if (err) {
+        error = err
+        break
+      }
+    }
+
     setMenyimpan(false)
 
-    const gagal = hasil.filter((h) => h.error)
-    if (gagal.length > 0) {
-      console.error('Gagal menyimpan ruang ujian:', gagal[0].error)
-      setPesanError(
-        `${gagal.length} data gagal disimpan: ${gagal[0].error.message}. Pastikan kolom ruang_ujian sudah ada di tabel siswa.`
-      )
+    if (error) {
+      console.error('Gagal menyimpan ruang ujian:', error)
+      setPesanError(`Gagal menyimpan: ${error.message}`)
       return
     }
 
