@@ -8,6 +8,7 @@ import {
   Instagram,
   RefreshCw,
   AlertTriangle,
+  GraduationCap,
 } from 'lucide-react'
 
 // Halaman ini level ATAS (route: /link-layanan) — bisa diakses semua peran
@@ -49,6 +50,21 @@ const KELOMPOK_LINK = [
     ],
   },
   {
+    id: 'akun-guru',
+    judul: 'Akun & Layanan Guru',
+    tautan: [
+      { id: 'ruang-gtk', nama: 'Ruang GTK', url: 'https://guru.kemendikdasmen.go.id/', bukaTabBaru: true },
+      {
+        id: 'sim-pkb',
+        nama: 'SIM PKB',
+        url: 'https://paspor-gtk.simpkb.id/casgpo/login?service=https%3A%2F%2Fapp.simpkb.id%2Fauth%2Flogin',
+        bukaTabBaru: true,
+      },
+      { id: 'belajar-id', nama: 'belajar.id', url: 'https://www.belajar.id/', bukaTabBaru: true },
+      { id: 'asn-digital', nama: 'ASN Digital', url: 'https://asndigital.bkn.go.id/', bukaTabBaru: true },
+    ],
+  },
+  {
     id: 'dapodik',
     judul: 'Dapodik',
     tautan: [
@@ -73,10 +89,37 @@ const KELOMPOK_LINK = [
   },
 ]
 
-const IKON_KELOMPOK = {
-  kepegawaian: Landmark,
-  dapodik: Database,
-  sosmed: Instagram,
+// Tema per grup: dipetakan ke kelas Tailwind statis (bukan digabung secara
+// dinamis) supaya tetap terdeteksi oleh Tailwind saat build.
+const TEMA_KELOMPOK = {
+  kepegawaian: {
+    ikon: Landmark,
+    chip: 'bg-indigo-50 text-indigo-600',
+    aksen: 'border-l-indigo-400',
+    tekanAktif: 'active:bg-indigo-50 active:border-indigo-300',
+    hover: 'hover:border-indigo-300 hover:bg-indigo-50/40 hover:text-indigo-700',
+  },
+  'akun-guru': {
+    ikon: GraduationCap,
+    chip: 'bg-amber-50 text-amber-600',
+    aksen: 'border-l-amber-400',
+    tekanAktif: 'active:bg-amber-50 active:border-amber-300',
+    hover: 'hover:border-amber-300 hover:bg-amber-50/40 hover:text-amber-700',
+  },
+  dapodik: {
+    ikon: Database,
+    chip: 'bg-teal-50 text-teal-600',
+    aksen: 'border-l-teal-400',
+    tekanAktif: 'active:bg-teal-50 active:border-teal-300',
+    hover: 'hover:border-teal-300 hover:bg-teal-50/40 hover:text-teal-700',
+  },
+  sosmed: {
+    ikon: Instagram,
+    chip: 'bg-rose-50 text-rose-600',
+    aksen: 'border-l-rose-400',
+    tekanAktif: 'active:bg-rose-50 active:border-rose-300',
+    hover: 'hover:border-rose-300 hover:bg-rose-50/40 hover:text-rose-700',
+  },
 }
 
 // Berapa lama menunggu iframe memuat sebelum dianggap gagal & auto-fallback
@@ -187,14 +230,18 @@ export default function LinkLayanan() {
     >
       {aktif ? (
         <div className="flex flex-col h-[calc(100vh-220px)] min-h-[420px] rounded-2xl border border-slate-200 bg-white overflow-hidden">
-          {/* Bar atas: kembali, judul, muat ulang, buka di tab baru */}
-          <div className="flex items-center gap-2 px-3 sm:px-4 py-2.5 border-b border-slate-100 bg-slate-50">
+          {/* Bar atas: kembali, judul, muat ulang, buka di tab baru.
+              Semua kontrol minimal 44x44px (standar target sentuh Android)
+              dan memakai active: (bukan hover:) supaya terasa responsif saat
+              disentuh, dengan tap-highlight bawaan Chrome/Android dimatikan. */}
+          <div className="flex items-center gap-1 px-2 sm:px-4 py-2 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
             <button
               type="button"
               onClick={tutupPanel}
-              className="flex items-center gap-1 text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 shrink-0"
+              style={{ WebkitTapHighlightColor: 'transparent' }}
+              className="flex items-center gap-1 min-h-[44px] px-2.5 rounded-lg text-xs sm:text-sm font-medium text-slate-600 active:bg-slate-100 active:text-slate-900 touch-manipulation shrink-0"
             >
-              <ArrowLeft size={15} /> Kembali
+              <ArrowLeft size={16} /> Kembali
             </button>
             <p className="flex-1 min-w-0 truncate text-xs sm:text-sm font-medium text-slate-700 text-center">
               {aktif.nama}
@@ -203,18 +250,20 @@ export default function LinkLayanan() {
               type="button"
               onClick={muatUlang}
               title="Muat ulang"
-              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 shrink-0"
+              style={{ WebkitTapHighlightColor: 'transparent' }}
+              className="flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg text-slate-500 active:bg-slate-100 active:text-slate-900 touch-manipulation shrink-0"
             >
-              <RefreshCw size={15} className={sedangMemuat ? 'animate-spin' : ''} />
+              <RefreshCw size={16} className={sedangMemuat ? 'animate-spin' : ''} />
             </button>
             <a
               href={aktif.url}
               target="_blank"
               rel="noopener noreferrer"
               title="Buka di tab baru"
-              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 shrink-0"
+              style={{ WebkitTapHighlightColor: 'transparent' }}
+              className="flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg text-slate-500 active:bg-slate-100 active:text-slate-900 touch-manipulation shrink-0"
             >
-              <ExternalLink size={15} />
+              <ExternalLink size={16} />
             </a>
           </div>
 
@@ -251,11 +300,14 @@ export default function LinkLayanan() {
             </div>
           )}
           {KELOMPOK_LINK.map((kelompok) => {
-            const Ikon = IKON_KELOMPOK[kelompok.id] || ExternalLink
+            const tema = TEMA_KELOMPOK[kelompok.id] || TEMA_KELOMPOK.kepegawaian
+            const Ikon = tema.ikon
             return (
               <section key={kelompok.id}>
-                <div className="flex items-center gap-2 mb-3">
-                  <Ikon size={16} className="text-slate-400" />
+                <div className="flex items-center gap-2.5 mb-3">
+                  <span className={`flex items-center justify-center w-8 h-8 rounded-lg ${tema.chip}`}>
+                    <Ikon size={16} />
+                  </span>
                   <h2 className="font-display text-sm sm:text-base font-semibold text-slate-900">
                     {kelompok.judul}
                   </h2>
@@ -269,7 +321,8 @@ export default function LinkLayanan() {
                         type="button"
                         onClick={() => bukaTautan(t)}
                         title={akanBukaTabBaru ? 'Akan dibuka di tab baru' : undefined}
-                        className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm text-slate-700 hover:border-blue-300 hover:bg-blue-50/50 hover:text-blue-700 transition-colors"
+                        style={{ WebkitTapHighlightColor: 'transparent' }}
+                        className={`flex items-center justify-between gap-3 min-h-[52px] rounded-xl border border-l-4 border-slate-200 ${tema.aksen} bg-white px-4 py-3 text-left text-sm text-slate-700 transition-transform duration-100 touch-manipulation active:scale-[0.98] ${tema.tekanAktif} ${tema.hover}`}
                       >
                         <span className="min-w-0 truncate">{t.nama}</span>
                         <ExternalLink size={14} className="shrink-0 text-slate-300" />
