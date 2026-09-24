@@ -64,6 +64,7 @@ import {
   CalendarCheck,
   BookMarked,
   ChevronDown,
+  Link2,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
@@ -257,6 +258,7 @@ function getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelum
         { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
         { to: '/alat-pdf', label: 'Alat PDF', icon: FileType2 },
         { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
+        { to: '/link-layanan', label: 'Link Layanan', icon: Link2 },
       ],
     },
     {
@@ -353,6 +355,7 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   { to: '/perpustakaan', label: 'Perpustakaan', icon: Library },
   { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
   { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
+  { to: '/link-layanan', label: 'Link Layanan', icon: Link2 },
   ]
 }
 
