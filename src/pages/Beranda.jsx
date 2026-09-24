@@ -507,9 +507,9 @@ async function cobaDemo() {
   if (demoLoading) return
   setDemoError('')
   setDemoLoading(true)
-  const emailDemo = untuk === 'kua' ? DEMO_KUA_EMAIL : DEMO_EMAIL
-  const passwordDemo = untuk === 'kua' ? DEMO_KUA_PASSWORD : DEMO_PASSWORD
-  const { error } = await signIn(emailDemo, passwordDemo)
+  const emailDemo = untuk === 'kua' ? 'demokua@sdnusantara.gmail.com' : 'demokua@sdnusantara.gmail.com'
+  const passwordDemo = untuk === 'kua' ? 'DemoKua123' : 'DemoKua123'
+  const { error } = await signIn(demokua@sdnusantara.gmail.com, DemoKua123)
   setDemoLoading(false)
   if (error) {
     setDemoError('Sesi demo sedang tidak tersedia. Silakan coba lagi sebentar lagi.')
