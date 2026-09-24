@@ -107,6 +107,7 @@ function getGroupsAdmin(
         // Upgrade Fitur: status paket (free/standar/premium) melekat ke akun
         // masing-masing, jadi menu ini tampil untuk semua role, bukan cuma admin.
         { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
+        { to: '/link-layanan', label: 'Link Layanan', icon: Link2 },
         // Tab "Admin Pusat" sekarang jadi bagian dari halaman /pesan (lihat
         // Pesan.jsx) — badge menggabungkan unread pesan biasa + admin pusat.
         { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca + jumlahPesanPusatBelumDibaca },
