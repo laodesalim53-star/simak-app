@@ -67,6 +67,7 @@ const DaftarHonorPanitiaPPDB = lazy(() => import('./pages/DaftarHonorPanitiaPPDB
 // Portal Ujian — kelengkapan ujian: kartu peserta, berita acara, daftar hadir.
 const PortalUjian = lazy(() => import('./pages/PortalUjian'))
 const KartuPesertaUjian = lazy(() => import('./pages/KartuPesertaUjian'))
+const JadwalPengawasRuangUjian = lazy(() => import('./pages/JadwalPengawasRuangUjian'))
 const BeritaAcaraUjian = lazy(() => import('./pages/BeritaAcaraUjian'))
 const DaftarHadirSiswaUjian = lazy(() => import('./pages/DaftarHadirSiswaUjian'))
 const DaftarHadirPengawasUjian = lazy(() => import('./pages/DaftarHadirPengawasUjian'))
@@ -387,6 +388,7 @@ export default function App() {
           <Route path="/gudang-sk/portal-ujian/daftar-hadir-siswa" element={<ProtectedRoute adminOnly><DaftarHadirSiswaUjian /></ProtectedRoute>} />
           <Route path="/gudang-sk/portal-ujian/daftar-hadir-pengawas" element={<ProtectedRoute adminOnly><DaftarHadirPengawasUjian /></ProtectedRoute>} />
           <Route path="/gudang-sk/portal-ujian/berita-acara-serah-terima-as" element={<ProtectedRoute adminOnly><BeritaAcaraSerahTerimaAS /></ProtectedRoute>} />
+          <Route path="/gudang-sk/portal-ujian/jadwal-pengawas-ruang" element={<ProtectedRoute adminOnly><jadwal-pengawas-ruang /></ProtectedRoute>} />
           {/* Cetak Sampul Laporan — satu halaman dengan sidebar menu berisi
               semua jenis laporan (Bulanan, Semester, 8355, LPJ BOS, dst).
               Dikunci adminOnly — dulu ada versi kedua tanpa adminOnly di bagian
