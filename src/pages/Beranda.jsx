@@ -218,21 +218,89 @@ const DAFTAR_AREA = [
   },
 ]
 
-// ---- Cuplikan "Cara Mulai" (promosi) -----------------------------------
-// Versi RINGKAS dari Panduan Penggunaan Awal — hanya untuk memberi
-// gambaran ke pengunjung publik betapa mudahnya onboarding, BUKAN panduan
-// operasional lengkap (itu ada di halaman Dasbor setelah login, lihat
-// komponen PanduanAwalSIMAK). Konten menyesuaikan jenis instansi terpilih.
+// ---- "Cara Mulai" (promosi + panduan lengkap dalam modal) --------------
+// Kartu di beranda hanya menampilkan `judul` & `desc` (ringkas). Saat
+// diklik, modal panduan menampilkan detail penuh (`menu`, `poin`,
+// `catatan`) — versi publik dari komponen PanduanAwalSIMAK yang dipasang
+// di Dasbor setelah login. Konten menyesuaikan jenis instansi terpilih.
 const LANGKAH_MULAI = {
   sekolah: [
-    { ikon: Building2, judul: 'Lengkapi Profil Sekolah', desc: 'Isi identitas, logo & kop surat sekolah Anda.' },
-    { ikon: ClipboardList, judul: 'Atur Data Kelas', desc: 'Buat kelas 1–6/7–9 beserta rombelnya.' },
-    { ikon: UploadCloud, judul: 'Impor Data dari Dapodik', desc: 'Unggah file Dapodik, data siswa & guru langsung terisi.' },
+    {
+      ikon: Building2, judul: 'Lengkapi Profil Sekolah',
+      desc: 'Isi identitas, logo & kop surat sekolah Anda.',
+      menu: 'Menu: Profil Sekolah',
+      penjelasan: 'Isi identitas sekolah dengan lengkap dan benar. Data ini tampil otomatis di halaman PPDB publik dan dipakai untuk kop rapor serta dokumen resmi lainnya.',
+      poin: [
+        'Logo Sekolah (PNG/JPG) — dipakai di kop rapor & dokumen resmi',
+        'Logo Kabupaten (PNG/JPG) — dipakai di kop surat/rapor di samping logo sekolah',
+        'Tanda Tangan Elektronik Kepala Sekolah — otomatis terpasang di Surat Keterangan/Izin/Cuti yang disetujui',
+        'Kop Surat: Kabupaten/Kota, Dinas Pendidikan, dan Kecamatan',
+      ],
+      catatan: 'Jangan lupa klik Simpan setelah semua data terisi.',
+    },
+    {
+      ikon: ClipboardList, judul: 'Atur Data Kelas',
+      desc: 'Buat kelas 1–6/7–9 beserta rombelnya.',
+      menu: 'Menu: Kelas',
+      penjelasan: 'Buat data kelas sesuai jenjang sekolah lewat tombol + Tambah Kelas.',
+      poin: [
+        'SD: Kelas 1 s/d Kelas 6',
+        'SMP: Kelas 7 s/d Kelas 9 (sesuai tingkatan)',
+        'Tambahkan kode rombel bila ada lebih dari satu rombongan belajar per tingkat (6A, 6B, 6C, dst.)',
+        'Lengkapi wali kelas & tahun pelajaran',
+      ],
+      catatan: 'Setelah setiap kelas dibuat, jangan lupa klik Simpan.',
+    },
+    {
+      ikon: UploadCloud, judul: 'Impor Data dari Dapodik',
+      desc: 'Unggah file Dapodik, data siswa & guru langsung terisi.',
+      menu: 'Menu: Data Siswa / Data Guru',
+      penjelasan: 'Gunakan jalur Impor dari Dapodik agar data lengkap otomatis (bukan Impor Manual).',
+      poin: [
+        'Unggah file hasil unduhan Dapodik apa adanya (tanpa diedit di Excel)',
+        'Field lengkap ikut terbaca: alamat, data ortu/wali, KIP/KPS/PIP, dll.',
+        'Siswa & kelas dicocokkan otomatis dari NISN/NIS dan kolom Rombel',
+        'Lakukan hal yang sama untuk Data Guru',
+      ],
+      catatan: 'Periksa jumlah data terbaca, lalu klik Impor Data.',
+    },
   ],
   kua: [
-    { ikon: Building2, judul: 'Lengkapi Profil Kantor', desc: 'Isi identitas KUA, logo & kop surat resmi.' },
-    { ikon: ClipboardList, judul: 'Atur Data Pegawai', desc: 'Lengkapi data pegawai & penyuluh KUA.' },
-    { ikon: CheckCircle2, judul: 'Mulai Kelola Layanan', desc: 'Penyuluhan, kepenghuluan, keuangan & laporan langsung siap pakai.' },
+    {
+      ikon: Building2, judul: 'Lengkapi Profil Kantor',
+      desc: 'Isi identitas KUA, logo & kop surat resmi.',
+      menu: 'Menu: Profil Kantor',
+      penjelasan: 'Isi identitas KUA lengkap — data ini dipakai otomatis di kop surat & laporan resmi.',
+      poin: [
+        'Logo Kementerian Agama & Kantor Kabupaten',
+        'Data kantor: alamat, kecamatan, kabupaten, kontak',
+        'Tanda tangan elektronik Kepala KUA untuk laporan otomatis',
+      ],
+      catatan: 'Jangan lupa klik Simpan setelah semua data terisi.',
+    },
+    {
+      ikon: ClipboardList, judul: 'Atur Data Pegawai',
+      desc: 'Lengkapi data pegawai & penyuluh KUA.',
+      menu: 'Menu: Data Pegawai',
+      penjelasan: 'Lengkapi data pegawai & penyuluh agar presensi dan daftar hadir bisa langsung dipakai.',
+      poin: [
+        'Tambahkan data pegawai & penyuluh KUA',
+        'Lengkapi jabatan & NIP masing-masing pegawai',
+      ],
+      catatan: 'Setelah data pegawai lengkap, jangan lupa klik Simpan.',
+    },
+    {
+      ikon: CheckCircle2, judul: 'Mulai Kelola Layanan',
+      desc: 'Penyuluhan, kepenghuluan, keuangan & laporan langsung siap pakai.',
+      menu: 'Layanan Penyuluhan, Kepenghuluan & Keuangan',
+      penjelasan: 'Setelah profil & data pegawai lengkap, seluruh layanan langsung siap dipakai.',
+      poin: [
+        'Laporan penyuluhan & RKTP Penyuluh Agama',
+        'Pendaftaran nikah & laporan kepenghuluan bulanan',
+        'Keuangan, anggaran & laporan bulanan KUA',
+      ],
+      catatan: 'Semua data tersinkron otomatis ke laporan Kepala KUA.',
+    },
   ],
 }
 
@@ -405,6 +473,16 @@ export default function Beranda() {
   const [panduan, setPanduan] = useState(null)
   const isiPanduan = panduan ? PANDUAN_INSTAL[panduan] : null
 
+  // Modal "Panduan Mulai" — terbuka saat salah satu kartu langkah di
+  // bagian "mulai-section" diklik. langkahMulaiAktif menentukan tab/step
+  // mana yang tampil pertama kali di dalam modal (1, 2, atau 3).
+  const [panduanMulaiTerbuka, setPanduanMulaiTerbuka] = useState(false)
+  const [langkahMulaiAktif, setLangkahMulaiAktif] = useState(1)
+  function bukaPanduanMulai(nomorLangkah) {
+    setLangkahMulaiAktif(nomorLangkah)
+    setPanduanMulaiTerbuka(true)
+  }
+
   // Browser berbasis Chromium (Edge/Chrome) memberi tahu kapan situs ini
   // bisa dipasang sebagai aplikasi. Kejadiannya disimpan supaya tombol
   // "Windows" bisa langsung memunculkan kotak instal bawaan browser.
@@ -466,6 +544,16 @@ export default function Beranda() {
     window.addEventListener('keydown', saatTombol)
     return () => window.removeEventListener('keydown', saatTombol)
   }, [panduan])
+
+  // Tekan Esc untuk menutup modal Panduan Mulai.
+  useEffect(() => {
+    if (!panduanMulaiTerbuka) return
+    function saatTombol(e) {
+      if (e.key === 'Escape') setPanduanMulaiTerbuka(false)
+    }
+    window.addEventListener('keydown', saatTombol)
+    return () => window.removeEventListener('keydown', saatTombol)
+  }, [panduanMulaiTerbuka])
 
   // Menu pilihan kontak (WhatsApp / Live Chat) dari tombol mengambang.
   const [showFabMenu, setShowFabMenu] = useState(false)
@@ -731,29 +819,48 @@ export default function Beranda() {
             </form>
           </div>
 
-          {/* ---- Cuplikan "Cara Mulai" (promosi 3 langkah) ----
-              Non-interaktif, hanya menunjukkan betapa cepatnya onboarding.
-              Panduan lengkap & operasional ada di Dasbor setelah login. */}
+          {/* ---- "Cara Mulai" (promosi 3 langkah, bisa diklik) ----
+              Tiap kartu langkah, saat diklik, langsung membuka modal
+              Panduan Mulai pada step yang bersangkutan. Panduan
+              operasional lengkap untuk yang sudah login tetap ada di
+              Dasbor (komponen PanduanAwalSIMAK). */}
           <div className="mulai-section">
             <p className="mulai-eyebrow">Onboarding cepat</p>
             <h2 className="mulai-title">Mulai memakai SIMAK hanya dalam 3 langkah</h2>
             <p className="mulai-sub">
               Setelah mendaftar, data Anda langsung tersinkron ke seluruh modul aplikasi — tanpa
-              input ulang manual.
+              input ulang manual. Klik salah satu langkah untuk melihat petunjuknya.
             </p>
             <div className="mulai-steps">
               {langkahMulaiTampil.map((l, i) => {
                 const Ikon = l.ikon
                 return (
-                  <div key={l.judul} className="mulai-step">
+                  <button
+                    type="button"
+                    key={l.judul}
+                    className="mulai-step"
+                    onClick={() => bukaPanduanMulai(i + 1)}
+                  >
                     <span className="mulai-step-num">{i + 1}</span>
                     <div className="mulai-step-icon"><Ikon size={18} strokeWidth={2.2} /></div>
                     <p className="mulai-step-title">{l.judul}</p>
                     <p className="mulai-step-desc">{l.desc}</p>
-                  </div>
+                    <span className="mulai-step-cta">
+                      Lihat petunjuk
+                      <ArrowRight size={12} strokeWidth={2.5} />
+                    </span>
+                  </button>
                 )
               })}
             </div>
+            <button
+              type="button"
+              className="mulai-cta-full"
+              onClick={() => bukaPanduanMulai(1)}
+            >
+              Lihat panduan lengkap
+              <ArrowRight size={14} strokeWidth={2.5} />
+            </button>
           </div>
 
           <div className="area-showcase">
@@ -980,6 +1087,95 @@ export default function Beranda() {
               </a>
             )}
             <p className="ios-modal-note">{isiPanduan.catatan}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Modal "Panduan Mulai" — muncul saat kartu langkah di mulai-section
+          diklik. Berisi 3 tab langkah (sesuai jenis instansi terpilih),
+          masing-masing dengan penjelasan, daftar poin, dan catatan. Bisa
+          ditutup lewat tombol X, klik di luar kotak, atau tombol Esc. */}
+      {panduanMulaiTerbuka && (
+        <div className="ios-overlay" onClick={() => setPanduanMulaiTerbuka(false)}>
+          <div
+            className="panduan-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="panduan-modal-judul"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="ios-modal-header">
+              <h3 className="ios-modal-title" id="panduan-modal-judul">
+                Panduan Mulai — {untuk === 'kua' ? 'KUA' : 'Sekolah'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setPanduanMulaiTerbuka(false)}
+                className="ios-modal-close"
+                aria-label="Tutup"
+                autoFocus
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="panduan-tabs">
+              {langkahMulaiTampil.map((l, i) => (
+                <button
+                  key={l.judul}
+                  type="button"
+                  className={`panduan-tab${langkahMulaiAktif === i + 1 ? ' active' : ''}`}
+                  onClick={() => setLangkahMulaiAktif(i + 1)}
+                >
+                  <span className="panduan-tab-num">{i + 1}</span>
+                  {l.judul}
+                </button>
+              ))}
+            </div>
+
+            {langkahMulaiTampil
+              .filter((_, i) => i + 1 === langkahMulaiAktif)
+              .map((l) => (
+                <div key={l.judul} className="panduan-detail">
+                  <p className="panduan-detail-menu">{l.menu}</p>
+                  <p className="panduan-detail-desc">{l.penjelasan}</p>
+                  <ul className="panduan-detail-poin">
+                    {l.poin.map((p) => (
+                      <li key={p}>{p}</li>
+                    ))}
+                  </ul>
+                  <p className="panduan-detail-catatan">💡 {l.catatan}</p>
+
+                  <div className="panduan-nav">
+                    <button
+                      type="button"
+                      disabled={langkahMulaiAktif === 1}
+                      onClick={() => setLangkahMulaiAktif((n) => Math.max(1, n - 1))}
+                      className="panduan-nav-btn"
+                    >
+                      ← Sebelumnya
+                    </button>
+                    {langkahMulaiAktif < langkahMulaiTampil.length ? (
+                      <button
+                        type="button"
+                        onClick={() => setLangkahMulaiAktif((n) => Math.min(langkahMulaiTampil.length, n + 1))}
+                        className="panduan-nav-btn panduan-nav-btn-primary"
+                      >
+                        Langkah Selanjutnya →
+                      </button>
+                    ) : (
+                      <Link
+                        to={linkDaftar}
+                        className="panduan-nav-btn panduan-nav-btn-primary"
+                        onClick={() => setPanduanMulaiTerbuka(false)}
+                      >
+                        Daftar Sekarang
+                        <ArrowRight size={14} strokeWidth={2.5} />
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              ))}
           </div>
         </div>
       )}
@@ -1823,6 +2019,166 @@ export default function Beranda() {
           border: 1px solid #EEF0F7;
           border-radius: 14px;
           padding: 18px 16px 16px;
+          text-align: left;
+          font-family: inherit;
+          cursor: pointer;
+          width: 100%;
+          transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .mulai-step:hover {
+          border-color: rgba(45, 48, 114, 0.3);
+          transform: translateY(-2px);
+          box-shadow: 0 10px 22px rgba(23, 26, 46, 0.08);
+        }
+        .mulai-step-cta {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          margin-top: 10px;
+          font-size: 12px;
+          font-weight: 700;
+          color: #2D3072;
+        }
+        .mulai-cta-full {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          margin-top: 18px;
+          font-family: inherit;
+          font-size: 13.5px;
+          font-weight: 700;
+          color: #fff;
+          background: #2D3072;
+          border: none;
+          padding: 11px 20px;
+          min-height: 42px;
+          border-radius: 999px;
+          cursor: pointer;
+        }
+        .mulai-cta-full:hover { background: #1F2252; }
+
+        /* Modal Panduan Mulai */
+        .panduan-modal {
+          background: #fff;
+          border-radius: 20px;
+          padding: 24px;
+          width: 100%;
+          max-width: 480px;
+          max-height: 88vh;
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+          box-shadow: 0 30px 60px rgba(21, 23, 55, 0.3);
+        }
+        .panduan-tabs {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin: 4px 0 18px;
+        }
+        .panduan-tab {
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          font-family: inherit;
+          font-size: 12.5px;
+          font-weight: 700;
+          color: #4A5064;
+          background: #F1F3FA;
+          border: 1px solid transparent;
+          padding: 8px 13px;
+          border-radius: 999px;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+        .panduan-tab-num {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 18px; height: 18px;
+          border-radius: 999px;
+          background: #D8DBEE;
+          color: #4A5064;
+          font-size: 10.5px;
+          font-weight: 800;
+        }
+        .panduan-tab.active {
+          background: #2D3072;
+          color: #fff;
+        }
+        .panduan-tab.active .panduan-tab-num {
+          background: #F2762B;
+          color: #fff;
+        }
+        .panduan-detail-menu {
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+          color: #F2762B;
+          margin: 0 0 6px;
+        }
+        .panduan-detail-desc {
+          font-size: 13.5px;
+          color: #3A3D4B;
+          line-height: 1.6;
+          margin: 0 0 14px;
+        }
+        .panduan-detail-poin {
+          margin: 0 0 14px;
+          padding-left: 18px;
+          display: flex;
+          flex-direction: column;
+          gap: 7px;
+        }
+        .panduan-detail-poin li {
+          font-size: 13px;
+          color: #3A3D4B;
+          line-height: 1.5;
+        }
+        .panduan-detail-catatan {
+          font-size: 12.5px;
+          font-style: italic;
+          color: #5B6172;
+          background: #F7F8FC;
+          border: 1px solid #EEF0F7;
+          border-radius: 10px;
+          padding: 10px 12px;
+          margin: 0 0 18px;
+        }
+        .panduan-nav {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
+          padding-top: 12px;
+          border-top: 1px solid #EEF0F7;
+        }
+        .panduan-nav-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-family: inherit;
+          font-size: 13px;
+          font-weight: 700;
+          color: #4A5064;
+          background: #F1F3FA;
+          border: none;
+          padding: 10px 16px;
+          min-height: 40px;
+          border-radius: 999px;
+          cursor: pointer;
+          text-decoration: none;
+          white-space: nowrap;
+        }
+        .panduan-nav-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .panduan-nav-btn-primary {
+          color: #fff;
+          background: #F2762B;
+        }
+        @media (max-width: 560px) {
+          .panduan-modal { padding: 20px; border-radius: 16px; }
+          .panduan-nav { flex-direction: column; align-items: stretch; }
+          .panduan-nav-btn { justify-content: center; }
         }
         .mulai-step-num {
           position: absolute;
