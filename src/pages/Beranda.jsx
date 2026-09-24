@@ -57,6 +57,8 @@ const FOTO_HERO = '/screenshot-dasbor.png'
 // yang membatasi hanya sesi di perangkat pengunjung (lihat demoSession.js).
 const DEMO_EMAIL = 'sdnusantara@gmail.com'
 const DEMO_PASSWORD = 'Demo123'
+const DEMO_KUA_EMAIL = 'demokua@sdnusantara.gmail.com' 
+const DEMO_KUA_PASSWORD = 'DemoKua123'
 
 // ---- Pembantu localStorage & ID sesi ----------------------------------
 // localStorage bisa melempar error (mode privat, WebView lama, penyimpanan
@@ -501,19 +503,21 @@ export default function Beranda() {
   const [demoLoading, setDemoLoading] = useState(false)
   const [demoError, setDemoError] = useState('')
 
-  async function cobaDemo() {
-    if (demoLoading) return
-    setDemoError('')
-    setDemoLoading(true)
-    const { error } = await signIn(DEMO_EMAIL, DEMO_PASSWORD)
-    setDemoLoading(false)
-    if (error) {
-      setDemoError('Sesi demo sedang tidak tersedia. Silakan coba lagi sebentar lagi.')
-      return
-    }
-    mulaiSesiDemo()
-    navigate('/dashboard')
+async function cobaDemo() {
+  if (demoLoading) return
+  setDemoError('')
+  setDemoLoading(true)
+  const emailDemo = untuk === 'kua' ? DEMO_KUA_EMAIL : DEMO_EMAIL
+  const passwordDemo = untuk === 'kua' ? DEMO_KUA_PASSWORD : DEMO_PASSWORD
+  const { error } = await signIn(emailDemo, passwordDemo)
+  setDemoLoading(false)
+  if (error) {
+    setDemoError('Sesi demo sedang tidak tersedia. Silakan coba lagi sebentar lagi.')
+    return
   }
+  mulaiSesiDemo()
+  navigate('/dashboard')
+}
 
   // Browser berbasis Chromium (Edge/Chrome) memberi tahu kapan situs ini
   // bisa dipasang sebagai aplikasi. Kejadiannya disimpan supaya tombol
