@@ -56,6 +56,18 @@ const KELOMPOK_LINK = [
     tautan: [
       { id: 'ruang-gtk', nama: 'Ruang GTK', url: 'https://guru.kemendikdasmen.go.id/', bukaTabBaru: true },
       {
+        id: 'pmm-kinerja-guru',
+        nama: 'PMM Kinerja Guru',
+        url: 'https://guru.kemendikdasmen.go.id/pengelolaan-kinerja',
+        bukaTabBaru: true,
+      },
+      {
+        id: 'simenulis',
+        nama: 'Simenulis',
+        url: 'https://simenulis.kemendikdasmen.go.id/',
+        bukaTabBaru: true,
+      },
+      {
         id: 'sim-pkb',
         nama: 'SIM PKB',
         url: 'https://paspor-gtk.simpkb.id/casgpo/login?service=https%3A%2F%2Fapp.simpkb.id%2Fauth%2Flogin',
@@ -72,7 +84,8 @@ const KELOMPOK_LINK = [
       { id: 'portal-dapodik', nama: 'Portal Dapodik', url: 'https://dapo.kemendikdasmen.go.id', bukaTabBaru: true },
       { id: 'manajemen-sekolah', nama: 'Manajemen Sekolah', url: 'https://sp.datadik.kemendikdasmen.go.id', bukaTabBaru: true },
       { id: 'individual-gtk', nama: 'Individual GTK', url: 'https://ptk.datadik.kemendikdasmen.go.id', bukaTabBaru: true },
-      { id: 'bos-online', nama: 'BOS Online', url: 'http://bos.kemendikdasmen.go.id', bukaTabBaru: true },
+      { id: 'bos-online', nama: 'BOS Online (BOSP)', url: 'https://bosp.kemendikdasmen.go.id/portal/welcome', bukaTabBaru: true },
+      { id: 'pip-bsm', nama: 'Layanan BSM/PIP', url: 'https://pip.kemendikdasmen.go.id/session', bukaTabBaru: true },
       { id: 'verval-sp', nama: 'Verval SP', url: 'http://vervalsp.data.kemendikdasmen.go.id', bukaTabBaru: true },
       { id: 'verval-ptk', nama: 'Verval PTK', url: 'http://vervalptk.data.kemendikdasmen.go.id', bukaTabBaru: true },
       { id: 'verval-pd', nama: 'Verval PD', url: 'http://vervalpd.data.kemendikdasmen.go.id', bukaTabBaru: true },
@@ -81,11 +94,10 @@ const KELOMPOK_LINK = [
       {
         id: 'aplikasi-dapodik-lokal',
         nama: 'Aplikasi Dapodik (Entri Data)',
-        url: 'http://localhost:5774/',
-        bukaTabBaru: true,
+        url: 'http://localhost:5774/#dashboard',
         lokalSaja: true,
         catatan:
-          'Hanya berfungsi bila dibuka di komputer yang sudah terpasang aplikasi Dapodik. Port bisa berbeda tergantung versi Dapodik — sesuaikan angka "5774" bila perlu.',
+          'Hanya berfungsi bila dibuka di komputer yang sudah terpasang aplikasi Dapodik. Port bisa berbeda tergantung versi Dapodik — sesuaikan angka "5774" bila perlu. Akan dicoba ditampilkan di dalam aplikasi bila memungkinkan; kalau tidak bisa, otomatis dibuka di tab baru.',
       },
     ],
   },
@@ -157,6 +169,20 @@ function simpanDaftarGagal(set) {
   }
 }
 
+// Berbeda dari X-Frame-Options (tidak bisa dipastikan lewat JS), ini adalah
+// aturan browser yang PASTI: halaman https:// tidak akan pernah diizinkan
+// memuat iframe http:// ("mixed content"). Jadi untuk kasus ini kita bisa
+// langsung tahu di muka, tanpa perlu coba-coba atau menunggu timeout.
+function pastiDiblokirMixedContent(url) {
+  try {
+    const halamanHttps = window.location.protocol === 'https:'
+    const targetHttp = new URL(url, window.location.href).protocol === 'http:'
+    return halamanHttps && targetHttp
+  } catch {
+    return false
+  }
+}
+
 export default function LinkLayanan() {
   const [aktif, setAktif] = useState(null) // { id, nama, url } atau null saat di daftar
   const [kunciIframe, setKunciIframe] = useState(0) // ganti key untuk memuat ulang iframe
@@ -186,8 +212,14 @@ export default function LinkLayanan() {
   }, [bukaTabBaruLangsung])
 
   const bukaTautan = (tautan) => {
-    // 1) Sudah ditandai eksplisit di data, atau sebelumnya pernah gagal → langsung tab baru
-    if (tautan.bukaTabBaru || gagalTersimpanRef.current.has(tautan.id)) {
+    // 1) Sudah ditandai eksplisit di data, sebelumnya pernah gagal, atau
+    //    dipastikan akan diblokir browser karena mixed content (https →
+    //    http) → langsung tab baru, tidak perlu dicoba dulu.
+    if (
+      tautan.bukaTabBaru ||
+      gagalTersimpanRef.current.has(tautan.id) ||
+      pastiDiblokirMixedContent(tautan.url)
+    ) {
       bukaTabBaruLangsung(tautan)
       return
     }
@@ -324,7 +356,10 @@ export default function LinkLayanan() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
                   {kelompok.tautan.map((t) => {
-                    const akanBukaTabBaru = t.bukaTabBaru || gagalTersimpanRef.current.has(t.id)
+                    const akanBukaTabBaru =
+                      t.bukaTabBaru ||
+                      gagalTersimpanRef.current.has(t.id) ||
+                      pastiDiblokirMixedContent(t.url)
                     return (
                       <button
                         key={t.id}
