@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowRight, LogIn, Video, Download, Monitor, Apple, Smartphone, Share, SquarePlus, X, BookOpen, IdCard, Wallet, MessageCircle, Settings, Users, ShoppingBag, Phone, Send, Fish, Shell, Shirt, Pencil, Building2, Landmark, Megaphone, FileText, Library, ClipboardCheck } from 'lucide-react'
+import { ArrowRight, LogIn, Video, Download, Monitor, Apple, Smartphone, Share, SquarePlus, X, BookOpen, IdCard, Wallet, MessageCircle, Settings, Users, ShoppingBag, Phone, Send, Fish, Shell, Shirt, Pencil, Building2, Landmark, Megaphone, FileText, Library, ClipboardCheck, ClipboardList, UploadCloud, CheckCircle2 } from 'lucide-react'
 // PENTING: sesuaikan path import ini dengan lokasi client Supabase Anda
 // yang sudah ada di project (biasanya di src/lib/ atau src/services/).
 import { supabase } from '../lib/supabaseClient'
@@ -218,6 +218,24 @@ const DAFTAR_AREA = [
   },
 ]
 
+// ---- Cuplikan "Cara Mulai" (promosi) -----------------------------------
+// Versi RINGKAS dari Panduan Penggunaan Awal — hanya untuk memberi
+// gambaran ke pengunjung publik betapa mudahnya onboarding, BUKAN panduan
+// operasional lengkap (itu ada di halaman Dasbor setelah login, lihat
+// komponen PanduanAwalSIMAK). Konten menyesuaikan jenis instansi terpilih.
+const LANGKAH_MULAI = {
+  sekolah: [
+    { ikon: Building2, judul: 'Lengkapi Profil Sekolah', desc: 'Isi identitas, logo & kop surat sekolah Anda.' },
+    { ikon: ClipboardList, judul: 'Atur Data Kelas', desc: 'Buat kelas 1–6/7–9 beserta rombelnya.' },
+    { ikon: UploadCloud, judul: 'Impor Data dari Dapodik', desc: 'Unggah file Dapodik, data siswa & guru langsung terisi.' },
+  ],
+  kua: [
+    { ikon: Building2, judul: 'Lengkapi Profil Kantor', desc: 'Isi identitas KUA, logo & kop surat resmi.' },
+    { ikon: ClipboardList, judul: 'Atur Data Pegawai', desc: 'Lengkapi data pegawai & penyuluh KUA.' },
+    { ikon: CheckCircle2, judul: 'Mulai Kelola Layanan', desc: 'Penyuluhan, kepenghuluan, keuangan & laporan langsung siap pakai.' },
+  ],
+}
+
 // ---- Panduan instal manual ---------------------------------------------
 // Semua platform dipasang lewat panduan yang sama (tanpa file installer):
 //  - Android: menu titik tiga Chrome > Instal aplikasi. APK hanya cadangan.
@@ -330,6 +348,11 @@ export default function Beranda() {
         .filter((it) => typeof it === 'string' || untuk === 'semua' || it.u.includes(untuk))
         .map((it) => (typeof it === 'string' ? it : it.t)),
     }))
+
+  // Langkah mulai (cuplikan promosi) yang tampil: KUA memakai versi KUA,
+  // selain itu (Semua/Sekolah) memakai versi Sekolah karena itu alur yang
+  // paling umum dipakai saat ini.
+  const langkahMulaiTampil = untuk === 'kua' ? LANGKAH_MULAI.kua : LANGKAH_MULAI.sekolah
 
   // Klik tile -> gulir ke kartu area yang bersangkutan. Menghormati
   // pengaturan "kurangi gerakan" milik perangkat.
@@ -706,6 +729,31 @@ export default function Beranda() {
                 Gabung
               </button>
             </form>
+          </div>
+
+          {/* ---- Cuplikan "Cara Mulai" (promosi 3 langkah) ----
+              Non-interaktif, hanya menunjukkan betapa cepatnya onboarding.
+              Panduan lengkap & operasional ada di Dasbor setelah login. */}
+          <div className="mulai-section">
+            <p className="mulai-eyebrow">Onboarding cepat</p>
+            <h2 className="mulai-title">Mulai memakai SIMAK hanya dalam 3 langkah</h2>
+            <p className="mulai-sub">
+              Setelah mendaftar, data Anda langsung tersinkron ke seluruh modul aplikasi — tanpa
+              input ulang manual.
+            </p>
+            <div className="mulai-steps">
+              {langkahMulaiTampil.map((l, i) => {
+                const Ikon = l.ikon
+                return (
+                  <div key={l.judul} className="mulai-step">
+                    <span className="mulai-step-num">{i + 1}</span>
+                    <div className="mulai-step-icon"><Ikon size={18} strokeWidth={2.2} /></div>
+                    <p className="mulai-step-title">{l.judul}</p>
+                    <p className="mulai-step-desc">{l.desc}</p>
+                  </div>
+                )
+              })}
+            </div>
           </div>
 
           <div className="area-showcase">
@@ -1730,6 +1778,93 @@ export default function Beranda() {
           cursor: pointer;
         }
         .meet-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Cuplikan "Cara Mulai" (promosi 3 langkah) */
+        .mulai-section {
+          margin: 22px 36px 0;
+          background: #fff;
+          border-radius: 18px;
+          padding: 22px 24px;
+          box-shadow: 0 6px 18px rgba(23, 26, 46, 0.06);
+        }
+        .mulai-eyebrow {
+          display: inline-block;
+          font-size: 11.5px;
+          font-weight: 800;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: #F2762B;
+          background: rgba(242, 118, 43, 0.1);
+          padding: 4px 10px;
+          border-radius: 999px;
+          margin: 0 0 10px;
+        }
+        .mulai-title {
+          font-size: 18px;
+          font-weight: 800;
+          color: #171A2E;
+          margin: 0 0 4px;
+        }
+        .mulai-sub {
+          font-size: 13.5px;
+          color: #5B6172;
+          margin: 0 0 18px;
+          line-height: 1.55;
+          max-width: 64ch;
+        }
+        .mulai-steps {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 16px;
+        }
+        .mulai-step {
+          position: relative;
+          background: #F7F8FC;
+          border: 1px solid #EEF0F7;
+          border-radius: 14px;
+          padding: 18px 16px 16px;
+        }
+        .mulai-step-num {
+          position: absolute;
+          top: -10px;
+          left: 14px;
+          width: 24px; height: 24px;
+          border-radius: 999px;
+          background: #2D3072;
+          color: #fff;
+          font-size: 12px;
+          font-weight: 800;
+          display: flex; align-items: center; justify-content: center;
+          box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+        }
+        .mulai-step-icon {
+          width: 36px; height: 36px;
+          border-radius: 10px;
+          background: rgba(45, 48, 114, 0.08);
+          color: #2D3072;
+          display: flex; align-items: center; justify-content: center;
+          margin: 6px 0 12px;
+        }
+        .mulai-step-title {
+          font-size: 14px;
+          font-weight: 700;
+          color: #171A2E;
+          margin: 0 0 4px;
+        }
+        .mulai-step-desc {
+          font-size: 12.5px;
+          color: #5B6172;
+          margin: 0;
+          line-height: 1.5;
+        }
+        @media (max-width: 900px) {
+          .mulai-section { margin: 18px 20px 0; padding: 18px 18px; }
+        }
+        @media (max-width: 560px) {
+          .mulai-section { margin: 14px 16px 0; padding: 16px; }
+          .mulai-steps { grid-template-columns: 1fr; gap: 12px; }
+          .mulai-title { font-size: 16px; }
+        }
 
         .area-showcase {
           position: relative;
