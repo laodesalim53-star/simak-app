@@ -107,6 +107,15 @@ const KELOMPOK_LINK = [
     tautan: [
       { id: 'ig-ditjen', nama: 'IG Ditjen Pauddikdasmen', url: 'https://instagram.com/ditjen.paud.dikdasmen', bukaTabBaru: true },
       { id: 'ig-dapodik', nama: 'IG Dapodik', url: 'https://instagram.com/dapodik_official', bukaTabBaru: true },
+      { id: 'whatsapp', nama: 'WhatsApp', url: 'https://web.whatsapp.com/', bukaTabBaru: true },
+      {
+        id: 'facebook-admin',
+        nama: 'Facebook (Admin/Operator)',
+        // TODO: ganti dengan link profil Facebook admin/operator yang sebenarnya,
+        // contoh: https://facebook.com/nama.profil atau https://facebook.com/profile.php?id=xxxx
+        url: 'https://facebook.com/',
+        bukaTabBaru: true,
+      },
     ],
   },
 ]
