@@ -35,6 +35,11 @@
 //   ini murni tampilan tambahan dan tidak diambil dari database.
 // - sekolahId diambil dari useAuth().sekolahId, dan kalau tidak tersedia
 //   memakai useAuth().profil.sekolah_id (dua-duanya dicoba supaya aman).
+// - KOLOM TANDA TANGAN (BARU): nomor urut di kolom ini sengaja ditulis
+//   berselang-seling posisi kiri/tengah per baris (1 di kiri, 2 di tengah, 3
+//   di kiri, 4 di tengah, dst.) lewat posisiSilang(i) di bawah, supaya kalau
+//   dilihat menurun membentuk pola menyilang/zigzag — konvensi umum daftar
+//   hadir resmi supaya baris tidak gampang disisipi nama tambahan.
 
 import { useEffect, useMemo, useState } from 'react'
 import { Loader2, Plus, Printer, Trash2 } from 'lucide-react'
@@ -85,6 +90,13 @@ function urlLogo(path) {
   if (!path) return ''
   const { data } = supabase.storage.from('profil-sekolah').getPublicUrl(path)
   return data?.publicUrl || ''
+}
+
+// Posisi nomor di kolom Tanda Tangan, berselang-seling kiri/tengah per baris
+// (baris ke-0 -> kiri, baris ke-1 -> tengah, baris ke-2 -> kiri, dst.),
+// supaya kalau dilihat menurun kolomnya membentuk pola menyilang/zigzag.
+function posisiSilang(i) {
+  return i % 2 === 0 ? 'text-left pl-4' : 'text-center'
 }
 
 export default function DaftarHadirSiswaUjian() {
@@ -520,7 +532,7 @@ export default function DaftarHadirSiswaUjian() {
                 <Td className="text-center">{i + 1}</Td>
                 <Td>{isi(s.noPeserta, '')}</Td>
                 <Td>{isi(s.nama, '')}</Td>
-                <Td className="text-center text-slate-400">{i + 1}.</Td>
+                <Td className={`text-slate-400 ${posisiSilang(i)}`}>{i + 1}.</Td>
               </tr>
             ))}
           </tbody>
