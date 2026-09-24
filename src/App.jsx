@@ -388,7 +388,7 @@ export default function App() {
           <Route path="/gudang-sk/portal-ujian/daftar-hadir-siswa" element={<ProtectedRoute adminOnly><DaftarHadirSiswaUjian /></ProtectedRoute>} />
           <Route path="/gudang-sk/portal-ujian/daftar-hadir-pengawas" element={<ProtectedRoute adminOnly><DaftarHadirPengawasUjian /></ProtectedRoute>} />
           <Route path="/gudang-sk/portal-ujian/berita-acara-serah-terima-as" element={<ProtectedRoute adminOnly><BeritaAcaraSerahTerimaAS /></ProtectedRoute>} />
-          <Route path="/gudang-sk/portal-ujian/jadwal-pengawas-ruang" element={<ProtectedRoute adminOnly><<JadwalPengawasRuangUjian /></ProtectedRoute>} />
+          <Route path="/gudang-sk/portal-ujian/jadwal-pengawas-ruang" element={<ProtectedRoute adminOnly><JadwalPengawasRuangUjian /></ProtectedRoute>} />
           {/* Cetak Sampul Laporan — satu halaman dengan sidebar menu berisi
               semua jenis laporan (Bulanan, Semester, 8355, LPJ BOS, dst).
               Dikunci adminOnly — dulu ada versi kedua tanpa adminOnly di bagian
