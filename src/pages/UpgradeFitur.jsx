@@ -1,10 +1,18 @@
 import { useState } from "react";
-import Layout from "../components/Layout"; // dibungkus Layout, sama seperti ProfilSaya.jsx
+import Layout from "../components/Layout";
 import { PaketEmblem, usePaketSaatIni } from "../components/PaketBadge";
+import { supabase } from "../lib/supabaseClient";
 
-// Daftar paket. Ubah nama, tagline, dan harga di sini saja.
-// "urutan" menentukan tingkatan: paket dengan urutan lebih rendah
-// tidak akan menampilkan tombol upgrade kalau user sudah di paket lebih tinggi.
+// Ganti detail rekening tujuan di sini.
+const REKENING_TUJUAN = {
+  bank: "BRI",
+  nomor: "3630-0103-5574-531",
+  atasNama: "LA ODE SALIM",
+};
+
+// Nomor WhatsApp admin, ditampilkan sebagai kontak bantuan di modal upgrade.
+const WA_ADMIN = "6282197574897"; // format internasional tanpa "+" atau "0" di depan
+
 const DAFTAR_PAKET = [
   {
     id: "free",
@@ -12,6 +20,7 @@ const DAFTAR_PAKET = [
     urutan: 0,
     tagline: "Cukup untuk operasional harian sekolah.",
     harga: "Rp 0",
+    nominal: 0,
   },
   {
     id: "standar",
@@ -19,6 +28,7 @@ const DAFTAR_PAKET = [
     urutan: 1,
     tagline: "Untuk sekolah yang butuh lebih dari paket dasar.",
     harga: "Hubungi admin", // ganti mis. "Rp 50.000 / bulan" saat harga sudah pasti
+    nominal: 50000, // ganti sesuai harga asli, dipakai untuk isi awal form nominal
   },
   {
     id: "premium",
@@ -26,12 +36,12 @@ const DAFTAR_PAKET = [
     urutan: 2,
     tagline:
       "Paket lengkap: semua fitur Standar ditambah otomasi dan alat bantu guru/admin.",
-    harga: "Hubungi admin", // ganti mis. "Rp 100.000 / bulan" saat harga sudah pasti
+    harga: "Hubungi admin",
+    nominal: 100000,
     rekomendasi: true,
   },
 ];
 
-// Tampilan tiap kartu, dipisah dari data supaya mudah diubah.
 const TEMA_KARTU = {
   free: {
     kartu: "border border-slate-200 bg-white",
@@ -57,35 +67,85 @@ export default function UpgradeFitur() {
   const urutanSaatIni =
     DAFTAR_PAKET.find((p) => p.id === paketSaatIni)?.urutan ?? 0;
 
-  const [memproses, setMemproses] = useState(null); // menyimpan id paket yang sedang diproses
+  const [paketDipilih, setPaketDipilih] = useState(null); // objek paket saat modal terbuka
+  const [mengirim, setMengirim] = useState(false);
+  const [form, setForm] = useState({
+    nominal: "",
+    bankPengirim: "",
+    namaPengirim: "",
+    noRekeningPengirim: "",
+    catatan: "",
+  });
+  const [pesanError, setPesanError] = useState("");
+  const [pesanSukses, setPesanSukses] = useState("");
 
-  async function handleUpgrade(idPaket) {
-    setMemproses(idPaket);
+  function bukaModal(paket) {
+    setPaketDipilih(paket);
+    setForm({
+      nominal: paket.nominal ? String(paket.nominal) : "",
+      bankPengirim: "",
+      namaPengirim: "",
+      noRekeningPengirim: "",
+      catatan: "",
+    });
+    setPesanError("");
+    setPesanSukses("");
+  }
+
+  function tutupModal() {
+    if (mengirim) return;
+    setPaketDipilih(null);
+  }
+
+  async function kirimKonfirmasiTransfer(e) {
+    e.preventDefault();
+    if (!paketDipilih) return;
+
+    if (!form.namaPengirim || !form.noRekeningPengirim || !form.nominal) {
+      setPesanError("Nama pengirim, no. rekening asal, dan nominal wajib diisi.");
+      return;
+    }
+
+    setMengirim(true);
+    setPesanError("");
+
     try {
-      // TODO: sambungkan ke Midtrans Snap saat sudah siap.
-      // Project ini SUDAH punya Edge Function Midtrans yang jalan untuk fitur
-      // Toko (create-transaction & midtrans-notification, project Supabase
-      // wnceuxgokwvokzgxgfhq) — polanya tinggal dipakai ulang, bukan bikin
-      // integrasi baru dari nol:
-      //   1. Buat Edge Function baru (mis. "buat-transaksi-upgrade-paket")
-      //      yang menerima user_id dan idPaket ('standar' / 'premium'), insert
-      //      baris ke riwayat_pembayaran (status 'pending'), lalu minta Snap
-      //      Token ke Midtrans pakai Server Key (jangan taruh Server Key di
-      //      frontend). Harga dihitung di server berdasarkan idPaket, bukan
-      //      dikirim dari frontend.
-      //   2. Panggil supabase.functions.invoke('buat-transaksi-upgrade-paket',
-      //      { body: { paket: idPaket } }) dari sini, lalu buka
-      //      window.snap.pay(snapToken, {...}).
-      //   3. Tambahkan handler di Edge Function midtrans-notification yang
-      //      sudah ada: kalau notifikasi datang untuk order riwayat_pembayaran
-      //      (bukan order Toko), update status jadi 'berhasil' DAN update
-      //      profil.paket (sesuai paket yang dibeli) + paket_berlaku_sampai
-      //      untuk user_id terkait.
-      alert(
-        "Pembayaran online belum aktif. Untuk upgrade sementara, silakan hubungi admin sekolah."
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        throw new Error("Sesi Anda tidak ditemukan, silakan login ulang.");
+      }
+
+      const { error: insertError } = await supabase
+        .from("permohonan_upgrade_paket")
+        .insert({
+          user_id: user.id,
+          email: user.email,
+          nama_lengkap: user.user_metadata?.nama_lengkap || null,
+          paket: paketDipilih.id,
+          nominal: Number(form.nominal),
+          bank_pengirim: form.bankPengirim,
+          nama_pengirim: form.namaPengirim,
+          no_rekening_pengirim: form.noRekeningPengirim,
+          catatan: form.catatan,
+          status: "pending",
+        });
+
+      if (insertError) throw insertError;
+
+      setPesanSukses(
+        "Konfirmasi transfer terkirim. Admin akan meninjau dan mengaktifkan paket Anda setelah transfer diverifikasi."
+      );
+      setTimeout(() => setPaketDipilih(null), 1800);
+    } catch (err) {
+      setPesanError(
+        err.message || "Gagal mengirim konfirmasi transfer. Coba lagi."
       );
     } finally {
-      setMemproses(null);
+      setMengirim(false);
     }
   }
 
@@ -99,7 +159,6 @@ export default function UpgradeFitur() {
           const tema = TEMA_KARTU[p.id];
           const sedangDipakai = p.id === paketSaatIni;
           const bisaUpgrade = p.urutan > urutanSaatIni;
-          const sedangMemproses = memproses === p.id;
 
           return (
             <div
@@ -131,11 +190,10 @@ export default function UpgradeFitur() {
                   </div>
                 ) : bisaUpgrade ? (
                   <button
-                    onClick={() => handleUpgrade(p.id)}
-                    disabled={memproses !== null}
-                    className={`w-full rounded-md px-4 py-2 text-sm font-semibold disabled:opacity-60 ${tema.tombol}`}
+                    onClick={() => bukaModal(p)}
+                    className={`w-full rounded-md px-4 py-2 text-sm font-semibold ${tema.tombol}`}
                   >
-                    {sedangMemproses ? "Memproses..." : `Upgrade ke ${p.nama}`}
+                    {`Upgrade ke ${p.nama}`}
                   </button>
                 ) : null}
               </div>
@@ -143,6 +201,157 @@ export default function UpgradeFitur() {
           );
         })}
       </div>
+
+      {paketDipilih && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-slate-900">
+              Upgrade ke {paketDipilih.nama}
+            </h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Transfer ke rekening berikut, lalu isi form konfirmasi di bawah.
+              Admin akan mengaktifkan paket Anda setelah transfer diverifikasi.
+            </p>
+
+            <div className="mt-4 rounded-lg bg-slate-50 p-4 text-sm">
+              <div className="flex justify-between py-0.5">
+                <span className="text-slate-500">Bank</span>
+                <span className="font-medium text-slate-900">
+                  {REKENING_TUJUAN.bank}
+                </span>
+              </div>
+              <div className="flex justify-between py-0.5">
+                <span className="text-slate-500">No. Rekening</span>
+                <span className="font-medium text-slate-900">
+                  {REKENING_TUJUAN.nomor}
+                </span>
+              </div>
+              <div className="flex justify-between py-0.5">
+                <span className="text-slate-500">Atas Nama</span>
+                <span className="font-medium text-slate-900">
+                  {REKENING_TUJUAN.atasNama}
+                </span>
+              </div>
+            </div>
+
+            <a
+              href={`https://wa.me/${WA_ADMIN}?text=${encodeURIComponent(
+                `Halo, saya ingin konfirmasi upgrade paket ${paketDipilih.nama}.`
+              )}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 flex items-center justify-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100"
+            >
+              Hubungi Admin via WhatsApp
+            </a>
+
+            <form onSubmit={kirimKonfirmasiTransfer} className="mt-4 space-y-3">
+              <div>
+                <label className="text-xs font-medium text-slate-600">
+                  Nominal transfer (Rp)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={form.nominal}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, nominal: e.target.value }))
+                  }
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-slate-600">
+                  Nama pengirim
+                </label>
+                <input
+                  type="text"
+                  value={form.namaPengirim}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, namaPengirim: e.target.value }))
+                  }
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-slate-600">
+                    Bank asal
+                  </label>
+                  <input
+                    type="text"
+                    value={form.bankPengirim}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, bankPengirim: e.target.value }))
+                    }
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600">
+                    No. rekening asal
+                  </label>
+                  <input
+                    type="text"
+                    value={form.noRekeningPengirim}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        noRekeningPengirim: e.target.value,
+                      }))
+                    }
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-slate-600">
+                  Catatan (opsional)
+                </label>
+                <textarea
+                  value={form.catatan}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, catatan: e.target.value }))
+                  }
+                  rows={2}
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
+
+              {pesanError && (
+                <p className="text-sm text-red-600">{pesanError}</p>
+              )}
+              {pesanSukses && (
+                <p className="text-sm text-emerald-600">{pesanSukses}</p>
+              )}
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={tutupModal}
+                  disabled={mengirim}
+                  className="flex-1 rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={mengirim}
+                  className="flex-1 rounded-md bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60"
+                >
+                  {mengirim ? "Mengirim..." : "Kirim Konfirmasi"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }
