@@ -191,12 +191,19 @@ export default function PersetujuanAkun() {
   }
 
   // Ambil permohonan upgrade paket yang masih 'pending' verifikasi transfer.
-  // CATATAN: tabel permohonan_upgrade_paket di sini belum difilter per
-  // sekolah_id (kolomnya tidak diminta) — kalau tabel Anda punya kolom itu
-  // dan ingin admin non-superadmin hanya melihat permohonan sekolahnya
-  // sendiri, tambahkan .eq('sekolah_id', sekolahId) saat !isSuperAdmin,
-  // sama seperti pola di muatData().
+  //
+  // FITUR INI KHUSUS SUPERADMIN. Uang transfer masuk ke satu rekening milik
+  // pemilik aplikasi (lihat REKENING_TUJUAN di UpgradeFitur.jsx), jadi hanya
+  // Superadmin yang bisa memverifikasi mutasinya. Karena itu tabel ini tidak
+  // difilter per sekolah_id — dan admin/admin_utama tenant TIDAK BOLEH
+  // memanggil fungsi ini (dijaga juga di RLS/RPC Supabase, lihat folder
+  // supabase/migrations; guard di sini hanya untuk UX).
   async function muatUpgrade() {
+    if (!isSuperAdmin) {
+      setUpgradeRequests([])
+      setLoadingUpgrade(false)
+      return
+    }
     setLoadingUpgrade(true)
 
     const { data } = await supabase
@@ -227,10 +234,24 @@ export default function PersetujuanAkun() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isKantor])
 
+  // Hanya Superadmin yang boleh melihat/memuat permohonan upgrade paket.
+  // isSuperAdmin dijadikan dependency karena nilainya bisa baru tersedia
+  // setelah AuthContext selesai memuat profil.
   useEffect(() => {
+    if (!isSuperAdmin) {
+      setUpgradeRequests([])
+      setLoadingUpgrade(false)
+      return
+    }
     muatUpgrade()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [isSuperAdmin])
+
+  // Jaga-jaga: non-superadmin tidak boleh berada di tab 'upgrade_paket'
+  // (mis. lewat state/deep-link) — kembalikan ke tab default.
+  useEffect(() => {
+    if (!isSuperAdmin && tab === 'upgrade_paket') setTab('menunggu')
+  }, [isSuperAdmin, tab])
 
   async function ubahStatus(id, statusBaru, catatan = '', guruId = null, pegawaiId = null) {
     setProsesId(id)
@@ -523,9 +544,13 @@ export default function PersetujuanAkun() {
   // Sekarang approve dipindah ke satu pemanggilan RPC
   // approve_paket_upgrade(p_permohonan_id, p_masa_berlaku_hari) —
   // function SQL dengan SECURITY DEFINER yang mengecek role pemanggil
-  // (harus admin/superadmin) lalu meng-update permohonan_upgrade_paket
+  // (HARUS superadmin — lihat supabase/migrations/002) lalu meng-update permohonan_upgrade_paket
   // DAN profil dalam satu transaksi, bypass RLS dengan aman.
   async function ubahStatusUpgrade(request, statusBaru) {
+    if (!isSuperAdmin) {
+      window.alert('Hanya Superadmin yang dapat memproses permohonan upgrade paket.')
+      return
+    }
     const aksi = statusBaru === 'approved' ? 'menyetujui' : 'menolak'
     if (
       !window.confirm(
@@ -634,24 +659,28 @@ export default function PersetujuanAkun() {
             )}
           </button>
         )}
-        <button
-          onClick={() => setTab('upgrade_paket')}
-          className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5 ${
-            tab === 'upgrade_paket' ? 'bg-teal-600 text-white' : 'bg-white text-slate-600 border border-slate-200'
-          }`}
-        >
-          <CreditCard size={14} />
-          Upgrade Paket
-          {upgradeRequests.length > 0 && (
-            <span
-              className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                tab === 'upgrade_paket' ? 'bg-white/20' : 'bg-teal-100 text-teal-700'
-              }`}
-            >
-              {upgradeRequests.length}
-            </span>
-          )}
-        </button>
+        {/* Tab "Upgrade Paket" khusus Superadmin (rekening tujuan transfer milik
+            pemilik aplikasi, jadi hanya Superadmin yang bisa memverifikasi). */}
+        {isSuperAdmin && (
+          <button
+            onClick={() => setTab('upgrade_paket')}
+            className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5 ${
+              tab === 'upgrade_paket' ? 'bg-teal-600 text-white' : 'bg-white text-slate-600 border border-slate-200'
+            }`}
+          >
+            <CreditCard size={14} />
+            Upgrade Paket
+            {upgradeRequests.length > 0 && (
+              <span
+                className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                  tab === 'upgrade_paket' ? 'bg-white/20' : 'bg-teal-100 text-teal-700'
+                }`}
+              >
+                {upgradeRequests.length}
+              </span>
+            )}
+          </button>
+        )}
       </div>
 
       {tab !== 'anak_menunggu' && tab !== 'upgrade_paket' && (
@@ -926,8 +955,8 @@ export default function PersetujuanAkun() {
             </table>
           )}
         </div>
-      ) : (
-        // ===== Tab "Upgrade Paket" — verifikasi transfer manual =====
+      ) : tab === 'upgrade_paket' && isSuperAdmin ? (
+        // ===== Tab "Upgrade Paket" — verifikasi transfer manual (khusus Superadmin) =====
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
           {loadingUpgrade ? (
             <p className="p-6 text-sm text-slate-400 text-center">Memuat data...</p>
@@ -994,7 +1023,7 @@ export default function PersetujuanAkun() {
             </table>
           )}
         </div>
-      )}
+      ) : null}
 
       {modalGuru && (
         <ModalHubungkanGuru
