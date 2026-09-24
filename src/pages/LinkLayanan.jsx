@@ -10,15 +10,19 @@ import {
   AlertTriangle,
   GraduationCap,
   MonitorSmartphone,
+  Building2,
+  HeartHandshake,
 } from 'lucide-react'
 
 // Halaman ini level ATAS (route: /link-layanan) — bisa diakses semua peran
 // (admin, guru, orang tua) lewat menu sidebar, BUKAN bagian dari Gudang SK
 // yang admin-only.
 //
-// Kumpulan link layanan eksternal terkait kepegawaian & Dapodik.
-// Untuk menambah/mengubah link, cukup edit array KELOMPOK_LINK di bawah ini —
-// tidak perlu menyentuh bagian tampilan.
+// Halaman dibagi menjadi 2 bagian (tab): "Link Sekolah" dan "Link KUA".
+// Untuk menambah/mengubah link, cukup edit array KELOMPOK_LINK_SEKOLAH atau
+// KELOMPOK_LINK_KUA di bawah ini — tidak perlu menyentuh bagian tampilan.
+// Untuk menambah kelompok baru, tambahkan juga temanya di TEMA_KELOMPOK
+// (kalau lupa, otomatis memakai tema 'kepegawaian').
 //
 // CATATAN TEKNIS soal deteksi "diblokir iframe":
 // Browser TIDAK mengizinkan JavaScript membaca isi iframe lintas-domain
@@ -32,7 +36,9 @@ import {
 //      gagal → otomatis dibuka di tab baru.
 //   3. Kegagalan itu diingat (localStorage) supaya klik berikutnya pada link
 //      yang sama langsung ke tab baru, tanpa menunggu timeout lagi.
-const KELOMPOK_LINK = [
+
+// ─────────────────────────── BAGIAN 1: LINK SEKOLAH ───────────────────────────
+const KELOMPOK_LINK_SEKOLAH = [
   {
     id: 'kepegawaian',
     judul: 'Kepegawaian',
@@ -120,6 +126,45 @@ const KELOMPOK_LINK = [
   },
 ]
 
+// ───────────────────────────── BAGIAN 2: LINK KUA ─────────────────────────────
+// Portal resmi Kementerian Agama untuk layanan KUA. Semua ditandai
+// bukaTabBaru karena portal pemerintah umumnya menolak ditampilkan di iframe.
+const KELOMPOK_LINK_KUA = [
+  {
+    id: 'kua-layanan',
+    judul: 'Layanan Nikah & Keagamaan',
+    tautan: [
+      {
+        id: 'simkah',
+        nama: 'SIMKAH (Sistem Informasi Manajemen Nikah)',
+        url: 'https://simkah4.kemenag.go.id',
+        bukaTabBaru: true,
+      },
+      {
+        id: 'simas',
+        nama: 'SIMAS (Sistem Informasi Masjid)',
+        url: 'https://simas.kemenag.go.id',
+        bukaTabBaru: true,
+      },
+      { id: 'pusaka', nama: 'Pusaka Kemenag', url: 'https://pusaka.kemenag.go.id', bukaTabBaru: true },
+    ],
+  },
+  {
+    id: 'kua-portal',
+    judul: 'Portal Kementerian Agama',
+    tautan: [
+      { id: 'kemenag-pusat', nama: 'Kementerian Agama RI', url: 'https://kemenag.go.id', bukaTabBaru: true },
+      { id: 'bimas-islam', nama: 'Ditjen Bimas Islam', url: 'https://bimasislam.kemenag.go.id', bukaTabBaru: true },
+    ],
+  },
+]
+
+// Daftar tab di bagian atas halaman. Urutan di sini = urutan tab.
+const BAGIAN_LINK = [
+  { id: 'sekolah', judul: 'Link Sekolah', ikon: GraduationCap, kelompok: KELOMPOK_LINK_SEKOLAH },
+  { id: 'kua', judul: 'Link KUA', ikon: Building2, kelompok: KELOMPOK_LINK_KUA },
+]
+
 // Tema per grup: dipetakan ke kelas Tailwind statis (bukan digabung secara
 // dinamis) supaya tetap terdeteksi oleh Tailwind saat build.
 const TEMA_KELOMPOK = {
@@ -150,6 +195,20 @@ const TEMA_KELOMPOK = {
     aksen: 'border-l-rose-400',
     tekanAktif: 'active:bg-rose-50 active:border-rose-300',
     hover: 'hover:border-rose-300 hover:bg-rose-50/40 hover:text-rose-700',
+  },
+  'kua-layanan': {
+    ikon: HeartHandshake,
+    chip: 'bg-emerald-50 text-emerald-600',
+    aksen: 'border-l-emerald-400',
+    tekanAktif: 'active:bg-emerald-50 active:border-emerald-300',
+    hover: 'hover:border-emerald-300 hover:bg-emerald-50/40 hover:text-emerald-700',
+  },
+  'kua-portal': {
+    ikon: Landmark,
+    chip: 'bg-sky-50 text-sky-600',
+    aksen: 'border-l-sky-400',
+    tekanAktif: 'active:bg-sky-50 active:border-sky-300',
+    hover: 'hover:border-sky-300 hover:bg-sky-50/40 hover:text-sky-700',
   },
 }
 
@@ -193,12 +252,15 @@ function pastiDiblokirMixedContent(url) {
 }
 
 export default function LinkLayanan() {
+  const [bagianAktif, setBagianAktif] = useState('sekolah') // tab: 'sekolah' | 'kua'
   const [aktif, setAktif] = useState(null) // { id, nama, url } atau null saat di daftar
   const [kunciIframe, setKunciIframe] = useState(0) // ganti key untuk memuat ulang iframe
   const [sedangMemuat, setSedangMemuat] = useState(false)
   const [gagalTerdeteksi, setGagalTerdeteksi] = useState(false)
   const timerRef = useRef(null)
   const gagalTersimpanRef = useRef(ambilDaftarGagalTersimpan())
+
+  const bagian = BAGIAN_LINK.find((b) => b.id === bagianAktif) || BAGIAN_LINK[0]
 
   const bersihkanTimer = () => {
     if (timerRef.current) {
@@ -277,7 +339,7 @@ export default function LinkLayanan() {
   return (
     <Layout
       title="Link Layanan & Kepegawaian"
-      subtitle="Akses cepat ke portal KGB, kenaikan pangkat, mutasi pegawai, info GTK, dan Dapodik — dibuka langsung di dalam aplikasi bila memungkinkan, atau otomatis di tab baru bila situs menolak."
+      subtitle="Akses cepat ke portal layanan sekolah dan KUA — dibuka langsung di dalam aplikasi bila memungkinkan, atau otomatis di tab baru bila situs menolak."
     >
       {aktif ? (
         <div className="flex flex-col h-[calc(100vh-220px)] min-h-[420px] rounded-2xl border border-slate-200 bg-white overflow-hidden">
@@ -341,6 +403,31 @@ export default function LinkLayanan() {
         </div>
       ) : (
         <div className="space-y-6 sm:space-y-8">
+          {/* Tab pemilih bagian: Link Sekolah / Link KUA */}
+          <div role="tablist" className="flex gap-1 rounded-xl bg-slate-100 p-1 w-full sm:w-fit">
+            {BAGIAN_LINK.map((b) => {
+              const IkonBagian = b.ikon
+              const dipilih = b.id === bagianAktif
+              return (
+                <button
+                  key={b.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={dipilih}
+                  onClick={() => setBagianAktif(b.id)}
+                  style={{ WebkitTapHighlightColor: 'transparent' }}
+                  className={`flex flex-1 sm:flex-none items-center justify-center gap-2 min-h-[44px] px-4 rounded-lg text-sm font-medium touch-manipulation transition-colors ${
+                    dipilih
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-500 active:bg-white/60'
+                  }`}
+                >
+                  <IkonBagian size={16} /> {b.judul}
+                </button>
+              )
+            })}
+          </div>
+
           {gagalTerdeteksi && (
             <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs sm:text-sm text-amber-700">
               <AlertTriangle size={15} className="shrink-0 mt-0.5" />
@@ -350,7 +437,7 @@ export default function LinkLayanan() {
               </span>
             </div>
           )}
-          {KELOMPOK_LINK.map((kelompok) => {
+          {bagian.kelompok.map((kelompok) => {
             const tema = TEMA_KELOMPOK[kelompok.id] || TEMA_KELOMPOK.kepegawaian
             const Ikon = tema.ikon
             return (
