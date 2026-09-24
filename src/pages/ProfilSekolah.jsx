@@ -35,6 +35,12 @@ const emptyForm = {
   kode_pos: '',
   provinsi: '',
   website: '',
+  // TAMBAHAN: kode wilayah & kode sekolah untuk format resmi No. Peserta
+  // Ujian Sekolah (kode_wilayah-kode_sekolah-urut, mis. "3-15-001"), dipakai
+  // di halaman Kartu Peserta Ujian. Hanya relevan untuk tenant sekolah —
+  // disembunyikan untuk tenant kantor (kantor tidak punya Ujian Sekolah).
+  kode_wilayah: '',
+  kode_sekolah: '',
 }
 
 // TENANT-AWARE UI: satu halaman & satu tabel (`profil_sekolah`) dipakai baik
@@ -515,6 +521,37 @@ export default function ProfilSekolah() {
                 <label className="label-field">Akreditasi</label>
                 <input className="input-field" placeholder="A / B / C" value={form.akreditasi} onChange={(e) => ubah('akreditasi', e.target.value)} />
               </div>
+            )}
+            {/* TAMBAHAN: Kode Wilayah & Kode Sekolah — dipakai untuk membuat
+                format resmi No. Peserta Ujian Sekolah otomatis di halaman
+                Kartu Peserta Ujian (kode_wilayah-kode_sekolah-urut, mis.
+                "3-15-001"). Konsep khusus sekolah — disembunyikan untuk
+                tenant kantor. */}
+            {!isKantor && (
+              <>
+                <div>
+                  <label className="label-field">Kode Wilayah</label>
+                  <input
+                    className="input-field"
+                    placeholder="Contoh: 3"
+                    value={form.kode_wilayah}
+                    onChange={(e) => ubah('kode_wilayah', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="label-field">Kode Sekolah</label>
+                  <input
+                    className="input-field"
+                    placeholder="Contoh: 15"
+                    value={form.kode_sekolah}
+                    onChange={(e) => ubah('kode_sekolah', e.target.value)}
+                  />
+                  <p className="text-xs text-ink-700/50 mt-1.5">
+                    Kode wilayah & kode sekolah dipakai untuk membuat No. Peserta Ujian otomatis di halaman
+                    Kartu Peserta Ujian, contoh: "3-15-001".
+                  </p>
+                </div>
+              </>
             )}
             <div>
               <label className="label-field">Telepon</label>
