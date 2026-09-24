@@ -9,6 +9,7 @@ import {
   RefreshCw,
   AlertTriangle,
   GraduationCap,
+  MonitorSmartphone,
 } from 'lucide-react'
 
 // Halaman ini level ATAS (route: /link-layanan) — bisa diakses semua peran
@@ -77,6 +78,15 @@ const KELOMPOK_LINK = [
       { id: 'verval-pd', nama: 'Verval PD', url: 'http://vervalpd.data.kemendikdasmen.go.id', bukaTabBaru: true },
       { id: 'keaktifan-nuptk', nama: 'Keaktifan NUPTK', url: 'http://gtk.data.kemendikdasmen.go.id', bukaTabBaru: true },
       { id: 'sekolah-kita', nama: 'Sekolah Kita', url: 'http://sekolah.data.kemendikdasmen.go.id', bukaTabBaru: true },
+      {
+        id: 'aplikasi-dapodik-lokal',
+        nama: 'Aplikasi Dapodik (Entri Data)',
+        url: 'http://localhost:5774/',
+        bukaTabBaru: true,
+        lokalSaja: true,
+        catatan:
+          'Hanya berfungsi bila dibuka di komputer yang sudah terpasang aplikasi Dapodik. Port bisa berbeda tergantung versi Dapodik — sesuaikan angka "5774" bila perlu.',
+      },
     ],
   },
   {
@@ -320,12 +330,20 @@ export default function LinkLayanan() {
                         key={t.id}
                         type="button"
                         onClick={() => bukaTautan(t)}
-                        title={akanBukaTabBaru ? 'Akan dibuka di tab baru' : undefined}
+                        title={t.catatan || (akanBukaTabBaru ? 'Akan dibuka di tab baru' : undefined)}
                         style={{ WebkitTapHighlightColor: 'transparent' }}
-                        className={`flex items-center justify-between gap-3 min-h-[52px] rounded-xl border border-l-4 border-slate-200 ${tema.aksen} bg-white px-4 py-3 text-left text-sm text-slate-700 transition-transform duration-100 touch-manipulation active:scale-[0.98] ${tema.tekanAktif} ${tema.hover}`}
+                        className={`flex flex-col gap-1 min-h-[52px] rounded-xl border border-l-4 border-slate-200 ${tema.aksen} bg-white px-4 py-3 text-left text-sm text-slate-700 transition-transform duration-100 touch-manipulation active:scale-[0.98] ${tema.tekanAktif} ${tema.hover}`}
                       >
-                        <span className="min-w-0 truncate">{t.nama}</span>
-                        <ExternalLink size={14} className="shrink-0 text-slate-300" />
+                        <span className="flex items-center justify-between gap-3">
+                          <span className="min-w-0 truncate">{t.nama}</span>
+                          <ExternalLink size={14} className="shrink-0 text-slate-300" />
+                        </span>
+                        {t.lokalSaja && (
+                          <span className="flex items-center gap-1 text-[10px] font-medium text-slate-400">
+                            <MonitorSmartphone size={11} className="shrink-0" />
+                            Hanya di komputer operator (localhost)
+                          </span>
+                        )}
                       </button>
                     )
                   })}
