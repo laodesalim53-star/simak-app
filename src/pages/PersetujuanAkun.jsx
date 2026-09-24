@@ -13,6 +13,7 @@ import {
   Trash2,
   ShieldCheck,
   Loader2,
+  CreditCard,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
@@ -32,6 +33,11 @@ const ROLE_DARI_JABATAN = {
   pegawai: 'pegawai',
   orang_tua: 'orang_tua',
 }
+
+// Berapa lama masa aktif paket dihitung sejak upgrade disetujui (dalam hari).
+// Ganti sesuai kebijakan (mis. 30 untuk bulanan). Set null kalau tidak
+// mau ada tanggal kedaluwarsa.
+const MASA_AKTIF_HARI = 30
 
 export default function PersetujuanAkun() {
   const { isSuperAdmin, sekolahId, isKantor } = useAuth()
@@ -54,6 +60,13 @@ export default function PersetujuanAkun() {
   // orang tua/siswa sama sekali, jadi seluruh alur ini dilewati.
   const [anakMenunggu, setAnakMenunggu] = useState([])
   const [loadingAnakMenunggu, setLoadingAnakMenunggu] = useState(true)
+
+  // Permohonan upgrade paket (transfer manual) yang masih menunggu
+  // verifikasi admin. Ditampilkan di tab terpisah karena datanya berasal
+  // dari tabel permohonan_upgrade_paket, bukan dari profil.status_akun.
+  const [upgradeRequests, setUpgradeRequests] = useState([])
+  const [loadingUpgrade, setLoadingUpgrade] = useState(true)
+  const [prosesUpgradeId, setProsesUpgradeId] = useState(null)
 
   async function muatData() {
     setLoading(true)
@@ -177,6 +190,27 @@ export default function PersetujuanAkun() {
     setLoadingAnakMenunggu(false)
   }
 
+  // Ambil permohonan upgrade paket yang masih 'pending' verifikasi transfer.
+  // CATATAN: tabel permohonan_upgrade_paket di sini belum difilter per
+  // sekolah_id (kolomnya tidak diminta) — kalau tabel Anda punya kolom itu
+  // dan ingin admin non-superadmin hanya melihat permohonan sekolahnya
+  // sendiri, tambahkan .eq('sekolah_id', sekolahId) saat !isSuperAdmin,
+  // sama seperti pola di muatData().
+  async function muatUpgrade() {
+    setLoadingUpgrade(true)
+
+    const { data } = await supabase
+      .from('permohonan_upgrade_paket')
+      .select(
+        'id, user_id, email, nama_lengkap, paket, nominal, bank_pengirim, nama_pengirim, no_rekening_pengirim, catatan, status, created_at'
+      )
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+
+    setUpgradeRequests(data || [])
+    setLoadingUpgrade(false)
+  }
+
   useEffect(() => {
     muatData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -192,6 +226,11 @@ export default function PersetujuanAkun() {
     muatAnakMenunggu()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isKantor])
+
+  useEffect(() => {
+    muatUpgrade()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function ubahStatus(id, statusBaru, catatan = '', guruId = null, pegawaiId = null) {
     setProsesId(id)
@@ -473,6 +512,92 @@ export default function PersetujuanAkun() {
     muatAnakMenunggu()
   }
 
+  // Setujui/tolak satu permohonan upgrade paket (tab "Upgrade Paket").
+  // Kalau disetujui, langsung aktifkan paket di profil user terkait
+  // (dan set tanggal kedaluwarsa kalau MASA_AKTIF_HARI diisi).
+  async function ubahStatusUpgrade(request, statusBaru) {
+    const aksi = statusBaru === 'approved' ? 'menyetujui' : 'menolak'
+    if (
+      !window.confirm(
+        `Yakin ingin ${aksi} permohonan upgrade paket ${request.paket} dari ${request.email}?`
+      )
+    )
+      return
+
+    setProsesUpgradeId(request.id)
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    const updateData =
+      statusBaru === 'approved'
+        ? {
+            status: 'approved',
+            approved_at: new Date().toISOString(),
+            approved_by: user?.id || null,
+          }
+        : {
+            status: 'rejected',
+            rejected_at: new Date().toISOString(),
+            rejected_by: user?.id || null,
+          }
+
+    const { error } = await supabase
+      .from('permohonan_upgrade_paket')
+      .update(updateData)
+      .eq('id', request.id)
+
+    if (error) {
+      window.alert('Status permohonan upgrade gagal diperbarui: ' + error.message)
+      setProsesUpgradeId(null)
+      return
+    }
+
+    if (statusBaru === 'approved') {
+      const profilUpdate = { paket: request.paket }
+
+      if (MASA_AKTIF_HARI) {
+        const berlakuSampai = new Date()
+        berlakuSampai.setDate(berlakuSampai.getDate() + MASA_AKTIF_HARI)
+        profilUpdate.paket_berlaku_sampai = berlakuSampai.toISOString()
+      }
+
+      const { error: profilError } = await supabase
+        .from('profil')
+        .update(profilUpdate)
+        .eq('id', request.user_id)
+
+      if (profilError) {
+        window.alert(
+          `Status permohonan tersimpan, tapi paket user gagal diaktifkan: ${profilError.message}`
+        )
+        setProsesUpgradeId(null)
+        return
+      }
+    }
+
+    setUpgradeRequests((current) => current.filter((item) => item.id !== request.id))
+    setProsesUpgradeId(null)
+  }
+
+  function formatTanggalUpgrade(date) {
+    if (!date) return '-'
+    return new Intl.DateTimeFormat('id-ID', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(new Date(date))
+  }
+
+  function formatRupiah(nominal) {
+    if (nominal === null || nominal === undefined) return '-'
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      maximumFractionDigits: 0,
+    }).format(nominal)
+  }
+
   return (
     <Layout
       title="Persetujuan Akun"
@@ -480,7 +605,7 @@ export default function PersetujuanAkun() {
         isSuperAdmin ? ' di seluruh sekolah' : isKantor ? ' di kantor Anda' : ' di sekolah Anda'
       }.`}
     >
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-4 flex-wrap">
         <button
           onClick={() => setTab('menunggu')}
           className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors ${
@@ -518,9 +643,27 @@ export default function PersetujuanAkun() {
             )}
           </button>
         )}
+        <button
+          onClick={() => setTab('upgrade_paket')}
+          className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5 ${
+            tab === 'upgrade_paket' ? 'bg-teal-600 text-white' : 'bg-white text-slate-600 border border-slate-200'
+          }`}
+        >
+          <CreditCard size={14} />
+          Upgrade Paket
+          {upgradeRequests.length > 0 && (
+            <span
+              className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                tab === 'upgrade_paket' ? 'bg-white/20' : 'bg-teal-100 text-teal-700'
+              }`}
+            >
+              {upgradeRequests.length}
+            </span>
+          )}
+        </button>
       </div>
 
-      {tab !== 'anak_menunggu' && (
+      {tab !== 'anak_menunggu' && tab !== 'upgrade_paket' && (
         <div className="flex gap-2 mb-4 flex-wrap">
           <button
             onClick={() => setFilterJabatan('semua')}
@@ -581,7 +724,7 @@ export default function PersetujuanAkun() {
         </div>
       )}
 
-      {tab !== 'anak_menunggu' ? (
+      {tab === 'menunggu' || tab === 'riwayat' ? (
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
           {loading ? (
             <p className="p-6 text-sm text-slate-400 text-center">Memuat data...</p>
@@ -738,7 +881,7 @@ export default function PersetujuanAkun() {
             </table>
           )}
         </div>
-      ) : (
+      ) : tab === 'anak_menunggu' ? (
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
           {loadingAnakMenunggu ? (
             <p className="p-6 text-sm text-slate-400 text-center">Memuat data...</p>
@@ -780,6 +923,74 @@ export default function PersetujuanAkun() {
                         <button
                           onClick={() => tolakAnak(r.id)}
                           disabled={prosesId === r.id}
+                          className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-60"
+                        >
+                          <XCircle size={14} /> Tolak
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      ) : (
+        // ===== Tab "Upgrade Paket" — verifikasi transfer manual =====
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          {loadingUpgrade ? (
+            <p className="p-6 text-sm text-slate-400 text-center">Memuat data...</p>
+          ) : upgradeRequests.length === 0 ? (
+            <p className="p-6 text-sm text-slate-400 text-center">
+              Tidak ada permohonan upgrade paket yang menunggu verifikasi.
+            </p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+                <tr>
+                  <th className="text-left px-4 py-3 font-medium">Pengguna</th>
+                  <th className="text-left px-4 py-3 font-medium">Paket</th>
+                  <th className="text-left px-4 py-3 font-medium">Transfer</th>
+                  <th className="text-left px-4 py-3 font-medium">Diajukan</th>
+                  <th className="text-right px-4 py-3 font-medium">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {upgradeRequests.map((r) => (
+                  <tr key={r.id}>
+                    <td className="px-4 py-3 text-slate-700">
+                      {r.nama_lengkap || '—'}
+                      <p className="text-[11px] text-slate-400">{r.email}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full bg-teal-50 text-teal-700 capitalize">
+                        {r.paket}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-slate-600">
+                      {formatRupiah(r.nominal)}
+                      <p className="text-[11px] text-slate-400">
+                        {r.nama_pengirim}
+                        {r.bank_pengirim ? ` (${r.bank_pengirim})` : ''}
+                        {r.no_rekening_pengirim ? ` · ${r.no_rekening_pengirim}` : ''}
+                      </p>
+                      {r.catatan && (
+                        <p className="text-[11px] italic text-slate-400 mt-0.5">"{r.catatan}"</p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-slate-500">{formatTanggalUpgrade(r.created_at)}</td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex justify-end items-center gap-1.5">
+                        <button
+                          onClick={() => ubahStatusUpgrade(r, 'approved')}
+                          disabled={prosesUpgradeId === r.id}
+                          className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 disabled:opacity-60"
+                        >
+                          <CheckCircle2 size={14} /> Setujui & Aktifkan
+                        </button>
+                        <button
+                          onClick={() => ubahStatusUpgrade(r, 'rejected')}
+                          disabled={prosesUpgradeId === r.id}
                           className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-60"
                         >
                           <XCircle size={14} /> Tolak
