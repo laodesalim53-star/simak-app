@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
 import StoryBar from '../components/StoryBar'
 import StoryUploader from '../components/StoryUploader'
 import PintasanKUA from '../components/PintasanKUA'
-import { Users, GraduationCap, DoorOpen, Megaphone, LayoutDashboard, ClipboardCheck, FileClock, Briefcase, UserCheck, AlertTriangle } from 'lucide-react'
+import { Users, GraduationCap, DoorOpen, Megaphone, LayoutDashboard, ClipboardCheck, FileClock, Briefcase, UserCheck, AlertTriangle, Link2, ArrowRight } from 'lucide-react'
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -185,6 +186,31 @@ function DataErrorBanner() {
       <AlertTriangle size={16} className="shrink-0" />
       <span>Sebagian data gagal dimuat. Coba muat ulang halaman; jika masih terjadi, hubungi admin sistem.</span>
     </div>
+  )
+}
+
+// BARU: kartu pintasan ke halaman Link Layanan (KGB, kenaikan pangkat,
+// Dapodik, dll). Hanya dipakai di DashboardSekolah — sengaja TIDAK
+// ditampilkan di DashboardKantor (KUA sudah punya <PintasanKUA /> sendiri
+// dan link ini memang dilewatkan untuk tenant kantor & peran orang tua).
+function PintasanLinkLayanan() {
+  return (
+    <Link
+      to="/link-layanan"
+      className="dash-fade-in opacity-0 card p-5 mb-8 flex items-center gap-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 ease-out"
+      style={{ animationDelay: '420ms' }}
+    >
+      <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+        <Link2 size={20} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="font-display text-sm font-semibold text-ink-950">Link Layanan &amp; Kepegawaian</p>
+        <p className="text-xs text-ink-700/60 mt-0.5">
+          Akses cepat ke portal KGB, kenaikan pangkat, mutasi pegawai, info GTK, dan Dapodik.
+        </p>
+      </div>
+      <ArrowRight size={16} className="text-ink-700/30 shrink-0" />
+    </Link>
   )
 }
 
@@ -405,6 +431,8 @@ function DashboardSekolah({ sekolahId }) {
             />
           ))}
         </div>
+
+        <PintasanLinkLayanan />
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
           <div className="dash-fade-in opacity-0 card p-6 lg:col-span-2" style={{ animationDelay: '540ms' }}>
