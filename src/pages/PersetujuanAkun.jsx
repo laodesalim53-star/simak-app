@@ -513,8 +513,18 @@ export default function PersetujuanAkun() {
   }
 
   // Setujui/tolak satu permohonan upgrade paket (tab "Upgrade Paket").
-  // Kalau disetujui, langsung aktifkan paket di profil user terkait
-  // (dan set tanggal kedaluwarsa kalau MASA_AKTIF_HARI diisi).
+  //
+  // PERBAIKAN: bagian "approve" sebelumnya melakukan dua .update() terpisah
+  // dari client — satu ke permohonan_upgrade_paket, satu lagi ke profil
+  // user lain. Update kedua itu kena RLS (policy UPDATE di tabel profil
+  // hanya mengizinkan auth.uid() = id), jadi "berhasil" tanpa error tapi
+  // sebenarnya 0 baris berubah, sehingga paket user tetap 'free'.
+  //
+  // Sekarang approve dipindah ke satu pemanggilan RPC
+  // approve_paket_upgrade(p_permohonan_id, p_masa_berlaku_hari) —
+  // function SQL dengan SECURITY DEFINER yang mengecek role pemanggil
+  // (harus admin/superadmin) lalu meng-update permohonan_upgrade_paket
+  // DAN profil dalam satu transaksi, bypass RLS dengan aman.
   async function ubahStatusUpgrade(request, statusBaru) {
     const aksi = statusBaru === 'approved' ? 'menyetujui' : 'menolak'
     if (
@@ -526,52 +536,33 @@ export default function PersetujuanAkun() {
 
     setProsesUpgradeId(request.id)
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    const updateData =
-      statusBaru === 'approved'
-        ? {
-            status: 'approved',
-            approved_at: new Date().toISOString(),
-            approved_by: user?.id || null,
-          }
-        : {
-            status: 'rejected',
-            rejected_at: new Date().toISOString(),
-            rejected_by: user?.id || null,
-          }
-
-    const { error } = await supabase
-      .from('permohonan_upgrade_paket')
-      .update(updateData)
-      .eq('id', request.id)
-
-    if (error) {
-      window.alert('Status permohonan upgrade gagal diperbarui: ' + error.message)
-      setProsesUpgradeId(null)
-      return
-    }
-
     if (statusBaru === 'approved') {
-      const profilUpdate = { paket: request.paket }
+      const { error } = await supabase.rpc('approve_paket_upgrade', {
+        p_permohonan_id: request.id,
+        p_masa_berlaku_hari: MASA_AKTIF_HARI || 365,
+      })
 
-      if (MASA_AKTIF_HARI) {
-        const berlakuSampai = new Date()
-        berlakuSampai.setDate(berlakuSampai.getDate() + MASA_AKTIF_HARI)
-        profilUpdate.paket_berlaku_sampai = berlakuSampai.toISOString()
+      if (error) {
+        window.alert('Gagal menyetujui & mengaktifkan paket: ' + error.message)
+        setProsesUpgradeId(null)
+        return
       }
+    } else {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
 
-      const { error: profilError } = await supabase
-        .from('profil')
-        .update(profilUpdate)
-        .eq('id', request.user_id)
+      const { error } = await supabase
+        .from('permohonan_upgrade_paket')
+        .update({
+          status: 'rejected',
+          rejected_at: new Date().toISOString(),
+          rejected_by: user?.id || null,
+        })
+        .eq('id', request.id)
 
-      if (profilError) {
-        window.alert(
-          `Status permohonan tersimpan, tapi paket user gagal diaktifkan: ${profilError.message}`
-        )
+      if (error) {
+        window.alert('Status permohonan upgrade gagal diperbarui: ' + error.message)
         setProsesUpgradeId(null)
         return
       }
