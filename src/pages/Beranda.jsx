@@ -4,6 +4,8 @@ import { ArrowRight, LogIn, Video, Download, Monitor, Apple, Smartphone, Share, 
 // PENTING: sesuaikan path import ini dengan lokasi client Supabase Anda
 // yang sudah ada di project (biasanya di src/lib/ atau src/services/).
 import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../lib/AuthContext'
+import { mulaiSesiDemo } from '../lib/demoSession'
 
 // Widget "Tanya AI" — dimuat malas (lazy) supaya tidak memperberat
 // pemuatan awal beranda, terutama di sinyal lambat. Ditempatkan di pojok
@@ -48,6 +50,13 @@ const FOTO_ADMIN_CHAT = '/ibu-guru-chat.jpg'
 // bagian ini otomatis tidak ditampilkan dan tampilan hero tetap rapi.
 // Saran: lebar ±1200px, rasio 16:10, format .webp/.png, ukuran < 200 KB.
 const FOTO_HERO = '/screenshot-dasbor.png'
+
+// Kredensial akun demo (superadmin, data dami). Login dilakukan langsung
+// dari Beranda — tidak lewat halaman /login — supaya pengunjung langsung
+// masuk dalam satu klik. Akun ini sendiri (di Supabase) tidak dikunci;
+// yang membatasi hanya sesi di perangkat pengunjung (lihat demoSession.js).
+const DEMO_EMAIL = 'sdnusantara@gmail.com'
+const DEMO_PASSWORD = 'Demo123'
 
 // ---- Pembantu localStorage & ID sesi ----------------------------------
 // localStorage bisa melempar error (mode privat, WebView lama, penyimpanan
@@ -393,6 +402,7 @@ function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 
 
 export default function Beranda() {
   const navigate = useNavigate()
+  const { signIn } = useAuth()
 
   // Jenis instansi yang sedang dilihat pengunjung: Semua / Sekolah / KUA.
   // Disimpan di URL (?untuk=kua) supaya bisa dibagikan — mis. link khusus
@@ -481,6 +491,28 @@ export default function Beranda() {
   function bukaPanduanMulai(nomorLangkah) {
     setLangkahMulaiAktif(nomorLangkah)
     setPanduanMulaiTerbuka(true)
+  }
+
+  // ---- Coba Demo: login langsung dari Beranda -------------------------
+  // Tidak lewat halaman /login — satu klik, langsung masuk. Kredensial
+  // ada di konstanta DEMO_EMAIL/DEMO_PASSWORD di atas. Sesi demo di
+  // perangkat ini otomatis berakhir 1 jam kemudian (lihat demoSession.js
+  // & DemoSessionWatcher.jsx yang dipasang di App.jsx).
+  const [demoLoading, setDemoLoading] = useState(false)
+  const [demoError, setDemoError] = useState('')
+
+  async function cobaDemo() {
+    if (demoLoading) return
+    setDemoError('')
+    setDemoLoading(true)
+    const { error } = await signIn(DEMO_EMAIL, DEMO_PASSWORD)
+    setDemoLoading(false)
+    if (error) {
+      setDemoError('Sesi demo sedang tidak tersedia. Silakan coba lagi sebentar lagi.')
+      return
+    }
+    mulaiSesiDemo()
+    navigate('/dashboard')
   }
 
   // Browser berbasis Chromium (Edge/Chrome) memberi tahu kapan situs ini
@@ -727,16 +759,19 @@ export default function Beranda() {
                     Daftar sekarang
                     <ArrowRight size={16} strokeWidth={2.5} />
                   </Link>
-                  {/* Tombol Coba Demo: TIDAK memakai query string supaya
-                      email/password demo tidak pernah nampil di address
-                      bar/riwayat browser. Data dikirim lewat router state
-                      (state={{ demo: true }}) yang hanya bisa dibaca oleh
-                      halaman Login.jsx lewat useLocation(). Kredensial demo
-                      itu sendiri (DEMO_EMAIL/DEMO_PASSWORD) didefinisikan
-                      di Login.jsx, bukan di sini. */}
-                  <Link to="/login" state={{ demo: true }} className="btn-demo">
-                    Coba Demo
-                  </Link>
+                  {/* Tombol Coba Demo: login langsung dari Beranda (bukan
+                      lewat /login) memakai kredensial akun demo di
+                      DEMO_EMAIL/DEMO_PASSWORD di atas. Sesi demo di
+                      perangkat ini otomatis berakhir 1 jam kemudian. */}
+                  <button
+                    type="button"
+                    onClick={cobaDemo}
+                    disabled={demoLoading}
+                    className="btn-demo"
+                    aria-busy={demoLoading}
+                  >
+                    {demoLoading ? 'Memuat demo…' : 'Coba Demo'}
+                  </button>
                   <Link to="/login" className="btn-ghost">
                     <LogIn size={15} strokeWidth={2.5} />
                     Sudah punya akun? Masuk
@@ -755,6 +790,10 @@ export default function Beranda() {
                     </Link>
                   )}
                 </div>
+
+                {demoError && (
+                  <p className="demo-error-msg" role="alert">{demoError}</p>
+                )}
 
                 {!sudahTerpasang && (
                   <div className="install-row">
@@ -1497,6 +1536,7 @@ export default function Beranda() {
           align-items: center;
           justify-content: center;
           gap: 7px;
+          font-family: inherit;
           font-size: 13.5px;
           font-weight: 700;
           color: #F2762B;
@@ -1504,10 +1544,17 @@ export default function Beranda() {
           padding: 12px 20px;
           min-height: 44px;
           border-radius: 999px;
-          text-decoration: none;
+          border: none;
+          cursor: pointer;
           white-space: nowrap;
         }
         .btn-demo:hover { background: #FFE9DA; }
+        .btn-demo:disabled { opacity: 0.7; cursor: default; }
+        .demo-error-msg {
+          color: #FCA5A5;
+          font-size: 13px;
+          margin: 10px 0 0;
+        }
         .btn-outline-toko {
           display: inline-flex;
           align-items: center;
@@ -2611,7 +2658,7 @@ export default function Beranda() {
           .cat-section { grid-template-columns: 1fr; padding: 14px 16px 24px; gap: 12px; }
           .cat-card.wide { grid-column: span 1; }
           .header-actions { flex-direction: column; align-items: stretch; gap: 10px; }
-          .btn-primary, .btn-ghost, .btn-outline-toko { justify-content: center; width: 100%; }
+          .btn-primary, .btn-ghost, .btn-demo, .btn-outline-toko { justify-content: center; width: 100%; }
           .install-row { justify-content: center; }
           .aru-banner { margin: 14px 16px 0; }
           .aru-text { font-size: 13.5px; }
