@@ -90,6 +90,7 @@ const SuratKeteranganLulus = lazy(() => import('./pages/SuratKeteranganLulus'))
 const RPP = lazy(() => import('./pages/RPP'))
 const ArsipRPP = lazy(() => import('./pages/ArsipRPP'))
 const BankSoal = lazy(() => import('./pages/BankSoal'))
+const LinkLayanan = lazy(() => import('./pages/LinkLayanan'))
 const MateriKelas = lazy(() => import('./pages/MateriKelas'))
 const BuatUjian = lazy(() => import('./pages/BuatUjian'))
 const BuatKuisSeru = lazy(() => import('./pages/BuatKuisSeru'))
@@ -413,6 +414,7 @@ export default function App() {
           <Route path="/rpp" element={<ProtectedRoute><RPP /></ProtectedRoute>} />
           <Route path="/arsip-rpp" element={<ProtectedRoute><ArsipRPP /></ProtectedRoute>} />
           <Route path="/bank-soal" element={<ProtectedRoute><BankSoal /></ProtectedRoute>} />
+          <Route path="/link-layanan" element={<ProtectedRoute><LinkLayanan /></ProtectedRoute>} />
           <Route path="/materi-kelas" element={<MateriKelas />} />
           <Route path="/buat-ujian" element={<ProtectedRoute><BuatUjian /></ProtectedRoute>} />
           <Route path="/buat-kuis-seru" element={<ProtectedRoute><BuatKuisSeru /></ProtectedRoute>} />
