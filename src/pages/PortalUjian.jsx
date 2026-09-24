@@ -5,7 +5,7 @@
 // cukup dengan menambah objek di `daftarDokumen`.
 
 import { Link } from 'react-router-dom'
-import { IdCard, FileText, ClipboardList, ShieldCheck, GraduationCap, ArrowLeftRight } from 'lucide-react'
+import { IdCard, FileText, ClipboardList, ShieldCheck, GraduationCap, ArrowLeftRight, CalendarDays } from 'lucide-react'
 import Layout from '../components/Layout'
 import { PALET_WARNA, BatikOverlay, IsiKartuHub } from '../components/hub'
 
@@ -47,6 +47,15 @@ const daftarDokumen = [
     siap: true,
   },
   {
+    id: 'jadwal-pengawas-ruang',
+    judul: 'Jadwal Pengawas Ruang',
+    deskripsi: 'Jadwal pengawas ruang per hari dan sesi, dengan kode pengawas dan tanda tangan Kepala Sekolah.',
+    icon: CalendarDays,
+    path: '/gudang-sk/portal-ujian/jadwal-pengawas-ruang',
+    warna: 'blue',
+    siap: true,
+  },
+  {
     id: 'serah-terima-as',
     judul: 'Berita Acara Serah Terima AS',
     deskripsi: 'Berita acara serah terima hasil pekerjaan asesmen antar-guru, lengkap dengan saksi dan tanda tangan.',
@@ -55,13 +64,13 @@ const daftarDokumen = [
     warna: 'teal',
     siap: true,
   },
-  ]
+]
 
 export default function PortalUjian() {
   return (
     <Layout
       title="Portal Ujian"
-      subtitle="Semua kelengkapan ujian dalam satu tempat: kartu peserta, berita acara, dan daftar hadir."
+      subtitle="Semua kelengkapan ujian dalam satu tempat: kartu peserta, berita acara, daftar hadir, dan jadwal pengawas."
     >
       <style>{`
         @keyframes dashFadeInUp {
