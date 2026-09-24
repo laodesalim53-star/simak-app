@@ -2,9 +2,22 @@
 //
 // Daftar hadir pengawas ruang ujian. Ruang = kelas VI, pengawas = guru aktif
 // (keduanya dari ambilGuruDanKelas); jam jaga tetap manual.
+//
+// Kop surat & sistem cetak mengikuti DaftarHadirSiswaUjian.jsx:
+// - Kop resmi: Pemerintah Kabupaten > Dinas Pendidikan > Nama Sekolah > Kecamatan,
+//   dengan logo kabupaten (kiri) dan logo sekolah (kanan) dari tabel
+//   profil_sekolah (kolom logo_kabupaten_path & logo_path, bucket 'profil-sekolah').
+// - Field kop terisi otomatis dari profil_sekolah, tetap bisa diubah manual;
+//   perubahan manual TIDAK menimpa isian yang sudah diketik.
+// - CSS cetak: mode satu halaman, semua teks hitam, huruf Times New Roman,
+//   gambar kop dikunci supaya tidak kebawa aturan CSS global.
+// - Kolom Tanda Tangan: nomor berselang-seling kiri/tengah (zigzag) lewat
+//   posisiSilang(i), sama seperti daftar hadir siswa.
+// - sekolahId dari useAuth().sekolahId, cadangan useAuth().profil.sekolah_id.
 
 import { useEffect, useMemo, useState } from 'react'
 import { Loader2, Plus, Printer, Trash2 } from 'lucide-react'
+import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
 import {
@@ -36,19 +49,43 @@ function formatHariTanggal(iso) {
   })
 }
 
+// Path file di bucket 'profil-sekolah' -> URL publik (kosong kalau tidak ada).
+function urlLogo(path) {
+  if (!path) return ''
+  const { data } = supabase.storage.from('profil-sekolah').getPublicUrl(path)
+  return data?.publicUrl || ''
+}
+
+// Posisi nomor di kolom Tanda Tangan, berselang-seling kiri/tengah per baris
+// (baris ke-0 -> kiri, baris ke-1 -> tengah, dst.) supaya membentuk pola zigzag.
+function posisiSilang(i) {
+  return i % 2 === 0 ? 'text-left pl-4' : 'text-center'
+}
+
 const idBaru = () => Math.random().toString(36).slice(2, 9)
 const barisBaru = (kelasId = '') => ({ id: idBaru(), guruId: '', kelasId, jamJaga: '08.00 – 10.00' })
 
 export default function DaftarHadirPengawasUjian() {
-  const { sekolahId } = useAuth()
+  // Aman untuk dua bentuk AuthContext: `sekolahId` langsung, atau lewat profil.sekolah_id.
+  const { sekolahId: sekolahIdCtx, profil } = useAuth()
+  const sekolahId = sekolahIdCtx || profil?.sekolah_id
 
   const [sekolah, setSekolah] = useState(SEKOLAH_KOSONG)
   const [guru, setGuru] = useState([])
   const [kelasEnam, setKelasEnam] = useState([])
-  const [tanggal, setTanggal] = useState(isoHariIni())
   const [baris, setBaris] = useState([barisBaru()])
   const [memuat, setMemuat] = useState(true)
   const [galat, setGalat] = useState('')
+  const [logoSekolahUrl, setLogoSekolahUrl] = useState('')
+  const [logoKabupatenUrl, setLogoKabupatenUrl] = useState('')
+
+  const [form, setForm] = useState({
+    kabupaten: '',
+    dinas: 'DINAS PENDIDIKAN DAN KEBUDAYAAN',
+    kecamatan: '',
+    jenisUjian: 'Ujian Tulis / Praktek',
+    tanggal: isoHariIni(),
+  })
 
   async function muat() {
     if (!sekolahId) {
@@ -58,9 +95,26 @@ export default function DaftarHadirPengawasUjian() {
     setMemuat(true)
     setGalat('')
     try {
-      const [ps, gk] = await Promise.all([ambilProfilSekolah(sekolahId), ambilGuruDanKelas(sekolahId)])
+      const [ps, gk, profRes] = await Promise.all([
+        ambilProfilSekolah(sekolahId),
+        ambilGuruDanKelas(sekolahId),
+        supabase
+          .from('profil_sekolah')
+          .select('kabupaten, dinas_pendidikan, kecamatan, alamat, logo_path, logo_kabupaten_path')
+          .eq('sekolah_id', sekolahId)
+          .maybeSingle(),
+      ])
+      const prof = profRes?.data || {}
+      setLogoSekolahUrl(urlLogo(prof.logo_path))
+      setLogoKabupatenUrl(urlLogo(prof.logo_kabupaten_path))
       setSekolah(ps.sekolah)
       setGuru(urutkanGuru(gk.guru))
+      setForm((f) => ({
+        ...f,
+        kabupaten: f.kabupaten || prof.kabupaten || '',
+        dinas: prof.dinas_pendidikan || f.dinas,
+        kecamatan: f.kecamatan || prof.kecamatan || '',
+      }))
       const enam = gk.kelas.filter(isKelasEnam)
       setKelasEnam(enam)
       setBaris((d) => d.map((b) => ({ ...b, kelasId: b.kelasId || enam[0]?.id || '' })))
@@ -76,6 +130,8 @@ export default function DaftarHadirPengawasUjian() {
     muat()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sekolahId])
+
+  const ubah = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
   const kelasPerId = useMemo(() => {
     const m = {}
@@ -107,12 +163,12 @@ export default function DaftarHadirPengawasUjian() {
 
   const namaSekolah = isi(sekolah.nama, 'NAMA SEKOLAH')
   const tapel = tahunPelajaranSekarang()
-  const hariTanggal = formatHariTanggal(tanggal)
+  const hariTanggal = formatHariTanggal(form.tanggal)
 
   return (
     <Layout title="Daftar Hadir Pengawas" subtitle="Daftar hadir pengawas ruang ujian, siap cetak.">
       <style>{`
-        @page { size: A4; margin: 15mm 18mm; }
+        @page { size: A4; margin: 12mm 16mm; }
         @media print {
           body * { visibility: hidden; }
           #area-cetak-pengawas, #area-cetak-pengawas * { visibility: visible; }
@@ -123,12 +179,28 @@ export default function DaftarHadirPengawasUjian() {
             font-family: 'Times New Roman', Times, serif;
             color: #000 !important;
           }
-          #area-cetak-pengawas table, #area-cetak-pengawas th, #area-cetak-pengawas td { border-color: #000 !important; }
+          #area-cetak-pengawas .kop-surat { border-bottom-color: #000 !important; }
+          #area-cetak-pengawas .ttd-blok { page-break-inside: avoid; }
+          #area-cetak-pengawas * { color: #000 !important; }
+          #area-cetak-pengawas table { border-color: #000 !important; }
+          #area-cetak-pengawas th, #area-cetak-pengawas td { border-color: #000 !important; }
           #area-cetak-pengawas thead { display: table-header-group; }
           #area-cetak-pengawas tr { page-break-inside: avoid; }
           #area-cetak-pengawas thead tr { background: #fff !important; }
-          #area-cetak-pengawas .ttd-blok { page-break-inside: avoid; }
-          #area-cetak-pengawas .garis-nama { text-decoration-color: #000 !important; }
+
+          /* === MODE SATU HALAMAN === */
+          /* Ukuran huruf cetak: turunkan lagi kalau isi masih meluber. */
+          #area-cetak-pengawas { font-size: 10.5pt !important; line-height: 1.3 !important; break-inside: avoid; }
+          #area-cetak-pengawas .kop-surat { padding-bottom: 6px !important; margin-bottom: 10px !important; }
+          #area-cetak-pengawas .kop-logo { width: 60px !important; height: 60px !important; }
+          #area-cetak-pengawas .judul-blok { margin-bottom: 10px !important; }
+          #area-cetak-pengawas .info-blok { margin-bottom: 8px !important; }
+          #area-cetak-pengawas td, #area-cetak-pengawas th { padding: 2px 6px !important; }
+        }
+        /* Kunci gambar kop supaya tidak kebawa aturan CSS global (position:fixed dll). */
+        #area-cetak-pengawas .kop-logo img {
+          position: static !important; float: none !important;
+          display: block; max-width: 100%; max-height: 100%; object-fit: contain;
         }
       `}</style>
 
@@ -144,9 +216,26 @@ export default function DaftarHadirPengawasUjian() {
           </div>
         )}
 
+        <Bagian judul="Kop surat" keterangan="Terisi otomatis dari Profil Sekolah; bisa diubah di sini, kosongkan yang tidak perlu ditampilkan.">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="Pemerintah Kabupaten/Kota">
+              <input className={inputCls} value={form.kabupaten} onChange={ubah('kabupaten')} placeholder="PEMERINTAH KABUPATEN …" />
+            </Field>
+            <Field label="Dinas">
+              <input className={inputCls} value={form.dinas} onChange={ubah('dinas')} />
+            </Field>
+            <Field label="Kecamatan">
+              <input className={inputCls} value={form.kecamatan} onChange={ubah('kecamatan')} placeholder="KECAMATAN …" />
+            </Field>
+            <Field label="Jenis ujian">
+              <input className={inputCls} value={form.jenisUjian} onChange={ubah('jenisUjian')} placeholder="Ujian Tulis / Praktek" />
+            </Field>
+          </div>
+        </Bagian>
+
         <Bagian judul="Tanggal">
           <Field label="Hari, tanggal ujian" className="sm:max-w-xs">
-            <input type="date" className={inputCls} value={tanggal} onChange={(e) => setTanggal(e.target.value)} />
+            <input type="date" className={inputCls} value={form.tanggal} onChange={ubah('tanggal')} />
           </Field>
         </Bagian>
 
@@ -218,39 +307,71 @@ export default function DaftarHadirPengawasUjian() {
         </div>
       </div>
 
-      <div id="area-cetak-pengawas" className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-8">
-        <div className="text-center mb-6 text-[13.5px]">
-          <p className="font-display text-base font-bold">DAFTAR HADIR PENGAWAS UJIAN</p>
-          <p>{namaSekolah} — Tahun Pelajaran {tapel}</p>
-          <p>{hariTanggal}</p>
+      <div id="area-cetak-pengawas" className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-8 text-[13px] leading-relaxed text-slate-800">
+        <div className="kop-surat flex items-center gap-3 border-b-2 border-slate-800 pb-3 mb-6">
+          {/* Logo kiri: kabupaten. Kotak tetap ada walau kosong supaya teks tetap di tengah. */}
+          <div className="kop-logo w-[76px] h-[76px] shrink-0 flex items-center justify-center">
+            {logoKabupatenUrl && (
+              <img
+                src={logoKabupatenUrl}
+                alt="Logo kabupaten"
+                onError={(e) => { e.currentTarget.style.display = 'none' }}
+              />
+            )}
+          </div>
+          <div className="flex-1 text-center">
+            {form.kabupaten && <p className="font-bold uppercase tracking-wide">{form.kabupaten}</p>}
+            {form.dinas && <p className="font-bold uppercase tracking-wide">{form.dinas}</p>}
+            <p className="font-bold uppercase tracking-wide text-base">{namaSekolah}</p>
+            {form.kecamatan && <p className="font-bold uppercase tracking-wide">{form.kecamatan}</p>}
+          </div>
+          {/* Logo kanan: sekolah. */}
+          <div className="kop-logo w-[76px] h-[76px] shrink-0 flex items-center justify-center">
+            {logoSekolahUrl && (
+              <img
+                src={logoSekolahUrl}
+                alt="Logo sekolah"
+                onError={(e) => { e.currentTarget.style.display = 'none' }}
+              />
+            )}
+          </div>
         </div>
 
-        <table className="w-full border-collapse text-[13px]">
+        <div className="judul-blok text-center mb-6">
+          <p className="font-display text-base font-bold uppercase">Daftar Hadir Pengawas</p>
+          <p className="font-bold uppercase">{form.jenisUjian} Tahun Pelajaran {tapel}</p>
+        </div>
+
+        <div className="info-blok mb-4">
+          <p>Hari / Tanggal : <strong>{hariTanggal}</strong></p>
+        </div>
+
+        <table className="w-full border-collapse mb-6">
           <thead>
-            <tr className="bg-slate-50">
+            <tr>
               <Th className="w-10">No</Th>
               <Th>Nama Pengawas</Th>
               <Th className="w-24">Ruang</Th>
               <Th className="w-32">Jam Jaga</Th>
-              <Th className="w-28">Tanda Tangan</Th>
+              <Th className="w-32">Tanda Tangan</Th>
             </tr>
           </thead>
           <tbody>
             {baris.map((b, i) => (
               <tr key={b.id}>
                 <Td className="text-center">{i + 1}</Td>
-                <Td>{isi(guruPerId[b.guruId]?.nama_lengkap)}</Td>
-                <Td className="text-center">{isi(kelasPerId[b.kelasId]?.nama_kelas)}</Td>
-                <Td className="text-center">{isi(b.jamJaga)}</Td>
-                <Td>&nbsp;</Td>
+                <Td>{isi(guruPerId[b.guruId]?.nama_lengkap, '')}</Td>
+                <Td className="text-center">{isi(kelasPerId[b.kelasId]?.nama_kelas, '')}</Td>
+                <Td className="text-center">{isi(b.jamJaga, '')}</Td>
+                <Td className={`text-slate-400 ${posisiSilang(i)}`}>{i + 1}.</Td>
               </tr>
             ))}
           </tbody>
         </table>
 
-        <div className="ttd-blok mt-10 flex justify-end text-[13px]">
+        <div className="ttd-blok mt-10 flex justify-end">
           <div className="text-center">
-            <p className="mb-16">Kepala Sekolah</p>
+            <p className="font-medium mb-16">Kepala Sekolah</p>
             <p className="garis-nama font-semibold underline decoration-slate-400 underline-offset-4">
               {isi(sekolah.kepala, '________________________')}
             </p>
@@ -263,8 +384,8 @@ export default function DaftarHadirPengawasUjian() {
 }
 
 function Th({ children, className = '' }) {
-  return <th className={`border border-slate-200 px-2 py-2 text-left font-semibold ${className}`}>{children}</th>
+  return <th className={`border border-slate-300 px-2 py-1.5 text-left font-semibold ${className}`}>{children}</th>
 }
 function Td({ children, className = '' }) {
-  return <td className={`border border-slate-200 px-2 py-2 ${className}`}>{children}</td>
+  return <td className={`border border-slate-300 px-2 py-1.5 ${className}`}>{children}</td>
 }
