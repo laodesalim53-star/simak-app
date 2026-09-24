@@ -88,13 +88,6 @@ const PALET_WARNA = {
     hoverBorder: 'hover:border-orange-400',
     hoverShadow: 'hover:shadow-orange-100',
   },
-  sky: {
-    bg: 'bg-sky-50',
-    icon: 'text-sky-600',
-    border: 'border-sky-100',
-    hoverBorder: 'hover:border-sky-400',
-    hoverShadow: 'hover:shadow-sky-100',
-  },
   green: {
     bg: 'bg-green-50',
     icon: 'text-green-600',
@@ -247,15 +240,6 @@ const daftarLaporan = [
     icon: FileCheck2,
     path: '/skl',
     warna: 'green',
-    siap: true,
-  },
-  {
-    id: 'surat-keterangan',
-    judul: 'Surat Keterangan',
-    deskripsi: 'Buat dan kelola surat keterangan untuk siswa maupun guru, lengkap dengan nomor surat.',
-    icon: FileSignature,
-    path: '/surat-keterangan',
-    warna: 'sky',
     siap: true,
   },
   {
