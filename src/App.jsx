@@ -5,6 +5,7 @@ import { supabase } from './lib/supabaseClient'
 import Loader from './components/Loader'
 import { CartProvider } from './lib/CartContext'
 import LisensiCetak from "./components/LisensiCetak";
+import DemoSessionWatcher from './components/DemoSessionWatcher'
 
 // ============================================================
 // LAZY-LOADED PAGES
@@ -544,6 +545,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
+      <DemoSessionWatcher />
       <LisensiCetak app="sekolah" />
     </CartProvider>
   )
