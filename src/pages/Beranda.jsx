@@ -727,6 +727,16 @@ export default function Beranda() {
                     Daftar sekarang
                     <ArrowRight size={16} strokeWidth={2.5} />
                   </Link>
+                  {/* Tombol Coba Demo: TIDAK memakai query string supaya
+                      email/password demo tidak pernah nampil di address
+                      bar/riwayat browser. Data dikirim lewat router state
+                      (state={{ demo: true }}) yang hanya bisa dibaca oleh
+                      halaman Login.jsx lewat useLocation(). Kredensial demo
+                      itu sendiri (DEMO_EMAIL/DEMO_PASSWORD) didefinisikan
+                      di Login.jsx, bukan di sini. */}
+                  <Link to="/login" state={{ demo: true }} className="btn-demo">
+                    Coba Demo
+                  </Link>
                   <Link to="/login" className="btn-ghost">
                     <LogIn size={15} strokeWidth={2.5} />
                     Sudah punya akun? Masuk
@@ -1482,6 +1492,22 @@ export default function Beranda() {
           text-decoration: none;
           border: 1px solid rgba(255,255,255,0.18);
         }
+        .btn-demo {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          font-size: 13.5px;
+          font-weight: 700;
+          color: #F2762B;
+          background: #fff;
+          padding: 12px 20px;
+          min-height: 44px;
+          border-radius: 999px;
+          text-decoration: none;
+          white-space: nowrap;
+        }
+        .btn-demo:hover { background: #FFE9DA; }
         .btn-outline-toko {
           display: inline-flex;
           align-items: center;
