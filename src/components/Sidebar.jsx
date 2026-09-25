@@ -343,6 +343,7 @@ function getGroupsPuskesmasAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBe
         { to: '/data-pegawai-puskesmas', label: 'Data Pegawai', icon: Briefcase },
         { to: '/presensi-puskesmas', label: 'Presensi Pegawai', icon: ClipboardCheck },
         { to: '/profil-puskesmas', label: 'Profil Puskesmas', icon: Building2 },
+        { to: '/keuangan-bok', label: 'Keuangan BOK', icon: Wallet },
         { to: '/daftar-hadir-puskesmas', label: 'Daftar Hadir Pegawai', icon: ClipboardList },
       ],
     },
