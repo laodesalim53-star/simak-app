@@ -31,6 +31,9 @@ const DataPegawaiKantor = lazy(() => import('./pages/DataPegawaiKantor'))
 const DaftarHadirPegawai = lazy(() => import('./pages/DaftarHadirPegawai'))
 const ProfilKantor = lazy(() => import('./pages/ProfilKantor'))
 const ProfilPuskesmas = lazy(() => import('./pages/ProfilPuskesmas'))
+const DataPegawaiPuskesmas = lazy(() => import('./pages/DataPegawaiPuskesmas'))
+const PresensiPuskesmas = lazy(() => import('./pages/PresensiPuskesmas'))
+const DaftarHadirPuskesmas = lazy(() => import('./pages/DaftarHadirPuskesmas'))
 const PendaftaranNikah = lazy(() => import('./pages/PendaftaranNikah'))   // BARU
 const VerifikasiNikah = lazy(() => import('./pages/VerifikasiNikah'))     // BARU
 const Kelas = lazy(() => import('./pages/Kelas'))
@@ -347,6 +350,9 @@ export default function App() {
           <Route path="/kelas" element={<ProtectedRoute adminOnly><Kelas /></ProtectedRoute>} />
           <Route path="/profil-kantor" element={<ProtectedRoute adminOnly><ProfilKantor /></ProtectedRoute>} />
           <Route path="/profil-puskesmas" element={<ProtectedRoute adminOnly><ProfilPuskesmas /></ProtectedRoute>} />
+          <Route path="/data-pegawai-puskesmas" element={<ProtectedRoute adminOnly><DataPegawaiPuskesmas /></ProtectedRoute>} />
+          <Route path="/presensi-puskesmas" element={<ProtectedRoute adminOnly><PresensiPuskesmas /></ProtectedRoute>} />
+          <Route path="/daftar-hadir-puskesmas" element={<ProtectedRoute adminOnly><DaftarHadirPuskesmas /></ProtectedRoute>} />
 
           {/* ============================================================
               3. LAPORAN GURU & SAMPUL LAPORAN
