@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "site.simaksdnwaria.simak",
+        "sha256_cert_fingerprints": ["C3:A3:2E:5F:C8:52:F4:67:55:69:61:13:1B:4D:B9:79:8B:7F:07:0F:35:A5:91:EC:03:23:4B:65:5A:E0:6B:89"]
+      }
+    }]
