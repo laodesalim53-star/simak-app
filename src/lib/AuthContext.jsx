@@ -6,14 +6,48 @@ const AuthContext = createContext(null)
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(undefined)
   const [profil, setProfil] = useState(undefined)
+  const [profilPuskesmas, setProfilPuskesmas] = useState(undefined)
 
   const profilRequestIdRef = useRef(0)
+  const puskesmasRequestIdRef = useRef(0)
+
+  // =========================================================
+  // PROFIL PUSKESMAS (tenant jenis_organisasi === 'puskesmas')
+  // Dimuat sekali di context supaya halaman lain (kop surat,
+  // tanda tangan dokumen, dsb) tidak perlu fetch ulang sendiri
+  // seperti sebelumnya di ProfilPuskesmas.jsx.
+  // =========================================================
+  async function loadProfilPuskesmas(sekolahId) {
+    const requestId = ++puskesmasRequestIdRef.current
+
+    if (!sekolahId) {
+      if (requestId === puskesmasRequestIdRef.current) setProfilPuskesmas(null)
+      return
+    }
+
+    const { data, error } = await supabase
+      .from('profil_puskesmas')
+      .select('*')
+      .eq('sekolah_id', sekolahId)
+      .maybeSingle()
+
+    if (requestId !== puskesmasRequestIdRef.current) return
+
+    if (error) {
+      console.error('Gagal memuat profil puskesmas (dibiarkan):', error)
+      return
+    }
+
+    setProfilPuskesmas(data || null)
+  }
 
   async function loadProfil(userId) {
     const requestId = ++profilRequestIdRef.current
 
     if (!userId) {
       if (requestId === profilRequestIdRef.current) setProfil(null)
+      puskesmasRequestIdRef.current++
+      setProfilPuskesmas(null)
       return
     }
 
@@ -59,6 +93,15 @@ export function AuthProvider({ children }) {
 
     const jenisOrganisasi = data.sekolah?.jenis_organisasi || 'sekolah'
     const namaSekolah = data.sekolah?.nama_sekolah || null
+
+    // Muat profil puskesmas secara paralel bila tenant ini jenisnya puskesmas.
+    // Tidak di-await supaya tidak memperlambat pemuatan profil utama.
+    if (jenisOrganisasi === 'puskesmas' && data.sekolah_id) {
+      loadProfilPuskesmas(data.sekolah_id)
+    } else {
+      puskesmasRequestIdRef.current++
+      setProfilPuskesmas(null)
+    }
 
 if (jenisOrganisasi === 'kantor' && data.pegawai_id) {
   const { data: pegawai } = await supabase
@@ -144,6 +187,8 @@ if (jenisOrganisasi === 'kantor' && data.pegawai_id) {
   const signOut = () => supabase.auth.signOut()
 
   const refreshProfil = () => loadProfil(session?.user?.id)
+
+  const refreshProfilPuskesmas = () => loadProfilPuskesmas(profil?.sekolah_id)
 
   async function tandaiPesanDibaca() {
     if (!session?.user?.id) return
@@ -375,6 +420,9 @@ if (jenisOrganisasi === 'kantor' && data.pegawai_id) {
   const isKantor =
     (profil?.jenis_organisasi ?? 'sekolah') === 'kantor'
 
+  const isPuskesmas =
+    (profil?.jenis_organisasi ?? 'sekolah') === 'puskesmas'
+
   return (
     <AuthContext.Provider
       value={{
@@ -398,6 +446,7 @@ if (jenisOrganisasi === 'kantor' && data.pegawai_id) {
         isOrangTua,
         isKepalaSekolah,
         isKantor,
+        isPuskesmas,
 
         tambahAnak,
         getAnakSaya,
@@ -419,8 +468,13 @@ if (jenisOrganisasi === 'kantor' && data.pegawai_id) {
 
         paketBerlakuSampai:
           profil?.paket_berlaku_sampai ?? null,
-        
+
         tandaiPesanDibaca,
+
+        // Profil puskesmas (data kop/tanda tangan): undefined = belum
+        // dimuat/tidak relevan, null = tenant ini belum punya baris.
+        profilPuskesmas,
+        refreshProfilPuskesmas,
       }}
     >
       {children}
