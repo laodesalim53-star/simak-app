@@ -31,6 +31,7 @@ const DataPegawaiKantor = lazy(() => import('./pages/DataPegawaiKantor'))
 const DaftarHadirPegawai = lazy(() => import('./pages/DaftarHadirPegawai'))
 const ProfilKantor = lazy(() => import('./pages/ProfilKantor'))
 const ProfilPuskesmas = lazy(() => import('./pages/ProfilPuskesmas'))
+const KeuanganBOK = lazy(() => import('./pages/KeuanganBOK'))
 const DataPegawaiPuskesmas = lazy(() => import('./pages/DataPegawaiPuskesmas'))
 const PresensiPuskesmas = lazy(() => import('./pages/PresensiPuskesmas'))
 const DaftarHadirPuskesmas = lazy(() => import('./pages/DaftarHadirPuskesmas'))
@@ -350,6 +351,7 @@ export default function App() {
           <Route path="/kelas" element={<ProtectedRoute adminOnly><Kelas /></ProtectedRoute>} />
           <Route path="/profil-kantor" element={<ProtectedRoute adminOnly><ProfilKantor /></ProtectedRoute>} />
           <Route path="/profil-puskesmas" element={<ProtectedRoute adminOnly><ProfilPuskesmas /></ProtectedRoute>} />
+          <Route path="/keuangan-bok" element={<ProtectedRoute adminOnly><KeuanganBOK /></ProtectedRoute>} />
           <Route path="/data-pegawai-puskesmas" element={<ProtectedRoute adminOnly><DataPegawaiPuskesmas /></ProtectedRoute>} />
           <Route path="/presensi-puskesmas" element={<ProtectedRoute adminOnly><PresensiPuskesmas /></ProtectedRoute>} />
           <Route path="/daftar-hadir-puskesmas" element={<ProtectedRoute adminOnly><DaftarHadirPuskesmas /></ProtectedRoute>} />
