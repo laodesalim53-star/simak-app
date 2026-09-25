@@ -22,30 +22,30 @@ const emptyForm = {
 }
 
 // Satu puskesmas = satu baris, di-scope lewat sekolah_id (tenant), sama
-// polanya dengan ProfilKantor.jsx. sekolah_id didapat dari profil user
-// yang login.
+// polanya dengan ProfilKantor.jsx. Data ini sekarang didaftarkan di
+// AuthContext (profilPuskesmas) supaya halaman lain (kop surat, tanda
+// tangan dokumen, dsb) bisa langsung pakai tanpa fetch ulang sendiri.
 export default function ProfilPuskesmas() {
-  const { sekolahId } = useAuth()
+  const { sekolahId, profilPuskesmas, refreshProfilPuskesmas } = useAuth()
   const [form, setForm] = useState(emptyForm)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(profilPuskesmas === undefined)
   const [saving, setSaving] = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [tersimpan, setTersimpan] = useState(false)
   const [logoUrl, setLogoUrl] = useState('')
 
-  async function muatData() {
-    if (!sekolahId) return
-    setLoading(true)
-    const { data } = await supabase
-      .from('profil_puskesmas')
-      .select('*')
-      .eq('sekolah_id', sekolahId)
-      .maybeSingle()
+  // Isi form dari data yang sudah dimuat di AuthContext, bukan fetch sendiri.
+  useEffect(() => {
+    if (profilPuskesmas === undefined) {
+      setLoading(true)
+      return
+    }
+    setLoading(false)
 
-    if (data) {
-      setForm({ ...emptyForm, ...data })
-      if (data.logo_path) {
-        const { data: pub } = supabase.storage.from('profil-puskesmas').getPublicUrl(data.logo_path)
+    if (profilPuskesmas) {
+      setForm({ ...emptyForm, ...profilPuskesmas })
+      if (profilPuskesmas.logo_path) {
+        const { data: pub } = supabase.storage.from('profil-puskesmas').getPublicUrl(profilPuskesmas.logo_path)
         setLogoUrl(pub.publicUrl)
       } else {
         setLogoUrl('')
@@ -55,12 +55,7 @@ export default function ProfilPuskesmas() {
       setForm(emptyForm)
       setLogoUrl('')
     }
-    setLoading(false)
-  }
-
-  useEffect(() => {
-    muatData()
-  }, [sekolahId])
+  }, [profilPuskesmas])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -78,6 +73,7 @@ export default function ProfilPuskesmas() {
     if (!error) {
       setTersimpan(true)
       setTimeout(() => setTersimpan(false), 3000)
+      await refreshProfilPuskesmas()
     } else {
       alert('Gagal menyimpan: ' + error.message)
     }
@@ -115,6 +111,8 @@ export default function ProfilPuskesmas() {
 
     if (saveError) {
       alert('Logo terunggah tapi gagal disimpan ke profil: ' + saveError.message)
+    } else {
+      await refreshProfilPuskesmas()
     }
 
     setUploadingLogo(false)
