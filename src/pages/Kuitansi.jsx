@@ -336,6 +336,7 @@ export default function Kuitansi() {
         <KuitansiModal
           keuanganRow={bkuTerpilih}
           sekolah={sekolah}
+          sekolahId={sekolahId}
           onClose={handleTutupBuat}
         />
       )}
