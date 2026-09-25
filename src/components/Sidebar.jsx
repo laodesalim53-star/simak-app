@@ -285,7 +285,7 @@ function getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelum
       ],
     },
     // BARU: Aset Kantor — Inventaris & Kondisi Bangunan kantor (dipakai
-    // juga oleh RingkasanAset.jsx di Laporan Kepala KUA / Laporan Bulanan KUA).
+    // juga oleh RingkasanAset.jsx di Laporan Kepala Sekolah / Laporan Kepala KUA).
     {
       label: 'Aset Kantor',
       links: [
@@ -308,6 +308,53 @@ function getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelum
               { to: '/laporan-kepala-kua', label: 'Laporan Kepala KUA', icon: BookOpen },
               { to: '/laporan-bulanan-kua', label: 'Laporan Bulanan KUA', icon: NotebookPen },
             ]
+          : []),
+      ],
+    },
+  ]
+}
+
+// Menu ADMIN untuk tenant "puskesmas" (isPuskesmas) — sejajar pola
+// getGroupsKantorAdmin() di atas, tapi TANPA grup Keagamaan (khusus KUA)
+// dan tanpa item bernuansa sekolah (Akademik, Toko, Keuangan sekolah, dst).
+// Fokus: profil puskesmas, kepegawaian, dokumen, dan administrasi umum.
+// Halaman-halaman rute di bawah ini (/profil-puskesmas, /presensi-puskesmas,
+// /data-pegawai-puskesmas, /daftar-hadir-puskesmas) perlu dibuat menyusul —
+// belum ada di aplikasi saat catatan ini ditulis.
+function getGroupsPuskesmasAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelumDibaca = 0) {
+  return [
+    {
+      label: null,
+      links: [
+        { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
+        { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
+        { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
+        { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
+        { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
+        { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
+        { to: '/alat-pdf', label: 'Alat PDF', icon: FileType2 },
+        { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
+        { to: '/link-layanan', label: 'Link Layanan', icon: Link2 },
+      ],
+    },
+    {
+      label: 'Kepegawaian',
+      links: [
+        { to: '/data-pegawai-puskesmas', label: 'Data Pegawai', icon: Briefcase },
+        { to: '/presensi-puskesmas', label: 'Presensi Pegawai', icon: ClipboardCheck },
+        { to: '/profil-puskesmas', label: 'Profil Puskesmas', icon: Building2 },
+        { to: '/daftar-hadir-puskesmas', label: 'Daftar Hadir Pegawai', icon: ClipboardList },
+      ],
+    },
+    {
+      label: 'Administrasi',
+      links: [
+        { to: '/agenda', label: 'Agenda Puskesmas', icon: CalendarDays },
+        { to: '/surat', label: 'Surat Masuk/Keluar', icon: Mail },
+        { to: '/backup', label: 'Backup Data', icon: DatabaseBackup },
+        // "Persetujuan Akun" hanya untuk admin utama / kepala puskesmas.
+        ...(isAdminUtama
+          ? [{ to: '/persetujuan-akun', label: 'Persetujuan Akun', icon: ShieldCheck, badge: jumlahMenunggu }]
           : []),
       ],
     },
@@ -379,6 +426,25 @@ function getLinksKantorPegawai(jumlahPesanBelumDibaca = 0) {
     { to: '/alat-pdf', label: 'Alat PDF', icon: FileType2 },
     { to: '/presensi', label: 'Presensi', icon: ClipboardCheck },
     { to: '/agenda', label: 'Agenda Kantor', icon: CalendarDays },
+    { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
+    { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
+  ]
+}
+
+// Menu PEGAWAI (non-admin) untuk tenant "puskesmas" — sejajar pola
+// getLinksKantorPegawai() di atas, tanpa item Keagamaan (khusus KUA) dan
+// tanpa item bernuansa sekolah. Hanya profil, presensi, dokumen, dan item
+// umum lain.
+function getLinksPuskesmasPegawai(jumlahPesanBelumDibaca = 0) {
+  return [
+    { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
+    { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
+    { to: '/presensi-puskesmas', label: 'Presensi', icon: ClipboardCheck },
+    { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
+    { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
+    { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
+    { to: '/alat-pdf', label: 'Alat PDF', icon: FileType2 },
+    { to: '/agenda', label: 'Agenda Puskesmas', icon: CalendarDays },
     { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
     { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
   ]
@@ -472,11 +538,14 @@ function getInisial(nama) {
 // memang jabatan/role di profil benar-benar 'guru'.
 // PERBAIKAN 2: tambahan untuk tenant kantor — 'kepala_kantor' & 'pegawai'
 // sebelumnya tidak dikenali sama sekali sehingga macet di 'Memuat...'.
+// PERBAIKAN 3: tambahan untuk tenant puskesmas — 'kepala_puskesmas'
+// sekarang dikenali juga, sejajar dengan 'kepala_kantor'.
 function getLabelPeran(profil, isSuperAdmin, isAdminUtama, isAdmin, isOrangTua, hasSession) {
   if (!hasSession) return 'Tamu'
   if (isSuperAdmin) return 'Superadmin'
   if (profil?.jabatan === 'kepala_sekolah') return 'Kepala Sekolah'
   if (profil?.jabatan === 'kepala_kantor') return 'Kepala Kantor'
+  if (profil?.jabatan === 'kepala_puskesmas') return 'Kepala Puskesmas'
   if (isAdminUtama) return 'Admin Utama'
   if (isAdmin) return 'Admin'
   if (isOrangTua) return 'Orang Tua/Wali'
@@ -530,6 +599,7 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
     isOrangTua,
     sekolahId,
     isKantor,
+    isPuskesmas,
   } = useAuth()
   const navigate = useNavigate()
   const fotoUrl = getFotoUrl(profil?.foto_profil_path)
@@ -831,10 +901,14 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
     }
   }, [isSuperAdmin])
 
-  // Pilih set menu admin & non-admin sesuai jenis tenant (sekolah vs kantor).
-  // isKantor datang dari AuthContext (relasi profil -> sekolah.jenis_organisasi).
+  // Pilih set menu admin & non-admin sesuai jenis tenant (sekolah vs kantor vs puskesmas).
+  // isKantor dan isPuskesmas datang dari AuthContext (relasi profil ->
+  // sekolah.jenis_organisasi). Puskesmas dicek setelah kantor supaya kedua
+  // tenant non-sekolah tetap saling eksklusif.
   const groupsAdmin = isKantor
     ? getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu, jumlahPesanBelumDibaca)
+    : isPuskesmas
+    ? getGroupsPuskesmasAdmin(isAdminUtama, jumlahMenunggu, jumlahPesanBelumDibaca)
     : getGroupsAdmin(
         isAdminUtama,
         isSuperAdmin,
@@ -848,6 +922,8 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
       )
   const linksGuru = isKantor
     ? getLinksKantorPegawai(jumlahPesanBelumDibaca)
+    : isPuskesmas
+    ? getLinksPuskesmasPegawai(jumlahPesanBelumDibaca)
     : getLinksGuru(jumlahPesanBelumDibaca, sekolahId)
   const linksOrangTua = getLinksOrangTua(jumlahPesanBelumDibaca, sekolahId)
 
