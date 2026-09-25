@@ -5,7 +5,16 @@
 // cukup dengan menambah objek di `daftarDokumen`.
 
 import { Link } from 'react-router-dom'
-import { IdCard, FileText, ClipboardList, ShieldCheck, GraduationCap, ArrowLeftRight, CalendarDays } from 'lucide-react'
+import {
+  IdCard,
+  FileText,
+  ClipboardList,
+  ShieldCheck,
+  GraduationCap,
+  ArrowLeftRight,
+  CalendarDays,
+  FileSignature,
+} from 'lucide-react'
 import Layout from '../components/Layout'
 import { PALET_WARNA, BatikOverlay, IsiKartuHub } from '../components/hub'
 
@@ -62,6 +71,15 @@ const daftarDokumen = [
     icon: ArrowLeftRight,
     path: '/gudang-sk/portal-ujian/berita-acara-serah-terima-as',
     warna: 'teal',
+    siap: true,
+  },
+  {
+    id: 'pakta-integritas',
+    judul: 'Pakta Integritas Kepala Sekolah',
+    deskripsi: 'Pakta integritas pelaksanaan Asesmen Sekolah, ditandatangani Kepala Sekolah.',
+    icon: FileSignature,
+    path: '/gudang-sk/portal-ujian/pakta-integritas',
+    warna: 'amber',
     siap: true,
   },
 ]
