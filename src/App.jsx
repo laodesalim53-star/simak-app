@@ -73,6 +73,7 @@ const BeritaAcaraUjian = lazy(() => import('./pages/BeritaAcaraUjian'))
 const DaftarHadirSiswaUjian = lazy(() => import('./pages/DaftarHadirSiswaUjian'))
 const DaftarHadirPengawasUjian = lazy(() => import('./pages/DaftarHadirPengawasUjian'))
 const BeritaAcaraSerahTerimaAS = lazy(() => import('./pages/BeritaAcaraSerahTerimaAS'))
+const PaktaIntegritas = lazy(() => import('./pages/PaktaIntegritas'))
 // Cetak Sampul Laporan (generik, kop otomatis dari profil_sekolah) — satu
 // halaman dengan sidebar menu, menggantikan file terpisah CetakSampul.jsx /
 // CetakSampulSemester.jsx / CetakSampul8355.jsx.
@@ -390,6 +391,7 @@ export default function App() {
           <Route path="/gudang-sk/portal-ujian/daftar-hadir-pengawas" element={<ProtectedRoute adminOnly><DaftarHadirPengawasUjian /></ProtectedRoute>} />
           <Route path="/gudang-sk/portal-ujian/berita-acara-serah-terima-as" element={<ProtectedRoute adminOnly><BeritaAcaraSerahTerimaAS /></ProtectedRoute>} />
           <Route path="/gudang-sk/portal-ujian/jadwal-pengawas-ruang" element={<ProtectedRoute adminOnly><JadwalPengawasRuangUjian /></ProtectedRoute>} />
+          <Route path="/gudang-sk/portal-ujian/pakta-integritas" element={<ProtectedRoute adminOnly><PaktaIntegritas /></ProtectedRoute>} />
           {/* Cetak Sampul Laporan — satu halaman dengan sidebar menu berisi
               semua jenis laporan (Bulanan, Semester, 8355, LPJ BOS, dst).
               Dikunci adminOnly — dulu ada versi kedua tanpa adminOnly di bagian
