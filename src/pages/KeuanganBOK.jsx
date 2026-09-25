@@ -4,7 +4,7 @@ import Layout from '../components/Layout'
 import { useAuth } from '../lib/AuthContext'
 import {
   Plus, Pencil, Trash2, Search, X, Loader2, Wallet,
-  ClipboardList, BookOpen, Receipt, ShoppingCart, FileSignature,
+  ClipboardList, BookOpen, Receipt, ShoppingCart, FileSignature, Printer,
 } from 'lucide-react'
 
 // Halaman "Keuangan BOK" (Bantuan Operasional Kesehatan) — KHUSUS tenant
@@ -40,6 +40,48 @@ function formatTanggal(tgl) {
   } catch {
     return tgl
   }
+}
+
+// Konversi angka ke terbilang bahasa Indonesia, dipakai di kwitansi
+// ("Sudah terima uang sejumlah ... rupiah"). Mendukung sampai triliunan.
+const SATUAN_ANGKA = ['', 'satu', 'dua', 'tiga', 'empat', 'lima', 'enam', 'tujuh', 'delapan', 'sembilan']
+
+function terbilangSampaiSeribu(n) {
+  if (n === 0) return ''
+  if (n < 10) return SATUAN_ANGKA[n]
+  if (n < 20) return (n === 10 ? 'sepuluh' : n === 11 ? 'sebelas' : SATUAN_ANGKA[n - 10] + ' belas')
+  if (n < 100) return (SATUAN_ANGKA[Math.floor(n / 10)] + ' puluh' + (n % 10 ? ' ' + SATUAN_ANGKA[n % 10] : '')).trim()
+  if (n < 200) return ('seratus' + (n % 100 ? ' ' + terbilangSampaiSeribu(n % 100) : '')).trim()
+  if (n < 1000) return (SATUAN_ANGKA[Math.floor(n / 100)] + ' ratus' + (n % 100 ? ' ' + terbilangSampaiSeribu(n % 100) : '')).trim()
+  return ''
+}
+
+function terbilang(angka) {
+  let n = Math.floor(Number(angka) || 0)
+  if (n === 0) return 'nol'
+  const bagian = []
+  const triliun = Math.floor(n / 1_000_000_000_000)
+  n %= 1_000_000_000_000
+  const miliar = Math.floor(n / 1_000_000_000)
+  n %= 1_000_000_000
+  const juta = Math.floor(n / 1_000_000)
+  n %= 1_000_000
+  const ribu = Math.floor(n / 1000)
+  n %= 1000
+  const sisa = n
+
+  if (triliun) bagian.push(`${terbilangSampaiSeribu(triliun)} triliun`)
+  if (miliar) bagian.push(`${terbilangSampaiSeribu(miliar)} miliar`)
+  if (juta) bagian.push(`${terbilangSampaiSeribu(juta)} juta`)
+  if (ribu) bagian.push(ribu === 1 ? 'seribu' : `${terbilangSampaiSeribu(ribu)} ribu`)
+  if (sisa) bagian.push(terbilangSampaiSeribu(sisa))
+
+  return bagian.join(' ').trim()
+}
+
+function kapitalKalimat(teks) {
+  if (!teks) return ''
+  return teks.charAt(0).toUpperCase() + teks.slice(1)
 }
 
 const TABS = [
@@ -79,15 +121,9 @@ export default function KeuanganBOK() {
 
       {tabAktif === 'rka' && <TabRKA />}
       {tabAktif === 'bku' && <TabBKU />}
-      {tabAktif === 'kwitansi' && (
-        <p className="text-center py-10 text-ink-700/50 text-sm">Tab Kwitansi menyusul.</p>
-      )}
-      {tabAktif === 'nota' && (
-        <p className="text-center py-10 text-ink-700/50 text-sm">Tab Nota Belanja menyusul.</p>
-      )}
-      {tabAktif === 'sk' && (
-        <p className="text-center py-10 text-ink-700/50 text-sm">Tab SK Pengelola menyusul.</p>
-      )}
+      {tabAktif === 'kwitansi' && <TabKwitansi />}
+      {tabAktif === 'nota' && <TabNotaBelanja />}
+      {tabAktif === 'sk' && <TabSKPengelola />}
     </Layout>
   )
 }
@@ -678,6 +714,1070 @@ function TabBKU() {
           </form>
         </div>
       )}
+    </>
+  )
+}
+
+// ============================================================
+// TAB 3: KWITANSI
+// ============================================================
+
+const emptyFormKwitansi = {
+  bku_id: '',
+  nomor_kwitansi: '',
+  tanggal: new Date().toISOString().slice(0, 10),
+  sudah_terima_dari: '',
+  jumlah_uang: '',
+  untuk_pembayaran: '',
+  potongan_pph: '',
+  potongan_ppn: '',
+  nama_penerima: '',
+  jabatan_penerima: '',
+}
+
+function TabKwitansi() {
+  const { sekolahId, profil } = useAuth()
+  const [profilPuskesmas, setProfilPuskesmas] = useState(null)
+  const [data, setData] = useState([])
+  const [bkuList, setBkuList] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+  const [form, setForm] = useState(emptyFormKwitansi)
+  const [saving, setSaving] = useState(false)
+  const [cetak, setCetak] = useState(null) // kwitansi yang sedang dicetak
+
+  useEffect(() => {
+    if (!sekolahId) return
+    supabase
+      .from('profil_puskesmas')
+      .select('nama_puskesmas, kepala_puskesmas, nip_kepala_puskesmas, tempat_ttd, kabupaten')
+      .eq('sekolah_id', sekolahId)
+      .maybeSingle()
+      .then(({ data: p }) => setProfilPuskesmas(p))
+  }, [sekolahId])
+
+  async function loadData() {
+    if (!sekolahId) {
+      setData([])
+      setLoading(false)
+      return
+    }
+    setLoading(true)
+
+    const { data: daftarBku } = await supabase
+      .from('bku_bok')
+      .select('id, tanggal, uraian, pengeluaran')
+      .eq('sekolah_id', sekolahId)
+      .order('tanggal', { ascending: false })
+    setBkuList(daftarBku || [])
+
+    const { data: rows, error } = await supabase
+      .from('kwitansi_bok')
+      .select('*')
+      .eq('sekolah_id', sekolahId)
+      .order('tanggal', { ascending: false })
+
+    if (error) alert('Gagal memuat kwitansi: ' + error.message)
+    setData(rows || [])
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sekolahId])
+
+  function openAdd() {
+    setForm({ ...emptyFormKwitansi, sudah_terima_dari: profilPuskesmas?.nama_puskesmas || '' })
+    setEditingId(null)
+    setShowForm(true)
+  }
+
+  function openEdit(row) {
+    setForm({
+      bku_id: row.bku_id || '',
+      nomor_kwitansi: row.nomor_kwitansi || '',
+      tanggal: row.tanggal,
+      sudah_terima_dari: row.sudah_terima_dari || '',
+      jumlah_uang: String(row.jumlah_uang),
+      untuk_pembayaran: row.untuk_pembayaran,
+      potongan_pph: String(row.potongan_pph || 0),
+      potongan_ppn: String(row.potongan_ppn || 0),
+      nama_penerima: row.nama_penerima || '',
+      jabatan_penerima: row.jabatan_penerima || '',
+    })
+    setEditingId(row.id)
+    setShowForm(true)
+  }
+
+  // Isi otomatis Uraian & Jumlah dari transaksi BKU yang dipilih, supaya
+  // tidak perlu ketik ulang manual — admin masih bisa mengubahnya.
+  function pilihBku(bkuId) {
+    const bku = bkuList.find((b) => b.id === bkuId)
+    setForm((prev) => ({
+      ...prev,
+      bku_id: bkuId,
+      untuk_pembayaran: bku ? bku.uraian : prev.untuk_pembayaran,
+      jumlah_uang: bku ? String(bku.pengeluaran) : prev.jumlah_uang,
+      tanggal: bku ? bku.tanggal : prev.tanggal,
+    }))
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!sekolahId) return
+    setSaving(true)
+    const payload = {
+      sekolah_id: sekolahId,
+      bku_id: form.bku_id || null,
+      nomor_kwitansi: form.nomor_kwitansi || null,
+      tanggal: form.tanggal,
+      sudah_terima_dari: form.sudah_terima_dari || null,
+      jumlah_uang: Number(form.jumlah_uang) || 0,
+      untuk_pembayaran: form.untuk_pembayaran,
+      potongan_pph: Number(form.potongan_pph) || 0,
+      potongan_ppn: Number(form.potongan_ppn) || 0,
+      nama_penerima: form.nama_penerima || null,
+      jabatan_penerima: form.jabatan_penerima || null,
+    }
+    const { error } = editingId
+      ? await supabase.from('kwitansi_bok').update(payload).eq('id', editingId).eq('sekolah_id', sekolahId)
+      : await supabase.from('kwitansi_bok').insert(payload)
+    setSaving(false)
+    if (!error) {
+      setShowForm(false)
+      loadData()
+    } else {
+      alert('Gagal menyimpan: ' + error.message)
+    }
+  }
+
+  async function handleDelete(id) {
+    if (!confirm('Hapus kwitansi ini?')) return
+    const { error } = await supabase.from('kwitansi_bok').delete().eq('id', id).eq('sekolah_id', sekolahId)
+    if (!error) loadData()
+    else alert('Gagal menghapus: ' + error.message)
+  }
+
+  const filtered = data.filter((k) =>
+    `${k.nomor_kwitansi} ${k.untuk_pembayaran} ${k.nama_penerima}`.toLowerCase().includes(search.toLowerCase())
+  )
+
+  return (
+    <>
+      <div className="card relative overflow-hidden p-4 mb-4">
+        <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 to-blue-700" />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="w-9 h-9 rounded-full bg-emerald-600/10 text-emerald-700 flex items-center justify-center shrink-0">
+              <Receipt size={18} />
+            </div>
+            <div className="relative max-w-xs w-full">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-700/40" />
+              <input className="input-field pl-9" placeholder="Cari no. kwitansi/penerima..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
+          </div>
+          <button className="btn-primary" onClick={openAdd}>
+            <Plus size={16} /> Buat Kwitansi
+          </button>
+        </div>
+      </div>
+
+      <div className="card overflow-x-auto">
+        <table className="table-shell">
+          <thead>
+            <tr>
+              <th>Tanggal</th>
+              <th>No. Kwitansi</th>
+              <th>Untuk Pembayaran</th>
+              <th>Jumlah</th>
+              <th>Penerima</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading && <tr><td colSpan={6} className="text-center py-8 text-ink-700/50">Memuat data...</td></tr>}
+            {!loading && filtered.length === 0 && <tr><td colSpan={6} className="text-center py-8 text-ink-700/50">Belum ada kwitansi.</td></tr>}
+            {filtered.map((k) => (
+              <tr key={k.id} className="hover:bg-emerald-600/[0.03] transition-colors">
+                <td className="whitespace-nowrap text-xs">{formatTanggal(k.tanggal)}</td>
+                <td className="font-mono text-xs">{k.nomor_kwitansi || '-'}</td>
+                <td className="font-medium">{k.untuk_pembayaran}</td>
+                <td className="font-semibold text-emerald-700">{formatRupiah(k.jumlah_uang)}</td>
+                <td>{k.nama_penerima || '-'}</td>
+                <td>
+                  <div className="flex items-center gap-1 justify-end">
+                    <button onClick={() => setCetak(k)} className="p-2 hover:bg-blue-600/10 rounded-lg text-blue-700/70" title="Cetak">
+                      <Printer size={15} />
+                    </button>
+                    <button onClick={() => openEdit(k)} className="p-2 hover:bg-emerald-600/10 rounded-lg text-emerald-700/70">
+                      <Pencil size={15} />
+                    </button>
+                    <button onClick={() => handleDelete(k.id)} className="p-2 hover:bg-red-900/10 rounded-lg text-red-900/70">
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-4">
+          <form onSubmit={handleSubmit} className="card relative overflow-hidden w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto">
+            <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 to-blue-700" />
+            <button type="button" onClick={() => setShowForm(false)} className="absolute top-4 right-4 text-ink-700/40 hover:text-ink-900">
+              <X size={20} />
+            </button>
+            <h2 className="font-display text-xl font-semibold mb-4">{editingId ? 'Ubah Kwitansi' : 'Buat Kwitansi'}</h2>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="eyebrow mb-1.5 block">Transaksi BKU Terkait (opsional)</label>
+                <select className="input-field" value={form.bku_id} onChange={(e) => pilihBku(e.target.value)}>
+                  <option value="">— Tidak tertaut —</option>
+                  {bkuList.map((b) => (
+                    <option key={b.id} value={b.id}>{formatTanggal(b.tanggal)} — {b.uraian}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="eyebrow mb-1.5 block">Nomor Kwitansi</label>
+                <input className="input-field" value={form.nomor_kwitansi} onChange={(e) => setForm({ ...form, nomor_kwitansi: e.target.value })} />
+              </div>
+              <div>
+                <label className="eyebrow mb-1.5 block">Tanggal</label>
+                <input type="date" required className="input-field" value={form.tanggal} onChange={(e) => setForm({ ...form, tanggal: e.target.value })} />
+              </div>
+              <div className="col-span-2">
+                <label className="eyebrow mb-1.5 block">Sudah Terima Dari</label>
+                <input className="input-field" value={form.sudah_terima_dari} onChange={(e) => setForm({ ...form, sudah_terima_dari: e.target.value })} />
+              </div>
+              <div className="col-span-2">
+                <label className="eyebrow mb-1.5 block">Untuk Pembayaran</label>
+                <textarea required rows={2} className="input-field" value={form.untuk_pembayaran} onChange={(e) => setForm({ ...form, untuk_pembayaran: e.target.value })} />
+              </div>
+              <div className="col-span-2">
+                <label className="eyebrow mb-1.5 block">Jumlah Uang (Rp)</label>
+                <input type="number" min="0" required className="input-field" value={form.jumlah_uang} onChange={(e) => setForm({ ...form, jumlah_uang: e.target.value })} />
+              </div>
+              <div>
+                <label className="eyebrow mb-1.5 block">Potongan PPh (Rp, opsional)</label>
+                <input type="number" min="0" className="input-field" value={form.potongan_pph} onChange={(e) => setForm({ ...form, potongan_pph: e.target.value })} />
+              </div>
+              <div>
+                <label className="eyebrow mb-1.5 block">Potongan PPN (Rp, opsional)</label>
+                <input type="number" min="0" className="input-field" value={form.potongan_ppn} onChange={(e) => setForm({ ...form, potongan_ppn: e.target.value })} />
+              </div>
+              <div>
+                <label className="eyebrow mb-1.5 block">Nama Penerima</label>
+                <input className="input-field" value={form.nama_penerima} onChange={(e) => setForm({ ...form, nama_penerima: e.target.value })} />
+              </div>
+              <div>
+                <label className="eyebrow mb-1.5 block">Jabatan Penerima</label>
+                <input className="input-field" value={form.jabatan_penerima} onChange={(e) => setForm({ ...form, jabatan_penerima: e.target.value })} />
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-3">
+              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Batal</button>
+              <button type="submit" disabled={saving} className="btn-primary">
+                {saving && <Loader2 size={16} className="animate-spin" />} Simpan
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ==== Modal Cetak Kwitansi ==== */}
+      {cetak && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="no-print flex items-center justify-between p-4 border-b border-ink-900/10">
+              <h2 className="font-display font-semibold">Pratinjau Kwitansi</h2>
+              <div className="flex items-center gap-2">
+                <button onClick={() => window.print()} className="btn-primary !py-1.5"><Printer size={14} /> Cetak</button>
+                <button onClick={() => setCetak(null)} className="p-2 hover:bg-ink-900/5 rounded-lg"><X size={18} /></button>
+              </div>
+            </div>
+
+            <div className="lembar-kwitansi p-8" style={{ width: '190mm', margin: '0 auto' }}>
+              <table className="w-full border-collapse border-2 border-slate-800 text-sm">
+                <tbody>
+                  <tr>
+                    <td colSpan={4} className="border-2 border-slate-800 p-3 text-center">
+                      <p className="font-display font-bold text-base uppercase">KWITANSI</p>
+                      <p className="text-xs mt-0.5">No: {cetak.nomor_kwitansi || '-'}</p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="border border-slate-800 p-2 w-40">Sudah terima dari</td>
+                    <td className="border border-slate-800 p-2" colSpan={3}>: {cetak.sudah_terima_dari || profilPuskesmas?.nama_puskesmas || '-'}</td>
+                  </tr>
+                  <tr>
+                    <td className="border border-slate-800 p-2">Uang sejumlah</td>
+                    <td className="border border-slate-800 p-2 italic" colSpan={3}>
+                      : {kapitalKalimat(terbilang(cetak.jumlah_uang))} rupiah
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="border border-slate-800 p-2">Untuk pembayaran</td>
+                    <td className="border border-slate-800 p-2" colSpan={3}>: {cetak.untuk_pembayaran}</td>
+                  </tr>
+                  {(Number(cetak.potongan_pph) > 0 || Number(cetak.potongan_ppn) > 0) && (
+                    <tr>
+                      <td className="border border-slate-800 p-2">Potongan</td>
+                      <td className="border border-slate-800 p-2" colSpan={3}>
+                        : {[
+                          Number(cetak.potongan_pph) > 0 && `PPh ${formatRupiah(cetak.potongan_pph)}`,
+                          Number(cetak.potongan_ppn) > 0 && `PPN ${formatRupiah(cetak.potongan_ppn)}`,
+                        ].filter(Boolean).join(', ')}
+                      </td>
+                    </tr>
+                  )}
+                  <tr>
+                    <td colSpan={3} className="border border-slate-800 p-2 text-right font-semibold">Jumlah</td>
+                    <td className="border border-slate-800 p-2 font-bold">{formatRupiah(cetak.jumlah_uang)}</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div className="flex justify-end mt-8">
+                <div className="text-center w-56">
+                  <p>{profilPuskesmas?.tempat_ttd || profilPuskesmas?.kabupaten || '-'}, {formatTanggal(cetak.tanggal)}</p>
+                  <p className="mt-1">Yang menerima,</p>
+                  <div className="h-16" />
+                  <p className="font-semibold border-t border-slate-800 pt-1">
+                    {cetak.nama_penerima || '..............................'}
+                  </p>
+                  {cetak.jabatan_penerima && <p className="text-xs text-slate-600">{cetak.jabatan_penerima}</p>}
+                </div>
+              </div>
+
+              <div className="flex justify-start mt-4">
+                <div className="text-center w-56">
+                  <p>Mengetahui,</p>
+                  <p>Kepala Puskesmas</p>
+                  <div className="h-16" />
+                  <p className="font-semibold border-t border-slate-800 pt-1">
+                    {profilPuskesmas?.kepala_puskesmas || '..............................'}
+                  </p>
+                  <p className="text-xs text-slate-600">NIP. {profilPuskesmas?.nip_kepala_puskesmas || '..............................'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          .lembar-kwitansi, .lembar-kwitansi * { visibility: visible; }
+          .lembar-kwitansi { position: absolute; top: 0; left: 0; }
+          .no-print { display: none !important; }
+        }
+      `}</style>
+    </>
+  )
+}
+
+// ============================================================
+// TAB 4: NOTA BELANJA
+// ============================================================
+
+const barisBarangKosong = { nama: '', jumlah: 1, satuan: '', harga_satuan: 0 }
+
+const emptyFormNota = {
+  bku_id: '',
+  nomor_nota: '',
+  tanggal: new Date().toISOString().slice(0, 10),
+  nama_toko: '',
+  alamat_toko: '',
+  daftar_barang: [{ ...barisBarangKosong }],
+}
+
+function TabNotaBelanja() {
+  const { sekolahId } = useAuth()
+  const [profilPuskesmas, setProfilPuskesmas] = useState(null)
+  const [data, setData] = useState([])
+  const [bkuList, setBkuList] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+  const [form, setForm] = useState(emptyFormNota)
+  const [saving, setSaving] = useState(false)
+  const [cetak, setCetak] = useState(null)
+
+  useEffect(() => {
+    if (!sekolahId) return
+    supabase
+      .from('profil_puskesmas')
+      .select('nama_puskesmas, tempat_ttd, kabupaten')
+      .eq('sekolah_id', sekolahId)
+      .maybeSingle()
+      .then(({ data: p }) => setProfilPuskesmas(p))
+  }, [sekolahId])
+
+  async function loadData() {
+    if (!sekolahId) {
+      setData([])
+      setLoading(false)
+      return
+    }
+    setLoading(true)
+
+    const { data: daftarBku } = await supabase
+      .from('bku_bok')
+      .select('id, tanggal, uraian')
+      .eq('sekolah_id', sekolahId)
+      .order('tanggal', { ascending: false })
+    setBkuList(daftarBku || [])
+
+    const { data: rows, error } = await supabase
+      .from('nota_belanja_bok')
+      .select('*')
+      .eq('sekolah_id', sekolahId)
+      .order('tanggal', { ascending: false })
+
+    if (error) alert('Gagal memuat nota belanja: ' + error.message)
+    setData(rows || [])
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sekolahId])
+
+  function openAdd() {
+    setForm(emptyFormNota)
+    setEditingId(null)
+    setShowForm(true)
+  }
+
+  function openEdit(row) {
+    setForm({
+      bku_id: row.bku_id || '',
+      nomor_nota: row.nomor_nota || '',
+      tanggal: row.tanggal,
+      nama_toko: row.nama_toko || '',
+      alamat_toko: row.alamat_toko || '',
+      daftar_barang: (row.daftar_barang && row.daftar_barang.length > 0) ? row.daftar_barang : [{ ...barisBarangKosong }],
+    })
+    setEditingId(row.id)
+    setShowForm(true)
+  }
+
+  function ubahBarang(index, field, value) {
+    setForm((prev) => {
+      const daftar = [...prev.daftar_barang]
+      daftar[index] = { ...daftar[index], [field]: value }
+      return { ...prev, daftar_barang: daftar }
+    })
+  }
+
+  function tambahBarisBarang() {
+    setForm((prev) => ({ ...prev, daftar_barang: [...prev.daftar_barang, { ...barisBarangKosong }] }))
+  }
+
+  function hapusBarisBarang(index) {
+    setForm((prev) => ({ ...prev, daftar_barang: prev.daftar_barang.filter((_, i) => i !== index) }))
+  }
+
+  const totalBelanjaForm = useMemo(
+    () => form.daftar_barang.reduce((sum, b) => sum + (Number(b.jumlah) || 0) * (Number(b.harga_satuan) || 0), 0),
+    [form.daftar_barang]
+  )
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!sekolahId) return
+    setSaving(true)
+    const daftarBarangBersih = form.daftar_barang
+      .filter((b) => b.nama.trim() !== '')
+      .map((b) => ({
+        nama: b.nama,
+        jumlah: Number(b.jumlah) || 0,
+        satuan: b.satuan || '',
+        harga_satuan: Number(b.harga_satuan) || 0,
+        total: (Number(b.jumlah) || 0) * (Number(b.harga_satuan) || 0),
+      }))
+    const payload = {
+      sekolah_id: sekolahId,
+      bku_id: form.bku_id || null,
+      nomor_nota: form.nomor_nota || null,
+      tanggal: form.tanggal,
+      nama_toko: form.nama_toko || null,
+      alamat_toko: form.alamat_toko || null,
+      daftar_barang: daftarBarangBersih,
+      total_belanja: daftarBarangBersih.reduce((s, b) => s + b.total, 0),
+    }
+    const { error } = editingId
+      ? await supabase.from('nota_belanja_bok').update(payload).eq('id', editingId).eq('sekolah_id', sekolahId)
+      : await supabase.from('nota_belanja_bok').insert(payload)
+    setSaving(false)
+    if (!error) {
+      setShowForm(false)
+      loadData()
+    } else {
+      alert('Gagal menyimpan: ' + error.message)
+    }
+  }
+
+  async function handleDelete(id) {
+    if (!confirm('Hapus nota belanja ini?')) return
+    const { error } = await supabase.from('nota_belanja_bok').delete().eq('id', id).eq('sekolah_id', sekolahId)
+    if (!error) loadData()
+    else alert('Gagal menghapus: ' + error.message)
+  }
+
+  const filtered = data.filter((n) =>
+    `${n.nomor_nota} ${n.nama_toko}`.toLowerCase().includes(search.toLowerCase())
+  )
+
+  return (
+    <>
+      <div className="card relative overflow-hidden p-4 mb-4">
+        <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 to-blue-700" />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="w-9 h-9 rounded-full bg-emerald-600/10 text-emerald-700 flex items-center justify-center shrink-0">
+              <ShoppingCart size={18} />
+            </div>
+            <div className="relative max-w-xs w-full">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-700/40" />
+              <input className="input-field pl-9" placeholder="Cari no. nota/nama toko..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
+          </div>
+          <button className="btn-primary" onClick={openAdd}>
+            <Plus size={16} /> Buat Nota Belanja
+          </button>
+        </div>
+      </div>
+
+      <div className="card overflow-x-auto">
+        <table className="table-shell">
+          <thead>
+            <tr>
+              <th>Tanggal</th>
+              <th>No. Nota</th>
+              <th>Nama Toko</th>
+              <th>Jumlah Barang</th>
+              <th>Total Belanja</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading && <tr><td colSpan={6} className="text-center py-8 text-ink-700/50">Memuat data...</td></tr>}
+            {!loading && filtered.length === 0 && <tr><td colSpan={6} className="text-center py-8 text-ink-700/50">Belum ada nota belanja.</td></tr>}
+            {filtered.map((n) => (
+              <tr key={n.id} className="hover:bg-emerald-600/[0.03] transition-colors">
+                <td className="whitespace-nowrap text-xs">{formatTanggal(n.tanggal)}</td>
+                <td className="font-mono text-xs">{n.nomor_nota || '-'}</td>
+                <td className="font-medium">{n.nama_toko || '-'}</td>
+                <td>{(n.daftar_barang || []).length} item</td>
+                <td className="font-semibold text-emerald-700">{formatRupiah(n.total_belanja)}</td>
+                <td>
+                  <div className="flex items-center gap-1 justify-end">
+                    <button onClick={() => setCetak(n)} className="p-2 hover:bg-blue-600/10 rounded-lg text-blue-700/70" title="Cetak">
+                      <Printer size={15} />
+                    </button>
+                    <button onClick={() => openEdit(n)} className="p-2 hover:bg-emerald-600/10 rounded-lg text-emerald-700/70">
+                      <Pencil size={15} />
+                    </button>
+                    <button onClick={() => handleDelete(n.id)} className="p-2 hover:bg-red-900/10 rounded-lg text-red-900/70">
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-4">
+          <form onSubmit={handleSubmit} className="card relative overflow-hidden w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 to-blue-700" />
+            <button type="button" onClick={() => setShowForm(false)} className="absolute top-4 right-4 text-ink-700/40 hover:text-ink-900">
+              <X size={20} />
+            </button>
+            <h2 className="font-display text-xl font-semibold mb-4">{editingId ? 'Ubah Nota Belanja' : 'Buat Nota Belanja'}</h2>
+
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="col-span-2">
+                <label className="eyebrow mb-1.5 block">Transaksi BKU Terkait (opsional)</label>
+                <select className="input-field" value={form.bku_id} onChange={(e) => setForm({ ...form, bku_id: e.target.value })}>
+                  <option value="">— Tidak tertaut —</option>
+                  {bkuList.map((b) => (
+                    <option key={b.id} value={b.id}>{formatTanggal(b.tanggal)} — {b.uraian}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="eyebrow mb-1.5 block">Nomor Nota</label>
+                <input className="input-field" value={form.nomor_nota} onChange={(e) => setForm({ ...form, nomor_nota: e.target.value })} />
+              </div>
+              <div>
+                <label className="eyebrow mb-1.5 block">Tanggal</label>
+                <input type="date" required className="input-field" value={form.tanggal} onChange={(e) => setForm({ ...form, tanggal: e.target.value })} />
+              </div>
+              <div>
+                <label className="eyebrow mb-1.5 block">Nama Toko</label>
+                <input className="input-field" value={form.nama_toko} onChange={(e) => setForm({ ...form, nama_toko: e.target.value })} />
+              </div>
+              <div>
+                <label className="eyebrow mb-1.5 block">Alamat Toko</label>
+                <input className="input-field" value={form.alamat_toko} onChange={(e) => setForm({ ...form, alamat_toko: e.target.value })} />
+              </div>
+            </div>
+
+            <p className="eyebrow text-emerald-700 mb-2">Daftar Barang</p>
+            <div className="space-y-2 mb-2">
+              {form.daftar_barang.map((b, i) => (
+                <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                  <input className="input-field col-span-4" placeholder="Nama barang" value={b.nama} onChange={(e) => ubahBarang(i, 'nama', e.target.value)} />
+                  <input type="number" min="0" className="input-field col-span-2" placeholder="Jml" value={b.jumlah} onChange={(e) => ubahBarang(i, 'jumlah', e.target.value)} />
+                  <input className="input-field col-span-2" placeholder="Satuan" value={b.satuan} onChange={(e) => ubahBarang(i, 'satuan', e.target.value)} />
+                  <input type="number" min="0" className="input-field col-span-3" placeholder="Harga satuan" value={b.harga_satuan} onChange={(e) => ubahBarang(i, 'harga_satuan', e.target.value)} />
+                  <button type="button" onClick={() => hapusBarisBarang(i)} className="col-span-1 p-2 text-red-900/60 hover:bg-red-900/10 rounded-lg">
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button type="button" onClick={tambahBarisBarang} className="btn-secondary !py-1.5 mb-4">
+              <Plus size={14} /> Tambah Barang
+            </button>
+
+            <div className="p-3 rounded-lg bg-emerald-600/[0.06] flex items-center justify-between mb-4">
+              <span className="text-sm text-ink-700/70">Total Belanja</span>
+              <span className="font-display font-semibold text-emerald-700">{formatRupiah(totalBelanjaForm)}</span>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Batal</button>
+              <button type="submit" disabled={saving} className="btn-primary">
+                {saving && <Loader2 size={16} className="animate-spin" />} Simpan
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ==== Modal Cetak Nota ==== */}
+      {cetak && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="no-print flex items-center justify-between p-4 border-b border-ink-900/10">
+              <h2 className="font-display font-semibold">Pratinjau Nota Belanja</h2>
+              <div className="flex items-center gap-2">
+                <button onClick={() => window.print()} className="btn-primary !py-1.5"><Printer size={14} /> Cetak</button>
+                <button onClick={() => setCetak(null)} className="p-2 hover:bg-ink-900/5 rounded-lg"><X size={18} /></button>
+              </div>
+            </div>
+
+            <div className="lembar-nota p-8" style={{ width: '190mm', margin: '0 auto' }}>
+              <div className="text-center mb-4">
+                <p className="font-display font-bold text-base uppercase">NOTA BELANJA</p>
+                <p className="text-xs mt-0.5">No: {cetak.nomor_nota || '-'}</p>
+              </div>
+
+              <div className="text-sm mb-3">
+                <p><strong>Toko:</strong> {cetak.nama_toko || '-'}{cetak.alamat_toko && ` — ${cetak.alamat_toko}`}</p>
+                <p><strong>Tanggal:</strong> {formatTanggal(cetak.tanggal)}</p>
+              </div>
+
+              <table className="w-full border-collapse border border-slate-800 text-sm">
+                <thead>
+                  <tr className="bg-slate-100">
+                    <th className="border border-slate-800 px-2 py-1 w-8">No</th>
+                    <th className="border border-slate-800 px-2 py-1 text-left">Nama Barang</th>
+                    <th className="border border-slate-800 px-2 py-1 w-16">Jumlah</th>
+                    <th className="border border-slate-800 px-2 py-1 w-24">Harga Satuan</th>
+                    <th className="border border-slate-800 px-2 py-1 w-28">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(cetak.daftar_barang || []).map((b, i) => (
+                    <tr key={i}>
+                      <td className="border border-slate-800 px-2 py-1 text-center">{i + 1}</td>
+                      <td className="border border-slate-800 px-2 py-1">{b.nama}</td>
+                      <td className="border border-slate-800 px-2 py-1 text-center">{b.jumlah} {b.satuan}</td>
+                      <td className="border border-slate-800 px-2 py-1 text-right">{formatRupiah(b.harga_satuan)}</td>
+                      <td className="border border-slate-800 px-2 py-1 text-right">{formatRupiah(b.total)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={4} className="border border-slate-800 px-2 py-1 text-right font-semibold">Total Belanja</td>
+                    <td className="border border-slate-800 px-2 py-1 text-right font-bold">{formatRupiah(cetak.total_belanja)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+
+              <div className="flex justify-end mt-8">
+                <div className="text-center w-56">
+                  <p>{profilPuskesmas?.tempat_ttd || profilPuskesmas?.kabupaten || '-'}, {formatTanggal(cetak.tanggal)}</p>
+                  <p className="mt-1">Penjual/Toko,</p>
+                  <div className="h-16" />
+                  <p className="font-semibold border-t border-slate-800 pt-1">{cetak.nama_toko || '..............................'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          .lembar-nota, .lembar-nota * { visibility: visible; }
+          .lembar-nota { position: absolute; top: 0; left: 0; }
+          .no-print { display: none !important; }
+        }
+      `}</style>
+    </>
+  )
+}
+
+// ============================================================
+// TAB 5: SK PENGELOLA BOK
+// ============================================================
+
+const barisTimKosong = { nama: '', nip: '', jabatan_tim: '', jabatan_puskesmas: '' }
+
+const emptyFormSk = {
+  tahun_anggaran: new Date().getFullYear(),
+  nomor_sk: '',
+  tanggal_sk: new Date().toISOString().slice(0, 10),
+  tentang: 'Penetapan Tim Pengelola Keuangan Bantuan Operasional Kesehatan (BOK)',
+  dasar_hukum: '',
+  susunan_tim: [{ ...barisTimKosong, jabatan_tim: 'Penanggung Jawab' }, { ...barisTimKosong, jabatan_tim: 'Bendahara' }],
+}
+
+const OPSI_JABATAN_TIM = ['Penanggung Jawab', 'Bendahara', 'Pelaksana Kegiatan', 'Anggota']
+
+function TabSKPengelola() {
+  const { sekolahId } = useAuth()
+  const [profilPuskesmas, setProfilPuskesmas] = useState(null)
+  const [data, setData] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+  const [form, setForm] = useState(emptyFormSk)
+  const [saving, setSaving] = useState(false)
+  const [cetak, setCetak] = useState(null)
+
+  useEffect(() => {
+    if (!sekolahId) return
+    supabase
+      .from('profil_puskesmas')
+      .select('nama_puskesmas, kepala_puskesmas, nip_kepala_puskesmas, tempat_ttd, kabupaten')
+      .eq('sekolah_id', sekolahId)
+      .maybeSingle()
+      .then(({ data: p }) => setProfilPuskesmas(p))
+  }, [sekolahId])
+
+  async function loadData() {
+    if (!sekolahId) {
+      setData([])
+      setLoading(false)
+      return
+    }
+    setLoading(true)
+    const { data: rows, error } = await supabase
+      .from('sk_pengelola_bok')
+      .select('*')
+      .eq('sekolah_id', sekolahId)
+      .order('tahun_anggaran', { ascending: false })
+
+    if (error) alert('Gagal memuat SK: ' + error.message)
+    setData(rows || [])
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sekolahId])
+
+  function openAdd() {
+    setForm(emptyFormSk)
+    setEditingId(null)
+    setShowForm(true)
+  }
+
+  function openEdit(row) {
+    setForm({
+      tahun_anggaran: row.tahun_anggaran,
+      nomor_sk: row.nomor_sk || '',
+      tanggal_sk: row.tanggal_sk || '',
+      tentang: row.tentang || '',
+      dasar_hukum: row.dasar_hukum || '',
+      susunan_tim: (row.susunan_tim && row.susunan_tim.length > 0) ? row.susunan_tim : [{ ...barisTimKosong }],
+    })
+    setEditingId(row.id)
+    setShowForm(true)
+  }
+
+  function ubahTim(index, field, value) {
+    setForm((prev) => {
+      const tim = [...prev.susunan_tim]
+      tim[index] = { ...tim[index], [field]: value }
+      return { ...prev, susunan_tim: tim }
+    })
+  }
+
+  function tambahBarisTim() {
+    setForm((prev) => ({ ...prev, susunan_tim: [...prev.susunan_tim, { ...barisTimKosong }] }))
+  }
+
+  function hapusBarisTim(index) {
+    setForm((prev) => ({ ...prev, susunan_tim: prev.susunan_tim.filter((_, i) => i !== index) }))
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!sekolahId) return
+    setSaving(true)
+    const timBersih = form.susunan_tim.filter((t) => t.nama.trim() !== '')
+    const payload = {
+      sekolah_id: sekolahId,
+      tahun_anggaran: Number(form.tahun_anggaran),
+      nomor_sk: form.nomor_sk || null,
+      tanggal_sk: form.tanggal_sk || null,
+      tentang: form.tentang,
+      dasar_hukum: form.dasar_hukum || null,
+      susunan_tim: timBersih,
+    }
+    const { error } = editingId
+      ? await supabase.from('sk_pengelola_bok').update(payload).eq('id', editingId).eq('sekolah_id', sekolahId)
+      : await supabase.from('sk_pengelola_bok').insert(payload)
+    setSaving(false)
+    if (!error) {
+      setShowForm(false)
+      loadData()
+    } else {
+      alert('Gagal menyimpan: ' + error.message)
+    }
+  }
+
+  async function handleDelete(id) {
+    if (!confirm('Hapus SK ini?')) return
+    const { error } = await supabase.from('sk_pengelola_bok').delete().eq('id', id).eq('sekolah_id', sekolahId)
+    if (!error) loadData()
+    else alert('Gagal menghapus: ' + error.message)
+  }
+
+  return (
+    <>
+      <div className="card relative overflow-hidden p-4 mb-4">
+        <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 to-blue-700" />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-emerald-600/10 text-emerald-700 flex items-center justify-center shrink-0">
+              <FileSignature size={18} />
+            </div>
+            <p className="text-sm text-ink-700/60">SK Tim Pengelola Keuangan BOK per tahun anggaran</p>
+          </div>
+          <button className="btn-primary" onClick={openAdd}>
+            <Plus size={16} /> Buat SK
+          </button>
+        </div>
+      </div>
+
+      <div className="card overflow-x-auto">
+        <table className="table-shell">
+          <thead>
+            <tr>
+              <th>Tahun</th>
+              <th>Nomor SK</th>
+              <th>Tanggal SK</th>
+              <th>Tentang</th>
+              <th>Jumlah Anggota Tim</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading && <tr><td colSpan={6} className="text-center py-8 text-ink-700/50">Memuat data...</td></tr>}
+            {!loading && data.length === 0 && <tr><td colSpan={6} className="text-center py-8 text-ink-700/50">Belum ada SK pengelola.</td></tr>}
+            {data.map((sk) => (
+              <tr key={sk.id} className="hover:bg-emerald-600/[0.03] transition-colors">
+                <td>{sk.tahun_anggaran}</td>
+                <td className="font-mono text-xs">{sk.nomor_sk || '-'}</td>
+                <td className="text-xs">{formatTanggal(sk.tanggal_sk)}</td>
+                <td className="font-medium">{sk.tentang}</td>
+                <td>{(sk.susunan_tim || []).length} orang</td>
+                <td>
+                  <div className="flex items-center gap-1 justify-end">
+                    <button onClick={() => setCetak(sk)} className="p-2 hover:bg-blue-600/10 rounded-lg text-blue-700/70" title="Cetak">
+                      <Printer size={15} />
+                    </button>
+                    <button onClick={() => openEdit(sk)} className="p-2 hover:bg-emerald-600/10 rounded-lg text-emerald-700/70">
+                      <Pencil size={15} />
+                    </button>
+                    <button onClick={() => handleDelete(sk.id)} className="p-2 hover:bg-red-900/10 rounded-lg text-red-900/70">
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-4">
+          <form onSubmit={handleSubmit} className="card relative overflow-hidden w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 to-blue-700" />
+            <button type="button" onClick={() => setShowForm(false)} className="absolute top-4 right-4 text-ink-700/40 hover:text-ink-900">
+              <X size={20} />
+            </button>
+            <h2 className="font-display text-xl font-semibold mb-4">{editingId ? 'Ubah SK Pengelola' : 'Buat SK Pengelola'}</h2>
+
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div>
+                <label className="eyebrow mb-1.5 block">Tahun Anggaran</label>
+                <input type="number" required className="input-field" value={form.tahun_anggaran} onChange={(e) => setForm({ ...form, tahun_anggaran: e.target.value })} />
+              </div>
+              <div>
+                <label className="eyebrow mb-1.5 block">Nomor SK</label>
+                <input className="input-field" value={form.nomor_sk} onChange={(e) => setForm({ ...form, nomor_sk: e.target.value })} />
+              </div>
+              <div>
+                <label className="eyebrow mb-1.5 block">Tanggal SK</label>
+                <input type="date" className="input-field" value={form.tanggal_sk} onChange={(e) => setForm({ ...form, tanggal_sk: e.target.value })} />
+              </div>
+              <div className="col-span-2">
+                <label className="eyebrow mb-1.5 block">Tentang</label>
+                <input required className="input-field" value={form.tentang} onChange={(e) => setForm({ ...form, tentang: e.target.value })} />
+              </div>
+              <div className="col-span-2">
+                <label className="eyebrow mb-1.5 block">Dasar Hukum (opsional)</label>
+                <textarea rows={2} className="input-field" placeholder="Contoh: Peraturan Menteri Kesehatan No. ... Tahun ..." value={form.dasar_hukum} onChange={(e) => setForm({ ...form, dasar_hukum: e.target.value })} />
+              </div>
+            </div>
+
+            <p className="eyebrow text-emerald-700 mb-2">Susunan Tim</p>
+            <div className="space-y-2 mb-2">
+              {form.susunan_tim.map((t, i) => (
+                <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                  <input className="input-field col-span-3" placeholder="Nama" value={t.nama} onChange={(e) => ubahTim(i, 'nama', e.target.value)} />
+                  <input className="input-field col-span-2" placeholder="NIP" value={t.nip} onChange={(e) => ubahTim(i, 'nip', e.target.value)} />
+                  <select className="input-field col-span-3" value={t.jabatan_tim} onChange={(e) => ubahTim(i, 'jabatan_tim', e.target.value)}>
+                    <option value="">Jabatan dalam Tim</option>
+                    {OPSI_JABATAN_TIM.map((j) => <option key={j} value={j}>{j}</option>)}
+                  </select>
+                  <input className="input-field col-span-3" placeholder="Jabatan di Puskesmas" value={t.jabatan_puskesmas} onChange={(e) => ubahTim(i, 'jabatan_puskesmas', e.target.value)} />
+                  <button type="button" onClick={() => hapusBarisTim(i)} className="col-span-1 p-2 text-red-900/60 hover:bg-red-900/10 rounded-lg">
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button type="button" onClick={tambahBarisTim} className="btn-secondary !py-1.5 mb-4">
+              <Plus size={14} /> Tambah Anggota Tim
+            </button>
+
+            <div className="flex justify-end gap-3">
+              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Batal</button>
+              <button type="submit" disabled={saving} className="btn-primary">
+                {saving && <Loader2 size={16} className="animate-spin" />} Simpan
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ==== Modal Cetak SK ==== */}
+      {cetak && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="no-print flex items-center justify-between p-4 border-b border-ink-900/10">
+              <h2 className="font-display font-semibold">Pratinjau SK</h2>
+              <div className="flex items-center gap-2">
+                <button onClick={() => window.print()} className="btn-primary !py-1.5"><Printer size={14} /> Cetak</button>
+                <button onClick={() => setCetak(null)} className="p-2 hover:bg-ink-900/5 rounded-lg"><X size={18} /></button>
+              </div>
+            </div>
+
+            <div className="lembar-sk p-8 text-sm" style={{ width: '190mm', margin: '0 auto' }}>
+              <div className="text-center mb-4">
+                <p className="font-display font-bold text-base uppercase">Surat Keputusan Kepala Puskesmas</p>
+                <p className="font-display font-bold text-base uppercase">{profilPuskesmas?.nama_puskesmas || '-'}</p>
+                <p className="mt-1">Nomor: {cetak.nomor_sk || '..............................'}</p>
+              </div>
+
+              <p className="text-center font-semibold uppercase mb-4">Tentang<br />{cetak.tentang}</p>
+
+              {cetak.dasar_hukum && (
+                <div className="mb-4">
+                  <p className="font-semibold mb-1">Menimbang / Mengingat:</p>
+                  <p className="whitespace-pre-line">{cetak.dasar_hukum}</p>
+                </div>
+              )}
+
+              <p className="font-semibold mb-2">MEMUTUSKAN:</p>
+              <p className="mb-3">Menetapkan susunan Tim Pengelola Keuangan Bantuan Operasional Kesehatan (BOK) Tahun Anggaran {cetak.tahun_anggaran} sebagai berikut:</p>
+
+              <table className="w-full border-collapse border border-slate-800 mb-6">
+                <thead>
+                  <tr className="bg-slate-100">
+                    <th className="border border-slate-800 px-2 py-1 w-8">No</th>
+                    <th className="border border-slate-800 px-2 py-1 text-left">Nama / NIP</th>
+                    <th className="border border-slate-800 px-2 py-1 text-left">Jabatan di Puskesmas</th>
+                    <th className="border border-slate-800 px-2 py-1 text-left">Jabatan dalam Tim</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(cetak.susunan_tim || []).map((t, i) => (
+                    <tr key={i}>
+                      <td className="border border-slate-800 px-2 py-1 text-center">{i + 1}</td>
+                      <td className="border border-slate-800 px-2 py-1">
+                        {t.nama}{t.nip && <><br /><span className="text-xs text-slate-600">NIP. {t.nip}</span></>}
+                      </td>
+                      <td className="border border-slate-800 px-2 py-1">{t.jabatan_puskesmas || '-'}</td>
+                      <td className="border border-slate-800 px-2 py-1">{t.jabatan_tim || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div className="flex justify-end">
+                <div className="text-center w-56">
+                  <p>{profilPuskesmas?.tempat_ttd || profilPuskesmas?.kabupaten || '-'}, {formatTanggal(cetak.tanggal_sk)}</p>
+                  <p className="mt-1">Kepala Puskesmas</p>
+                  <p>{profilPuskesmas?.nama_puskesmas || '-'}</p>
+                  <div className="h-16" />
+                  <p className="font-semibold border-t border-slate-800 pt-1">
+                    {profilPuskesmas?.kepala_puskesmas || '..............................'}
+                  </p>
+                  <p className="text-xs text-slate-600">NIP. {profilPuskesmas?.nip_kepala_puskesmas || '..............................'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          .lembar-sk, .lembar-sk * { visibility: visible; }
+          .lembar-sk { position: absolute; top: 0; left: 0; }
+          .no-print { display: none !important; }
+        }
+      `}</style>
     </>
   )
 }
