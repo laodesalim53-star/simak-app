@@ -12,17 +12,22 @@ import {
   MonitorSmartphone,
   Building2,
   HeartHandshake,
+  Stethoscope,
+  Hospital,
+  Users,
+  FileText,
 } from 'lucide-react'
 
 // Halaman ini level ATAS (route: /link-layanan) — bisa diakses semua peran
 // (admin, guru, orang tua) lewat menu sidebar, BUKAN bagian dari Gudang SK
 // yang admin-only.
 //
-// Halaman dibagi menjadi 2 bagian (tab): "Link Sekolah" dan "Link KUA".
-// Untuk menambah/mengubah link, cukup edit array KELOMPOK_LINK_SEKOLAH atau
-// KELOMPOK_LINK_KUA di bawah ini — tidak perlu menyentuh bagian tampilan.
-// Untuk menambah kelompok baru, tambahkan juga temanya di TEMA_KELOMPOK
-// (kalau lupa, otomatis memakai tema 'kepegawaian').
+// Halaman dibagi menjadi 3 bagian (tab): "Link Sekolah", "Link KUA", dan
+// "Link Kesehatan". Untuk menambah/mengubah link, cukup edit array
+// KELOMPOK_LINK_SEKOLAH / KELOMPOK_LINK_KUA / KELOMPOK_LINK_KESEHATAN di
+// bawah ini — tidak perlu menyentuh bagian tampilan. Untuk menambah
+// kelompok baru, tambahkan juga temanya di TEMA_KELOMPOK (kalau lupa,
+// otomatis memakai tema 'kepegawaian').
 //
 // CATATAN TEKNIS soal deteksi "diblokir iframe":
 // Browser TIDAK mengizinkan JavaScript membaca isi iframe lintas-domain
@@ -159,10 +164,107 @@ const KELOMPOK_LINK_KUA = [
   },
 ]
 
+// ─────────────────────── BAGIAN 3: LINK KESEHATAN/PUSKESMAS ───────────────────────
+// Portal & aplikasi resmi Kementerian Kesehatan RI untuk Puskesmas —
+// semua memakai domain resmi kemkes.go.id (sebelumnya kemenkes.go.id).
+// Sama seperti Dapodik & KUA, semua ditandai bukaTabBaru karena portal
+// Kemenkes pada umumnya menolak ditampilkan di dalam iframe.
+const KELOMPOK_LINK_KESEHATAN = [
+  {
+    id: 'transformasi-kesehatan',
+    judul: 'Transformasi Kesehatan Digital',
+    tautan: [
+      {
+        id: 'satusehat',
+        nama: 'SATUSEHAT (Platform Data Kesehatan)',
+        url: 'https://satusehat.kemkes.go.id',
+        bukaTabBaru: true,
+      },
+      {
+        id: 'satusehat-sdmk',
+        nama: 'SATUSEHAT SDMK',
+        url: 'https://satusehat.kemkes.go.id/sdmk/login',
+        bukaTabBaru: true,
+      },
+      {
+        id: 'sisrute',
+        nama: 'SISRUTE (Sistem Rujukan Terintegrasi)',
+        url: 'https://sisrute.kemkes.go.id',
+        bukaTabBaru: true,
+      },
+    ],
+  },
+  {
+    id: 'fasyankes',
+    judul: 'Data & Registrasi Fasyankes',
+    tautan: [
+      {
+        id: 'dfo',
+        nama: 'Data Fasyankes Online (DFO)',
+        url: 'https://dfo.kemkes.go.id',
+        bukaTabBaru: true,
+      },
+      {
+        id: 'registrasi-fasyankes',
+        nama: 'Registrasi Fasyankes',
+        url: 'https://registrasifasyankes.kemkes.go.id',
+        bukaTabBaru: true,
+      },
+      {
+        id: 'aspak',
+        nama: 'ASPAK (Sarana, Prasarana & Alat Kesehatan)',
+        url: 'https://aspak.kemkes.go.id/aplikasi/',
+        bukaTabBaru: true,
+      },
+      {
+        id: 'rs-kemkes',
+        nama: 'Portal Rumah Sakit Kemenkes',
+        url: 'https://rs.kemkes.go.id',
+        bukaTabBaru: true,
+      },
+    ],
+  },
+  {
+    id: 'sdm-kesehatan',
+    judul: 'SDM Kesehatan',
+    tautan: [
+      {
+        id: 'nakes-kemkes',
+        nama: 'Portal Informasi Tenaga Kesehatan',
+        url: 'https://nakes.kemkes.go.id',
+        bukaTabBaru: true,
+      },
+      {
+        id: 'tugsus-nakes',
+        nama: 'Penugasan Khusus Tenaga Kesehatan',
+        url: 'https://tugsusnakes.kemkes.go.id',
+        bukaTabBaru: true,
+      },
+      {
+        id: 'sibk',
+        nama: 'SIBK (Beasiswa Kemenkes)',
+        url: 'https://sibk.kemkes.go.id',
+        bukaTabBaru: true,
+      },
+    ],
+  },
+  {
+    id: 'portal-regulasi-kesehatan',
+    judul: 'Portal & Regulasi',
+    tautan: [
+      { id: 'kemkes-pusat', nama: 'Kementerian Kesehatan RI', url: 'https://kemkes.go.id', bukaTabBaru: true },
+      { id: 'yankes', nama: 'Ditjen Pelayanan Kesehatan (Yankes)', url: 'https://yankes.kemkes.go.id', bukaTabBaru: true },
+      { id: 'jdih-kemkes', nama: 'JDIH Kemenkes (Regulasi)', url: 'https://jdih.kemkes.go.id', bukaTabBaru: true },
+      { id: 'sehat-negeriku', nama: 'Sehat Negeriku (Berita Kesehatan)', url: 'https://sehatnegeriku.kemkes.go.id', bukaTabBaru: true },
+    ],
+  },
+]
+
 // Daftar tab di bagian atas halaman. Urutan di sini = urutan tab.
 const BAGIAN_LINK = [
   { id: 'sekolah', judul: 'Link Sekolah', ikon: GraduationCap, kelompok: KELOMPOK_LINK_SEKOLAH },
   { id: 'kua', judul: 'Link KUA', ikon: Building2, kelompok: KELOMPOK_LINK_KUA },
+  { id: 'kesehatan', judul: 'Link Kesehatan', ikon: Stethoscope, kelompok: KELOMPOK_LINK_KESEHATAN },
 ]
 
 // Tema per grup: dipetakan ke kelas Tailwind statis (bukan digabung secara
@@ -210,6 +312,34 @@ const TEMA_KELOMPOK = {
     tekanAktif: 'active:bg-sky-50 active:border-sky-300',
     hover: 'hover:border-sky-300 hover:bg-sky-50/40 hover:text-sky-700',
   },
+  'transformasi-kesehatan': {
+    ikon: Stethoscope,
+    chip: 'bg-cyan-50 text-cyan-600',
+    aksen: 'border-l-cyan-400',
+    tekanAktif: 'active:bg-cyan-50 active:border-cyan-300',
+    hover: 'hover:border-cyan-300 hover:bg-cyan-50/40 hover:text-cyan-700',
+  },
+  fasyankes: {
+    ikon: Hospital,
+    chip: 'bg-red-50 text-red-600',
+    aksen: 'border-l-red-400',
+    tekanAktif: 'active:bg-red-50 active:border-red-300',
+    hover: 'hover:border-red-300 hover:bg-red-50/40 hover:text-red-700',
+  },
+  'sdm-kesehatan': {
+    ikon: Users,
+    chip: 'bg-violet-50 text-violet-600',
+    aksen: 'border-l-violet-400',
+    tekanAktif: 'active:bg-violet-50 active:border-violet-300',
+    hover: 'hover:border-violet-300 hover:bg-violet-50/40 hover:text-violet-700',
+  },
+  'portal-regulasi-kesehatan': {
+    ikon: FileText,
+    chip: 'bg-lime-50 text-lime-600',
+    aksen: 'border-l-lime-400',
+    tekanAktif: 'active:bg-lime-50 active:border-lime-300',
+    hover: 'hover:border-lime-300 hover:bg-lime-50/40 hover:text-lime-700',
+  },
 }
 
 // Berapa lama menunggu iframe memuat sebelum dianggap gagal & auto-fallback
@@ -252,7 +382,7 @@ function pastiDiblokirMixedContent(url) {
 }
 
 export default function LinkLayanan() {
-  const [bagianAktif, setBagianAktif] = useState('sekolah') // tab: 'sekolah' | 'kua'
+  const [bagianAktif, setBagianAktif] = useState('sekolah') // tab: 'sekolah' | 'kua' | 'kesehatan'
   const [aktif, setAktif] = useState(null) // { id, nama, url } atau null saat di daftar
   const [kunciIframe, setKunciIframe] = useState(0) // ganti key untuk memuat ulang iframe
   const [sedangMemuat, setSedangMemuat] = useState(false)
@@ -339,7 +469,7 @@ export default function LinkLayanan() {
   return (
     <Layout
       title="Link Layanan & Kepegawaian"
-      subtitle="Akses cepat ke portal layanan sekolah dan KUA — dibuka langsung di dalam aplikasi bila memungkinkan, atau otomatis di tab baru bila situs menolak."
+      subtitle="Akses cepat ke portal layanan sekolah, KUA & kesehatan — dibuka langsung di dalam aplikasi bila memungkinkan, atau otomatis di tab baru bila situs menolak."
     >
       {aktif ? (
         <div className="flex flex-col h-[calc(100vh-220px)] min-h-[420px] rounded-2xl border border-slate-200 bg-white overflow-hidden">
@@ -403,7 +533,7 @@ export default function LinkLayanan() {
         </div>
       ) : (
         <div className="space-y-6 sm:space-y-8">
-          {/* Tab pemilih bagian: Link Sekolah / Link KUA */}
+          {/* Tab pemilih bagian: Link Sekolah / Link KUA / Link Kesehatan */}
           <div role="tablist" className="flex gap-1 rounded-xl bg-slate-100 p-1 w-full sm:w-fit">
             {BAGIAN_LINK.map((b) => {
               const IkonBagian = b.ikon
