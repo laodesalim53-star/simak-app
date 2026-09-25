@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
+import { useAuth } from '../lib/AuthContext'
+import { isKelas6 } from '../lib/kelasTingkat'
 import { Loader2, Save, CheckCircle2, Printer } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
@@ -28,24 +29,6 @@ const KOLOM_TAMBAHAN = [
   { key: 'no_skhun', label: 'No SKHUN', width: 'w-28', sumber: ['skhun'] },
 ]
 
-// TAMBAHAN: Kelas 6 di beberapa sekolah ditulis dengan angka ("6A", "Kelas 6"),
-// di sekolah lain pakai angka Romawi ("VIA", "Kelas VI"). Supaya penarikan data
-// tidak meleset karena beda gaya penamaan, kecocokan kelas dicek dari KEDUA
-// kemungkinan itu sekaligus.
-function isKelas6(namaKelas) {
-  const nama = (namaKelas || '').trim().toUpperCase()
-  if (!nama) return false
-  // Angka: diawali "6" (mis. "6A", "6", "6-B", "KELAS 6")
-  if (/^6\b/.test(nama)) return true
-  if (/KELAS\s*6\b/.test(nama)) return true
-  // Romawi: diawali "VI" tapi bukan "VII" atau "VIII" (kelas 7/8), dan bukan
-  // "VI" yang jadi bagian kata lain — makanya dicek harus diikuti batas kata,
-  // spasi, atau langsung akhir string / diikuti huruf rombel (A, B, C, ...).
-  if (/^VI([^I]|$)/.test(nama)) return true
-  if (/KELAS\s*VI([^I]|$)/.test(nama)) return true
-  return false
-}
-
 export default function DataUjian8355() {
   const { profil, isAdmin } = useAuth()
   const sekolahId = profil?.sekolah_id
@@ -68,11 +51,10 @@ export default function DataUjian8355() {
     }
     setLoading(true)
 
-    // PERBAIKAN: filter kelas 6 dulunya hanya .ilike('kelas.nama_kelas', '6%')
-    // sehingga kelas dengan penamaan Romawi ("VIA", "Kelas VI", dst.) tidak
-    // pernah muncul. Sekarang semua siswa sekolah diambil dulu (join kelas),
-    // lalu difilter di sisi client memakai isKelas6() yang menerima kedua
-    // format penamaan (angka "6" maupun Romawi "VI").
+    // Filter kelas 6 dilakukan di client (bukan lewat .ilike di query) supaya
+    // kelas dengan penamaan Romawi ("VIA", "Kelas VI", dst.) ikut kebaca —
+    // lihat isKelas6() dari lib/kelasTingkat.js, yang menerima kedua format
+    // penamaan (angka "6" maupun Romawi "VI").
     const { data, error } = await supabase
       .from('siswa')
       .select('*, kelas(nama_kelas)')
