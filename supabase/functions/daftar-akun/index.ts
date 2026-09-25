@@ -1,4 +1,4 @@
-// Edge Function pendaftaran akun (mode 'baru' & 'gabung', sekolah & kantor).
+// Edge Function pendaftaran akun (mode 'baru' & 'gabung', sekolah, kantor & puskesmas).
 // Publik (dipanggil orang yang belum punya akun), jadi SEMUA validasi di sini.
 // Role & status ditentukan server, tidak pernah dipercaya dari request.
 
@@ -22,7 +22,10 @@ function json(body: unknown, status: number) {
 // Sengaja TIDAK memuat admin_utama dan superadmin.
 const JABATAN_SEKOLAH = ['guru', 'orang_tua', 'admin', 'kepala_sekolah']
 const JABATAN_KANTOR = ['pegawai', 'kepala_kantor', 'admin']
+const JABATAN_PUSKESMAS = ['pegawai', 'kepala_puskesmas', 'admin']
 const HUBUNGAN_VALID = ['ayah', 'ibu', 'wali'] // sesuaikan dengan pilihan di form
+
+type JenisOrganisasi = 'sekolah' | 'kantor' | 'puskesmas'
 
 class HttpError extends Error {
   constructor(public status: number, message: string) {
@@ -65,7 +68,12 @@ async function kirimNotifikasiSuperadmin(
       return
     }
 
-    const labelJenis = info.jenisOrganisasi === 'kantor' ? 'Kantor (KUA)' : 'Sekolah'
+    const labelJenis =
+      info.jenisOrganisasi === 'kantor'
+        ? 'Kantor (KUA)'
+        : info.jenisOrganisasi === 'puskesmas'
+          ? 'Puskesmas'
+          : 'Sekolah'
     const judul =
       info.mode === 'baru'
         ? `Pendaftar baru: ${labelJenis} "${info.namaOrganisasi}" (organisasi baru)`
@@ -128,7 +136,15 @@ Deno.serve(async (req) => {
     const siswaId = body.siswaId ?? null
     const hubungan = body.hubungan ?? null
     const nip = String(body.nip ?? '').trim()
-    const jenisOrganisasi = body.jenisOrganisasi === 'kantor' ? 'kantor' : 'sekolah'
+
+    // PERBAIKAN: tambahkan 'puskesmas' sebagai jenis organisasi yang valid,
+    // sejajar dengan 'kantor'. Default tetap 'sekolah' bila tidak dikenali.
+    const jenisOrganisasi: JenisOrganisasi =
+      body.jenisOrganisasi === 'kantor'
+        ? 'kantor'
+        : body.jenisOrganisasi === 'puskesmas'
+          ? 'puskesmas'
+          : 'sekolah'
 
     // ---------- Validasi dasar ----------
     if (!['baru', 'gabung'].includes(mode)) throw new HttpError(400, 'Mode pendaftaran tidak valid.')
@@ -136,18 +152,26 @@ Deno.serve(async (req) => {
     if (password.length < 6) throw new HttpError(400, 'Password minimal 6 karakter.')
     if (!namaLengkap) throw new HttpError(400, 'Nama lengkap wajib diisi.')
 
-    const jabatanBoleh = jenisOrganisasi === 'kantor' ? JABATAN_KANTOR : JABATAN_SEKOLAH
-    const jabatan = body.jabatan || (jenisOrganisasi === 'kantor' ? 'pegawai' : 'guru')
+    const jabatanBoleh =
+      jenisOrganisasi === 'kantor'
+        ? JABATAN_KANTOR
+        : jenisOrganisasi === 'puskesmas'
+          ? JABATAN_PUSKESMAS
+          : JABATAN_SEKOLAH
+    const jabatan =
+      body.jabatan ||
+      (jenisOrganisasi === 'kantor' || jenisOrganisasi === 'puskesmas' ? 'pegawai' : 'guru')
     if (!jabatanBoleh.includes(jabatan)) throw new HttpError(400, 'Jabatan tidak valid.')
 
     if (jenisOrganisasi === 'kantor' && !nip) throw new HttpError(400, 'NIP wajib diisi untuk akun Kantor.')
+    if (jenisOrganisasi === 'puskesmas' && !nip) throw new HttpError(400, 'NIP wajib diisi untuk akun Puskesmas.')
 
     const isOrangTua = jabatan === 'orang_tua'
     if (isOrangTua && mode !== 'gabung') {
       throw new HttpError(400, 'Akun orang tua/wali hanya dapat bergabung ke sekolah yang sudah terdaftar.')
     }
     if (mode === 'baru' && !namaSekolah) throw new HttpError(400, 'Nama organisasi wajib diisi.')
-    if (mode === 'gabung' && !sekolahId) throw new HttpError(400, 'Silakan pilih sekolah/kantor terlebih dahulu.')
+    if (mode === 'gabung' && !sekolahId) throw new HttpError(400, 'Silakan pilih sekolah/kantor/puskesmas terlebih dahulu.')
     if (isOrangTua) {
       if (!siswaId) throw new HttpError(400, 'Silakan pilih siswa yang merupakan anak/wali Anda.')
       if (!hubungan || !HUBUNGAN_VALID.includes(hubungan)) {
@@ -164,8 +188,8 @@ Deno.serve(async (req) => {
         .select('id, jenis_organisasi')
         .eq('id', sekolahId)
         .maybeSingle()
-      if (error) throw new HttpError(500, 'Gagal memeriksa sekolah: ' + error.message)
-      if (!sekolah) throw new HttpError(404, 'Sekolah/kantor tidak ditemukan.')
+      if (error) throw new HttpError(500, 'Gagal memeriksa organisasi: ' + error.message)
+      if (!sekolah) throw new HttpError(404, 'Sekolah/kantor/puskesmas tidak ditemukan.')
       if ((sekolah.jenis_organisasi ?? 'sekolah') !== jenisOrganisasi) {
         throw new HttpError(400, 'Jenis organisasi tidak sesuai.')
       }
@@ -218,20 +242,21 @@ Deno.serve(async (req) => {
         ? 'admin_utama'
         : isOrangTua
           ? 'orang_tua'
-          : jenisOrganisasi === 'kantor'
+          : jenisOrganisasi === 'kantor' || jenisOrganisasi === 'puskesmas'
             ? 'pegawai'
             : 'guru'
 
-    // PERBAIKAN: semua pendaftaran (baru maupun gabung) menunggu persetujuan
-    // superadmin. Sebelumnya mode 'baru' langsung 'aktif', sehingga pendaftar
-    // organisasi baru (mis. kantor palsu) tidak pernah muncul di halaman
-    // Persetujuan Akun dan langsung bisa login tanpa disaring.
+    // Semua pendaftaran (baru maupun gabung) menunggu persetujuan superadmin.
     const statusAkun = 'menunggu'
 
-    // ---------- 4. pegawai_kantor (khusus kantor) ----------
-    if (jenisOrganisasi === 'kantor') {
+    // ---------- 4. pegawai_kantor / pegawai_puskesmas (khusus tenant non-sekolah) ----------
+    // CATATAN: tabel 'pegawai_puskesmas' diasumsikan sudah ada dengan struktur
+    // yang sama seperti 'pegawai_kantor' (sekolah_id, nama_lengkap, jabatan, nip,
+    // email, status). Sesuaikan nama tabel/kolom di bawah bila berbeda.
+    if (jenisOrganisasi === 'kantor' || jenisOrganisasi === 'puskesmas') {
+      const namaTabelPegawai = jenisOrganisasi === 'kantor' ? 'pegawai_kantor' : 'pegawai_puskesmas'
       const { data: pegawai, error } = await adminClient
-        .from('pegawai_kantor')
+        .from(namaTabelPegawai)
         .insert({
           sekolah_id: targetSekolahId,
           nama_lengkap: namaLengkap,
@@ -301,7 +326,10 @@ Deno.serve(async (req) => {
     if (userId) {
       await coba(() => adminClient.from('orang_tua_siswa').delete().eq('orang_tua_id', userId))
       if (profilDibuat) await coba(() => adminClient.from('profil').delete().eq('id', userId))
-      if (pegawaiId) await coba(() => adminClient.from('pegawai_kantor').delete().eq('id', pegawaiId))
+      if (pegawaiId) {
+        await coba(() => adminClient.from('pegawai_kantor').delete().eq('id', pegawaiId))
+        await coba(() => adminClient.from('pegawai_puskesmas').delete().eq('id', pegawaiId))
+      }
       if (sekolahBaruId) await coba(() => adminClient.from('sekolah').delete().eq('id', sekolahBaruId))
       await coba(() => adminClient.auth.admin.deleteUser(userId))
     }
