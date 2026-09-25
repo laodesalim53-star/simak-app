@@ -35,9 +35,13 @@ const TEMPLATE_HEADERS = [
 ]
 
 // Baris contoh, sekadar menunjukkan format yang benar (boleh dihapus user).
+// Contoh diambil dari pola data hasil konversi PDF BKU Pembantu Bank yang
+// sebenarnya: tanggal ISO (YYYY-MM-DD), angka tanpa titik ribuan/simbol,
+// kode_kegiatan format "xx.xx.xx." dan kode_rekening format penuh
+// "x.x.xx.xx.xx.xx.xxxx".
 const TEMPLATE_CONTOH = [
   ['2025-01-21', 'BBU01', 'Terima Dana BOSP Tahap 1 2025', '46050000', '0', '', '', '', ''],
-  ['2025-09-01', 'BNU01', 'KELAS II (BUKU SISWA) Tema 5 Pengalamanku', '0', '170000', '05.02.03.', '5.1.02.03.05.00.01', '30', ''],
+  ['2025-09-03', 'BNU02', 'Lakban Besar', '0', '100000', '06.05.08.', '5.1.02.01.01.0024', '4', ''],
 ]
 
 function unduhTemplateBku() {
