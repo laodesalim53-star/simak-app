@@ -14,6 +14,36 @@ const STATUS_OPTS = [
 
 const BUCKET_BUKTI = 'bukti-presensi'
 
+// ============================================================
+// StatusSegment — TAMPILAN status kehadiran (BARU). Menggantikan 4 badge
+// lepas (yang gampang pecah ke baris berikutnya / tombolnya kecil-kecil di
+// HP) dengan satu grup "segmented control" yang menyatu. Full-width di HP
+// (flex-1) supaya target sentuh lega dan tidak ada yang kepotong, otomatis
+// lebih ringkas (flex-none) di layar lebar. Warna aktif tetap memakai
+// STATUS_OPTS.color yang sama seperti sebelumnya — cuma bungkusnya yang
+// berubah, logika pemilihan status TIDAK berubah (tetap lewat prop
+// value/onChange yang dikendalikan komponen pemanggil).
+// ============================================================
+function StatusSegment({ value, onChange }) {
+  return (
+    <div className="inline-flex w-full sm:w-auto rounded-lg border border-ink-900/10 overflow-hidden bg-white">
+      {STATUS_OPTS.map((opt, i) => (
+        <button
+          key={opt.value}
+          type="button"
+          aria-pressed={value === opt.value}
+          onClick={() => onChange(opt.value)}
+          className={`flex-1 sm:flex-none px-3 py-2 text-sm font-medium transition-colors ${
+            i !== 0 ? 'border-l border-ink-900/10' : ''
+          } ${value === opt.value ? opt.color : 'text-ink-700/40 hover:text-ink-900'}`}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 // Motif batik (kawung + parang) — sama persis dengan Profil Saya, Dasbor, Galeri, Dokumen & Data Siswa,
 // warna garis menyesuaikan latar (emas di atas navy).
 function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 72 }) {
@@ -516,18 +546,7 @@ function PresensiPribadi({ profil }) {
 
               <div className="mb-5">
                 <label className="block text-xs font-semibold text-ink-700/60 mb-2">Status Kehadiran</label>
-                <div className="flex gap-1.5 flex-wrap">
-                  {STATUS_OPTS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setDataSaya((d) => ({ ...d, status: opt.value }))}
-                      className={`badge cursor-pointer border ${dataSaya.status === opt.value ? opt.color + ' border-transparent' : 'border-ink-900/10 text-ink-700/40'}`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
+                <StatusSegment value={dataSaya.status} onChange={(v) => setDataSaya((d) => ({ ...d, status: v }))} />
               </div>
 
               <div className="mb-5">
@@ -554,7 +573,7 @@ function PresensiPribadi({ profil }) {
                 )}
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <button onClick={handleSimpanStatusSaya} disabled={savingSaya} className="btn-primary">
                   {savingSaya ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                   Simpan Presensi
@@ -572,47 +591,60 @@ function PresensiPribadi({ profil }) {
                   Presensi Siswa Kelas {kelasWali.nama_kelas}
                 </h2>
               </div>
-              <div className="card relative overflow-hidden overflow-x-auto">
+
+              <div className="card relative overflow-hidden">
                 <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-900 to-brass-400" />
-                <table className="table-shell">
-                  <thead>
-                    <tr>
-                      <th>Nama Siswa</th>
-                      <th>Status Kehadiran</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {loadingSiswa && (
-                      <tr><td colSpan={2} className="text-center py-8 text-ink-700/50">Memuat...</td></tr>
-                    )}
-                    {!loadingSiswa && siswaList.length === 0 && (
-                      <tr><td colSpan={2} className="text-center py-8 text-ink-700/50">Belum ada siswa aktif di kelas ini.</td></tr>
-                    )}
-                    {siswaList.map((s) => (
-                      <tr key={s.id}>
-                        <td className="font-medium">{s.nama_lengkap}</td>
-                        <td>
-                          <div className="flex gap-1.5">
-                            {STATUS_OPTS.map((opt) => (
-                              <button
-                                key={opt.value}
-                                type="button"
-                                onClick={() => setStatusSiswaMap({ ...statusSiswaMap, [s.id]: opt.value })}
-                                className={`badge cursor-pointer border ${statusSiswaMap[s.id] === opt.value ? opt.color + ' border-transparent' : 'border-ink-900/10 text-ink-700/40'}`}
-                              >
-                                {opt.label}
-                              </button>
-                            ))}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+
+                {loadingSiswa && <div className="text-center py-8 text-ink-700/50">Memuat...</div>}
+                {!loadingSiswa && siswaList.length === 0 && (
+                  <div className="text-center py-8 text-ink-700/50">Belum ada siswa aktif di kelas ini.</div>
+                )}
+
+                {!loadingSiswa && siswaList.length > 0 && (
+                  <>
+                    {/* TAMPILAN HP: satu kartu per siswa, status full-width */}
+                    <div className="sm:hidden divide-y divide-ink-900/10">
+                      {siswaList.map((s) => (
+                        <div key={s.id} className="p-4">
+                          <p className="font-medium mb-2">{s.nama_lengkap}</p>
+                          <StatusSegment
+                            value={statusSiswaMap[s.id]}
+                            onChange={(v) => setStatusSiswaMap({ ...statusSiswaMap, [s.id]: v })}
+                          />
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* TAMPILAN DESKTOP: tabel seperti semula */}
+                    <div className="hidden sm:block overflow-x-auto">
+                      <table className="table-shell w-full">
+                        <thead>
+                          <tr>
+                            <th>Nama Siswa</th>
+                            <th>Status Kehadiran</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {siswaList.map((s) => (
+                            <tr key={s.id}>
+                              <td className="font-medium">{s.nama_lengkap}</td>
+                              <td>
+                                <StatusSegment
+                                  value={statusSiswaMap[s.id]}
+                                  onChange={(v) => setStatusSiswaMap({ ...statusSiswaMap, [s.id]: v })}
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
               </div>
 
               {siswaList.length > 0 && (
-                <div className="mt-4 flex items-center gap-3">
+                <div className="mt-4 flex items-center gap-3 flex-wrap">
                   <button onClick={handleSimpanPresensiSiswa} disabled={savingSiswa} className="btn-primary">
                     {savingSiswa ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                     Simpan Presensi Siswa
@@ -887,28 +919,24 @@ function PresensiAdmin() {
         )}
       </div>
 
-      <div className="card relative overflow-hidden overflow-x-auto">
+      <div className="card relative overflow-hidden">
         <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-900 to-brass-400" />
-        <table className="table-shell">
-          <thead>
-            <tr>
-              <th>Nama</th>
-              <th>Status Kehadiran</th>
-              {tab === 'guru' && <th>Foto Bukti</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {loading && <tr><td colSpan={tab === 'guru' ? 3 : 2} className="text-center py-8 text-ink-700/50">Memuat...</td></tr>}
-            {!loading && list.length === 0 && (
-              <tr><td colSpan={tab === 'guru' ? 3 : 2} className="text-center py-8 text-ink-700/50">
-                {tab === 'siswa' ? 'Pilih kelas yang memiliki siswa aktif.' : 'Belum ada data guru aktif.'}
-              </td></tr>
-            )}
-            {list.map((item) => (
-              <tr key={item.id}>
-                <td className="font-medium">
-                  {tab === 'guru' ? (
-                    <div className="flex items-center gap-2.5">
+
+        {loading && <div className="text-center py-8 text-ink-700/50">Memuat...</div>}
+        {!loading && list.length === 0 && (
+          <div className="text-center py-8 text-ink-700/50">
+            {tab === 'siswa' ? 'Pilih kelas yang memiliki siswa aktif.' : 'Belum ada data guru aktif.'}
+          </div>
+        )}
+
+        {!loading && list.length > 0 && (
+          <>
+            {/* TAMPILAN HP: satu kartu per orang, status full-width, foto bukti di bawahnya (khusus guru) */}
+            <div className="sm:hidden divide-y divide-ink-900/10">
+              {list.map((item) => (
+                <div key={item.id} className="p-4">
+                  <div className="flex items-center gap-2.5 mb-3">
+                    {tab === 'guru' && (
                       <div className="w-8 h-8 rounded-full bg-ink-900/10 ring-1 ring-ink-900/10 overflow-hidden flex items-center justify-center shrink-0">
                         {fotoUrl(item.foto_profil_path) ? (
                           <img src={fotoUrl(item.foto_profil_path)} alt={item.nama_lengkap} className="w-full h-full object-cover" />
@@ -916,58 +944,106 @@ function PresensiAdmin() {
                           <span className="text-xs font-semibold text-ink-700/60">{item.nama_lengkap?.[0] || '?'}</span>
                         )}
                       </div>
-                      <span>{item.nama_lengkap}</span>
-                    </div>
-                  ) : (
-                    item.nama_lengkap
-                  )}
-                </td>
-                <td>
-                  <div className="flex gap-1.5">
-                    {STATUS_OPTS.map((opt) => (
-                      <button key={opt.value} type="button"
-                        onClick={() => setStatusMap({ ...statusMap, [item.id]: opt.value })}
-                        className={`badge cursor-pointer border ${statusMap[item.id] === opt.value ? opt.color + ' border-transparent' : 'border-ink-900/10 text-ink-700/40'}`}>
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </td>
-                {tab === 'guru' && (
-                  <td>
-                    {buktiMap[item.id]?.foto_bukti_path ? (
-                      <button
-                        type="button"
-                        onClick={() => setCameraForGuru(item)}
-                        className="flex items-center gap-2 group"
-                        title="Ambil ulang foto"
-                      >
-                        <img
-                          src={fotoBuktiUrl(buktiMap[item.id].foto_bukti_path)}
-                          alt="Bukti presensi"
-                          className="w-9 h-9 rounded-lg object-cover ring-1 ring-ink-900/10 group-hover:ring-blue-900/40"
-                        />
-                        <span className="text-xs text-ink-700/50">{jamLabel(buktiMap[item.id].jam_absen) || '—'}</span>
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setCameraForGuru(item)}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-900/10 text-blue-900 text-xs font-medium hover:bg-blue-900/15"
-                      >
-                        <Camera size={13} /> Ambil Foto
-                      </button>
                     )}
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                    <span className="font-medium">{item.nama_lengkap}</span>
+                  </div>
+                  <StatusSegment value={statusMap[item.id]} onChange={(v) => setStatusMap({ ...statusMap, [item.id]: v })} />
+                  {tab === 'guru' && (
+                    <div className="mt-3">
+                      {buktiMap[item.id]?.foto_bukti_path ? (
+                        <button type="button" onClick={() => setCameraForGuru(item)} className="flex items-center gap-2 group" title="Ambil ulang foto">
+                          <img
+                            src={fotoBuktiUrl(buktiMap[item.id].foto_bukti_path)}
+                            alt="Bukti presensi"
+                            className="w-9 h-9 rounded-lg object-cover ring-1 ring-ink-900/10 group-hover:ring-blue-900/40"
+                          />
+                          <span className="text-xs text-ink-700/50">{jamLabel(buktiMap[item.id].jam_absen) || '—'}</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setCameraForGuru(item)}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-900/10 text-blue-900 text-xs font-medium hover:bg-blue-900/15"
+                        >
+                          <Camera size={13} /> Ambil Foto
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* TAMPILAN DESKTOP: tabel seperti semula */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="table-shell w-full">
+                <thead>
+                  <tr>
+                    <th>Nama</th>
+                    <th>Status Kehadiran</th>
+                    {tab === 'guru' && <th>Foto Bukti</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.map((item) => (
+                    <tr key={item.id}>
+                      <td className="font-medium">
+                        {tab === 'guru' ? (
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full bg-ink-900/10 ring-1 ring-ink-900/10 overflow-hidden flex items-center justify-center shrink-0">
+                              {fotoUrl(item.foto_profil_path) ? (
+                                <img src={fotoUrl(item.foto_profil_path)} alt={item.nama_lengkap} className="w-full h-full object-cover" />
+                              ) : (
+                                <span className="text-xs font-semibold text-ink-700/60">{item.nama_lengkap?.[0] || '?'}</span>
+                              )}
+                            </div>
+                            <span>{item.nama_lengkap}</span>
+                          </div>
+                        ) : (
+                          item.nama_lengkap
+                        )}
+                      </td>
+                      <td>
+                        <StatusSegment value={statusMap[item.id]} onChange={(v) => setStatusMap({ ...statusMap, [item.id]: v })} />
+                      </td>
+                      {tab === 'guru' && (
+                        <td>
+                          {buktiMap[item.id]?.foto_bukti_path ? (
+                            <button
+                              type="button"
+                              onClick={() => setCameraForGuru(item)}
+                              className="flex items-center gap-2 group"
+                              title="Ambil ulang foto"
+                            >
+                              <img
+                                src={fotoBuktiUrl(buktiMap[item.id].foto_bukti_path)}
+                                alt="Bukti presensi"
+                                className="w-9 h-9 rounded-lg object-cover ring-1 ring-ink-900/10 group-hover:ring-blue-900/40"
+                              />
+                              <span className="text-xs text-ink-700/50">{jamLabel(buktiMap[item.id].jam_absen) || '—'}</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setCameraForGuru(item)}
+                              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-900/10 text-blue-900 text-xs font-medium hover:bg-blue-900/15"
+                            >
+                              <Camera size={13} /> Ambil Foto
+                            </button>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
 
       {list.length > 0 && (
-        <div className="mt-4 flex items-center gap-3">
+        <div className="mt-4 flex items-center gap-3 flex-wrap">
           <button onClick={handleSave} disabled={saving} className="btn-primary">
             {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
             Simpan Presensi
@@ -1127,18 +1203,7 @@ function PresensiPegawaiPribadi({ profil }) {
 
           <div className="mb-5">
             <label className="block text-xs font-semibold text-ink-700/60 mb-2">Status Kehadiran</label>
-            <div className="flex gap-1.5 flex-wrap">
-              {STATUS_OPTS.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setDataSaya((d) => ({ ...d, status: opt.value }))}
-                  className={`badge cursor-pointer border ${dataSaya.status === opt.value ? opt.color + ' border-transparent' : 'border-ink-900/10 text-ink-700/40'}`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+            <StatusSegment value={dataSaya.status} onChange={(v) => setDataSaya((d) => ({ ...d, status: v }))} />
           </div>
 
           <div className="mb-5">
@@ -1165,7 +1230,7 @@ function PresensiPegawaiPribadi({ profil }) {
             )}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <button onClick={handleSimpanStatusSaya} disabled={savingSaya} className="btn-primary">
               {savingSaya ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
               Simpan Presensi
@@ -1360,25 +1425,21 @@ function PresensiPegawaiAdmin() {
         <input type="date" className="input-field w-auto" value={tanggal} onChange={(e) => setTanggal(e.target.value)} />
       </div>
 
-      <div className="card relative overflow-hidden overflow-x-auto">
+      <div className="card relative overflow-hidden">
         <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-900 to-brass-400" />
-        <table className="table-shell">
-          <thead>
-            <tr>
-              <th>Nama Pegawai</th>
-              <th>Status Kehadiran</th>
-              <th>Foto Bukti</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && <tr><td colSpan={3} className="text-center py-8 text-ink-700/50">Memuat...</td></tr>}
-            {!loading && pegawaiList.length === 0 && (
-              <tr><td colSpan={3} className="text-center py-8 text-ink-700/50">Belum ada data pegawai aktif.</td></tr>
-            )}
-            {pegawaiList.map((item) => (
-              <tr key={item.id}>
-                <td className="font-medium">
-                  <div className="flex items-center gap-2.5">
+
+        {loading && <div className="text-center py-8 text-ink-700/50">Memuat...</div>}
+        {!loading && pegawaiList.length === 0 && (
+          <div className="text-center py-8 text-ink-700/50">Belum ada data pegawai aktif.</div>
+        )}
+
+        {!loading && pegawaiList.length > 0 && (
+          <>
+            {/* TAMPILAN HP: satu kartu per pegawai */}
+            <div className="sm:hidden divide-y divide-ink-900/10">
+              {pegawaiList.map((item) => (
+                <div key={item.id} className="p-4">
+                  <div className="flex items-center gap-2.5 mb-3">
                     <div className="w-8 h-8 rounded-full bg-ink-900/10 ring-1 ring-ink-900/10 overflow-hidden flex items-center justify-center shrink-0">
                       {fotoUrl(item.foto_profil_path) ? (
                         <img src={fotoUrl(item.foto_profil_path)} alt={item.nama_lengkap} className="w-full h-full object-cover" />
@@ -1387,55 +1448,107 @@ function PresensiPegawaiAdmin() {
                       )}
                     </div>
                     <div>
-                      <div>{item.nama_lengkap}</div>
+                      <div className="font-medium">{item.nama_lengkap}</div>
                       {item.jabatan && <div className="text-xs text-ink-700/40">{item.jabatan}</div>}
                     </div>
                   </div>
-                </td>
-                <td>
-                  <div className="flex gap-1.5">
-                    {STATUS_OPTS.map((opt) => (
-                      <button key={opt.value} type="button"
-                        onClick={() => setStatusMap({ ...statusMap, [item.id]: opt.value })}
-                        className={`badge cursor-pointer border ${statusMap[item.id] === opt.value ? opt.color + ' border-transparent' : 'border-ink-900/10 text-ink-700/40'}`}>
-                        {opt.label}
+                  <StatusSegment value={statusMap[item.id]} onChange={(v) => setStatusMap({ ...statusMap, [item.id]: v })} />
+                  <div className="mt-3">
+                    {buktiMap[item.id]?.foto_bukti_path ? (
+                      <button
+                        type="button"
+                        onClick={() => setCameraForPegawai(item)}
+                        className="flex items-center gap-2 group"
+                        title="Ambil ulang foto"
+                      >
+                        <img
+                          src={fotoBuktiUrl(buktiMap[item.id].foto_bukti_path)}
+                          alt="Bukti presensi"
+                          className="w-9 h-9 rounded-lg object-cover ring-1 ring-ink-900/10 group-hover:ring-blue-900/40"
+                        />
+                        <span className="text-xs text-ink-700/50">{jamLabel(buktiMap[item.id].jam_absen) || '—'}</span>
                       </button>
-                    ))}
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setCameraForPegawai(item)}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-900/10 text-blue-900 text-xs font-medium hover:bg-blue-900/15"
+                      >
+                        <Camera size={13} /> Ambil Foto
+                      </button>
+                    )}
                   </div>
-                </td>
-                <td>
-                  {buktiMap[item.id]?.foto_bukti_path ? (
-                    <button
-                      type="button"
-                      onClick={() => setCameraForPegawai(item)}
-                      className="flex items-center gap-2 group"
-                      title="Ambil ulang foto"
-                    >
-                      <img
-                        src={fotoBuktiUrl(buktiMap[item.id].foto_bukti_path)}
-                        alt="Bukti presensi"
-                        className="w-9 h-9 rounded-lg object-cover ring-1 ring-ink-900/10 group-hover:ring-blue-900/40"
-                      />
-                      <span className="text-xs text-ink-700/50">{jamLabel(buktiMap[item.id].jam_absen) || '—'}</span>
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setCameraForPegawai(item)}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-900/10 text-blue-900 text-xs font-medium hover:bg-blue-900/15"
-                    >
-                      <Camera size={13} /> Ambil Foto
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </div>
+              ))}
+            </div>
+
+            {/* TAMPILAN DESKTOP: tabel seperti semula */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="table-shell w-full">
+                <thead>
+                  <tr>
+                    <th>Nama Pegawai</th>
+                    <th>Status Kehadiran</th>
+                    <th>Foto Bukti</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pegawaiList.map((item) => (
+                    <tr key={item.id}>
+                      <td className="font-medium">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-full bg-ink-900/10 ring-1 ring-ink-900/10 overflow-hidden flex items-center justify-center shrink-0">
+                            {fotoUrl(item.foto_profil_path) ? (
+                              <img src={fotoUrl(item.foto_profil_path)} alt={item.nama_lengkap} className="w-full h-full object-cover" />
+                            ) : (
+                              <span className="text-xs font-semibold text-ink-700/60">{item.nama_lengkap?.[0] || '?'}</span>
+                            )}
+                          </div>
+                          <div>
+                            <div>{item.nama_lengkap}</div>
+                            {item.jabatan && <div className="text-xs text-ink-700/40">{item.jabatan}</div>}
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <StatusSegment value={statusMap[item.id]} onChange={(v) => setStatusMap({ ...statusMap, [item.id]: v })} />
+                      </td>
+                      <td>
+                        {buktiMap[item.id]?.foto_bukti_path ? (
+                          <button
+                            type="button"
+                            onClick={() => setCameraForPegawai(item)}
+                            className="flex items-center gap-2 group"
+                            title="Ambil ulang foto"
+                          >
+                            <img
+                              src={fotoBuktiUrl(buktiMap[item.id].foto_bukti_path)}
+                              alt="Bukti presensi"
+                              className="w-9 h-9 rounded-lg object-cover ring-1 ring-ink-900/10 group-hover:ring-blue-900/40"
+                            />
+                            <span className="text-xs text-ink-700/50">{jamLabel(buktiMap[item.id].jam_absen) || '—'}</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setCameraForPegawai(item)}
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-900/10 text-blue-900 text-xs font-medium hover:bg-blue-900/15"
+                          >
+                            <Camera size={13} /> Ambil Foto
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
 
       {pegawaiList.length > 0 && (
-        <div className="mt-4 flex items-center gap-3">
+        <div className="mt-4 flex items-center gap-3 flex-wrap">
           <button onClick={handleSave} disabled={saving} className="btn-primary">
             {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
             Simpan Presensi
