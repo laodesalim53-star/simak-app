@@ -103,25 +103,29 @@ export function AuthProvider({ children }) {
       setProfilPuskesmas(null)
     }
 
-if (jenisOrganisasi === 'kantor' && data.pegawai_id) {
-  const { data: pegawai } = await supabase
-    .from('pegawai_kantor')
-    .select('nama_lengkap, foto_profil_path, nip')
-    .eq('id', data.pegawai_id)
-    .maybeSingle()
+    // PERBAIKAN: tenant 'kantor' dan 'puskesmas' sama-sama memakai struktur
+    // pegawai (pegawai_id), bukan guru. Data nama & foto diambil dari tabel
+    // pegawai masing-masing tenant.
+    if ((jenisOrganisasi === 'kantor' || jenisOrganisasi === 'puskesmas') && data.pegawai_id) {
+      const namaTabelPegawai = jenisOrganisasi === 'kantor' ? 'pegawai_kantor' : 'pegawai_puskesmas'
+      const { data: pegawai } = await supabase
+        .from(namaTabelPegawai)
+        .select('nama_lengkap, foto_profil_path, nip')
+        .eq('id', data.pegawai_id)
+        .maybeSingle()
 
-  if (requestId !== profilRequestIdRef.current) return
+      if (requestId !== profilRequestIdRef.current) return
 
-  setProfil({
-    ...data,
-    jenis_organisasi: jenisOrganisasi,
-    nama_sekolah: namaSekolah,
-    nama_lengkap: pegawai?.nama_lengkap || data.nama_lengkap_pendaftar,
-    foto_profil_path: pegawai?.foto_profil_path || data.foto_profil_path,
-    nip: pegawai?.nip || null,
-  })
-  return
-}
+      setProfil({
+        ...data,
+        jenis_organisasi: jenisOrganisasi,
+        nama_sekolah: namaSekolah,
+        nama_lengkap: pegawai?.nama_lengkap || data.nama_lengkap_pendaftar,
+        foto_profil_path: pegawai?.foto_profil_path || data.foto_profil_path,
+        nip: pegawai?.nip || null,
+      })
+      return
+    }
     if (data.guru_id) {
       const { data: guru } = await supabase
         .from('guru')
@@ -225,6 +229,18 @@ if (jenisOrganisasi === 'kantor' && data.pegawai_id) {
   }
   if (jenisOrganisasi === 'kantor' && !nip) {
     return { error: { message: 'NIP wajib diisi untuk akun Kantor.' } }
+  }
+
+  // PERBAIKAN: tenant Puskesmas. Jabatan yang diizinkan hanya
+  // kepala_puskesmas, admin, pegawai (sejajar dengan pola kantor).
+  if (jenisOrganisasi === 'puskesmas') {
+    const jabatanValidPuskesmas = ['kepala_puskesmas', 'admin', 'pegawai']
+    if (!jabatanValidPuskesmas.includes(jabatan)) {
+      return { error: { message: 'Jabatan tidak valid untuk akun Puskesmas.' } }
+    }
+    if (!nip) {
+      return { error: { message: 'NIP wajib diisi untuk akun Puskesmas.' } }
+    }
   }
 
   const { data, error } = await supabase.functions.invoke('daftar-akun', {
@@ -395,18 +411,23 @@ if (jenisOrganisasi === 'kantor' && data.pegawai_id) {
   // akun Kepala Kantor mendapat menu admin (getGroupsKantorAdmin di
   // Sidebar.jsx) dan akses fitur admin-utama (Persetujuan Akun, Verifikasi
   // Nikah), setara dengan Admin Utama/superadmin di tenant kantor.
+  //
+  // PERBAIKAN: 'kepala_puskesmas' ditambahkan setara, supaya akun Kepala
+  // Puskesmas mendapat menu & akses admin di tenant puskesmas.
   const isAdmin = [
     'admin',
     'admin_utama',
     'superadmin',
     'kepala_sekolah',
     'kepala_kantor',
+    'kepala_puskesmas',
   ].includes(profil?.role)
 
   const isAdminUtama =
     profil?.role === 'admin_utama' ||
     profil?.role === 'superadmin' ||
-    profil?.role === 'kepala_kantor'
+    profil?.role === 'kepala_kantor' ||
+    profil?.role === 'kepala_puskesmas'
 
   const isSuperAdmin =
     profil?.role === 'superadmin'
