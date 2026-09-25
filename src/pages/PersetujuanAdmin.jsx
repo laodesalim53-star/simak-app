@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
+  Building2,
   Check,
   Clock3,
   CreditCard,
@@ -15,6 +16,34 @@ import { supabase } from '../lib/supabaseClient'
 // Ganti sesuai kebijakan (mis. 30 untuk bulanan). Set null kalau tidak
 // mau ada tanggal kedaluwarsa.
 const MASA_AKTIF_HARI = 30
+
+// Label tampilan untuk jenis tenant/organisasi.
+const LABEL_JENIS_TENANT = {
+  sekolah: 'Sekolah',
+  kantor: 'Kantor',
+  puskesmas: 'Puskesmas',
+}
+
+// Label tampilan untuk jabatan, khususnya jabatan tenant puskesmas &
+// kantor yang namanya tidak langsung terbaca (mis. 'kepala_puskesmas').
+const LABEL_JABATAN = {
+  guru: 'Guru',
+  orang_tua: 'Orang Tua/Wali',
+  kepala_sekolah: 'Kepala Sekolah',
+  pegawai: 'Pegawai',
+  kepala_kantor: 'Kepala Kantor',
+  kepala_puskesmas: 'Kepala Puskesmas',
+  admin: 'Admin',
+}
+
+function labelJenisTenant(jenis) {
+  return LABEL_JENIS_TENANT[jenis] || 'Sekolah'
+}
+
+function labelJabatan(jabatan) {
+  if (!jabatan) return null
+  return LABEL_JABATAN[jabatan] || jabatan
+}
 
 export default function PersetujuanAdmin() {
   const [requests, setRequests] = useState([])
@@ -32,10 +61,13 @@ export default function PersetujuanAdmin() {
     setError('')
     setMessage('')
 
+    // PERBAIKAN: tambahkan 'jabatan' dan join ke 'sekolah' supaya jenis
+    // tenant (sekolah/kantor/puskesmas) dan jabatan spesifik (mis.
+    // kepala_puskesmas) bisa ditampilkan di kartu permohonan.
     const { data, error: requestError } = await supabase
       .from('permohonan_akun')
       .select(
-        'id, nama_lengkap, email, role, status, created_at'
+        'id, nama_lengkap, email, role, jabatan, status, created_at, sekolah:sekolah_id ( nama_sekolah, jenis_organisasi )'
       )
       .eq('status', 'pending')
       .order('created_at', { ascending: false })
@@ -350,73 +382,93 @@ export default function PersetujuanAdmin() {
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
-              {requests.map((request) => (
-                <article
-                  key={request.id}
-                  className="flex flex-col gap-5 px-5 py-5 lg:flex-row lg:items-center lg:justify-between"
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
-                      <UserRound size={21} />
-                    </div>
+              {requests.map((request) => {
+                const jenisOrganisasi =
+                  request.sekolah?.jenis_organisasi || 'sekolah'
+                const namaOrganisasi = request.sekolah?.nama_sekolah
 
-                    <div>
-                      <h3 className="font-semibold text-slate-900">
-                        {request.nama_lengkap || 'Nama belum diisi'}
-                      </h3>
-
-                      <div className="mt-1 flex items-center gap-2 text-sm text-slate-500">
-                        <Mail size={14} />
-                        {request.email}
+                return (
+                  <article
+                    key={request.id}
+                    className="flex flex-col gap-5 px-5 py-5 lg:flex-row lg:items-center lg:justify-between"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                        <UserRound size={21} />
                       </div>
 
-                      <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                        <span className="rounded-full bg-slate-100 px-2.5 py-1 font-medium capitalize text-slate-600">
-                          {request.role || 'guru'}
-                        </span>
+                      <div>
+                        <h3 className="font-semibold text-slate-900">
+                          {request.nama_lengkap || 'Nama belum diisi'}
+                        </h3>
 
-                        <span className="rounded-full bg-amber-100 px-2.5 py-1 font-medium text-amber-700">
-                          Menunggu
-                        </span>
+                        <div className="mt-1 flex items-center gap-2 text-sm text-slate-500">
+                          <Mail size={14} />
+                          {request.email}
+                        </div>
 
-                        <span className="text-slate-400">
-                          Diajukan {formatDate(request.created_at)}
-                        </span>
+                        {namaOrganisasi && (
+                          <div className="mt-1 flex items-center gap-2 text-sm text-slate-500">
+                            <Building2 size={14} />
+                            {namaOrganisasi}
+                          </div>
+                        )}
+
+                        <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                          {/* Jenis tenant: Sekolah / Kantor / Puskesmas */}
+                          <span className="rounded-full bg-indigo-100 px-2.5 py-1 font-medium text-indigo-700">
+                            {labelJenisTenant(jenisOrganisasi)}
+                          </span>
+
+                          <span className="rounded-full bg-slate-100 px-2.5 py-1 font-medium capitalize text-slate-600">
+                            {labelJabatan(request.jabatan) ||
+                              request.role ||
+                              'Guru'}
+                          </span>
+
+                          <span className="rounded-full bg-amber-100 px-2.5 py-1 font-medium text-amber-700">
+                            Menunggu
+                          </span>
+
+                          <span className="text-slate-400">
+                            Diajukan {formatDate(request.created_at)}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="flex gap-2 lg:shrink-0">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateRequest(request, 'rejected')
-                      }
-                      disabled={processingId === request.id}
-                      className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 lg:flex-none"
-                    >
-                      <X size={16} />
-                      Tolak
-                    </button>
+                    <div className="flex gap-2 lg:shrink-0">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateRequest(request, 'rejected')
+                        }
+                        disabled={processingId === request.id}
+                        className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 lg:flex-none"
+                      >
+                        <X size={16} />
+                        Tolak
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateRequest(request, 'approved')
-                      }
-                      disabled={processingId === request.id}
-                      className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 lg:flex-none"
-                    >
-                      {processingId === request.id ? (
-                        <RefreshCw size={16} className="animate-spin" />
-                      ) : (
-                        <Check size={16} />
-                      )}
-                      Setujui
-                    </button>
-                  </div>
-                </article>
-              ))}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateRequest(request, 'approved')
+                        }
+                        disabled={processingId === request.id}
+                        className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 lg:flex-none"
+                      >
+                        {processingId === request.id ? (
+                          <RefreshCw size={16} className="animate-spin" />
+                        ) : (
+                          <Check size={16} />
+                        )}
+                        Setujui
+                      </button>
+                    </div>
+                  </article>
+                )
+              })}
             </div>
           )}
         </section>
