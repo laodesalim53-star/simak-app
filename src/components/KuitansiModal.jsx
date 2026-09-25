@@ -8,6 +8,14 @@ import KuitansiPrintTemplate from '../lib/KuitansiPrintTemplate'
 // Dibayar/NIP Pembayar) DAN pihak yang terlibat (Sudah Terima Dari/Yang
 // Menerima/Alamat Penerima). Tidak perlu ketik ulang tiap kali, tapi tetap
 // bisa diedit manual di form kalau memang beda dari biasanya.
+//
+// KHUSUS disetujui_oleh/nip_disetujui/dibayar_oleh/nip_dibayar: nilai dari
+// localStorage ini sekarang hanya dipakai sebagai FALLBACK saat form pertama
+// kali dibuka. Begitu data Kepala Sekolah/Bendahara berhasil ditemukan dari
+// tabel `guru` (lihat muatPenandatanganDariGuru di bawah), nilainya otomatis
+// ditimpa supaya selalu sinkron dengan data guru terbaru — tidak perlu lagi
+// mengandalkan isian lama yang bisa saja sudah tidak akurat (mis. setelah
+// pergantian kepala sekolah/bendahara).
 const ISIAN_STORAGE_KEY = 'kuitansi_ttd_default'
 
 function ambilIsianTersimpan() {
@@ -48,6 +56,8 @@ const emptyForm = (keuanganRow) => {
     jumlah: keuanganRow?.jumlah || '',
     untuk_pembayaran: keuanganRow?.catatan || keuanganRow?.kategori || '',
     catatan: '',
+    // Fallback awal dari localStorage — akan ditimpa otomatis oleh data guru
+    // (Kepala Sekolah/Bendahara) begitu ditemukan, lihat useEffect di bawah.
     disetujui_oleh: isianDefault.disetujui_oleh || '',
     jabatan_disetujui: 'Atasan Langsung',
     nip_disetujui: isianDefault.nip_disetujui || '',
@@ -59,6 +69,19 @@ const emptyForm = (keuanganRow) => {
   }
 }
 
+// Cari guru yang jenis_ptk ATAU tugas_tambahan-nya mengandung kata kunci
+// tertentu (case-insensitive). Dipakai untuk mengenali siapa Kepala Sekolah
+// dan siapa Bendahara dari data guru — dua-duanya bisa tercatat di salah satu
+// dari dua kolom itu tergantung cara sekolah mengisi Dapodik.
+function cariGuruBerdasarkanPeran(daftarGuru, kataKunci) {
+  const k = kataKunci.toLowerCase()
+  return (daftarGuru || []).find((g) => {
+    const jenisPtk = (g.jenis_ptk || '').toLowerCase()
+    const tugasTambahan = (g.tugas_tambahan || '').toLowerCase()
+    return jenisPtk.includes(k) || tugasTambahan.includes(k)
+  })
+}
+
 /**
  * Form untuk membuat Kuitansi (khusus Kwitansi — bagian Nota belum didukung di sini).
  * Nominal diisi langsung lewat field "Uang Sejumlah" (tidak lagi dihitung dari
@@ -68,6 +91,7 @@ const emptyForm = (keuanganRow) => {
  *   <KuitansiModal
  *     keuanganRow={row}          // baris transaksi keuangan yang mau dibuatkan kuitansi (boleh null)
  *     sekolah={{ nama, alamat, kota }}
+ *     sekolahId={sekolahId}      // dipakai untuk cari Kepala Sekolah/Bendahara di tabel guru
  *     onClose={() => setKuitansiFor(null)}
  *   />
  *
@@ -75,13 +99,24 @@ const emptyForm = (keuanganRow) => {
  * Kuitansi.jsx — baris bku_kas dipetakan ke bentuk yang sama di sana
  * ({ tanggal, jumlah, catatan, kategori, no_bukti, mata_anggaran }, TANPA
  * field id — lihat catatan di handleSimpan soal keuangan_id) sebelum dioper
- * ke sini, supaya komponen ini tidak perlu tahu soal BKU.
+ * ke sini, supaya komponen ini tidak perlu tahu soal BKU. Field-field itu
+ * TIDAK disentuh oleh logika penandatangan di bawah.
  *
  * Field "Sudah Terima Dari", tanda tangan (disetujui_oleh/nip_disetujui/
  * dibayar_oleh/nip_dibayar), dan "Yang Menerima"/"Alamat Penerima" diingat
  * otomatis lewat localStorage (lihat ISIAN_STORAGE_KEY di atas) supaya tidak
  * perlu diketik ulang tiap kali — kalau suatu saat beda, tinggal edit manual
  * di form, dan isian barunya otomatis jadi default berikutnya.
+ *
+ * KHUSUS nama+NIP Kepala Sekolah (disetujui_oleh/nip_disetujui) dan Bendahara
+ * (dibayar_oleh/nip_dibayar): begitu modal dibuka dan sekolahId tersedia,
+ * muatPenandatanganDariGuru() mengambil data guru aktif sekolah tsb dan
+ * mencari yang jenis_ptk/tugas_tambahan mengandung "kepala sekolah" atau
+ * "bendahara", lalu MENGISI ULANG kedua field itu dengan data guru terbaru —
+ * jadi selalu sinkron otomatis walau kepala sekolah/bendahara berganti,
+ * tanpa perlu edit manual. Kalau tidak ketemu guru yang cocok, isian
+ * localStorage/manual di atas tetap dipakai (tidak ditimpa jadi kosong).
+ * Field lain tetap bisa diedit manual seperti biasa.
  *
  * PENOMORAN: untuk kuitansi biasa (dibuat manual, keuanganRow?.id terisi
  * atau kosong total), nomor kuitansi tetap otomatis lewat RPC
@@ -91,7 +126,7 @@ const emptyForm = (keuanganRow) => {
  * "BNU02"), bukan format auto "0008/BNU/2026" — supaya nomor kuitansi
  * selalu mengikuti nomor bukti aslinya di BKU. Lihat handleSimpan.
  */
-export default function KuitansiModal({ keuanganRow, sekolah, onClose }) {
+export default function KuitansiModal({ keuanganRow, sekolah, sekolahId, onClose }) {
   const [form, setForm] = useState(emptyForm(keuanganRow))
   const [saving, setSaving] = useState(false)
   const [savedData, setSavedData] = useState(null) // { ...kuitansi row } setelah tersimpan, siap dicetak
@@ -100,6 +135,42 @@ export default function KuitansiModal({ keuanganRow, sekolah, onClose }) {
   function ubah(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
   }
+
+  // Sinkronkan nama+NIP Kepala Sekolah & Bendahara dari tabel guru setiap
+  // modal dibuka. Tidak menyentuh field lain (termasuk yang berasal dari
+  // BKU) — hanya 4 field tanda tangan ini yang diisi ulang, dan hanya kalau
+  // guru yang cocok memang ditemukan.
+  useEffect(() => {
+    if (!sekolahId) return
+    let batal = false
+
+    async function muatPenandatanganDariGuru() {
+      const { data: daftarGuru, error } = await supabase
+        .from('guru')
+        .select('nama_lengkap, nip, jenis_ptk, tugas_tambahan')
+        .eq('sekolah_id', sekolahId)
+        .eq('status', 'aktif')
+
+      if (error || batal) return
+
+      const kepsek = cariGuruBerdasarkanPeran(daftarGuru, 'kepala sekolah')
+      const bendahara = cariGuruBerdasarkanPeran(daftarGuru, 'bendahara')
+
+      if (!kepsek && !bendahara) return
+      if (batal) return
+
+      setForm((prev) => ({
+        ...prev,
+        disetujui_oleh: kepsek?.nama_lengkap || prev.disetujui_oleh,
+        nip_disetujui: kepsek?.nip || prev.nip_disetujui,
+        dibayar_oleh: bendahara?.nama_lengkap || prev.dibayar_oleh,
+        nip_dibayar: bendahara?.nip || prev.nip_dibayar,
+      }))
+    }
+
+    muatPenandatanganDariGuru()
+    return () => { batal = true }
+  }, [sekolahId])
 
   async function handleSimpan(e) {
     e.preventDefault()
@@ -265,10 +336,13 @@ export default function KuitansiModal({ keuanganRow, sekolah, onClose }) {
             </div>
 
             {/* ==== Tanda tangan ====
-                Semua field di bawah ini (termasuk Sudah Terima Dari di atas, dan
-                Yang Menerima/Alamat Penerima di bawah) otomatis terisi dari isian
-                terakhir (localStorage) lewat emptyForm() di atas — tetap bisa
-                diedit kalau memang beda dari biasanya. */}
+                Nama+NIP Kepala Sekolah dan Bendahara di bawah ini otomatis terisi
+                dari data guru (lihat muatPenandatanganDariGuru di atas), dengan
+                fallback ke isian terakhir (localStorage) lewat emptyForm() kalau
+                belum ketemu di data guru — tetap bisa diedit manual kalau memang
+                beda dari biasanya. Sudah Terima Dari di atas, dan Yang
+                Menerima/Alamat Penerima di bawah, tetap dari localStorage seperti
+                semula. */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label-field">Setuju Dibayar (nama)</label>
