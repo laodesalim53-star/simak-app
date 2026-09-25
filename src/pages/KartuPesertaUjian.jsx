@@ -80,19 +80,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
+import { isKelas6 } from '../lib/kelasTingkat'
 import { GraduationCap, Loader2, Printer, User, Settings, Hash, X, Save, AlertTriangle } from 'lucide-react'
-
-// Kelas 6 bisa ditulis dengan angka ("6A", "Kelas 6") atau angka Romawi
-// ("VIA", "Kelas VI"), jadi kecocokan dicek dari kedua kemungkinan itu.
-function isKelas6(namaKelas) {
-  const nama = (namaKelas || '').trim().toUpperCase()
-  if (!nama) return false
-  if (/^6\b/.test(nama)) return true
-  if (/KELAS\s*6\b/.test(nama)) return true
-  if (/^VI([^I]|$)/.test(nama)) return true
-  if (/KELAS\s*VI([^I]|$)/.test(nama)) return true
-  return false
-}
 
 // Dipakai untuk menandai siswa yang No. Peserta Ujian-nya sudah terisi
 // (dipakai untuk badge status & hitung berapa yang masih kosong), BUKAN lagi
