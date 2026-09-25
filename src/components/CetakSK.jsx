@@ -15,11 +15,6 @@ import { supabase } from '../lib/supabaseClient'
 //     menyembunyikannya di layar
 //   • `@page` + `@media print` di <style> halaman itu sendiri
 //
-// Halaman Keputusan dicetak potret (A4), halaman Lampiran (tabel personel)
-// dicetak lanskap (A4 landscape) secara otomatis lewat CSS Paged Media
-// bernama (`page: lampiran`), supaya kolom tabel lebih lega dan barisnya
-// tidak gampang membelah ke halaman berikutnya.
-//
 // Cara memakai di halaman SK baru:
 //
 //   <div className="min-h-screen bg-slate-100">
@@ -33,7 +28,15 @@ import { supabase } from '../lib/supabaseClient'
 //   </div>
 //
 // Kolom `sk` yang dibaca di sini: nomor, tempat, tanggal (yyyy-mm-dd).
-// Kolom `sekolah`: kopAtas, nama, npsn, alamat, kepala, nipKepala, logoUrl.
+// Kolom `sekolah`: kopAtas, nama, npsn, alamat, kepala, nipKepala, logoUrl,
+// logoKabupatenUrl.
+//
+// CATATAN LOGO KABUPATEN (BARU): mengikuti pola yang sudah dipakai di
+// DaftarHadirSiswaUjian.jsx — logo kabupaten diambil dari kolom
+// profil_sekolah.logo_kabupaten_path (bucket storage 'profil-sekolah'),
+// ditaruh di sisi KIRI kop surat, logo sekolah tetap di KANAN. Kotak logo
+// (sk-kop-logo-box) tetap ada walau logonya kosong, supaya teks kop surat
+// tetap center — sama seperti kop-logo di DaftarHadirSiswaUjian.jsx.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─── Utilitas ────────────────────────────────────────────────────────────────
@@ -75,6 +78,15 @@ function formatKabupaten(teks) {
     .trim()
 }
 
+// Path file di bucket 'profil-sekolah' -> URL publik (kosong kalau tidak ada).
+// Sama seperti urlLogo() di DaftarHadirSiswaUjian.jsx, dipakai untuk logo
+// sekolah maupun logo kabupaten.
+function urlLogo(path) {
+  if (!path) return ''
+  const { data } = supabase.storage.from('profil-sekolah').getPublicUrl(path)
+  return data?.publicUrl || ''
+}
+
 // ─── Ambil Profil Sekolah untuk kop & tanda tangan ───────────────────────────
 export const SEKOLAH_KOSONG = {
   kopAtas: '',
@@ -84,6 +96,7 @@ export const SEKOLAH_KOSONG = {
   kepala: '',
   nipKepala: '',
   logoUrl: '',
+  logoKabupatenUrl: '', // BARU
 }
 
 // Mengembalikan { profil, sekolah, tempat }. `sekolah` siap dipakai KopSK/BlokTTD,
@@ -96,11 +109,8 @@ export async function ambilProfilSekolah(sekolahId) {
     .maybeSingle()
   if (error) throw error
 
-  let logoUrl = ''
-  if (profil?.logo_path) {
-    const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(profil.logo_path)
-    logoUrl = pub?.publicUrl || ''
-  }
+  const logoUrl = urlLogo(profil?.logo_path)
+  const logoKabupatenUrl = urlLogo(profil?.logo_kabupaten_path) // BARU
 
   const kab = formatKabupaten(profil?.kabupaten)
   const sekolah = {
@@ -115,6 +125,7 @@ export async function ambilProfilSekolah(sekolahId) {
     kepala: profil?.kepala_sekolah || '',
     nipKepala: profil?.nip_kepala_sekolah || '',
     logoUrl,
+    logoKabupatenUrl, // BARU
   }
 
   // Hanya tempat_ttd — kolom kecamatan berisi teks kop lengkap ("KECAMATAN ..."),
@@ -127,21 +138,16 @@ const CSS = `
 .lembar-sk {
   width: 210mm;
   margin: 0 auto 16px;
-  padding: 15mm 18mm;
+  padding: 20mm 22mm;
   background: #fff;
   color: #000;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.18), 0 8px 24px rgba(15, 23, 42, 0.08);
   font-family: 'Times New Roman', Times, serif;
-  font-size: 11.5pt;
-  line-height: 1.35;
+  font-size: 12pt;
+  line-height: 1.45;
   box-sizing: border-box;
 }
 .lembar-sk p { margin: 0; }
-
-/* Halaman lampiran (tabel): lebih lebar, dicetak A4 landscape (lihat @page "lampiran" di bawah) */
-.lembar-sk.landscape {
-  width: 297mm;
-}
 
 /* Override pola laporan guru: position static + tampil di layar */
 .lembar-cetak.print-only {
@@ -154,58 +160,58 @@ const CSS = `
 }
 @media screen {
   .lembar-cetak.print-only { display: block !important; min-height: 297mm; }
-  .lembar-cetak.print-only.landscape { min-height: 210mm; }
 }
 
-.sk-kop { display: flex; align-items: center; gap: 10px; border-bottom: 3px double #000; padding-bottom: 5px; margin-bottom: 10px; }
-.sk-kop-logo { width: 18mm; height: 18mm; object-fit: contain; flex: none; }
+.sk-kop { display: flex; align-items: center; gap: 12px; border-bottom: 3px double #000; padding-bottom: 6px; margin-bottom: 14px; }
+.sk-kop-logo-box { width: 20mm; height: 20mm; flex: none; display: flex; align-items: center; justify-content: center; }
+.sk-kop-logo { width: 20mm; height: 20mm; object-fit: contain; flex: none; }
 .sk-kop-teks { flex: 1; text-align: center; }
-.sk-kop-atas { font-size: 11.5pt; font-weight: 700; text-transform: uppercase; }
-.sk-kop-nama { font-size: 14pt; font-weight: 700; text-transform: uppercase; line-height: 1.2; }
-.sk-kop-alamat { font-size: 10pt; }
+.sk-kop-atas { font-size: 12pt; font-weight: 700; text-transform: uppercase; }
+.sk-kop-nama { font-size: 15pt; font-weight: 700; text-transform: uppercase; line-height: 1.25; }
+.sk-kop-alamat { font-size: 10.5pt; }
 
-.sk-judul { text-align: center; font-weight: 700; text-transform: uppercase; margin-bottom: 10px; }
-.sk-judul .tentang { margin: 3px 0; }
+.sk-judul { text-align: center; font-weight: 700; text-transform: uppercase; margin-bottom: 12px; }
+.sk-judul .tentang { margin: 4px 0; }
 
-.sk-def { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
-.sk-def td { vertical-align: top; padding: 0 0 3px; }
+.sk-def { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+.sk-def td { vertical-align: top; padding: 0 0 4px; }
 .sk-def td.k { width: 30mm; }
 .sk-def td.t { width: 5mm; }
 .sk-def tr { page-break-inside: avoid; }
 
-.sk-item { display: flex; page-break-inside: avoid; }
+.sk-item { display: flex; }
 .sk-item .no { width: 8mm; flex: none; }
 .sk-item .isi { text-align: justify; }
 .sk-justify { text-align: justify; }
 
-.sk-tengah { text-align: center; font-weight: 700; text-transform: uppercase; margin: 8px 0; }
+.sk-tengah { text-align: center; font-weight: 700; text-transform: uppercase; margin: 10px 0; }
 
-.sk-ttd { margin-left: 52%; margin-top: 14px; page-break-inside: avoid; }
+.sk-ttd { margin-left: 52%; margin-top: 18px; page-break-inside: avoid; }
 .sk-ttd table { border-collapse: collapse; }
 .sk-ttd td { padding: 0 6px 0 0; vertical-align: top; }
-.sk-ttd .ruang { height: 18mm; }
+.sk-ttd .ruang { height: 20mm; }
 
-.sk-meta { border-collapse: collapse; margin-left: 50%; margin-bottom: 10px; font-size: 10.5pt; }
+.sk-meta { border-collapse: collapse; margin-left: 50%; margin-bottom: 14px; font-size: 11pt; }
 .sk-meta td { vertical-align: top; padding: 0 6px 0 0; }
 
-.sk-tabel { width: 100%; border-collapse: collapse; font-size: 10.5pt; }
-.sk-tabel th, .sk-tabel td { border: 1px solid #000; padding: 4px 6px; vertical-align: top; }
+.sk-tabel { width: 100%; border-collapse: collapse; font-size: 11pt; }
+.sk-tabel th, .sk-tabel td { border: 1px solid #000; padding: 5px 6px; vertical-align: top; }
 .sk-tabel th { text-align: center; font-weight: 700; vertical-align: middle; }
 .sk-tabel thead { display: table-header-group; }
 .sk-tabel tr { page-break-inside: avoid; }
 .sk-tabel td.c { text-align: center; }
-.sk-tabel .nip { font-size: 9.5pt; }
+.sk-tabel .nip { font-size: 10pt; }
 
 /* ── Format surat keterangan ── */
-.sk-surat-judul { text-align: center; margin-bottom: 12px; }
+.sk-surat-judul { text-align: center; margin-bottom: 14px; }
 .sk-surat-judul .judul { font-weight: 700; text-decoration: underline; text-transform: uppercase; font-size: 13pt; }
-.sk-data { border-collapse: collapse; margin: 4px 0 8px 8mm; }
+.sk-data { border-collapse: collapse; margin: 4px 0 10px 8mm; }
 .sk-data td { vertical-align: top; padding: 1px 0; }
 .sk-data td.k { width: 44mm; }
 .sk-data td.t { width: 5mm; }
-.sk-paragraf { text-align: justify; text-indent: 12mm; margin-bottom: 6px; }
-.sk-ttd-surat { margin-left: 55%; margin-top: 18px; page-break-inside: avoid; }
-.sk-ttd-surat .ruang { height: 20mm; }
+.sk-paragraf { text-align: justify; text-indent: 12mm; margin-bottom: 8px; }
+.sk-ttd-surat { margin-left: 55%; margin-top: 22px; page-break-inside: avoid; }
+.sk-ttd-surat .ruang { height: 22mm; }
 
 @media print {
   .no-print { display: none !important; }
@@ -218,17 +224,10 @@ const CSS = `
   }
   .lembar-sk { padding: 0 !important; min-height: 0 !important; }
   .lembar-sk + .lembar-sk { page-break-before: always; }
-
-  /* Halaman berkelas "landscape" (Lampiran) memakai definisi @page "lampiran" di bawah */
-  .lembar-sk.landscape { page: lampiran; }
 }
 @page {
   size: A4;
-  margin: 15mm 18mm;
-}
-@page lampiran {
-  size: A4 landscape;
-  margin: 13mm 15mm;
+  margin: 18mm 20mm;
 }
 `
 
@@ -262,16 +261,29 @@ export function AreaLembar({ children }) {
   return <div className="pembungkus-lembar overflow-x-auto p-3 sm:p-6">{children}</div>
 }
 
-// `landscape`: true untuk halaman yang dicetak A4 lanskap (dipakai HalamanLampiran).
-export function LembarSK({ children, landscape = false }) {
-  return <div className={`lembar-cetak print-only lembar-sk${landscape ? ' landscape' : ''}`}>{children}</div>
+export function LembarSK({ children }) {
+  return <div className="lembar-cetak print-only lembar-sk">{children}</div>
 }
 
 // ─── Bagian dokumen ──────────────────────────────────────────────────────────
+// Logo kabupaten di KIRI, logo sekolah di KANAN — sama seperti kop surat di
+// DaftarHadirSiswaUjian.jsx. Kotak logo tetap dirender walau logonya kosong
+// (sk-kop-logo-box) supaya teks kop surat tetap center.
 export function KopSK({ sekolah }) {
   return (
     <div className="sk-kop">
-      {sekolah.logoUrl && <img src={sekolah.logoUrl} alt="Logo sekolah" className="sk-kop-logo" />}
+      <div className="sk-kop-logo-box">
+        {sekolah.logoKabupatenUrl && (
+          <img
+            src={sekolah.logoKabupatenUrl}
+            alt="Logo kabupaten"
+            className="sk-kop-logo"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none'
+            }}
+          />
+        )}
+      </div>
       <div className="sk-kop-teks">
         {pecahBaris(sekolah.kopAtas).map((teks, i) => (
           <div key={i} className="sk-kop-atas">
@@ -281,6 +293,18 @@ export function KopSK({ sekolah }) {
         <div className="sk-kop-nama">{isi(sekolah.nama, 'NAMA SEKOLAH')}</div>
         {sekolah.npsn && <div className="sk-kop-alamat">NPSN: {sekolah.npsn}</div>}
         {sekolah.alamat && <div className="sk-kop-alamat">{sekolah.alamat}</div>}
+      </div>
+      <div className="sk-kop-logo-box">
+        {sekolah.logoUrl && (
+          <img
+            src={sekolah.logoUrl}
+            alt="Logo sekolah"
+            className="sk-kop-logo"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none'
+            }}
+          />
+        )}
       </div>
     </div>
   )
@@ -323,7 +347,6 @@ function Daftar({ items, gaya }) {
 }
 
 // Halaman 1: Keputusan (kop, judul, Menimbang, Mengingat, Memutuskan, diktum, TTD).
-// Selalu potret A4.
 //   tentang  : string, judul lengkap setelah kata "TENTANG"
 //   menimbang: string[]   mengingat: string[]   diktum: [label, teks][]
 export function HalamanKeputusan({ sk, sekolah, tentang, menimbang, mengingat, diktum }) {
@@ -389,13 +412,11 @@ export function HalamanKeputusan({ sk, sekolah, tentang, menimbang, mengingat, d
 }
 
 // Halaman 2: Lampiran (blok LAMPIRAN/NOMOR/TANGGAL, judul, isi bebas, TTD).
-// Dicetak A4 landscape secara default (lebih lega untuk tabel personel).
 //   judul: string[] — baris judul lampiran di atas isi.
-//   landscape: boolean — set false kalau lampiran ini justru ingin tetap potret.
-export function HalamanLampiran({ sk, sekolah, judul, children, landscape = true }) {
+export function HalamanLampiran({ sk, sekolah, judul, children }) {
   const namaSekolah = isi(sekolah.nama, 'NAMA SEKOLAH')
   return (
-    <LembarSK landscape={landscape}>
+    <LembarSK>
       <table className="sk-meta">
         <tbody>
           <tr>
