@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+
 export default defineConfig({
   plugins: [
     react(),
@@ -26,9 +27,33 @@ export default defineConfig({
         background_color: '#ffffff',
         display: 'standalone',
         start_url: '/',
+
+        // TAMBAHAN: 'id' adalah identitas unik PWA ini di mata
+        // Android/browser, terpisah dari start_url. Gunanya: kalau suatu
+        // saat domain atau start_url berubah, OS masih mengenali ini
+        // sebagai app yang SAMA (bukan app baru), jadi data & shortcut
+        // yang sudah ter-install pengguna tidak hilang. Sengaja diisi '/'
+        // (sama seperti start_url sekarang) — JANGAN ubah nilainya setelah
+        // dipublikasikan ke Play Store, karena itu akan dianggap app baru.
+        id: '/',
+
+        // TAMBAHAN: mengunci orientasi ke portrait karena SIMAK dipakai
+        // untuk presensi/surat/laporan yang layoutnya memang didesain
+        // portrait. Kalau ada halaman yang butuh landscape (misal tabel
+        // laporan lebar), ini bisa dihapus nanti dan ditangani lewat CSS
+        // responsive saja, bukan lewat manifest.
+        orientation: 'portrait',
+
         icons: [
           { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png' }
+          // CATATAN (belum ditambahkan, perlu file ikon baru dulu):
+          // PWABuilder/Android adaptive icon idealnya juga punya varian
+          // "maskable" — ikon dengan padding aman ~20% di sekeliling
+          // logo, ditandai purpose: 'any maskable'. Tanpa ini, ikon di
+          // beberapa launcher Android bisa terlihat terpotong. Kalau
+          // sudah punya file ikon maskable-nya, tambahkan entry baru di
+          // array ini, jangan ganti dua yang sudah ada.
         ]
       },
       workbox: {
