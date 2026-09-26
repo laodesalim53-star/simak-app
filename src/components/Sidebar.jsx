@@ -996,10 +996,12 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
               className="w-11 h-11 rounded-full object-cover shrink-0 border-2 border-amber-400/60 ring-2 ring-amber-400/15"
             />
           ) : (
-        <div
-        className="w-11 h-11 rounded-full flex items-center justify-center font-display font-bold text-white text-sm shrink-0 border-2 border-amber-400/60 ring-2 ring-amber-400/15"
-        style={{ background: 'var(--sidebar-active-gradient)' }}
-        >
+            <div
+              className="w-11 h-11 rounded-full flex items-center justify-center font-display font-bold text-white text-sm shrink-0 border-2 border-amber-400/60 ring-2 ring-amber-400/15"
+              style={{ background: 'var(--sidebar-active-gradient)' }}
+            >
+              {getInisial(namaTampil)}
+            </div>
           )}
           <div className="min-w-0 flex-1">
             <p className="font-display font-semibold text-[13px] leading-tight truncate text-white">{namaTampil}</p>
