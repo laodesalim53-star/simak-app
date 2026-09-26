@@ -1048,10 +1048,9 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
       */}
      <div className="relative flex-1 min-h-0" style={{ background: 'var(--sidebar-body-gradient)' }}>
         {/* Motif batik area menu — gaya berbeda dari header (kawung/diamond, bukan lingkaran) */}
-        <svg
-          className="absolute inset-0 w-full h-full opacity-[0.22] pointer-events-none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
+<svg
+  className="absolute inset-0 w-full h-full opacity-[0.5] pointer-events-none"
+  xmlns="http://www.w3.org/2000/svg"
           <defs>
             <pattern
               id="batikMenu"
