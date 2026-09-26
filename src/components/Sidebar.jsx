@@ -978,14 +978,27 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
           xmlns="http://www.w3.org/2000/svg"
         >
 <defs>
-  <pattern id="batikSidebar" width="46" height="46" patternUnits="userSpaceOnUse">
-    <circle cx="23" cy="23" r="12" fill="none" stroke="var(--sidebar-accent)" strokeWidth="1.4" />
-    <circle cx="23" cy="23" r="4" fill="none" stroke="var(--sidebar-accent)" strokeWidth="1.4" />
-    <path d="M23 5 v8 M23 33 v8 M5 23 h8 M33 23 h8" stroke="var(--sidebar-accent)" strokeWidth="1.4" />
-    <path d="M10 10 l4 4 M32 10 l-4 4 M10 36 l4 -4 M32 36 l-4 -4" stroke="var(--sidebar-accent)" strokeWidth="1" />
+  <pattern id="batikSidebar" width="90" height="90" patternUnits="userSpaceOnUse">
+    {/* Medali bersayap (gaya lambang KORPRI, stilisasi) */}
+    <g transform="translate(45,32)">
+      <circle cx="0" cy="0" r="9" fill="none" stroke="var(--sidebar-accent)" strokeWidth="1.3" />
+      <path d="M0 -4 L1.6 -1 L4.8 -0.6 L2.4 1.6 L3 4.8 L0 3.2 L-3 4.8 L-2.4 1.6 L-4.8 -0.6 L-1.6 -1 Z"
+        fill="var(--sidebar-accent)" />
+      <path d="M-9 0 C-16 -4, -22 -1, -26 4 C-20 3, -14 4, -9 3 Z" fill="var(--sidebar-accent)" opacity="0.85" />
+      <path d="M9 0 C16 -4, 22 -1, 26 4 C20 3, 14 4, 9 3 Z" fill="var(--sidebar-accent)" opacity="0.85" />
+      <path d="M-7 6 C-4 9, 4 9, 7 6" stroke="var(--sidebar-accent)" strokeWidth="1.1" fill="none" />
+    </g>
+    {/* Ukiran bunga di bawah medali */}
+    <g transform="translate(45,64)" stroke="var(--sidebar-accent)" strokeWidth="1" fill="none">
+      <path d="M-14 0 C-10 -6, -4 -6, 0 0 C4 -6, 10 -6, 14 0" />
+      <circle cx="-14" cy="0" r="2" fill="var(--sidebar-accent)" stroke="none" />
+      <circle cx="0" cy="-3" r="2.2" fill="var(--sidebar-accent)" stroke="none" />
+      <circle cx="14" cy="0" r="2" fill="var(--sidebar-accent)" stroke="none" />
+      <path d="M-14 0 v6 M0 -3 v9 M14 0 v6" />
+    </g>
   </pattern>
 </defs>
-          <rect width="100%" height="100%" fill="url(#batikSidebar)" />
+<rect width="100%" height="100%" fill="url(#batikSidebar)" />
         </svg>
 
         <div className="relative flex items-center gap-3 pr-11 md:pr-0">
@@ -1047,12 +1060,20 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
               patternUnits="userSpaceOnUse"
               patternTransform="rotate(45)"
             >
-<rect x="12" y="0" width="12" height="12" fill="none" stroke="var(--sidebar-accent)" strokeWidth="1.2" />
-<circle cx="18" cy="6" r="2.6" fill="var(--sidebar-accent)" />
-<path d="M0 18 L18 0 M18 36 L36 18" stroke="var(--sidebar-accent)" strokeWidth="1" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#batikMenu)" />
+<defs>
+  <pattern
+    id="batikMenu"
+    width="36"
+    height="36"
+    patternUnits="userSpaceOnUse"
+    patternTransform="rotate(45)"
+  >
+    <rect x="12" y="0" width="12" height="12" fill="none" stroke="var(--sidebar-accent)" strokeWidth="1.2" />
+    <circle cx="18" cy="6" r="2.6" fill="var(--sidebar-accent)" />
+    <path d="M0 18 L18 0 M18 36 L36 18" stroke="var(--sidebar-accent)" strokeWidth="1" />
+  </pattern>
+</defs>
+<rect width="100%" height="100%" fill="url(#batikMenu)" />
         </svg>
 
         <nav
