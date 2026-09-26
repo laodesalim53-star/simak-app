@@ -1,10 +1,11 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
+import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabaseClient'
 import Layout from '../components/Layout'
 import KopSurat from '../components/KopSurat'
 import { useAuth } from '../lib/AuthContext'
 import {
-  Plus, Pencil, Trash2, Search, X, Loader2, Wallet,
+  Plus, Pencil, Trash2, Search, X, Loader2, Wallet, Upload, Download,
   ClipboardList, BookOpen, Receipt, ShoppingCart, FileSignature, Printer,
 } from 'lucide-react'
 
@@ -168,6 +169,14 @@ function TabRKA() {
   const [form, setForm] = useState(emptyFormRka)
   const [saving, setSaving] = useState(false)
 
+  // == Import massal dari Excel ==
+  const fileInputRef = useRef(null)
+  const [showImport, setShowImport] = useState(false)
+  const [importRows, setImportRows] = useState([])
+  const [importFileName, setImportFileName] = useState('')
+  const [importError, setImportError] = useState('')
+  const [importing, setImporting] = useState(false)
+
   async function loadData() {
     if (!sekolahId) {
       setData([])
@@ -249,6 +258,130 @@ function TabRKA() {
     else alert('Gagal menghapus: ' + error.message)
   }
 
+  // Ambil nilai kolom dari baris hasil parsing Excel secara fleksibel —
+  // cocokkan nama header tanpa peduli besar/kecil huruf atau spasi di
+  // ujung, supaya template tidak harus persis sama urutan/kapitalisasinya.
+  function ambilKolom(row, ...kemungkinanNama) {
+    for (const key of Object.keys(row)) {
+      const bersih = key.toString().trim().toLowerCase()
+      if (kemungkinanNama.some((n) => bersih === n.toLowerCase())) {
+        return row[key]
+      }
+    }
+    return ''
+  }
+
+  function bukaDialogImport() {
+    setImportError('')
+    fileInputRef.current?.click()
+  }
+
+  async function handleFileImport(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImportError('')
+    setImportFileName(file.name)
+
+    try {
+      const buffer = await file.arrayBuffer()
+      const wb = XLSX.read(buffer, { type: 'array' })
+      const sheetName = wb.SheetNames.find((n) => n.toLowerCase().includes('rka')) || wb.SheetNames[0]
+      const sheet = wb.Sheets[sheetName]
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' })
+
+      if (rows.length === 0) {
+        setImportError('Sheet Excel kosong atau format tidak terbaca. Pastikan baris pertama berisi judul kolom.')
+        setImportRows([])
+        setShowImport(true)
+        return
+      }
+
+      const hasil = rows
+        .map((row, i) => {
+          const volume = Number(ambilKolom(row, 'Volume', 'Vol')) || 0
+          const hargaSatuan = Number(ambilKolom(row, 'Harga Satuan', 'Harga')) || 0
+          const komponen = String(ambilKolom(row, 'Komponen') || '').trim()
+          const rincianKegiatan = String(ambilKolom(row, 'Rincian Kegiatan', 'Kegiatan') || '').trim()
+          const tahun = Number(ambilKolom(row, 'Tahun Anggaran', 'Tahun')) || tahunFilter
+
+          return {
+            _baris: i + 2, // baris 1 = judul kolom, data mulai baris 2 di Excel
+            tahun_anggaran: tahun,
+            komponen,
+            sub_komponen: String(ambilKolom(row, 'Sub Komponen') || '').trim(),
+            rincian_kegiatan: rincianKegiatan,
+            volume,
+            satuan: String(ambilKolom(row, 'Satuan') || '').trim(),
+            harga_satuan: hargaSatuan,
+            jumlah_anggaran: volume * hargaSatuan,
+            bulan_pelaksanaan: String(ambilKolom(row, 'Bulan Pelaksanaan', 'Bulan') || '').trim(),
+            keterangan: String(ambilKolom(row, 'Keterangan') || '').trim(),
+            _valid: komponen !== '' && rincianKegiatan !== '' && volume > 0,
+          }
+        })
+        // Baris yang benar-benar kosong semua (mis. sisa baris kosong di
+        // template) tidak perlu ditampilkan di preview.
+        .filter((r) => r.komponen !== '' || r.rincian_kegiatan !== '' || r.volume > 0 || r.harga_satuan > 0)
+
+      setImportRows(hasil)
+      setShowImport(true)
+    } catch (err) {
+      setImportError('Gagal membaca file: ' + err.message)
+      setImportRows([])
+      setShowImport(true)
+    } finally {
+      e.target.value = '' // reset supaya file yang sama bisa dipilih ulang
+    }
+  }
+
+  function hapusBarisImport(index) {
+    setImportRows((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  async function simpanImport() {
+    if (!sekolahId) return
+    const barisValid = importRows.filter((r) => r._valid)
+    if (barisValid.length === 0) return
+    setImporting(true)
+    const payload = barisValid.map((r) => ({
+      sekolah_id: sekolahId,
+      tahun_anggaran: r.tahun_anggaran,
+      komponen: r.komponen,
+      sub_komponen: r.sub_komponen || null,
+      rincian_kegiatan: r.rincian_kegiatan,
+      volume: r.volume,
+      satuan: r.satuan || null,
+      harga_satuan: r.harga_satuan,
+      jumlah_anggaran: r.jumlah_anggaran,
+      bulan_pelaksanaan: r.bulan_pelaksanaan || null,
+      keterangan: r.keterangan || null,
+    }))
+    const { error } = await supabase.from('rka_bok').insert(payload)
+    setImporting(false)
+    if (!error) {
+      setShowImport(false)
+      setImportRows([])
+      setImportFileName('')
+      loadData()
+    } else {
+      setImportError('Gagal menyimpan ke database: ' + error.message)
+    }
+  }
+
+  // Template Excel dibuat langsung di browser (tidak perlu file statis di
+  // server) — berisi judul kolom yang sesuai & satu baris contoh.
+  function unduhTemplate() {
+    const contoh = [
+      ['Tahun Anggaran', 'Komponen', 'Sub Komponen', 'Rincian Kegiatan', 'Volume', 'Satuan', 'Harga Satuan', 'Bulan Pelaksanaan', 'Keterangan'],
+      [tahunFilter, 'UKM Esensial', 'Posyandu Balita', 'Transport petugas pendamping posyandu', 12, 'OH', 75000, 'Januari, Februari, Maret', 'Contoh baris — hapus/ganti sebelum diisi data asli'],
+    ]
+    const ws = XLSX.utils.aoa_to_sheet(contoh)
+    ws['!cols'] = [{ wch: 14 }, { wch: 26 }, { wch: 20 }, { wch: 36 }, { wch: 9 }, { wch: 9 }, { wch: 15 }, { wch: 24 }, { wch: 30 }]
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, ws, 'RKA BOK')
+    XLSX.writeFile(workbook, 'template-rka-bok.xlsx')
+  }
+
   const filtered = data.filter((r) =>
     `${r.komponen} ${r.sub_komponen} ${r.rincian_kegiatan}`.toLowerCase().includes(search.toLowerCase())
   )
@@ -298,9 +431,24 @@ function TabRKA() {
               ))}
             </select>
           </div>
-          <button className="btn-primary" onClick={openAdd}>
-            <Plus size={16} /> Tambah Rincian Kegiatan
-          </button>
+          <div className="flex items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              className="hidden"
+              onChange={handleFileImport}
+            />
+            <button type="button" className="btn-secondary" onClick={unduhTemplate} title="Unduh contoh format Excel">
+              <Download size={16} /> Template
+            </button>
+            <button type="button" className="btn-secondary" onClick={bukaDialogImport}>
+              <Upload size={16} /> Import dari Excel
+            </button>
+            <button className="btn-primary" onClick={openAdd}>
+              <Plus size={16} /> Tambah Rincian Kegiatan
+            </button>
+          </div>
         </div>
       </div>
 
@@ -433,6 +581,100 @@ function TabRKA() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* ==== Modal Preview Import Excel ==== */}
+      {showImport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-4">
+          <div className="card relative overflow-hidden w-full max-w-4xl p-6 max-h-[90vh] overflow-y-auto">
+            <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 to-blue-700" />
+            <button
+              type="button"
+              onClick={() => { setShowImport(false); setImportRows([]); setImportError('') }}
+              className="absolute top-4 right-4 text-ink-700/40 hover:text-ink-900"
+            >
+              <X size={20} />
+            </button>
+            <h2 className="font-display text-xl font-semibold mb-1">Import Rincian Kegiatan dari Excel</h2>
+            {importFileName && <p className="text-xs text-ink-700/50 mb-4">File: {importFileName}</p>}
+
+            {importError && (
+              <div className="p-3 rounded-lg bg-red-900/10 text-red-900 text-sm mb-4">{importError}</div>
+            )}
+
+            {importRows.length === 0 && !importError && (
+              <p className="text-sm text-ink-700/50 py-6 text-center">Belum ada data untuk ditampilkan.</p>
+            )}
+
+            {importRows.length > 0 && (
+              <>
+                <p className="text-sm text-ink-700/60 mb-2">
+                  {importRows.filter((r) => r._valid).length} dari {importRows.length} baris siap diimpor.
+                  Baris bertanda "Tidak lengkap" akan dilewati (Komponen, Rincian Kegiatan & Volume wajib diisi).
+                </p>
+                <div className="overflow-x-auto border border-ink-900/10 rounded-lg mb-4">
+                  <table className="table-shell">
+                    <thead>
+                      <tr>
+                        <th>Baris</th>
+                        <th>Komponen</th>
+                        <th>Rincian Kegiatan</th>
+                        <th>Vol</th>
+                        <th>Satuan</th>
+                        <th>Harga Satuan</th>
+                        <th>Jumlah</th>
+                        <th>Status</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importRows.map((r, i) => (
+                        <tr key={i} className={!r._valid ? 'bg-red-900/[0.04]' : 'hover:bg-emerald-600/[0.03]'}>
+                          <td className="text-xs">{r._baris}</td>
+                          <td>{r.komponen || '-'}</td>
+                          <td className="font-medium">{r.rincian_kegiatan || '-'}</td>
+                          <td>{r.volume}</td>
+                          <td>{r.satuan || '-'}</td>
+                          <td>{formatRupiah(r.harga_satuan)}</td>
+                          <td className="font-semibold text-emerald-700">{formatRupiah(r.jumlah_anggaran)}</td>
+                          <td>
+                            {r._valid
+                              ? <span className="badge bg-emerald-600/15 text-emerald-700">Siap</span>
+                              : <span className="badge bg-red-900/10 text-red-900">Tidak lengkap</span>}
+                          </td>
+                          <td>
+                            <button type="button" onClick={() => hapusBarisImport(i)} className="p-1.5 hover:bg-red-900/10 rounded-lg text-red-900/60">
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => { setShowImport(false); setImportRows([]); setImportError('') }}
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={importing || importRows.filter((r) => r._valid).length === 0}
+                onClick={simpanImport}
+                className="btn-primary"
+              >
+                {importing && <Loader2 size={16} className="animate-spin" />}
+                Simpan {importRows.filter((r) => r._valid).length} Kegiatan
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </>
