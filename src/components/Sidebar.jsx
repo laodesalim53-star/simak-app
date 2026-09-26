@@ -502,10 +502,11 @@ function NavItem({ to, label, icon: Icon, end, badge, onNavigate, external }) {
       className={({ isActive }) =>
         `flex items-center gap-3 px-3 py-3 md:py-2.5 rounded-lg text-[15px] md:text-sm font-medium transition-all touch-manipulation ${
           isActive
-            ? 'bg-gradient-to-r from-blue-500 to-indigo-400 text-white shadow-sm shadow-black/20'
+            ? 'text-white shadow-sm shadow-black/20'
             : 'text-white/70 active:bg-white/[0.12] md:hover:bg-white/[0.08] md:hover:text-white'
         }`
       }
+      style={({ isActive }) => (isActive ? { background: 'var(--sidebar-active-gradient)' } : undefined)}
     >
       {({ isActive }) => content(isActive)}
     </NavLink>
@@ -947,14 +948,14 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
           cadangan untuk browser lama yang belum mengenal dvh.
         - tap highlight abu-abu bawaan Android dimatikan.
       */}
-      <aside
-        style={{ height: '100dvh' }}
-        className={`w-72 max-w-[85vw] md:w-64 shrink-0 bg-blue-950 text-white flex flex-col h-screen fixed md:sticky top-0 left-0 z-50 border-r border-blue-900/50 transition-transform duration-300 ease-out [-webkit-tap-highlight-color:transparent]
-          ${open ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}
-      >
-      <div
-        style={{ paddingTop: 'calc(1.25rem + env(safe-area-inset-top, 0px))' }}
-        className="relative overflow-hidden shrink-0 px-4 pb-5 border-b border-white/10 bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-900"
+     <aside
+     style={{ height: '100dvh', background: 'var(--sidebar-solid)', borderColor: 'var(--sidebar-border)' }}
+     className={`w-72 max-w-[85vw] md:w-64 shrink-0 text-white flex flex-col h-screen fixed md:sticky top-0 left-0 z-50 border-r transition-transform duration-300 ease-out [-webkit-tap-highlight-color:transparent]
+     ${open ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}
+    >
+     <div
+    style={{ paddingTop: 'calc(1.25rem + env(safe-area-inset-top, 0px))', background: 'var(--sidebar-header-gradient)' }}
+    className="relative overflow-hidden shrink-0 px-4 pb-5 border-b border-white/10"
       >
         {/*
           Tombol tutup — hanya tampil di HP.
@@ -995,9 +996,10 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
               className="w-11 h-11 rounded-full object-cover shrink-0 border-2 border-amber-400/60 ring-2 ring-amber-400/15"
             />
           ) : (
-            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-indigo-400 flex items-center justify-center font-display font-bold text-white text-sm shrink-0 border-2 border-amber-400/60 ring-2 ring-amber-400/15">
-              {getInisial(namaTampil)}
-            </div>
+        <div
+        className="w-11 h-11 rounded-full flex items-center justify-center font-display font-bold text-white text-sm shrink-0 border-2 border-amber-400/60 ring-2 ring-amber-400/15"
+        style={{ background: 'var(--sidebar-active-gradient)' }}
+        >
           )}
           <div className="min-w-0 flex-1">
             <p className="font-display font-semibold text-[13px] leading-tight truncate text-white">{namaTampil}</p>
@@ -1029,7 +1031,7 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
         - padding bawah ditambah area aman (env) supaya menu terakhir tidak
           tertutup bilah navigasi/gestur Android.
       */}
-      <div className="relative flex-1 min-h-0 bg-gradient-to-b from-blue-950 via-blue-900 to-indigo-950">
+     <div className="relative flex-1 min-h-0" style={{ background: 'var(--sidebar-body-gradient)' }}>
         {/* Motif batik area menu — gaya berbeda dari header (kawung/diamond, bukan lingkaran) */}
         <svg
           className="absolute inset-0 w-full h-full opacity-[0.22] pointer-events-none"
