@@ -31,6 +31,14 @@ import {
 //   otomatis terisi dari pegawai yang dipilih.
 // - sk_pengelola_bok.susunan_tim: kolomnya jsonb, jadi tidak perlu migrasi
 //   — cukup tambahkan key `pegawai_id` per anggota tim di dalam JSON.
+//
+// == PERUBAHAN: AUTO-ISIAN DARI RKA DI TAB BKU ==
+// Tab BKU sekarang mengambil kolom tambahan dari rka_bok (satuan,
+// harga_satuan, sub_komponen) dan mengelompokkan dropdown "Kegiatan RKA
+// Terkait" per Komponen (optgroup). Memilih satu kegiatan otomatis
+// mengisi Uraian & Jumlah (dari harga_satuan acuan RKA) — admin tetap
+// bisa mengubah Jumlah kalau realisasinya berbeda. Kode Rekening TIDAK
+// ikut terisi otomatis karena rka_bok belum punya kolom itu.
 const OPSI_KOMPONEN_BOK = [
   'UKM Esensial',
   'UKM Pengembangan',
@@ -717,10 +725,14 @@ function TabBKU() {
     }
     setLoading(true)
 
+    // Ambil kolom tambahan (satuan, harga_satuan, sub_komponen) supaya
+    // bisa dipakai untuk auto-isi Uraian & Jumlah saat kegiatan RKA
+    // dipilih di form transaksi BKU (lihat fungsi pilihRka di bawah).
     const { data: daftarRka } = await supabase
       .from('rka_bok')
-      .select('id, rincian_kegiatan, komponen')
+      .select('id, komponen, sub_komponen, rincian_kegiatan, satuan, harga_satuan')
       .eq('sekolah_id', sekolahId)
+      .order('komponen')
       .order('rincian_kegiatan')
     setRkaList(daftarRka || [])
 
@@ -767,6 +779,19 @@ function TabBKU() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sekolahId, bulanFilter, tahunFilter])
 
+  // Kelompokkan daftar RKA per Komponen supaya dropdown "Kegiatan RKA
+  // Terkait" mudah ditelusuri (optgroup) — mencakup semua kegiatan &
+  // komponen yang ada, bukan cuma daftar datar.
+  const rkaGrouped = useMemo(() => {
+    const map = {}
+    for (const r of rkaList) {
+      const key = r.komponen || '(Tanpa Komponen)'
+      if (!map[key]) map[key] = []
+      map[key].push(r)
+    }
+    return map
+  }, [rkaList])
+
   function openAdd() {
     setForm({ ...emptyFormBku, tanggal: `${tahunFilter}-${String(bulanFilter).padStart(2, '0')}-01` })
     setEditingId(null)
@@ -785,6 +810,21 @@ function TabBKU() {
     })
     setEditingId(row.id)
     setShowForm(true)
+  }
+
+  // Isi otomatis Uraian & Jumlah dari kegiatan RKA yang dipilih — Uraian
+  // diambil dari rincian_kegiatan, Jumlah dari harga_satuan (acuan per
+  // unit di RKA). Admin tetap bisa mengubah kedua field ini kalau
+  // realisasi transaksinya berbeda dari acuan RKA (mis. beda volume).
+  // Kode Rekening TIDAK ikut terisi karena rka_bok belum punya kolom itu.
+  function pilihRka(rkaId) {
+    const rka = rkaList.find((r) => r.id === rkaId)
+    setForm((prev) => ({
+      ...prev,
+      rka_id: rkaId,
+      uraian: rka ? rka.rincian_kegiatan : prev.uraian,
+      jumlah: rka ? String(rka.harga_satuan) : prev.jumlah,
+    }))
   }
 
   async function handleSubmit(e) {
@@ -932,12 +972,21 @@ function TabBKU() {
               </div>
               <div className="col-span-2">
                 <label className="eyebrow mb-1.5 block">Kegiatan RKA Terkait (opsional)</label>
-                <select className="input-field" value={form.rka_id} onChange={(e) => setForm({ ...form, rka_id: e.target.value })}>
+                <select className="input-field" value={form.rka_id} onChange={(e) => pilihRka(e.target.value)}>
                   <option value="">— Tidak tertaut —</option>
-                  {rkaList.map((r) => (
-                    <option key={r.id} value={r.id}>{r.komponen} — {r.rincian_kegiatan}</option>
+                  {Object.entries(rkaGrouped).map(([komponen, items]) => (
+                    <optgroup key={komponen} label={komponen}>
+                      {items.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.rincian_kegiatan} ({formatRupiah(r.harga_satuan)}/{r.satuan || 'satuan'})
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
+                <p className="text-xs text-ink-700/40 mt-1">
+                  Memilih kegiatan akan mengisi Uraian & Jumlah secara otomatis (harga satuan per acuan RKA) — tetap bisa diubah manual.
+                </p>
               </div>
               <div className="col-span-2">
                 <label className="eyebrow mb-1.5 block">Uraian</label>
