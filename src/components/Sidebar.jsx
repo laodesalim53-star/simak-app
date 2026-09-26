@@ -977,13 +977,14 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
           className="absolute inset-0 w-full h-full opacity-[0.35] pointer-events-none"
           xmlns="http://www.w3.org/2000/svg"
         >
-          <defs>
-        <circle cx="23" cy="23" r="12" fill="none" stroke="var(--sidebar-accent)" strokeWidth="1.4" />
-        <circle cx="23" cy="23" r="4" fill="none" stroke="var(--sidebar-accent)" strokeWidth="1.4" />
-        <path d="M23 5 v8 M23 33 v8 M5 23 h8 M33 23 h8" stroke="var(--sidebar-accent)" strokeWidth="1.4" />
-        <path d="M10 10 l4 4 M32 10 l-4 4 M10 36 l4 -4 M32 36 l-4 -4" stroke="var(--sidebar-accent)" strokeWidth="1" />
-            </pattern>
-          </defs>
+<defs>
+  <pattern id="batikSidebar" width="46" height="46" patternUnits="userSpaceOnUse">
+    <circle cx="23" cy="23" r="12" fill="none" stroke="var(--sidebar-accent)" strokeWidth="1.4" />
+    <circle cx="23" cy="23" r="4" fill="none" stroke="var(--sidebar-accent)" strokeWidth="1.4" />
+    <path d="M23 5 v8 M23 33 v8 M5 23 h8 M33 23 h8" stroke="var(--sidebar-accent)" strokeWidth="1.4" />
+    <path d="M10 10 l4 4 M32 10 l-4 4 M10 36 l4 -4 M32 36 l-4 -4" stroke="var(--sidebar-accent)" strokeWidth="1" />
+  </pattern>
+</defs>
           <rect width="100%" height="100%" fill="url(#batikSidebar)" />
         </svg>
 
