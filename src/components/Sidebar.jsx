@@ -1048,9 +1048,10 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
       */}
      <div className="relative flex-1 min-h-0" style={{ background: 'var(--sidebar-body-gradient)' }}>
         {/* Motif batik area menu — gaya berbeda dari header (kawung/diamond, bukan lingkaran) */}
-<svg
-  className="absolute inset-0 w-full h-full opacity-[0.5] pointer-events-none"
-  xmlns="http://www.w3.org/2000/svg"
+        <svg
+          className="absolute inset-0 w-full h-full opacity-[0.22] pointer-events-none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
           <defs>
             <pattern
               id="batikMenu"
@@ -1059,20 +1060,12 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
               patternUnits="userSpaceOnUse"
               patternTransform="rotate(45)"
             >
-<defs>
-  <pattern
-    id="batikMenu"
-    width="36"
-    height="36"
-    patternUnits="userSpaceOnUse"
-    patternTransform="rotate(45)"
-  >
-    <rect x="12" y="0" width="12" height="12" fill="none" stroke="var(--sidebar-accent)" strokeWidth="1.2" />
-    <circle cx="18" cy="6" r="2.6" fill="var(--sidebar-accent)" />
-    <path d="M0 18 L18 0 M18 36 L36 18" stroke="var(--sidebar-accent)" strokeWidth="1" />
-  </pattern>
-</defs>
-<rect width="100%" height="100%" fill="url(#batikMenu)" />
+              <rect x="12" y="0" width="12" height="12" fill="none" stroke="var(--sidebar-accent)" strokeWidth="1.2" />
+              <circle cx="18" cy="6" r="2.6" fill="var(--sidebar-accent)" />
+              <path d="M0 18 L18 0 M18 36 L36 18" stroke="var(--sidebar-accent)" strokeWidth="1" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#batikMenu)" />
         </svg>
 
         <nav
