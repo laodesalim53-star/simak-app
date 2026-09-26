@@ -187,9 +187,15 @@ export default function ProfilSekolah() {
     }
   }
 
+  // PERBAIKAN: upload logo sekarang langsung disimpan ke database (kolom
+  // logo_path) begitu selesai diunggah ke storage — sebelumnya hanya
+  // memperbarui state form di memori, jadi kalau pengguna lupa/tidak sempat
+  // klik "Simpan Perubahan" (atau reload halaman duluan), path logo yang
+  // baru diunggah hilang lagi dan sekolah tetap tidak punya logo tersimpan.
+  // Pola ini sama dengan ProfilPuskesmas.jsx.
   async function handleLogoChange(e) {
     const file = e.target.files?.[0]
-    if (!file) return
+    if (!file || !rowId) return
     setUploadingLogo(true)
 
     const ext = file.name.split('.').pop()
@@ -208,14 +214,26 @@ export default function ProfilSekolah() {
     const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(path)
     setLogoUrl(pub.publicUrl)
     setForm((f) => ({ ...f, logo_path: path }))
+
+    // Langsung simpan ke DB supaya logo tidak hilang kalau lupa klik "Simpan Perubahan"
+    const { error: saveError } = await supabase
+      .from('profil_sekolah')
+      .update({ logo_path: path, diperbarui_pada: new Date().toISOString() })
+      .eq('id', rowId)
+
+    if (saveError) {
+      alert('Logo terunggah tapi gagal disimpan ke profil: ' + saveError.message)
+    }
+
     setUploadingLogo(false)
   }
 
   // Upload logo kabupaten — dipakai di kop surat/rapor di samping logo
   // sekolah/kantor.
+  // PERBAIKAN: sama seperti handleLogoChange, langsung disimpan ke DB.
   async function handleLogoKabupatenChange(e) {
     const file = e.target.files?.[0]
-    if (!file) return
+    if (!file || !rowId) return
     setUploadingLogoKabupaten(true)
 
     const ext = file.name.split('.').pop()
@@ -234,11 +252,24 @@ export default function ProfilSekolah() {
     const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(path)
     setLogoKabupatenUrl(pub.publicUrl)
     setForm((f) => ({ ...f, logo_kabupaten_path: path }))
+
+    // Langsung simpan ke DB supaya logo kabupaten tidak hilang kalau lupa klik "Simpan Perubahan"
+    const { error: saveError } = await supabase
+      .from('profil_sekolah')
+      .update({ logo_kabupaten_path: path, diperbarui_pada: new Date().toISOString() })
+      .eq('id', rowId)
+
+    if (saveError) {
+      alert('Logo kabupaten terunggah tapi gagal disimpan ke profil: ' + saveError.message)
+    }
+
     setUploadingLogoKabupaten(false)
   }
 
   // Hapus logo kabupaten — menghapus file dari storage (kalau ada) lalu
   // mengosongkan state & field form terkait.
+  // PERBAIKAN: kolom logo_kabupaten_path juga langsung dikosongkan di DB,
+  // konsisten dengan upload yang sekarang langsung tersimpan.
   async function handleLogoKabupatenDelete() {
     if (!confirm('Hapus logo kabupaten?')) return
 
@@ -255,13 +286,25 @@ export default function ProfilSekolah() {
 
     setLogoKabupatenUrl('')
     setForm((f) => ({ ...f, logo_kabupaten_path: '' }))
+
+    if (rowId) {
+      const { error: saveError } = await supabase
+        .from('profil_sekolah')
+        .update({ logo_kabupaten_path: null, diperbarui_pada: new Date().toISOString() })
+        .eq('id', rowId)
+
+      if (saveError) {
+        alert('Logo terhapus dari storage tapi gagal diperbarui di profil: ' + saveError.message)
+      }
+    }
   }
 
   // Upload gambar tanda tangan elektronik kepala sekolah/kantor — dipakai
   // otomatis di setiap surat yang dicetak untuk pengajuan yang sudah disetujui.
+  // PERBAIKAN: sama seperti logo, langsung disimpan ke DB.
   async function handleTtdChange(e) {
     const file = e.target.files?.[0]
-    if (!file) return
+    if (!file || !rowId) return
     setUploadingTtd(true)
 
     const ext = file.name.split('.').pop()
@@ -280,11 +323,23 @@ export default function ProfilSekolah() {
     const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(path)
     setTtdUrl(pub.publicUrl)
     setForm((f) => ({ ...f, ttd_kepala_sekolah_path: path }))
+
+    // Langsung simpan ke DB supaya tanda tangan tidak hilang kalau lupa klik "Simpan Perubahan"
+    const { error: saveError } = await supabase
+      .from('profil_sekolah')
+      .update({ ttd_kepala_sekolah_path: path, diperbarui_pada: new Date().toISOString() })
+      .eq('id', rowId)
+
+    if (saveError) {
+      alert('Tanda tangan terunggah tapi gagal disimpan ke profil: ' + saveError.message)
+    }
+
     setUploadingTtd(false)
   }
 
   // Hapus tanda tangan elektronik kepala sekolah/kantor — menghapus file dari
   // storage (kalau ada) lalu mengosongkan state & field form terkait.
+  // PERBAIKAN: kolom ttd_kepala_sekolah_path juga langsung dikosongkan di DB.
   async function handleTtdDelete() {
     if (!confirm(teks.konfirmasiHapusTtd)) return
 
@@ -301,6 +356,17 @@ export default function ProfilSekolah() {
 
     setTtdUrl('')
     setForm((f) => ({ ...f, ttd_kepala_sekolah_path: '' }))
+
+    if (rowId) {
+      const { error: saveError } = await supabase
+        .from('profil_sekolah')
+        .update({ ttd_kepala_sekolah_path: null, diperbarui_pada: new Date().toISOString() })
+        .eq('id', rowId)
+
+      if (saveError) {
+        alert('Tanda tangan terhapus dari storage tapi gagal diperbarui di profil: ' + saveError.message)
+      }
+    }
   }
 
   function ubah(field, value) {
