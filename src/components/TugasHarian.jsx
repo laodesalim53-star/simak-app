@@ -5,18 +5,30 @@ export default function TugasHarian({ profil }) {
   const [tugas, setTugas] = useState([]);
   const [judulBaru, setJudulBaru] = useState("");
   const [loading, setLoading] = useState(false);
+  const [userId, setUserId] = useState(null); // profil.id selalu undefined; id asli dari sesi auth
+
+  useEffect(() => {
+    let batal = false;
+    supabase.auth.getUser().then(({ data }) => {
+      if (!batal) setUserId(data?.user?.id ?? null);
+    });
+    return () => {
+      batal = true;
+    };
+  }, []);
 
   const muat = useCallback(async () => {
+    if (!userId) return;
     setLoading(true);
     const { data, error } = await supabase
       .from("tugas_bidan")
       .select("*")
-      .eq("petugas_id", profil.id)
+      .eq("petugas_id", userId)
       .eq("tanggal", new Date().toISOString().slice(0, 10))
       .order("created_at");
     if (!error) setTugas(data ?? []);
     setLoading(false);
-  }, [profil.id]);
+  }, [userId]);
 
   useEffect(() => {
     muat();
@@ -24,10 +36,10 @@ export default function TugasHarian({ profil }) {
 
   const tambahTugas = async (e) => {
     e.preventDefault();
-    if (!judulBaru.trim()) return;
+    if (!judulBaru.trim() || !userId) return;
     const { error } = await supabase.from("tugas_bidan").insert({
-      puskesmas_id: profil.puskesmas_id,
-      petugas_id: profil.id,
+      sekolah_id: profil.sekolah_id,
+      petugas_id: userId,
       judul: judulBaru.trim(),
     });
     if (!error) {
