@@ -338,6 +338,12 @@ function getGroupsPuskesmasAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBe
       ],
     },
     {
+  label: 'Pelayanan',
+  links: [
+    { to: '/bidan-puskesmas', label: 'Bidan / Mantri', icon: Stethoscope },
+  ],
+},
+    {
       label: 'Kepegawaian',
       links: [
         { to: '/data-pegawai-puskesmas', label: 'Data Pegawai', icon: Briefcase },
@@ -441,6 +447,7 @@ function getLinksPuskesmasPegawai(jumlahPesanBelumDibaca = 0) {
     { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
     { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
     { to: '/presensi-puskesmas', label: 'Presensi', icon: ClipboardCheck },
+    { to: '/bidan-puskesmas', label: 'Bidan / Mantri', icon: FolderHeart },
     { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
     { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
     { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
