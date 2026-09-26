@@ -6,6 +6,7 @@ import Loader from './components/Loader'
 import { CartProvider } from './lib/CartContext'
 import LisensiCetak from "./components/LisensiCetak";
 import DemoSessionWatcher from './components/DemoSessionWatcher'
+import TemaSync from './TemaSync'
 
 // ============================================================
 // LAZY-LOADED PAGES
@@ -557,6 +558,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
+      <TemaSync />
       <DemoSessionWatcher />
       <LisensiCetak app="sekolah" />
     </CartProvider>
