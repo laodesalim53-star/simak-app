@@ -71,6 +71,21 @@ import {
 // otomatis mengisi Uraian, Jumlah (dari harga_satuan acuan RKA), dan Kode
 // Rekening (dari rka_bok.kode_rekening) — admin tetap bisa mengubah
 // ketiganya kalau realisasinya berbeda.
+//
+// == PERUBAHAN: OPTIMASI TAMPILAN UNTUK HP (ANDROID) ==
+// Seluruh layout di halaman ini disamakan visualnya di desktop/tablet
+// (tidak ada perubahan class untuk breakpoint sm ke atas), tapi kini
+// mobile-friendly di layar HP (<640px):
+// - Kelompok tombol aksi (mis. Template Kegiatan BOK/Template Excel/
+//   Import dari Excel/Tambah) ditumpuk vertikal & selebar layar di HP,
+//   supaya tidak perlu geser horizontal atau tombol jadi kepencet-pencet.
+// - Grid form (Tambah/Ubah data) jadi 1 kolom di HP supaya label & input
+//   tidak berdesakan; kembali ke 2 kolom mulai breakpoint sm.
+// - Baris "Daftar Barang" (Nota Belanja) & "Susunan Tim" (SK Pengelola)
+//   ditata ulang jadi grid 2 kolom yang lebih longgar di HP.
+// - Tombol ikon (edit/hapus/cetak) diperbesar area sentuhnya di HP (lebih
+//   dekat ke standar 44x44px) supaya tidak salah pencet di layar kecil.
+// - Padding modal formulir dikecilkan di HP supaya area input lebih lega.
 const OPSI_KOMPONEN_BOK = [
   'UKM Esensial',
   'UKM Pengembangan',
@@ -162,7 +177,7 @@ export default function KeuanganBOK() {
                 key={tab.key}
                 type="button"
                 onClick={() => setTabAktif(tab.key)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`flex items-center gap-1.5 px-3 py-2.5 sm:py-2 rounded-lg text-sm font-medium transition-colors touch-manipulation ${
                   aktif ? 'bg-emerald-600 text-white' : 'text-ink-700/70 hover:bg-emerald-600/10'
                 }`}
               >
@@ -641,9 +656,9 @@ function TabRKA() {
     <>
       <div className="card relative overflow-hidden p-4 mb-4">
         <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 to-blue-700" />
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="w-9 h-9 rounded-full bg-emerald-600/10 text-emerald-700 flex items-center justify-center shrink-0">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:flex-wrap w-full sm:w-auto">
+            <div className="w-9 h-9 rounded-full bg-emerald-600/10 text-emerald-700 flex items-center justify-center shrink-0 hidden sm:flex">
               <ClipboardList size={18} />
             </div>
             <div className="relative max-w-xs w-full">
@@ -656,7 +671,7 @@ function TabRKA() {
               />
             </div>
             <select
-              className="input-field w-28"
+              className="input-field w-full sm:w-28"
               value={tahunFilter}
               onChange={(e) => setTahunFilter(Number(e.target.value))}
             >
@@ -665,7 +680,7 @@ function TabRKA() {
               ))}
             </select>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
             <input
               ref={fileInputRef}
               type="file"
@@ -673,16 +688,16 @@ function TabRKA() {
               className="hidden"
               onChange={handleFileImport}
             />
-            <button type="button" className="btn-secondary" onClick={bukaTemplate} title="Isi cepat dari katalog kegiatan BOK umum">
+            <button type="button" className="btn-secondary w-full sm:w-auto justify-center" onClick={bukaTemplate} title="Isi cepat dari katalog kegiatan BOK umum">
               <ListChecks size={16} /> Template Kegiatan BOK
             </button>
-            <button type="button" className="btn-secondary" onClick={unduhTemplate} title="Unduh contoh format Excel">
+            <button type="button" className="btn-secondary w-full sm:w-auto justify-center" onClick={unduhTemplate} title="Unduh contoh format Excel">
               <Download size={16} /> Template Excel
             </button>
-            <button type="button" className="btn-secondary" onClick={bukaDialogImport}>
+            <button type="button" className="btn-secondary w-full sm:w-auto justify-center" onClick={bukaDialogImport}>
               <Upload size={16} /> Import dari Excel
             </button>
-            <button className="btn-primary" onClick={openAdd}>
+            <button className="btn-primary w-full sm:w-auto justify-center" onClick={openAdd}>
               <Plus size={16} /> Tambah Rincian Kegiatan
             </button>
           </div>
@@ -731,10 +746,10 @@ function TabRKA() {
                   <td className="text-xs">{r.bulan_pelaksanaan || '-'}</td>
                   <td>
                     <div className="flex items-center gap-1 justify-end">
-                      <button onClick={() => openEdit(r)} className="p-2 hover:bg-emerald-600/10 rounded-lg text-emerald-700/70">
+                      <button onClick={() => openEdit(r)} className="p-2.5 sm:p-2 hover:bg-emerald-600/10 rounded-lg text-emerald-700/70 touch-manipulation">
                         <Pencil size={15} />
                       </button>
-                      <button onClick={() => handleDelete(r.id)} className="p-2 hover:bg-red-900/10 rounded-lg text-red-900/70">
+                      <button onClick={() => handleDelete(r.id)} className="p-2.5 sm:p-2 hover:bg-red-900/10 rounded-lg text-red-900/70 touch-manipulation">
                         <Trash2 size={15} />
                       </button>
                     </div>
@@ -747,10 +762,10 @@ function TabRKA() {
       ))}
 
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-4">
-          <form onSubmit={handleSubmit} className="card relative overflow-hidden w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-2 sm:p-4">
+          <form onSubmit={handleSubmit} className="card relative overflow-hidden w-full max-w-xl p-4 sm:p-6 max-h-[92vh] overflow-y-auto">
             <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 to-blue-700" />
-            <button type="button" onClick={() => setShowForm(false)} className="absolute top-4 right-4 text-ink-700/40 hover:text-ink-900">
+            <button type="button" onClick={() => setShowForm(false)} className="absolute top-4 right-4 text-ink-700/40 hover:text-ink-900 p-1 touch-manipulation">
               <X size={20} />
             </button>
             <h2 className="font-display text-xl font-semibold mb-4">{editingId ? 'Ubah Rincian Kegiatan' : 'Tambah Rincian Kegiatan'}</h2>
@@ -781,7 +796,7 @@ function TabRKA() {
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="eyebrow mb-1.5 block">Tahun Anggaran</label>
                 <input type="number" required className="input-field" value={form.tahun_anggaran} onChange={(e) => setForm({ ...form, tahun_anggaran: e.target.value })} />
@@ -800,11 +815,11 @@ function TabRKA() {
                   {OPSI_KOMPONEN_BOK.map((k) => <option key={k} value={k} />)}
                 </datalist>
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <label className="eyebrow mb-1.5 block">Sub Komponen (opsional)</label>
                 <input className="input-field" value={form.sub_komponen} onChange={(e) => setForm({ ...form, sub_komponen: e.target.value })} />
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <label className="eyebrow mb-1.5 block">Rincian Kegiatan</label>
                 <textarea required rows={2} className="input-field" value={form.rincian_kegiatan} onChange={(e) => setForm({ ...form, rincian_kegiatan: e.target.value })} />
               </div>
@@ -819,17 +834,17 @@ function TabRKA() {
                   {OPSI_SATUAN.map((s) => <option key={s} value={s} />)}
                 </datalist>
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <label className="eyebrow mb-1.5 block">Harga Satuan (Rp)</label>
                 <input type="number" min="0" required className="input-field" value={form.harga_satuan} onChange={(e) => setForm({ ...form, harga_satuan: e.target.value })} />
               </div>
-              <div className="col-span-2 p-3 rounded-lg bg-emerald-600/[0.06] flex items-center justify-between">
+              <div className="sm:col-span-2 p-3 rounded-lg bg-emerald-600/[0.06] flex items-center justify-between">
                 <span className="text-sm text-ink-700/70">Jumlah Anggaran</span>
                 <span className="font-display font-semibold text-emerald-700">
                   {formatRupiah((Number(form.volume) || 0) * (Number(form.harga_satuan) || 0))}
                 </span>
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <label className="eyebrow mb-1.5 block">Kode Rekening (opsional)</label>
                 <input
                   className="input-field"
@@ -841,19 +856,19 @@ function TabRKA() {
                   Diisi sekali di sini — akan otomatis ditarik ke Kode Rekening saat kegiatan ini dipilih di form Transaksi BKU.
                 </p>
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <label className="eyebrow mb-1.5 block">Bulan Pelaksanaan (opsional)</label>
                 <input className="input-field" placeholder="Contoh: Januari, Maret, Juli" value={form.bulan_pelaksanaan} onChange={(e) => setForm({ ...form, bulan_pelaksanaan: e.target.value })} />
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <label className="eyebrow mb-1.5 block">Keterangan (opsional)</label>
                 <textarea rows={2} className="input-field" value={form.keterangan} onChange={(e) => setForm({ ...form, keterangan: e.target.value })} />
               </div>
             </div>
 
-            <div className="mt-5 flex justify-end gap-3">
-              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Batal</button>
-              <button type="submit" disabled={saving} className="btn-primary">
+            <div className="mt-5 flex flex-col-reverse sm:flex-row justify-end gap-3">
+              <button type="button" className="btn-secondary w-full sm:w-auto justify-center" onClick={() => setShowForm(false)}>Batal</button>
+              <button type="submit" disabled={saving} className="btn-primary w-full sm:w-auto justify-center">
                 {saving && <Loader2 size={16} className="animate-spin" />} Simpan
               </button>
             </div>
@@ -863,13 +878,13 @@ function TabRKA() {
 
       {/* ==== Modal Preview Import Excel ==== */}
       {showImport && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-4">
-          <div className="card relative overflow-hidden w-full max-w-4xl p-6 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-2 sm:p-4">
+          <div className="card relative overflow-hidden w-full max-w-4xl p-4 sm:p-6 max-h-[92vh] overflow-y-auto">
             <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 to-blue-700" />
             <button
               type="button"
               onClick={() => { setShowImport(false); setImportRows([]); setImportError('') }}
-              className="absolute top-4 right-4 text-ink-700/40 hover:text-ink-900"
+              className="absolute top-4 right-4 text-ink-700/40 hover:text-ink-900 p-1 touch-manipulation"
             >
               <X size={20} />
             </button>
@@ -935,10 +950,10 @@ function TabRKA() {
               </>
             )}
 
-            <div className="flex justify-end gap-3">
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-3">
               <button
                 type="button"
-                className="btn-secondary"
+                className="btn-secondary w-full sm:w-auto justify-center"
                 onClick={() => { setShowImport(false); setImportRows([]); setImportError('') }}
               >
                 Batal
@@ -947,7 +962,7 @@ function TabRKA() {
                 type="button"
                 disabled={importing || importRows.filter((r) => r._valid).length === 0}
                 onClick={simpanImport}
-                className="btn-primary"
+                className="btn-primary w-full sm:w-auto justify-center"
               >
                 {importing && <Loader2 size={16} className="animate-spin" />}
                 Simpan {importRows.filter((r) => r._valid).length} Kegiatan
@@ -959,13 +974,13 @@ function TabRKA() {
 
       {/* ==== Modal Template/Katalog Kegiatan BOK ==== */}
       {showTemplate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-4">
-          <div className="card relative overflow-hidden w-full max-w-4xl p-6 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-2 sm:p-4">
+          <div className="card relative overflow-hidden w-full max-w-4xl p-4 sm:p-6 max-h-[92vh] overflow-y-auto">
             <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 to-blue-700" />
             <button
               type="button"
               onClick={() => setShowTemplate(false)}
-              className="absolute top-4 right-4 text-ink-700/40 hover:text-ink-900"
+              className="absolute top-4 right-4 text-ink-700/40 hover:text-ink-900 p-1 touch-manipulation"
             >
               <X size={20} />
             </button>
@@ -991,10 +1006,10 @@ function TabRKA() {
                 <div className="px-3 py-2 bg-emerald-600/[0.06] border-b border-emerald-600/10 flex items-center justify-between">
                   <p className="font-display font-semibold text-sm text-emerald-800">{komponen}</p>
                   <div className="flex items-center gap-3 text-xs">
-                    <button type="button" className="text-emerald-700 hover:underline" onClick={() => toggleSemuaDalamKomponen(items, true)}>
+                    <button type="button" className="text-emerald-700 hover:underline p-1 touch-manipulation" onClick={() => toggleSemuaDalamKomponen(items, true)}>
                       Pilih semua
                     </button>
-                    <button type="button" className="text-ink-700/50 hover:underline" onClick={() => toggleSemuaDalamKomponen(items, false)}>
+                    <button type="button" className="text-ink-700/50 hover:underline p-1 touch-manipulation" onClick={() => toggleSemuaDalamKomponen(items, false)}>
                       Batalkan
                     </button>
                   </div>
@@ -1006,11 +1021,11 @@ function TabRKA() {
                     return (
                       <label
                         key={kunci}
-                        className={`flex items-start gap-3 px-3 py-2 text-sm ${sudahAda ? 'opacity-50' : 'cursor-pointer hover:bg-emerald-600/[0.03]'}`}
+                        className={`flex items-start gap-3 px-3 py-2.5 sm:py-2 text-sm ${sudahAda ? 'opacity-50' : 'cursor-pointer hover:bg-emerald-600/[0.03]'}`}
                       >
                         <input
                           type="checkbox"
-                          className="mt-1"
+                          className="mt-1 w-5 h-5 sm:w-4 sm:h-4"
                           disabled={sudahAda}
                           checked={sudahAda ? false : templateSelected.has(kunci)}
                           onChange={() => toggleTemplateItem(kunci)}
@@ -1035,13 +1050,13 @@ function TabRKA() {
               <p className="text-sm text-ink-700/50 text-center py-6">Tidak ada kegiatan yang cocok dengan pencarian.</p>
             )}
 
-            <div className="flex justify-end gap-3 mt-2">
-              <button type="button" className="btn-secondary" onClick={() => setShowTemplate(false)}>Batal</button>
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 mt-2">
+              <button type="button" className="btn-secondary w-full sm:w-auto justify-center" onClick={() => setShowTemplate(false)}>Batal</button>
               <button
                 type="button"
                 disabled={templateSaving || templateSelected.size === 0}
                 onClick={simpanTemplate}
-                className="btn-primary"
+                className="btn-primary w-full sm:w-auto justify-center"
               >
                 {templateSaving && <Loader2 size={16} className="animate-spin" />}
                 Tambahkan {templateSelected.size} Kegiatan
@@ -1238,29 +1253,31 @@ function TabBKU() {
     <>
       <div className="card relative overflow-hidden p-4 mb-4">
         <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 to-blue-700" />
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="w-9 h-9 rounded-full bg-emerald-600/10 text-emerald-700 flex items-center justify-center shrink-0">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:flex-wrap w-full sm:w-auto">
+            <div className="w-9 h-9 rounded-full bg-emerald-600/10 text-emerald-700 flex items-center justify-center shrink-0 hidden sm:flex">
               <BookOpen size={18} />
             </div>
-            <select className="input-field w-36" value={bulanFilter} onChange={(e) => setBulanFilter(Number(e.target.value))}>
-              {['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'].map((nama, i) => (
-                <option key={nama} value={i + 1}>{nama}</option>
-              ))}
-            </select>
-            <select className="input-field w-24" value={tahunFilter} onChange={(e) => setTahunFilter(Number(e.target.value))}>
-              {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 2 + i).map((th) => (
-                <option key={th} value={th}>{th}</option>
-              ))}
-            </select>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <select className="input-field w-full sm:w-36" value={bulanFilter} onChange={(e) => setBulanFilter(Number(e.target.value))}>
+                {['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'].map((nama, i) => (
+                  <option key={nama} value={i + 1}>{nama}</option>
+                ))}
+              </select>
+              <select className="input-field w-full sm:w-24" value={tahunFilter} onChange={(e) => setTahunFilter(Number(e.target.value))}>
+                {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 2 + i).map((th) => (
+                  <option key={th} value={th}>{th}</option>
+                ))}
+              </select>
+            </div>
           </div>
-          <button className="btn-primary" onClick={openAdd}>
+          <button className="btn-primary w-full sm:w-auto justify-center" onClick={openAdd}>
             <Plus size={16} /> Tambah Transaksi
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
         <div className="card p-4">
           <p className="text-xs text-ink-700/50 mb-1">Total Penerimaan</p>
           <p className="font-display text-lg font-semibold text-emerald-700">{formatRupiah(totalPenerimaan)}</p>
@@ -1307,10 +1324,10 @@ function TabBKU() {
                 <td className="font-semibold">{formatRupiah(r.saldo_tampilan)}</td>
                 <td>
                   <div className="flex items-center gap-1 justify-end">
-                    <button onClick={() => openEdit(r)} className="p-2 hover:bg-emerald-600/10 rounded-lg text-emerald-700/70">
+                    <button onClick={() => openEdit(r)} className="p-2.5 sm:p-2 hover:bg-emerald-600/10 rounded-lg text-emerald-700/70 touch-manipulation">
                       <Pencil size={15} />
                     </button>
-                    <button onClick={() => handleDelete(r.id)} className="p-2 hover:bg-red-900/10 rounded-lg text-red-900/70">
+                    <button onClick={() => handleDelete(r.id)} className="p-2.5 sm:p-2 hover:bg-red-900/10 rounded-lg text-red-900/70 touch-manipulation">
                       <Trash2 size={15} />
                     </button>
                   </div>
@@ -1322,15 +1339,15 @@ function TabBKU() {
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-4">
-          <form onSubmit={handleSubmit} className="card relative overflow-hidden w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-2 sm:p-4">
+          <form onSubmit={handleSubmit} className="card relative overflow-hidden w-full max-w-xl p-4 sm:p-6 max-h-[92vh] overflow-y-auto">
             <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 to-blue-700" />
-            <button type="button" onClick={() => setShowForm(false)} className="absolute top-4 right-4 text-ink-700/40 hover:text-ink-900">
+            <button type="button" onClick={() => setShowForm(false)} className="absolute top-4 right-4 text-ink-700/40 hover:text-ink-900 p-1 touch-manipulation">
               <X size={20} />
             </button>
             <h2 className="font-display text-xl font-semibold mb-4">{editingId ? 'Ubah Transaksi BKU' : 'Tambah Transaksi BKU'}</h2>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="eyebrow mb-1.5 block">Tanggal</label>
                 <input type="date" required className="input-field" value={form.tanggal} onChange={(e) => setForm({ ...form, tanggal: e.target.value })} />
@@ -1339,7 +1356,7 @@ function TabBKU() {
                 <label className="eyebrow mb-1.5 block">No. Bukti</label>
                 <input className="input-field" value={form.nomor_bukti} onChange={(e) => setForm({ ...form, nomor_bukti: e.target.value })} />
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <label className="eyebrow mb-1.5 block">Kegiatan RKA Terkait (opsional)</label>
                 <select className="input-field" value={form.rka_id} onChange={(e) => pilihRka(e.target.value)}>
                   <option value="">— Tidak tertaut —</option>
@@ -1357,7 +1374,7 @@ function TabBKU() {
                   Memilih kegiatan akan mengisi Uraian, Jumlah & Kode Rekening secara otomatis (sesuai acuan RKA) — tetap bisa diubah manual.
                 </p>
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <label className="eyebrow mb-1.5 block">Uraian</label>
                 <input required className="input-field" value={form.uraian} onChange={(e) => setForm({ ...form, uraian: e.target.value })} />
               </div>
@@ -1372,15 +1389,15 @@ function TabBKU() {
                   <option value="penerimaan">Penerimaan</option>
                 </select>
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <label className="eyebrow mb-1.5 block">Jumlah (Rp)</label>
                 <input type="number" min="0" required className="input-field" value={form.jumlah} onChange={(e) => setForm({ ...form, jumlah: e.target.value })} />
               </div>
             </div>
 
-            <div className="mt-5 flex justify-end gap-3">
-              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Batal</button>
-              <button type="submit" disabled={saving} className="btn-primary">
+            <div className="mt-5 flex flex-col-reverse sm:flex-row justify-end gap-3">
+              <button type="button" className="btn-secondary w-full sm:w-auto justify-center" onClick={() => setShowForm(false)}>Batal</button>
+              <button type="submit" disabled={saving} className="btn-primary w-full sm:w-auto justify-center">
                 {saving && <Loader2 size={16} className="animate-spin" />} Simpan
               </button>
             </div>
@@ -1569,9 +1586,9 @@ function TabKwitansi() {
     <>
       <div className="card relative overflow-hidden p-4 mb-4">
         <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 to-blue-700" />
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="w-9 h-9 rounded-full bg-emerald-600/10 text-emerald-700 flex items-center justify-center shrink-0">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:flex-wrap w-full sm:w-auto">
+            <div className="w-9 h-9 rounded-full bg-emerald-600/10 text-emerald-700 flex items-center justify-center shrink-0 hidden sm:flex">
               <Receipt size={18} />
             </div>
             <div className="relative max-w-xs w-full">
@@ -1579,7 +1596,7 @@ function TabKwitansi() {
               <input className="input-field pl-9" placeholder="Cari no. kwitansi/penerima..." value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
           </div>
-          <button className="btn-primary" onClick={openAdd}>
+          <button className="btn-primary w-full sm:w-auto justify-center" onClick={openAdd}>
             <Plus size={16} /> Buat Kwitansi
           </button>
         </div>
@@ -1612,13 +1629,13 @@ function TabKwitansi() {
                 </td>
                 <td>
                   <div className="flex items-center gap-1 justify-end">
-                    <button onClick={() => setCetak(k)} className="p-2 hover:bg-blue-600/10 rounded-lg text-blue-700/70" title="Cetak">
+                    <button onClick={() => setCetak(k)} className="p-2.5 sm:p-2 hover:bg-blue-600/10 rounded-lg text-blue-700/70 touch-manipulation" title="Cetak">
                       <Printer size={15} />
                     </button>
-                    <button onClick={() => openEdit(k)} className="p-2 hover:bg-emerald-600/10 rounded-lg text-emerald-700/70">
+                    <button onClick={() => openEdit(k)} className="p-2.5 sm:p-2 hover:bg-emerald-600/10 rounded-lg text-emerald-700/70 touch-manipulation">
                       <Pencil size={15} />
                     </button>
-                    <button onClick={() => handleDelete(k.id)} className="p-2 hover:bg-red-900/10 rounded-lg text-red-900/70">
+                    <button onClick={() => handleDelete(k.id)} className="p-2.5 sm:p-2 hover:bg-red-900/10 rounded-lg text-red-900/70 touch-manipulation">
                       <Trash2 size={15} />
                     </button>
                   </div>
@@ -1630,16 +1647,16 @@ function TabKwitansi() {
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-4">
-          <form onSubmit={handleSubmit} className="card relative overflow-hidden w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-2 sm:p-4">
+          <form onSubmit={handleSubmit} className="card relative overflow-hidden w-full max-w-xl p-4 sm:p-6 max-h-[92vh] overflow-y-auto">
             <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 to-blue-700" />
-            <button type="button" onClick={() => setShowForm(false)} className="absolute top-4 right-4 text-ink-700/40 hover:text-ink-900">
+            <button type="button" onClick={() => setShowForm(false)} className="absolute top-4 right-4 text-ink-700/40 hover:text-ink-900 p-1 touch-manipulation">
               <X size={20} />
             </button>
             <h2 className="font-display text-xl font-semibold mb-4">{editingId ? 'Ubah Kwitansi' : 'Buat Kwitansi'}</h2>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="sm:col-span-2">
                 <label className="eyebrow mb-1.5 block">Transaksi BKU Terkait (opsional)</label>
                 <select className="input-field" value={form.bku_id} onChange={(e) => pilihBku(e.target.value)}>
                   <option value="">— Tidak tertaut —</option>
@@ -1656,15 +1673,15 @@ function TabKwitansi() {
                 <label className="eyebrow mb-1.5 block">Tanggal</label>
                 <input type="date" required className="input-field" value={form.tanggal} onChange={(e) => setForm({ ...form, tanggal: e.target.value })} />
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <label className="eyebrow mb-1.5 block">Sudah Terima Dari</label>
                 <input className="input-field" value={form.sudah_terima_dari} onChange={(e) => setForm({ ...form, sudah_terima_dari: e.target.value })} />
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <label className="eyebrow mb-1.5 block">Untuk Pembayaran</label>
                 <textarea required rows={2} className="input-field" value={form.untuk_pembayaran} onChange={(e) => setForm({ ...form, untuk_pembayaran: e.target.value })} />
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <label className="eyebrow mb-1.5 block">Jumlah Uang (Rp)</label>
                 <input type="number" min="0" required className="input-field" value={form.jumlah_uang} onChange={(e) => setForm({ ...form, jumlah_uang: e.target.value })} />
               </div>
@@ -1677,7 +1694,7 @@ function TabKwitansi() {
                 <input type="number" min="0" className="input-field" value={form.potongan_ppn} onChange={(e) => setForm({ ...form, potongan_ppn: e.target.value })} />
               </div>
 
-              <div className="col-span-2 pt-2 border-t border-ink-900/10">
+              <div className="sm:col-span-2 pt-2 border-t border-ink-900/10">
                 <label className="eyebrow mb-1.5 block text-emerald-700">Pilih Pegawai Penerima (sesuai tugasnya)</label>
                 <select className="input-field" value={form.pegawai_id} onChange={(e) => pilihPegawaiPenerima(e.target.value)}>
                   <option value="">— Ketik manual (tidak tertaut ke Data Pegawai) —</option>
@@ -1699,9 +1716,9 @@ function TabKwitansi() {
               </div>
             </div>
 
-            <div className="mt-5 flex justify-end gap-3">
-              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Batal</button>
-              <button type="submit" disabled={saving} className="btn-primary">
+            <div className="mt-5 flex flex-col-reverse sm:flex-row justify-end gap-3">
+              <button type="button" className="btn-secondary w-full sm:w-auto justify-center" onClick={() => setShowForm(false)}>Batal</button>
+              <button type="submit" disabled={saving} className="btn-primary w-full sm:w-auto justify-center">
                 {saving && <Loader2 size={16} className="animate-spin" />} Simpan
               </button>
             </div>
@@ -1711,17 +1728,17 @@ function TabKwitansi() {
 
       {/* ==== Modal Cetak Kwitansi ==== */}
       {cetak && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-2 sm:p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
             <div className="no-print flex items-center justify-between p-4 border-b border-ink-900/10">
               <h2 className="font-display font-semibold">Pratinjau Kwitansi</h2>
               <div className="flex items-center gap-2">
                 <button onClick={() => window.print()} className="btn-primary !py-1.5"><Printer size={14} /> Cetak</button>
-                <button onClick={() => setCetak(null)} className="p-2 hover:bg-ink-900/5 rounded-lg"><X size={18} /></button>
+                <button onClick={() => setCetak(null)} className="p-2.5 sm:p-2 hover:bg-ink-900/5 rounded-lg touch-manipulation"><X size={18} /></button>
               </div>
             </div>
 
-            <div className="lembar-kwitansi p-8" style={{ width: '190mm', margin: '0 auto' }}>
+            <div className="lembar-kwitansi p-4 sm:p-8" style={{ width: '190mm', maxWidth: '100%', margin: '0 auto' }}>
               <table className="w-full border-collapse border-2 border-slate-800 text-sm">
                 <tbody>
                   <tr>
@@ -1970,9 +1987,9 @@ function TabNotaBelanja() {
     <>
       <div className="card relative overflow-hidden p-4 mb-4">
         <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 to-blue-700" />
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="w-9 h-9 rounded-full bg-emerald-600/10 text-emerald-700 flex items-center justify-center shrink-0">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:flex-wrap w-full sm:w-auto">
+            <div className="w-9 h-9 rounded-full bg-emerald-600/10 text-emerald-700 flex items-center justify-center shrink-0 hidden sm:flex">
               <ShoppingCart size={18} />
             </div>
             <div className="relative max-w-xs w-full">
@@ -1980,7 +1997,7 @@ function TabNotaBelanja() {
               <input className="input-field pl-9" placeholder="Cari no. nota/nama toko..." value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
           </div>
-          <button className="btn-primary" onClick={openAdd}>
+          <button className="btn-primary w-full sm:w-auto justify-center" onClick={openAdd}>
             <Plus size={16} /> Buat Nota Belanja
           </button>
         </div>
@@ -2010,13 +2027,13 @@ function TabNotaBelanja() {
                 <td className="font-semibold text-emerald-700">{formatRupiah(n.total_belanja)}</td>
                 <td>
                   <div className="flex items-center gap-1 justify-end">
-                    <button onClick={() => setCetak(n)} className="p-2 hover:bg-blue-600/10 rounded-lg text-blue-700/70" title="Cetak">
+                    <button onClick={() => setCetak(n)} className="p-2.5 sm:p-2 hover:bg-blue-600/10 rounded-lg text-blue-700/70 touch-manipulation" title="Cetak">
                       <Printer size={15} />
                     </button>
-                    <button onClick={() => openEdit(n)} className="p-2 hover:bg-emerald-600/10 rounded-lg text-emerald-700/70">
+                    <button onClick={() => openEdit(n)} className="p-2.5 sm:p-2 hover:bg-emerald-600/10 rounded-lg text-emerald-700/70 touch-manipulation">
                       <Pencil size={15} />
                     </button>
-                    <button onClick={() => handleDelete(n.id)} className="p-2 hover:bg-red-900/10 rounded-lg text-red-900/70">
+                    <button onClick={() => handleDelete(n.id)} className="p-2.5 sm:p-2 hover:bg-red-900/10 rounded-lg text-red-900/70 touch-manipulation">
                       <Trash2 size={15} />
                     </button>
                   </div>
@@ -2028,16 +2045,16 @@ function TabNotaBelanja() {
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-4">
-          <form onSubmit={handleSubmit} className="card relative overflow-hidden w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-2 sm:p-4">
+          <form onSubmit={handleSubmit} className="card relative overflow-hidden w-full max-w-2xl p-4 sm:p-6 max-h-[92vh] overflow-y-auto">
             <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 to-blue-700" />
-            <button type="button" onClick={() => setShowForm(false)} className="absolute top-4 right-4 text-ink-700/40 hover:text-ink-900">
+            <button type="button" onClick={() => setShowForm(false)} className="absolute top-4 right-4 text-ink-700/40 hover:text-ink-900 p-1 touch-manipulation">
               <X size={20} />
             </button>
             <h2 className="font-display text-xl font-semibold mb-4">{editingId ? 'Ubah Nota Belanja' : 'Buat Nota Belanja'}</h2>
 
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className="col-span-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+              <div className="sm:col-span-2">
                 <label className="eyebrow mb-1.5 block">Transaksi BKU Terkait (opsional)</label>
                 <select className="input-field" value={form.bku_id} onChange={(e) => setForm({ ...form, bku_id: e.target.value })}>
                   <option value="">— Tidak tertaut —</option>
@@ -2067,18 +2084,18 @@ function TabNotaBelanja() {
             <p className="eyebrow text-emerald-700 mb-2">Daftar Barang</p>
             <div className="space-y-2 mb-2">
               {form.daftar_barang.map((b, i) => (
-                <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                  <input className="input-field col-span-4" placeholder="Nama barang" value={b.nama} onChange={(e) => ubahBarang(i, 'nama', e.target.value)} />
-                  <input type="number" min="0" className="input-field col-span-2" placeholder="Jml" value={b.jumlah} onChange={(e) => ubahBarang(i, 'jumlah', e.target.value)} />
-                  <input className="input-field col-span-2" placeholder="Satuan" value={b.satuan} onChange={(e) => ubahBarang(i, 'satuan', e.target.value)} />
-                  <input type="number" min="0" className="input-field col-span-3" placeholder="Harga satuan" value={b.harga_satuan} onChange={(e) => ubahBarang(i, 'harga_satuan', e.target.value)} />
-                  <button type="button" onClick={() => hapusBarisBarang(i)} className="col-span-1 p-2 text-red-900/60 hover:bg-red-900/10 rounded-lg">
-                    <Trash2 size={15} />
+                <div key={i} className="grid grid-cols-2 sm:grid-cols-12 gap-2 items-center p-2 sm:p-0 rounded-lg bg-emerald-600/[0.03] sm:bg-transparent">
+                  <input className="input-field col-span-2 sm:col-span-4" placeholder="Nama barang" value={b.nama} onChange={(e) => ubahBarang(i, 'nama', e.target.value)} />
+                  <input type="number" min="0" className="input-field col-span-1 sm:col-span-2" placeholder="Jml" value={b.jumlah} onChange={(e) => ubahBarang(i, 'jumlah', e.target.value)} />
+                  <input className="input-field col-span-1 sm:col-span-2" placeholder="Satuan" value={b.satuan} onChange={(e) => ubahBarang(i, 'satuan', e.target.value)} />
+                  <input type="number" min="0" className="input-field col-span-2 sm:col-span-3" placeholder="Harga satuan" value={b.harga_satuan} onChange={(e) => ubahBarang(i, 'harga_satuan', e.target.value)} />
+                  <button type="button" onClick={() => hapusBarisBarang(i)} className="col-span-2 sm:col-span-1 p-2.5 sm:p-2 text-red-900/60 hover:bg-red-900/10 rounded-lg flex items-center justify-center gap-1 touch-manipulation">
+                    <Trash2 size={15} /> <span className="sm:hidden text-xs">Hapus barang</span>
                   </button>
                 </div>
               ))}
             </div>
-            <button type="button" onClick={tambahBarisBarang} className="btn-secondary !py-1.5 mb-4">
+            <button type="button" onClick={tambahBarisBarang} className="btn-secondary !py-2 sm:!py-1.5 mb-4 w-full sm:w-auto justify-center">
               <Plus size={14} /> Tambah Barang
             </button>
 
@@ -2087,9 +2104,9 @@ function TabNotaBelanja() {
               <span className="font-display font-semibold text-emerald-700">{formatRupiah(totalBelanjaForm)}</span>
             </div>
 
-            <div className="flex justify-end gap-3">
-              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Batal</button>
-              <button type="submit" disabled={saving} className="btn-primary">
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-3">
+              <button type="button" className="btn-secondary w-full sm:w-auto justify-center" onClick={() => setShowForm(false)}>Batal</button>
+              <button type="submit" disabled={saving} className="btn-primary w-full sm:w-auto justify-center">
                 {saving && <Loader2 size={16} className="animate-spin" />} Simpan
               </button>
             </div>
@@ -2099,17 +2116,17 @@ function TabNotaBelanja() {
 
       {/* ==== Modal Cetak Nota ==== */}
       {cetak && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-2 sm:p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
             <div className="no-print flex items-center justify-between p-4 border-b border-ink-900/10">
               <h2 className="font-display font-semibold">Pratinjau Nota Belanja</h2>
               <div className="flex items-center gap-2">
                 <button onClick={() => window.print()} className="btn-primary !py-1.5"><Printer size={14} /> Cetak</button>
-                <button onClick={() => setCetak(null)} className="p-2 hover:bg-ink-900/5 rounded-lg"><X size={18} /></button>
+                <button onClick={() => setCetak(null)} className="p-2.5 sm:p-2 hover:bg-ink-900/5 rounded-lg touch-manipulation"><X size={18} /></button>
               </div>
             </div>
 
-            <div className="lembar-nota p-8" style={{ width: '190mm', margin: '0 auto' }}>
+            <div className="lembar-nota p-4 sm:p-8" style={{ width: '190mm', maxWidth: '100%', margin: '0 auto' }}>
               <div className="text-center mb-4">
                 <p className="font-display font-bold text-base uppercase">NOTA BELANJA</p>
                 <p className="text-xs mt-0.5">No: {cetak.nomor_nota || '-'}</p>
@@ -2120,34 +2137,36 @@ function TabNotaBelanja() {
                 <p><strong>Tanggal:</strong> {formatTanggal(cetak.tanggal)}</p>
               </div>
 
-              <table className="w-full border-collapse border border-slate-800 text-sm">
-                <thead>
-                  <tr className="bg-slate-100">
-                    <th className="border border-slate-800 px-2 py-1 w-8">No</th>
-                    <th className="border border-slate-800 px-2 py-1 text-left">Nama Barang</th>
-                    <th className="border border-slate-800 px-2 py-1 w-16">Jumlah</th>
-                    <th className="border border-slate-800 px-2 py-1 w-24">Harga Satuan</th>
-                    <th className="border border-slate-800 px-2 py-1 w-28">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(cetak.daftar_barang || []).map((b, i) => (
-                    <tr key={i}>
-                      <td className="border border-slate-800 px-2 py-1 text-center">{i + 1}</td>
-                      <td className="border border-slate-800 px-2 py-1">{b.nama}</td>
-                      <td className="border border-slate-800 px-2 py-1 text-center">{b.jumlah} {b.satuan}</td>
-                      <td className="border border-slate-800 px-2 py-1 text-right">{formatRupiah(b.harga_satuan)}</td>
-                      <td className="border border-slate-800 px-2 py-1 text-right">{formatRupiah(b.total)}</td>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse border border-slate-800 text-sm min-w-[480px]">
+                  <thead>
+                    <tr className="bg-slate-100">
+                      <th className="border border-slate-800 px-2 py-1 w-8">No</th>
+                      <th className="border border-slate-800 px-2 py-1 text-left">Nama Barang</th>
+                      <th className="border border-slate-800 px-2 py-1 w-16">Jumlah</th>
+                      <th className="border border-slate-800 px-2 py-1 w-24">Harga Satuan</th>
+                      <th className="border border-slate-800 px-2 py-1 w-28">Total</th>
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td colSpan={4} className="border border-slate-800 px-2 py-1 text-right font-semibold">Total Belanja</td>
-                    <td className="border border-slate-800 px-2 py-1 text-right font-bold">{formatRupiah(cetak.total_belanja)}</td>
-                  </tr>
-                </tfoot>
-              </table>
+                  </thead>
+                  <tbody>
+                    {(cetak.daftar_barang || []).map((b, i) => (
+                      <tr key={i}>
+                        <td className="border border-slate-800 px-2 py-1 text-center">{i + 1}</td>
+                        <td className="border border-slate-800 px-2 py-1">{b.nama}</td>
+                        <td className="border border-slate-800 px-2 py-1 text-center">{b.jumlah} {b.satuan}</td>
+                        <td className="border border-slate-800 px-2 py-1 text-right">{formatRupiah(b.harga_satuan)}</td>
+                        <td className="border border-slate-800 px-2 py-1 text-right">{formatRupiah(b.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td colSpan={4} className="border border-slate-800 px-2 py-1 text-right font-semibold">Total Belanja</td>
+                      <td className="border border-slate-800 px-2 py-1 text-right font-bold">{formatRupiah(cetak.total_belanja)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
 
               <div className="flex justify-end mt-8">
                 <div className="text-center w-56">
@@ -2357,14 +2376,14 @@ function TabSKPengelola() {
     <>
       <div className="card relative overflow-hidden p-4 mb-4">
         <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 to-blue-700" />
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-emerald-600/10 text-emerald-700 flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 rounded-full bg-emerald-600/10 text-emerald-700 flex items-center justify-center shrink-0 hidden sm:flex">
               <FileSignature size={18} />
             </div>
             <p className="text-sm text-ink-700/60">SK Tim Pengelola Keuangan BOK per tahun anggaran</p>
           </div>
-          <button className="btn-primary" onClick={openAdd}>
+          <button className="btn-primary w-full sm:w-auto justify-center" onClick={openAdd}>
             <Plus size={16} /> Buat SK
           </button>
         </div>
@@ -2394,13 +2413,13 @@ function TabSKPengelola() {
                 <td>{(sk.susunan_tim || []).length} orang</td>
                 <td>
                   <div className="flex items-center gap-1 justify-end">
-                    <button onClick={() => setCetak(sk)} className="p-2 hover:bg-blue-600/10 rounded-lg text-blue-700/70" title="Cetak">
+                    <button onClick={() => setCetak(sk)} className="p-2.5 sm:p-2 hover:bg-blue-600/10 rounded-lg text-blue-700/70 touch-manipulation" title="Cetak">
                       <Printer size={15} />
                     </button>
-                    <button onClick={() => openEdit(sk)} className="p-2 hover:bg-emerald-600/10 rounded-lg text-emerald-700/70">
+                    <button onClick={() => openEdit(sk)} className="p-2.5 sm:p-2 hover:bg-emerald-600/10 rounded-lg text-emerald-700/70 touch-manipulation">
                       <Pencil size={15} />
                     </button>
-                    <button onClick={() => handleDelete(sk.id)} className="p-2 hover:bg-red-900/10 rounded-lg text-red-900/70">
+                    <button onClick={() => handleDelete(sk.id)} className="p-2.5 sm:p-2 hover:bg-red-900/10 rounded-lg text-red-900/70 touch-manipulation">
                       <Trash2 size={15} />
                     </button>
                   </div>
@@ -2412,15 +2431,15 @@ function TabSKPengelola() {
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-4">
-          <form onSubmit={handleSubmit} className="card relative overflow-hidden w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-2 sm:p-4">
+          <form onSubmit={handleSubmit} className="card relative overflow-hidden w-full max-w-2xl p-4 sm:p-6 max-h-[92vh] overflow-y-auto">
             <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 to-blue-700" />
-            <button type="button" onClick={() => setShowForm(false)} className="absolute top-4 right-4 text-ink-700/40 hover:text-ink-900">
+            <button type="button" onClick={() => setShowForm(false)} className="absolute top-4 right-4 text-ink-700/40 hover:text-ink-900 p-1 touch-manipulation">
               <X size={20} />
             </button>
             <h2 className="font-display text-xl font-semibold mb-4">{editingId ? 'Ubah SK Pengelola' : 'Buat SK Pengelola'}</h2>
 
-            <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
               <div>
                 <label className="eyebrow mb-1.5 block">Tahun Anggaran</label>
                 <input type="number" required className="input-field" value={form.tahun_anggaran} onChange={(e) => setForm({ ...form, tahun_anggaran: e.target.value })} />
@@ -2433,11 +2452,11 @@ function TabSKPengelola() {
                 <label className="eyebrow mb-1.5 block">Tanggal SK</label>
                 <input type="date" className="input-field" value={form.tanggal_sk} onChange={(e) => setForm({ ...form, tanggal_sk: e.target.value })} />
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <label className="eyebrow mb-1.5 block">Tentang</label>
                 <input required className="input-field" value={form.tentang} onChange={(e) => setForm({ ...form, tentang: e.target.value })} />
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <label className="eyebrow mb-1.5 block">Dasar Hukum (opsional)</label>
                 <textarea rows={2} className="input-field" placeholder="Contoh: Peraturan Menteri Kesehatan No. ... Tahun ..." value={form.dasar_hukum} onChange={(e) => setForm({ ...form, dasar_hukum: e.target.value })} />
               </div>
@@ -2457,28 +2476,28 @@ function TabSKPengelola() {
                       <option key={p.id} value={p.id}>{p.nama_lengkap} — {p.jabatan || 'Tanpa jabatan'}</option>
                     ))}
                   </select>
-                  <div className="grid grid-cols-12 gap-2 items-center">
-                    <input className="input-field col-span-3" placeholder="Nama" value={t.nama} onChange={(e) => ubahTim(i, 'nama', e.target.value)} />
-                    <input className="input-field col-span-2" placeholder="NIP" value={t.nip} onChange={(e) => ubahTim(i, 'nip', e.target.value)} />
-                    <select className="input-field col-span-3" value={t.jabatan_tim} onChange={(e) => ubahTim(i, 'jabatan_tim', e.target.value)}>
+                  <div className="grid grid-cols-2 sm:grid-cols-12 gap-2 items-center">
+                    <input className="input-field col-span-2 sm:col-span-3" placeholder="Nama" value={t.nama} onChange={(e) => ubahTim(i, 'nama', e.target.value)} />
+                    <input className="input-field col-span-1 sm:col-span-2" placeholder="NIP" value={t.nip} onChange={(e) => ubahTim(i, 'nip', e.target.value)} />
+                    <select className="input-field col-span-1 sm:col-span-3" value={t.jabatan_tim} onChange={(e) => ubahTim(i, 'jabatan_tim', e.target.value)}>
                       <option value="">Jabatan dalam Tim</option>
                       {OPSI_JABATAN_TIM.map((j) => <option key={j} value={j}>{j}</option>)}
                     </select>
-                    <input className="input-field col-span-3" placeholder="Jabatan di Puskesmas" value={t.jabatan_puskesmas} onChange={(e) => ubahTim(i, 'jabatan_puskesmas', e.target.value)} />
-                    <button type="button" onClick={() => hapusBarisTim(i)} className="col-span-1 p-2 text-red-900/60 hover:bg-red-900/10 rounded-lg">
-                      <Trash2 size={15} />
+                    <input className="input-field col-span-2 sm:col-span-3" placeholder="Jabatan di Puskesmas" value={t.jabatan_puskesmas} onChange={(e) => ubahTim(i, 'jabatan_puskesmas', e.target.value)} />
+                    <button type="button" onClick={() => hapusBarisTim(i)} className="col-span-2 sm:col-span-1 p-2.5 sm:p-2 text-red-900/60 hover:bg-red-900/10 rounded-lg flex items-center justify-center gap-1 touch-manipulation">
+                      <Trash2 size={15} /> <span className="sm:hidden text-xs">Hapus anggota</span>
                     </button>
                   </div>
                 </div>
               ))}
             </div>
-            <button type="button" onClick={tambahBarisTim} className="btn-secondary !py-1.5 mb-4">
+            <button type="button" onClick={tambahBarisTim} className="btn-secondary !py-2 sm:!py-1.5 mb-4 w-full sm:w-auto justify-center">
               <Plus size={14} /> Tambah Anggota Tim
             </button>
 
-            <div className="flex justify-end gap-3">
-              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Batal</button>
-              <button type="submit" disabled={saving} className="btn-primary">
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-3">
+              <button type="button" className="btn-secondary w-full sm:w-auto justify-center" onClick={() => setShowForm(false)}>Batal</button>
+              <button type="submit" disabled={saving} className="btn-primary w-full sm:w-auto justify-center">
                 {saving && <Loader2 size={16} className="animate-spin" />} Simpan
               </button>
             </div>
@@ -2488,17 +2507,17 @@ function TabSKPengelola() {
 
       {/* ==== Modal Cetak SK ==== */}
       {cetak && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-2 sm:p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
             <div className="no-print flex items-center justify-between p-4 border-b border-ink-900/10">
               <h2 className="font-display font-semibold">Pratinjau SK</h2>
               <div className="flex items-center gap-2">
                 <button onClick={() => window.print()} className="btn-primary !py-1.5"><Printer size={14} /> Cetak</button>
-                <button onClick={() => setCetak(null)} className="p-2 hover:bg-ink-900/5 rounded-lg"><X size={18} /></button>
+                <button onClick={() => setCetak(null)} className="p-2.5 sm:p-2 hover:bg-ink-900/5 rounded-lg touch-manipulation"><X size={18} /></button>
               </div>
             </div>
 
-            <div className="lembar-sk p-8 text-sm" style={{ width: '190mm', margin: '0 auto' }}>
+            <div className="lembar-sk p-4 sm:p-8 text-sm" style={{ width: '190mm', maxWidth: '100%', margin: '0 auto' }}>
               <KopSurat />
 
               <div className="text-center mb-4">
@@ -2518,28 +2537,30 @@ function TabSKPengelola() {
               <p className="font-semibold mb-2">MEMUTUSKAN:</p>
               <p className="mb-3">Menetapkan susunan Tim Pengelola Keuangan Bantuan Operasional Kesehatan (BOK) Tahun Anggaran {cetak.tahun_anggaran} sebagai berikut:</p>
 
-              <table className="w-full border-collapse border border-slate-800 mb-6">
-                <thead>
-                  <tr className="bg-slate-100">
-                    <th className="border border-slate-800 px-2 py-1 w-8">No</th>
-                    <th className="border border-slate-800 px-2 py-1 text-left">Nama / NIP</th>
-                    <th className="border border-slate-800 px-2 py-1 text-left">Jabatan di Puskesmas</th>
-                    <th className="border border-slate-800 px-2 py-1 text-left">Jabatan dalam Tim</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(cetak.susunan_tim || []).map((t, i) => (
-                    <tr key={i}>
-                      <td className="border border-slate-800 px-2 py-1 text-center">{i + 1}</td>
-                      <td className="border border-slate-800 px-2 py-1">
-                        {t.nama}{t.nip && <><br /><span className="text-xs text-slate-600">NIP. {t.nip}</span></>}
-                      </td>
-                      <td className="border border-slate-800 px-2 py-1">{t.jabatan_puskesmas || '-'}</td>
-                      <td className="border border-slate-800 px-2 py-1">{t.jabatan_tim || '-'}</td>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse border border-slate-800 mb-6 min-w-[480px]">
+                  <thead>
+                    <tr className="bg-slate-100">
+                      <th className="border border-slate-800 px-2 py-1 w-8">No</th>
+                      <th className="border border-slate-800 px-2 py-1 text-left">Nama / NIP</th>
+                      <th className="border border-slate-800 px-2 py-1 text-left">Jabatan di Puskesmas</th>
+                      <th className="border border-slate-800 px-2 py-1 text-left">Jabatan dalam Tim</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {(cetak.susunan_tim || []).map((t, i) => (
+                      <tr key={i}>
+                        <td className="border border-slate-800 px-2 py-1 text-center">{i + 1}</td>
+                        <td className="border border-slate-800 px-2 py-1">
+                          {t.nama}{t.nip && <><br /><span className="text-xs text-slate-600">NIP. {t.nip}</span></>}
+                        </td>
+                        <td className="border border-slate-800 px-2 py-1">{t.jabatan_puskesmas || '-'}</td>
+                        <td className="border border-slate-800 px-2 py-1">{t.jabatan_tim || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
               <div className="flex justify-end">
                 <div className="text-center w-56">
