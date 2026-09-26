@@ -5,6 +5,7 @@ import { registerSW } from 'virtual:pwa-register'
 import App from './App.jsx'
 import { AuthProvider } from './lib/AuthContext.jsx'
 import './index.css'
+import './tema.css'
 
 // PERBAIKAN: registerType di vite.config.js sengaja 'prompt' (bukan
 // 'autoUpdate') supaya service worker tidak ganti diam-diam di tengah
