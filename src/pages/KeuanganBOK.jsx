@@ -29,16 +29,24 @@ import {
 //   pegawai_puskesmas(id)`. Nama/jabatan penerima tetap disimpan sebagai
 //   teks (untuk histori, kalau pegawai kelak diubah/dihapus), tapi
 //   otomatis terisi dari pegawai yang dipilih.
-// - sk_pengelola_bok.susunan_tim: kolomnya jsonb, jadi tidak perlu migrasi
-//   — cukup tambahkan key `pegawai_id` per anggota tim di dalam JSON.
+// - sk_pengelola_bok.susunan_tim: kolomnya jsonb, jadi tidak perlu
+//   migrasi — cukup tambahkan key `pegawai_id` per anggota tim di dalam
+//   JSON.
+//
+// == PERUBAHAN: KODE REKENING DI RKA (diisi sekali per kegiatan) ==
+// rka_bok sekarang punya kolom `kode_rekening` (lihat
+// migrasi-tambah-kode-rekening-rka-bok.sql). Diisi sekali per kegiatan di
+// form Tambah/Ubah Rincian Kegiatan (RKA), lalu ditarik otomatis ke field
+// Kode Rekening di form Transaksi BKU saat kegiatan RKA terkait dipilih —
+// admin tetap bisa mengubahnya manual di BKU kalau realisasinya beda.
 //
 // == PERUBAHAN: AUTO-ISIAN DARI RKA DI TAB BKU ==
 // Tab BKU sekarang mengambil kolom tambahan dari rka_bok (satuan,
-// harga_satuan, sub_komponen) dan mengelompokkan dropdown "Kegiatan RKA
-// Terkait" per Komponen (optgroup). Memilih satu kegiatan otomatis
-// mengisi Uraian & Jumlah (dari harga_satuan acuan RKA) — admin tetap
-// bisa mengubah Jumlah kalau realisasinya berbeda. Kode Rekening TIDAK
-// ikut terisi otomatis karena rka_bok belum punya kolom itu.
+// harga_satuan, sub_komponen, kode_rekening) dan mengelompokkan dropdown
+// "Kegiatan RKA Terkait" per Komponen (optgroup). Memilih satu kegiatan
+// otomatis mengisi Uraian, Jumlah (dari harga_satuan acuan RKA), dan Kode
+// Rekening (dari rka_bok.kode_rekening) — admin tetap bisa mengubah
+// ketiganya kalau realisasinya berbeda.
 const OPSI_KOMPONEN_BOK = [
   'UKM Esensial',
   'UKM Pengembangan',
@@ -162,6 +170,7 @@ const emptyFormRka = {
   volume: 1,
   satuan: '',
   harga_satuan: '',
+  kode_rekening: '',
   bulan_pelaksanaan: '',
   keterangan: '',
 }
@@ -243,6 +252,7 @@ function TabRKA() {
       satuan: form.satuan || null,
       harga_satuan: hargaSatuan,
       jumlah_anggaran: volume * hargaSatuan,
+      kode_rekening: form.kode_rekening || null,
       bulan_pelaksanaan: form.bulan_pelaksanaan || null,
       keterangan: form.keterangan || null,
       diperbarui_pada: new Date().toISOString(),
@@ -322,6 +332,7 @@ function TabRKA() {
             satuan: String(ambilKolom(row, 'Satuan') || '').trim(),
             harga_satuan: hargaSatuan,
             jumlah_anggaran: volume * hargaSatuan,
+            kode_rekening: String(ambilKolom(row, 'Kode Rekening', 'Kode Akun') || '').trim(),
             bulan_pelaksanaan: String(ambilKolom(row, 'Bulan Pelaksanaan', 'Bulan') || '').trim(),
             keterangan: String(ambilKolom(row, 'Keterangan') || '').trim(),
             _valid: komponen !== '' && rincianKegiatan !== '' && volume > 0,
@@ -361,6 +372,7 @@ function TabRKA() {
       satuan: r.satuan || null,
       harga_satuan: r.harga_satuan,
       jumlah_anggaran: r.jumlah_anggaran,
+      kode_rekening: r.kode_rekening || null,
       bulan_pelaksanaan: r.bulan_pelaksanaan || null,
       keterangan: r.keterangan || null,
     }))
@@ -380,11 +392,11 @@ function TabRKA() {
   // server) — berisi judul kolom yang sesuai & satu baris contoh.
   function unduhTemplate() {
     const contoh = [
-      ['Tahun Anggaran', 'Komponen', 'Sub Komponen', 'Rincian Kegiatan', 'Volume', 'Satuan', 'Harga Satuan', 'Bulan Pelaksanaan', 'Keterangan'],
-      [tahunFilter, 'UKM Esensial', 'Posyandu Balita', 'Transport petugas pendamping posyandu', 12, 'OH', 75000, 'Januari, Februari, Maret', 'Contoh baris — hapus/ganti sebelum diisi data asli'],
+      ['Tahun Anggaran', 'Komponen', 'Sub Komponen', 'Rincian Kegiatan', 'Volume', 'Satuan', 'Harga Satuan', 'Kode Rekening', 'Bulan Pelaksanaan', 'Keterangan'],
+      [tahunFilter, 'UKM Esensial', 'Posyandu Balita', 'Transport petugas pendamping posyandu', 12, 'OH', 75000, '5.1.02.xx.xx', 'Januari, Februari, Maret', 'Contoh baris — hapus/ganti sebelum diisi data asli'],
     ]
     const ws = XLSX.utils.aoa_to_sheet(contoh)
-    ws['!cols'] = [{ wch: 14 }, { wch: 26 }, { wch: 20 }, { wch: 36 }, { wch: 9 }, { wch: 9 }, { wch: 15 }, { wch: 24 }, { wch: 30 }]
+    ws['!cols'] = [{ wch: 14 }, { wch: 26 }, { wch: 20 }, { wch: 36 }, { wch: 9 }, { wch: 9 }, { wch: 15 }, { wch: 16 }, { wch: 24 }, { wch: 30 }]
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, ws, 'RKA BOK')
     XLSX.writeFile(workbook, 'template-rka-bok.xlsx')
@@ -484,6 +496,7 @@ function TabRKA() {
                 <th>Satuan</th>
                 <th>Harga Satuan</th>
                 <th>Jumlah</th>
+                <th>Kode Rekening</th>
                 <th>Bulan Pelaksanaan</th>
                 <th></th>
               </tr>
@@ -497,6 +510,7 @@ function TabRKA() {
                   <td>{r.satuan || '-'}</td>
                   <td>{formatRupiah(r.harga_satuan)}</td>
                   <td className="font-semibold text-emerald-700">{formatRupiah(r.jumlah_anggaran)}</td>
+                  <td className="font-mono text-xs">{r.kode_rekening || '-'}</td>
                   <td className="text-xs">{r.bulan_pelaksanaan || '-'}</td>
                   <td>
                     <div className="flex items-center gap-1 justify-end">
@@ -573,6 +587,18 @@ function TabRKA() {
                 </span>
               </div>
               <div className="col-span-2">
+                <label className="eyebrow mb-1.5 block">Kode Rekening (opsional)</label>
+                <input
+                  className="input-field"
+                  placeholder="Contoh: 5.1.02.xx.xx"
+                  value={form.kode_rekening}
+                  onChange={(e) => setForm({ ...form, kode_rekening: e.target.value })}
+                />
+                <p className="text-xs text-ink-700/40 mt-1">
+                  Diisi sekali di sini — akan otomatis ditarik ke Kode Rekening saat kegiatan ini dipilih di form Transaksi BKU.
+                </p>
+              </div>
+              <div className="col-span-2">
                 <label className="eyebrow mb-1.5 block">Bulan Pelaksanaan (opsional)</label>
                 <input className="input-field" placeholder="Contoh: Januari, Maret, Juli" value={form.bulan_pelaksanaan} onChange={(e) => setForm({ ...form, bulan_pelaksanaan: e.target.value })} />
               </div>
@@ -632,6 +658,7 @@ function TabRKA() {
                         <th>Satuan</th>
                         <th>Harga Satuan</th>
                         <th>Jumlah</th>
+                        <th>Kode Rekening</th>
                         <th>Status</th>
                         <th></th>
                       </tr>
@@ -646,6 +673,7 @@ function TabRKA() {
                           <td>{r.satuan || '-'}</td>
                           <td>{formatRupiah(r.harga_satuan)}</td>
                           <td className="font-semibold text-emerald-700">{formatRupiah(r.jumlah_anggaran)}</td>
+                          <td className="font-mono text-xs">{r.kode_rekening || '-'}</td>
                           <td>
                             {r._valid
                               ? <span className="badge bg-emerald-600/15 text-emerald-700">Siap</span>
@@ -725,12 +753,13 @@ function TabBKU() {
     }
     setLoading(true)
 
-    // Ambil kolom tambahan (satuan, harga_satuan, sub_komponen) supaya
-    // bisa dipakai untuk auto-isi Uraian & Jumlah saat kegiatan RKA
-    // dipilih di form transaksi BKU (lihat fungsi pilihRka di bawah).
+    // Ambil kolom tambahan (satuan, harga_satuan, sub_komponen,
+    // kode_rekening) supaya bisa dipakai untuk auto-isi Uraian, Jumlah &
+    // Kode Rekening saat kegiatan RKA dipilih di form transaksi BKU
+    // (lihat fungsi pilihRka di bawah).
     const { data: daftarRka } = await supabase
       .from('rka_bok')
-      .select('id, komponen, sub_komponen, rincian_kegiatan, satuan, harga_satuan')
+      .select('id, komponen, sub_komponen, rincian_kegiatan, satuan, harga_satuan, kode_rekening')
       .eq('sekolah_id', sekolahId)
       .order('komponen')
       .order('rincian_kegiatan')
@@ -812,11 +841,13 @@ function TabBKU() {
     setShowForm(true)
   }
 
-  // Isi otomatis Uraian & Jumlah dari kegiatan RKA yang dipilih — Uraian
-  // diambil dari rincian_kegiatan, Jumlah dari harga_satuan (acuan per
-  // unit di RKA). Admin tetap bisa mengubah kedua field ini kalau
-  // realisasi transaksinya berbeda dari acuan RKA (mis. beda volume).
-  // Kode Rekening TIDAK ikut terisi karena rka_bok belum punya kolom itu.
+  // Isi otomatis Uraian, Jumlah & Kode Rekening dari kegiatan RKA yang
+  // dipilih — Uraian diambil dari rincian_kegiatan, Jumlah dari
+  // harga_satuan (acuan per unit di RKA), dan Kode Rekening dari
+  // rka_bok.kode_rekening (diisi sekali per kegiatan di form RKA). Admin
+  // tetap bisa mengubah ketiga field ini kalau realisasi transaksinya
+  // berbeda dari acuan RKA (mis. beda volume, atau kode rekening berbeda
+  // untuk kasus tertentu).
   function pilihRka(rkaId) {
     const rka = rkaList.find((r) => r.id === rkaId)
     setForm((prev) => ({
@@ -824,6 +855,7 @@ function TabBKU() {
       rka_id: rkaId,
       uraian: rka ? rka.rincian_kegiatan : prev.uraian,
       jumlah: rka ? String(rka.harga_satuan) : prev.jumlah,
+      kode_rekening: rka && rka.kode_rekening ? rka.kode_rekening : prev.kode_rekening,
     }))
   }
 
@@ -985,7 +1017,7 @@ function TabBKU() {
                   ))}
                 </select>
                 <p className="text-xs text-ink-700/40 mt-1">
-                  Memilih kegiatan akan mengisi Uraian & Jumlah secara otomatis (harga satuan per acuan RKA) — tetap bisa diubah manual.
+                  Memilih kegiatan akan mengisi Uraian, Jumlah & Kode Rekening secara otomatis (sesuai acuan RKA) — tetap bisa diubah manual.
                 </p>
               </div>
               <div className="col-span-2">
