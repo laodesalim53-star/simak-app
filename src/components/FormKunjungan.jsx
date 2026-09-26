@@ -18,6 +18,20 @@ function labelJenisLayanan(value) {
   return JENIS_LAYANAN.find((j) => j.value === value)?.label || value || "-";
 }
 
+// Template nama obat/bahan per jenis layanan — sekadar daftar nama umum yang
+// tersedia di puskesmas untuk mempercepat pengisian, BUKAN rekomendasi dosis
+// atau aturan pakai. Dosis dan indikasi tetap sepenuhnya penilaian petugas.
+const TEMPLATE_OBAT = {
+  anc: ["Tablet Tambah Darah (Fe)", "Asam Folat", "Kalsium Laktat", "Vitamin B Complex"],
+  persalinan: ["Oksitosin", "Vitamin K1", "Salep Mata Antibiotik"],
+  nifas: ["Tablet Tambah Darah (Fe)", "Vitamin A", "Paracetamol"],
+  kb: ["Pil KB Kombinasi", "Suntik KB 3 Bulan", "Suntik KB 1 Bulan"],
+  imunisasi: ["Vaksin BCG", "Vaksin DPT-HB-Hib", "Vaksin Polio", "Vaksin Campak/MR"],
+  balita: ["Paracetamol Sirup", "Zinc", "Oralit", "Vitamin A"],
+  umum: ["Paracetamol", "Amoxicillin", "Antasida", "Vitamin B Complex", "CTM"],
+  rujukan: [],
+};
+
 const KOSONG = {
   jenis_layanan: "umum",
   keluhan: "",
@@ -43,9 +57,26 @@ function formatTanggalIndonesia(ts) {
   });
 }
 
+// Tambahkan nama obat ke teks yang sudah ada, dipisah koma, tanpa duplikat.
+function tambahKeDaftarObat(teksSaatIni, nama) {
+  const daftar = teksSaatIni
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+  if (daftar.some((t) => t.toLowerCase() === nama.toLowerCase())) {
+    return teksSaatIni; // sudah ada, tidak diulang
+  }
+  daftar.push(nama);
+  return daftar.join(", ");
+}
+
 // Field form dipakai ulang untuk form Tambah maupun modal Edit, supaya
 // tidak ada dua salinan JSX yang bisa saling tidak sinkron.
-function FieldPemeriksaan({ form, ubahField }) {
+// `setField(field, value)` dipakai khusus untuk aksi klik chip (bukan event
+// input biasa), terpisah dari `ubahField` yang menangani onChange input/textarea.
+function FieldPemeriksaan({ form, ubahField, setField }) {
+  const templateObat = TEMPLATE_OBAT[form.jenis_layanan] || [];
+
   return (
     <>
       <div>
@@ -117,7 +148,39 @@ function FieldPemeriksaan({ form, ubahField }) {
 
       <div>
         <label className="mb-1 block text-sm font-medium text-slate-700">Obat Diberikan</label>
-        <input value={form.obat_diberikan} onChange={ubahField("obat_diberikan")} className="w-full rounded border px-3 py-2 text-sm" />
+        <input
+          list="daftar-template-obat"
+          value={form.obat_diberikan}
+          onChange={ubahField("obat_diberikan")}
+          placeholder="Ketik atau pilih dari template di bawah"
+          className="w-full rounded border px-3 py-2 text-sm"
+        />
+        {/* datalist: muncul sebagai saran ketik otomatis bawaan browser,
+            gabungan semua template supaya tetap membantu meski jenis
+            layanan tidak match persis. */}
+        <datalist id="daftar-template-obat">
+          {Object.values(TEMPLATE_OBAT).flat().map((nama) => (
+            <option key={nama} value={nama} />
+          ))}
+        </datalist>
+
+        {templateObat.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {templateObat.map((nama) => (
+              <button
+                key={nama}
+                type="button"
+                onClick={() => setField("obat_diberikan", tambahKeDaftarObat(form.obat_diberikan, nama))}
+                className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+              >
+                + {nama}
+              </button>
+            ))}
+          </div>
+        )}
+        <p className="mt-1 text-xs text-slate-400">
+          Template nama obat umum sesuai jenis layanan — dosis dan aturan pakai tetap ditentukan oleh petugas.
+        </p>
       </div>
 
       <div>
@@ -152,6 +215,11 @@ export default function FormKunjungan({
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
   const ubahFieldEdit = (field) => (e) =>
     setFormEdit((prev) => ({ ...prev, [field]: e.target.value }));
+
+  const setFieldForm = (field, value) =>
+    setForm((prev) => ({ ...prev, [field]: value }));
+  const setFieldFormEdit = (field, value) =>
+    setFormEdit((prev) => ({ ...prev, [field]: value }));
 
   const muatRiwayat = useCallback(async () => {
     if (!pasien?.id) {
@@ -322,7 +390,7 @@ export default function FormKunjungan({
       </div>
 
       <form onSubmit={simpanKunjungan} className="space-y-3 rounded-lg border bg-white p-4">
-        <FieldPemeriksaan form={form} ubahField={ubahField} />
+        <FieldPemeriksaan form={form} ubahField={ubahField} setField={setFieldForm} />
 
         {pesan && (
           <p className={`text-sm ${pesan.tipe === "error" ? "text-red-600" : "text-emerald-700"}`}>
@@ -404,7 +472,7 @@ export default function FormKunjungan({
             </div>
 
             <form onSubmit={simpanEdit} className="space-y-3">
-              <FieldPemeriksaan form={formEdit} ubahField={ubahFieldEdit} />
+              <FieldPemeriksaan form={formEdit} ubahField={ubahFieldEdit} setField={setFieldFormEdit} />
 
               <div className="flex justify-end gap-2 pt-2">
                 <button
