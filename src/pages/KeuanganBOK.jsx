@@ -17,6 +17,18 @@ import {
 // Komponen BOK baku disimpan sebagai teks bebas (bukan enum) supaya admin
 // bisa menyesuaikan nomenklatur mengikuti juknis BOK tahun berjalan —
 // daftar di bawah ini hanya SARAN/opsi cepat di dropdown, bukan pembatas.
+//
+// == PERUBAHAN: HUBUNGAN DENGAN DATA PEGAWAI (pegawai_puskesmas) ==
+// Tab Kwitansi dan Tab SK Pengelola sekarang bisa menautkan penerima /
+// anggota tim ke data pegawai di `pegawai_puskesmas`, supaya nama & jabatan
+// yang tercetak selalu konsisten dengan data pegawai terdaftar (sesuai
+// tugasnya) — bukan diketik ulang manual & rawan typo/tidak sinkron.
+// - kwitansi_bok: perlu kolom baru `pegawai_id uuid null references
+//   pegawai_puskesmas(id)`. Nama/jabatan penerima tetap disimpan sebagai
+//   teks (untuk histori, kalau pegawai kelak diubah/dihapus), tapi
+//   otomatis terisi dari pegawai yang dipilih.
+// - sk_pengelola_bok.susunan_tim: kolomnya jsonb, jadi tidak perlu migrasi
+//   — cukup tambahkan key `pegawai_id` per anggota tim di dalam JSON.
 const OPSI_KOMPONEN_BOK = [
   'UKM Esensial',
   'UKM Pengembangan',
@@ -724,6 +736,7 @@ function TabBKU() {
 
 const emptyFormKwitansi = {
   bku_id: '',
+  pegawai_id: '',
   nomor_kwitansi: '',
   tanggal: new Date().toISOString().slice(0, 10),
   sudah_terima_dari: '',
@@ -738,6 +751,7 @@ const emptyFormKwitansi = {
 function TabKwitansi() {
   const { sekolahId, profil } = useAuth()
   const [profilPuskesmas, setProfilPuskesmas] = useState(null)
+  const [pegawaiList, setPegawaiList] = useState([])
   const [data, setData] = useState([])
   const [bkuList, setBkuList] = useState([])
   const [loading, setLoading] = useState(true)
@@ -756,6 +770,16 @@ function TabKwitansi() {
       .eq('sekolah_id', sekolahId)
       .maybeSingle()
       .then(({ data: p }) => setProfilPuskesmas(p))
+
+    // Daftar pegawai aktif — dipakai untuk menautkan penerima kwitansi ke
+    // data pegawai sesungguhnya (nama & jabatan otomatis sesuai tugasnya).
+    supabase
+      .from('pegawai_puskesmas')
+      .select('id, nama_lengkap, nip, jabatan')
+      .eq('sekolah_id', sekolahId)
+      .eq('status', 'aktif')
+      .order('nama_lengkap')
+      .then(({ data: pg }) => setPegawaiList(pg || []))
   }, [sekolahId])
 
   async function loadData() {
@@ -798,6 +822,7 @@ function TabKwitansi() {
   function openEdit(row) {
     setForm({
       bku_id: row.bku_id || '',
+      pegawai_id: row.pegawai_id || '',
       nomor_kwitansi: row.nomor_kwitansi || '',
       tanggal: row.tanggal,
       sudah_terima_dari: row.sudah_terima_dari || '',
@@ -825,6 +850,19 @@ function TabKwitansi() {
     }))
   }
 
+  // Isi otomatis Nama & Jabatan Penerima dari pegawai yang dipilih —
+  // memastikan penerima kwitansi sesuai data pegawai & jabatan/tugasnya
+  // yang tercatat di Data Pegawai, bukan ketikan manual yang bisa keliru.
+  function pilihPegawaiPenerima(pegawaiId) {
+    const p = pegawaiList.find((x) => x.id === pegawaiId)
+    setForm((prev) => ({
+      ...prev,
+      pegawai_id: pegawaiId,
+      nama_penerima: p ? p.nama_lengkap : prev.nama_penerima,
+      jabatan_penerima: p ? p.jabatan : prev.jabatan_penerima,
+    }))
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     if (!sekolahId) return
@@ -832,6 +870,7 @@ function TabKwitansi() {
     const payload = {
       sekolah_id: sekolahId,
       bku_id: form.bku_id || null,
+      pegawai_id: form.pegawai_id || null,
       nomor_kwitansi: form.nomor_kwitansi || null,
       tanggal: form.tanggal,
       sudah_terima_dari: form.sudah_terima_dari || null,
@@ -906,7 +945,10 @@ function TabKwitansi() {
                 <td className="font-mono text-xs">{k.nomor_kwitansi || '-'}</td>
                 <td className="font-medium">{k.untuk_pembayaran}</td>
                 <td className="font-semibold text-emerald-700">{formatRupiah(k.jumlah_uang)}</td>
-                <td>{k.nama_penerima || '-'}</td>
+                <td>
+                  {k.nama_penerima || '-'}
+                  {k.jabatan_penerima && <span className="block text-xs text-ink-700/50">{k.jabatan_penerima}</span>}
+                </td>
                 <td>
                   <div className="flex items-center gap-1 justify-end">
                     <button onClick={() => setCetak(k)} className="p-2 hover:bg-blue-600/10 rounded-lg text-blue-700/70" title="Cetak">
@@ -973,9 +1015,22 @@ function TabKwitansi() {
                 <label className="eyebrow mb-1.5 block">Potongan PPN (Rp, opsional)</label>
                 <input type="number" min="0" className="input-field" value={form.potongan_ppn} onChange={(e) => setForm({ ...form, potongan_ppn: e.target.value })} />
               </div>
+
+              <div className="col-span-2 pt-2 border-t border-ink-900/10">
+                <label className="eyebrow mb-1.5 block text-emerald-700">Pilih Pegawai Penerima (sesuai tugasnya)</label>
+                <select className="input-field" value={form.pegawai_id} onChange={(e) => pilihPegawaiPenerima(e.target.value)}>
+                  <option value="">— Ketik manual (tidak tertaut ke Data Pegawai) —</option>
+                  {pegawaiList.map((p) => (
+                    <option key={p.id} value={p.id}>{p.nama_lengkap} — {p.jabatan || 'Tanpa jabatan'}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-ink-700/40 mt-1">
+                  Memilih pegawai akan mengisi Nama & Jabatan Penerima di bawah secara otomatis dari Data Pegawai.
+                </p>
+              </div>
               <div>
                 <label className="eyebrow mb-1.5 block">Nama Penerima</label>
-                <input className="input-field" value={form.nama_penerima} onChange={(e) => setForm({ ...form, nama_penerima: e.target.value })} />
+                <input className="input-field" value={form.nama_penerima} onChange={(e) => setForm({ ...form, nama_penerima: e.target.value, pegawai_id: '' })} />
               </div>
               <div>
                 <label className="eyebrow mb-1.5 block">Jabatan Penerima</label>
@@ -1453,7 +1508,7 @@ function TabNotaBelanja() {
 // TAB 5: SK PENGELOLA BOK
 // ============================================================
 
-const barisTimKosong = { nama: '', nip: '', jabatan_tim: '', jabatan_puskesmas: '' }
+const barisTimKosong = { pegawai_id: '', nama: '', nip: '', jabatan_tim: '', jabatan_puskesmas: '' }
 
 const emptyFormSk = {
   tahun_anggaran: new Date().getFullYear(),
@@ -1469,6 +1524,7 @@ const OPSI_JABATAN_TIM = ['Penanggung Jawab', 'Bendahara', 'Pelaksana Kegiatan',
 function TabSKPengelola() {
   const { sekolahId } = useAuth()
   const [profilPuskesmas, setProfilPuskesmas] = useState(null)
+  const [pegawaiList, setPegawaiList] = useState([])
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -1485,6 +1541,17 @@ function TabSKPengelola() {
       .eq('sekolah_id', sekolahId)
       .maybeSingle()
       .then(({ data: p }) => setProfilPuskesmas(p))
+
+    // Daftar pegawai aktif — dipakai untuk menautkan anggota tim pengelola
+    // BOK ke data pegawai sesungguhnya (NIP & jabatan di puskesmas otomatis
+    // sesuai tugasnya, admin tinggal memilih peran mereka dalam tim BOK).
+    supabase
+      .from('pegawai_puskesmas')
+      .select('id, nama_lengkap, nip, jabatan')
+      .eq('sekolah_id', sekolahId)
+      .eq('status', 'aktif')
+      .order('nama_lengkap')
+      .then(({ data: pg }) => setPegawaiList(pg || []))
   }, [sekolahId])
 
   async function loadData() {
@@ -1523,7 +1590,9 @@ function TabSKPengelola() {
       tanggal_sk: row.tanggal_sk || '',
       tentang: row.tentang || '',
       dasar_hukum: row.dasar_hukum || '',
-      susunan_tim: (row.susunan_tim && row.susunan_tim.length > 0) ? row.susunan_tim : [{ ...barisTimKosong }],
+      susunan_tim: (row.susunan_tim && row.susunan_tim.length > 0)
+        ? row.susunan_tim.map((t) => ({ ...barisTimKosong, ...t }))
+        : [{ ...barisTimKosong }],
     })
     setEditingId(row.id)
     setShowForm(true)
@@ -1533,6 +1602,25 @@ function TabSKPengelola() {
     setForm((prev) => {
       const tim = [...prev.susunan_tim]
       tim[index] = { ...tim[index], [field]: value }
+      return { ...prev, susunan_tim: tim }
+    })
+  }
+
+  // Isi otomatis Nama, NIP & Jabatan di Puskesmas dari pegawai yang
+  // dipilih — anggota tim BOK jadi konsisten dengan Data Pegawai. Jabatan
+  // dalam Tim (Penanggung Jawab/Bendahara/dll.) tetap dipilih manual,
+  // karena itu peran khusus dalam pengelolaan BOK, bukan jabatan pokoknya.
+  function pilihPegawaiTim(index, pegawaiId) {
+    const p = pegawaiList.find((x) => x.id === pegawaiId)
+    setForm((prev) => {
+      const tim = [...prev.susunan_tim]
+      tim[index] = {
+        ...tim[index],
+        pegawai_id: pegawaiId,
+        nama: p ? p.nama_lengkap : tim[index].nama,
+        nip: p ? (p.nip || '') : tim[index].nip,
+        jabatan_puskesmas: p ? (p.jabatan || '') : tim[index].jabatan_puskesmas,
+      }
       return { ...prev, susunan_tim: tim }
     })
   }
@@ -1549,7 +1637,15 @@ function TabSKPengelola() {
     e.preventDefault()
     if (!sekolahId) return
     setSaving(true)
-    const timBersih = form.susunan_tim.filter((t) => t.nama.trim() !== '')
+    const timBersih = form.susunan_tim
+      .filter((t) => t.nama.trim() !== '')
+      .map((t) => ({
+        pegawai_id: t.pegawai_id || null,
+        nama: t.nama,
+        nip: t.nip || '',
+        jabatan_tim: t.jabatan_tim || '',
+        jabatan_puskesmas: t.jabatan_puskesmas || '',
+      }))
     const payload = {
       sekolah_id: sekolahId,
       tahun_anggaran: Number(form.tahun_anggaran),
@@ -1671,17 +1767,29 @@ function TabSKPengelola() {
             <p className="eyebrow text-emerald-700 mb-2">Susunan Tim</p>
             <div className="space-y-2 mb-2">
               {form.susunan_tim.map((t, i) => (
-                <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                  <input className="input-field col-span-3" placeholder="Nama" value={t.nama} onChange={(e) => ubahTim(i, 'nama', e.target.value)} />
-                  <input className="input-field col-span-2" placeholder="NIP" value={t.nip} onChange={(e) => ubahTim(i, 'nip', e.target.value)} />
-                  <select className="input-field col-span-3" value={t.jabatan_tim} onChange={(e) => ubahTim(i, 'jabatan_tim', e.target.value)}>
-                    <option value="">Jabatan dalam Tim</option>
-                    {OPSI_JABATAN_TIM.map((j) => <option key={j} value={j}>{j}</option>)}
+                <div key={i} className="p-3 rounded-lg bg-emerald-600/[0.04] space-y-2">
+                  <select
+                    className="input-field"
+                    value={t.pegawai_id || ''}
+                    onChange={(e) => pilihPegawaiTim(i, e.target.value)}
+                  >
+                    <option value="">— Pilih pegawai (opsional, sesuai tugasnya) —</option>
+                    {pegawaiList.map((p) => (
+                      <option key={p.id} value={p.id}>{p.nama_lengkap} — {p.jabatan || 'Tanpa jabatan'}</option>
+                    ))}
                   </select>
-                  <input className="input-field col-span-3" placeholder="Jabatan di Puskesmas" value={t.jabatan_puskesmas} onChange={(e) => ubahTim(i, 'jabatan_puskesmas', e.target.value)} />
-                  <button type="button" onClick={() => hapusBarisTim(i)} className="col-span-1 p-2 text-red-900/60 hover:bg-red-900/10 rounded-lg">
-                    <Trash2 size={15} />
-                  </button>
+                  <div className="grid grid-cols-12 gap-2 items-center">
+                    <input className="input-field col-span-3" placeholder="Nama" value={t.nama} onChange={(e) => ubahTim(i, 'nama', e.target.value)} />
+                    <input className="input-field col-span-2" placeholder="NIP" value={t.nip} onChange={(e) => ubahTim(i, 'nip', e.target.value)} />
+                    <select className="input-field col-span-3" value={t.jabatan_tim} onChange={(e) => ubahTim(i, 'jabatan_tim', e.target.value)}>
+                      <option value="">Jabatan dalam Tim</option>
+                      {OPSI_JABATAN_TIM.map((j) => <option key={j} value={j}>{j}</option>)}
+                    </select>
+                    <input className="input-field col-span-3" placeholder="Jabatan di Puskesmas" value={t.jabatan_puskesmas} onChange={(e) => ubahTim(i, 'jabatan_puskesmas', e.target.value)} />
+                    <button type="button" onClick={() => hapusBarisTim(i)} className="col-span-1 p-2 text-red-900/60 hover:bg-red-900/10 rounded-lg">
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
