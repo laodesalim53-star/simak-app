@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import Layout from '../components/Layout'
+import KopSurat from '../components/KopSurat'
 import { useAuth } from '../lib/AuthContext'
 import {
   Plus, Pencil, Trash2, Search, X, Loader2, Wallet,
@@ -1131,9 +1132,18 @@ function TabKwitansi() {
 
       <style>{`
         @media print {
+          @page { size: A4; margin: 15mm; }
+          html, body { margin: 0 !important; padding: 0 !important; }
           body * { visibility: hidden; }
           .lembar-kwitansi, .lembar-kwitansi * { visibility: visible; }
-          .lembar-kwitansi { position: absolute; top: 0; left: 0; }
+          .lembar-kwitansi {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
           .no-print { display: none !important; }
         }
       `}</style>
@@ -1494,9 +1504,18 @@ function TabNotaBelanja() {
 
       <style>{`
         @media print {
+          @page { size: A4; margin: 15mm; }
+          html, body { margin: 0 !important; padding: 0 !important; }
           body * { visibility: hidden; }
           .lembar-nota, .lembar-nota * { visibility: visible; }
-          .lembar-nota { position: absolute; top: 0; left: 0; }
+          .lembar-nota {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
           .no-print { display: none !important; }
         }
       `}</style>
@@ -1820,9 +1839,10 @@ function TabSKPengelola() {
             </div>
 
             <div className="lembar-sk p-8 text-sm" style={{ width: '190mm', margin: '0 auto' }}>
+              <KopSurat />
+
               <div className="text-center mb-4">
                 <p className="font-display font-bold text-base uppercase">Surat Keputusan Kepala Puskesmas</p>
-                <p className="font-display font-bold text-base uppercase">{profilPuskesmas?.nama_puskesmas || '-'}</p>
                 <p className="mt-1">Nomor: {cetak.nomor_sk || '..............................'}</p>
               </div>
 
@@ -1880,9 +1900,18 @@ function TabSKPengelola() {
 
       <style>{`
         @media print {
+          @page { size: A4; margin: 15mm; }
+          html, body { margin: 0 !important; padding: 0 !important; }
           body * { visibility: hidden; }
           .lembar-sk, .lembar-sk * { visibility: visible; }
-          .lembar-sk { position: absolute; top: 0; left: 0; }
+          .lembar-sk {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
           .no-print { display: none !important; }
         }
       `}</style>
