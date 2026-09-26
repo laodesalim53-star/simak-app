@@ -7,6 +7,7 @@ import { useAuth } from '../lib/AuthContext'
 import {
   Plus, Pencil, Trash2, Search, X, Loader2, Wallet, Upload, Download,
   ClipboardList, BookOpen, Receipt, ShoppingCart, FileSignature, Printer,
+  ListChecks,
 } from 'lucide-react'
 
 // Halaman "Keuangan BOK" (Bantuan Operasional Kesehatan) — KHUSUS tenant
@@ -39,6 +40,29 @@ import {
 // form Tambah/Ubah Rincian Kegiatan (RKA), lalu ditarik otomatis ke field
 // Kode Rekening di form Transaksi BKU saat kegiatan RKA terkait dipilih —
 // admin tetap bisa mengubahnya manual di BKU kalau realisasinya beda.
+//
+// == PERUBAHAN: TEMPLATE/KATALOG KEGIATAN BOK ==
+// Tab RKA sekarang punya KATALOG_KEGIATAN_BOK: daftar kegiatan umum yang
+// biasa ada di puskesmas (dikelompokkan per Komponen & Sub Komponen),
+// supaya admin tidak perlu mengetik ulang nama kegiatan dari nol. Dua cara
+// pakai:
+// 1) Tombol "Template Kegiatan BOK" di atas tabel RKA membuka modal berisi
+//    seluruh katalog dengan checkbox per kegiatan (dikelompokkan per
+//    Komponen, bisa dicari) — kegiatan yang dicentang akan ditambahkan
+//    sekaligus ke rka_bok untuk tahun yang sedang difilter, dengan
+//    Volume=1 & Harga Satuan=0 sebagai placeholder (admin tinggal
+//    menyunting Volume, Harga Satuan, Kode Rekening & Bulan Pelaksanaan
+//    per baris sesuai kebutuhan riil). Kegiatan yang sudah ada di tahun
+//    tersebut ditandai "Sudah ada" & tidak bisa dipilih lagi (dicegah
+//    dobel berdasarkan kombinasi Komponen+Sub Komponen+Rincian Kegiatan).
+// 2) Dropdown "Pilih dari Katalog Kegiatan BOK" di form Tambah/Ubah RKA
+//    untuk menambah SATU kegiatan saja — memilih item akan mengisi
+//    Komponen, Sub Komponen, Rincian Kegiatan & Satuan secara otomatis;
+//    Volume, Harga Satuan & Kode Rekening tetap diisi manual karena
+//    nilainya spesifik per puskesmas/daerah/tahun anggaran.
+// Katalog ini hanya SARAN nama kegiatan (bukan Kode Rekening resmi) —
+// Kode Rekening TIDAK disertakan otomatis dari katalog karena berbeda-beda
+// per daerah (mengikuti Bagan Akun Standar/Kode Rekening APBD setempat).
 //
 // == PERUBAHAN: AUTO-ISIAN DARI RKA DI TAB BKU ==
 // Tab BKU sekarang mengambil kolom tambahan dari rka_bok (satuan,
@@ -175,6 +199,92 @@ const emptyFormRka = {
   keterangan: '',
 }
 
+// Katalog kegiatan BOK yang umum dijalankan puskesmas — hanya SARAN nama
+// kegiatan & satuan (bukan Kode Rekening resmi, karena itu mengikuti
+// Bagan Akun Standar/Kode Rekening APBD masing-masing daerah). Admin
+// bebas menambah/mengubah sendiri lewat form Tambah Rincian Kegiatan;
+// katalog ini semata mempercepat pengisian, bukan pembatas.
+const KATALOG_KEGIATAN_BOK = [
+  // --- UKM Esensial: Promosi Kesehatan ---
+  { komponen: 'UKM Esensial', sub_komponen: 'Promosi Kesehatan', rincian_kegiatan: 'Penyuluhan kesehatan di sekolah', satuan: 'Kali' },
+  { komponen: 'UKM Esensial', sub_komponen: 'Promosi Kesehatan', rincian_kegiatan: 'Penyuluhan kesehatan di posyandu', satuan: 'Kali' },
+  { komponen: 'UKM Esensial', sub_komponen: 'Promosi Kesehatan', rincian_kegiatan: 'Pembinaan Desa/Kelurahan Siaga Aktif', satuan: 'OH' },
+  { komponen: 'UKM Esensial', sub_komponen: 'Promosi Kesehatan', rincian_kegiatan: 'Advokasi lintas sektor tingkat kecamatan', satuan: 'OK' },
+  { komponen: 'UKM Esensial', sub_komponen: 'Promosi Kesehatan', rincian_kegiatan: 'Pembuatan media promosi kesehatan (banner, leaflet, poster)', satuan: 'Paket' },
+  // --- UKM Esensial: Kesehatan Ibu dan Anak (KIA) ---
+  { komponen: 'UKM Esensial', sub_komponen: 'Kesehatan Ibu dan Anak (KIA)', rincian_kegiatan: 'Kunjungan rumah ibu hamil risiko tinggi', satuan: 'OH' },
+  { komponen: 'UKM Esensial', sub_komponen: 'Kesehatan Ibu dan Anak (KIA)', rincian_kegiatan: 'Kelas ibu hamil', satuan: 'Kali' },
+  { komponen: 'UKM Esensial', sub_komponen: 'Kesehatan Ibu dan Anak (KIA)', rincian_kegiatan: 'Pelacakan dan pelaporan kematian ibu/bayi', satuan: 'OK' },
+  { komponen: 'UKM Esensial', sub_komponen: 'Kesehatan Ibu dan Anak (KIA)', rincian_kegiatan: 'Kunjungan neonatal risiko tinggi', satuan: 'OH' },
+  { komponen: 'UKM Esensial', sub_komponen: 'Kesehatan Ibu dan Anak (KIA)', rincian_kegiatan: 'Pemantauan tumbuh kembang balita', satuan: 'Kali' },
+  // --- UKM Esensial: Gizi Masyarakat ---
+  { komponen: 'UKM Esensial', sub_komponen: 'Gizi Masyarakat', rincian_kegiatan: 'Pemantauan status gizi balita (PSG)', satuan: 'Paket' },
+  { komponen: 'UKM Esensial', sub_komponen: 'Gizi Masyarakat', rincian_kegiatan: 'Pemberian PMT pemulihan balita gizi kurang', satuan: 'Paket' },
+  { komponen: 'UKM Esensial', sub_komponen: 'Gizi Masyarakat', rincian_kegiatan: 'Sweeping vitamin A', satuan: 'OH' },
+  { komponen: 'UKM Esensial', sub_komponen: 'Gizi Masyarakat', rincian_kegiatan: 'Pemantauan garam beryodium', satuan: 'OK' },
+  // --- UKM Esensial: Kesehatan Lingkungan ---
+  { komponen: 'UKM Esensial', sub_komponen: 'Kesehatan Lingkungan', rincian_kegiatan: 'Inspeksi kesehatan lingkungan tempat pengelolaan pangan', satuan: 'OH' },
+  { komponen: 'UKM Esensial', sub_komponen: 'Kesehatan Lingkungan', rincian_kegiatan: 'Pemicuan STBM (Sanitasi Total Berbasis Masyarakat)', satuan: 'Kali' },
+  { komponen: 'UKM Esensial', sub_komponen: 'Kesehatan Lingkungan', rincian_kegiatan: 'Pengawasan kualitas air minum', satuan: 'OH' },
+  { komponen: 'UKM Esensial', sub_komponen: 'Kesehatan Lingkungan', rincian_kegiatan: 'Verifikasi desa/kelurahan Stop BABS', satuan: 'OK' },
+  // --- UKM Esensial: Pencegahan dan Pengendalian Penyakit (P2P) ---
+  { komponen: 'UKM Esensial', sub_komponen: 'Pencegahan dan Pengendalian Penyakit (P2P)', rincian_kegiatan: 'Pelacakan kontak kasus TBC', satuan: 'OH' },
+  { komponen: 'UKM Esensial', sub_komponen: 'Pencegahan dan Pengendalian Penyakit (P2P)', rincian_kegiatan: 'Penemuan kasus aktif TBC', satuan: 'Kali' },
+  { komponen: 'UKM Esensial', sub_komponen: 'Pencegahan dan Pengendalian Penyakit (P2P)', rincian_kegiatan: 'Fogging fokus DBD', satuan: 'Paket' },
+  { komponen: 'UKM Esensial', sub_komponen: 'Pencegahan dan Pengendalian Penyakit (P2P)', rincian_kegiatan: 'Surveilans penyakit tidak menular (PTM)', satuan: 'OH' },
+  { komponen: 'UKM Esensial', sub_komponen: 'Pencegahan dan Pengendalian Penyakit (P2P)', rincian_kegiatan: 'Imunisasi rutin dan sweeping imunisasi', satuan: 'OH' },
+  { komponen: 'UKM Esensial', sub_komponen: 'Pencegahan dan Pengendalian Penyakit (P2P)', rincian_kegiatan: 'Pelacakan kasus kontak erat penyakit menular', satuan: 'OH' },
+  // --- UKM Esensial: Posyandu / Pelayanan Kesehatan Dasar ---
+  { komponen: 'UKM Esensial', sub_komponen: 'Posyandu', rincian_kegiatan: 'Transport petugas pendamping posyandu balita', satuan: 'OH' },
+  { komponen: 'UKM Esensial', sub_komponen: 'Posyandu', rincian_kegiatan: 'Refreshing/pembinaan kader posyandu', satuan: 'Kali' },
+
+  // --- UKM Pengembangan ---
+  { komponen: 'UKM Pengembangan', sub_komponen: 'Kesehatan Jiwa', rincian_kegiatan: 'Kunjungan rumah ODGJ (Orang Dengan Gangguan Jiwa)', satuan: 'OH' },
+  { komponen: 'UKM Pengembangan', sub_komponen: 'Kesehatan Lansia', rincian_kegiatan: 'Posyandu lansia (pemeriksaan kesehatan berkala)', satuan: 'OK' },
+  { komponen: 'UKM Pengembangan', sub_komponen: 'Kesehatan Olahraga', rincian_kegiatan: 'Tes kebugaran jasmani anak sekolah', satuan: 'Paket' },
+  { komponen: 'UKM Pengembangan', sub_komponen: 'Kesehatan Gigi dan Mulut (UKGS)', rincian_kegiatan: 'Penjaringan kesehatan gigi anak sekolah', satuan: 'Kali' },
+  { komponen: 'UKM Pengembangan', sub_komponen: 'Kesehatan Kerja', rincian_kegiatan: 'Pembinaan Pos UKK (Upaya Kesehatan Kerja)', satuan: 'OK' },
+  { komponen: 'UKM Pengembangan', sub_komponen: 'Kesehatan Tradisional', rincian_kegiatan: 'Pembinaan kelompok asuhan mandiri TOGA', satuan: 'OK' },
+
+  // --- Manajemen BOK (Dukungan Manajemen) ---
+  { komponen: 'Manajemen BOK (Dukungan Manajemen)', sub_komponen: '', rincian_kegiatan: 'Honor pengelola keuangan BOK (Bendahara)', satuan: 'Bulan' },
+  { komponen: 'Manajemen BOK (Dukungan Manajemen)', sub_komponen: '', rincian_kegiatan: 'Belanja ATK pengelolaan BOK', satuan: 'Paket' },
+  { komponen: 'Manajemen BOK (Dukungan Manajemen)', sub_komponen: '', rincian_kegiatan: 'Penggandaan dan pelaporan bulanan BOK', satuan: 'Bulan' },
+  { komponen: 'Manajemen BOK (Dukungan Manajemen)', sub_komponen: '', rincian_kegiatan: 'Rapat koordinasi internal pengelola BOK', satuan: 'Kali' },
+  { komponen: 'Manajemen BOK (Dukungan Manajemen)', sub_komponen: '', rincian_kegiatan: 'Perjalanan dinas konsultasi ke Dinas Kesehatan Kabupaten/Kota', satuan: 'OK' },
+
+  // --- Dukungan Operasional UKM Tim Nusantara Sehat ---
+  { komponen: 'Dukungan Operasional UKM Tim Nusantara Sehat', sub_komponen: '', rincian_kegiatan: 'Transport pendampingan Tim Nusantara Sehat ke lokasi binaan', satuan: 'OH' },
+  { komponen: 'Dukungan Operasional UKM Tim Nusantara Sehat', sub_komponen: '', rincian_kegiatan: 'Konsumsi rapat koordinasi Tim Nusantara Sehat', satuan: 'Kali' },
+
+  // --- Pengawasan Obat dan Makanan ---
+  { komponen: 'Pengawasan Obat dan Makanan', sub_komponen: '', rincian_kegiatan: 'Pengawasan peredaran obat dan makanan di wilayah kerja', satuan: 'OH' },
+  { komponen: 'Pengawasan Obat dan Makanan', sub_komponen: '', rincian_kegiatan: 'Pembinaan apotek dan toko obat', satuan: 'OK' },
+
+  // --- Penyediaan Tenaga dengan Perjanjian Kerja ---
+  { komponen: 'Penyediaan Tenaga dengan Perjanjian Kerja', sub_komponen: '', rincian_kegiatan: 'Honor tenaga kontrak promosi kesehatan/gizi/kesling', satuan: 'Bulan' },
+]
+
+// Kunci unik per item katalog (untuk pelacakan pilihan checkbox & deteksi
+// "sudah ada") — kombinasi Komponen + Sub Komponen + Rincian Kegiatan.
+function kunciKatalog(item) {
+  return `${item.komponen}|${item.sub_komponen || ''}|${item.rincian_kegiatan}`
+}
+
+function kelompokkanKatalog(daftar) {
+  const map = {}
+  for (const item of daftar) {
+    const key = item.komponen
+    if (!map[key]) map[key] = []
+    map[key].push(item)
+  }
+  return map
+}
+
+// Dikelompokkan sekali di level modul (data statis) — dipakai untuk
+// dropdown pilih-satu-kegiatan di form Tambah/Ubah RKA.
+const KATALOG_KEGIATAN_DIKELOMPOKKAN = kelompokkanKatalog(KATALOG_KEGIATAN_BOK)
+
 function TabRKA() {
   const { sekolahId } = useAuth()
   const [data, setData] = useState([])
@@ -193,6 +303,12 @@ function TabRKA() {
   const [importFileName, setImportFileName] = useState('')
   const [importError, setImportError] = useState('')
   const [importing, setImporting] = useState(false)
+
+  // == Template/Katalog Kegiatan BOK (isi cepat & massal) ==
+  const [showTemplate, setShowTemplate] = useState(false)
+  const [templateSearch, setTemplateSearch] = useState('')
+  const [templateSelected, setTemplateSelected] = useState(() => new Set())
+  const [templateSaving, setTemplateSaving] = useState(false)
 
   async function loadData() {
     if (!sekolahId) {
@@ -234,6 +350,19 @@ function TabRKA() {
     })
     setEditingId(row.id)
     setShowForm(true)
+  }
+
+  // Isi otomatis Komponen, Sub Komponen, Rincian Kegiatan & Satuan dari
+  // katalog kegiatan BOK — Volume, Harga Satuan & Kode Rekening tetap
+  // diisi manual karena nilainya spesifik per puskesmas/tahun anggaran.
+  function pilihDariKatalog(item) {
+    setForm((prev) => ({
+      ...prev,
+      komponen: item.komponen,
+      sub_komponen: item.sub_komponen || '',
+      rincian_kegiatan: item.rincian_kegiatan,
+      satuan: item.satuan || '',
+    }))
   }
 
   async function handleSubmit(e) {
@@ -423,6 +552,91 @@ function TabRKA() {
     return map
   }, [filtered])
 
+  // Kunci kegiatan (Komponen+Sub Komponen+Rincian Kegiatan) yang sudah
+  // tercatat di tahun yang sedang difilter — supaya katalog tidak
+  // menawarkan/menambahkan kegiatan yang sama dua kali.
+  const kunciSudahAda = useMemo(() => {
+    const set = new Set()
+    for (const r of data) {
+      set.add(`${r.komponen}|${r.sub_komponen || ''}|${r.rincian_kegiatan}`)
+    }
+    return set
+  }, [data])
+
+  function bukaTemplate() {
+    // Default: centang semua kegiatan katalog yang BELUM ada di tahun ini,
+    // supaya admin tinggal meninjau lalu menekan Tambahkan.
+    const awal = new Set(
+      KATALOG_KEGIATAN_BOK.filter((item) => !kunciSudahAda.has(kunciKatalog(item))).map(kunciKatalog)
+    )
+    setTemplateSelected(awal)
+    setTemplateSearch('')
+    setShowTemplate(true)
+  }
+
+  function toggleTemplateItem(kunci) {
+    setTemplateSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(kunci)) next.delete(kunci)
+      else next.add(kunci)
+      return next
+    })
+  }
+
+  function toggleSemuaDalamKomponen(items, tandai) {
+    setTemplateSelected((prev) => {
+      const next = new Set(prev)
+      for (const item of items) {
+        const kunci = kunciKatalog(item)
+        if (kunciSudahAda.has(kunci)) continue // yang sudah ada tidak bisa dipilih ulang
+        if (tandai) next.add(kunci)
+        else next.delete(kunci)
+      }
+      return next
+    })
+  }
+
+  const katalogTerfilter = useMemo(() => {
+    const q = templateSearch.trim().toLowerCase()
+    if (!q) return KATALOG_KEGIATAN_BOK
+    return KATALOG_KEGIATAN_BOK.filter((item) =>
+      `${item.komponen} ${item.sub_komponen} ${item.rincian_kegiatan}`.toLowerCase().includes(q)
+    )
+  }, [templateSearch])
+
+  const katalogDikelompokkan = useMemo(() => kelompokkanKatalog(katalogTerfilter), [katalogTerfilter])
+
+  async function simpanTemplate() {
+    if (!sekolahId) return
+    const dipilih = KATALOG_KEGIATAN_BOK.filter(
+      (item) => templateSelected.has(kunciKatalog(item)) && !kunciSudahAda.has(kunciKatalog(item))
+    )
+    if (dipilih.length === 0) return
+    setTemplateSaving(true)
+    const payload = dipilih.map((item) => ({
+      sekolah_id: sekolahId,
+      tahun_anggaran: tahunFilter,
+      komponen: item.komponen,
+      sub_komponen: item.sub_komponen || null,
+      rincian_kegiatan: item.rincian_kegiatan,
+      volume: 1,
+      satuan: item.satuan || null,
+      harga_satuan: 0,
+      jumlah_anggaran: 0,
+      kode_rekening: null,
+      bulan_pelaksanaan: null,
+      keterangan: null,
+    }))
+    const { error } = await supabase.from('rka_bok').insert(payload)
+    setTemplateSaving(false)
+    if (!error) {
+      setShowTemplate(false)
+      loadData()
+    } else {
+      alert('Gagal menambahkan dari template: ' + error.message)
+    }
+  }
+
   return (
     <>
       <div className="card relative overflow-hidden p-4 mb-4">
@@ -459,8 +673,11 @@ function TabRKA() {
               className="hidden"
               onChange={handleFileImport}
             />
+            <button type="button" className="btn-secondary" onClick={bukaTemplate} title="Isi cepat dari katalog kegiatan BOK umum">
+              <ListChecks size={16} /> Template Kegiatan BOK
+            </button>
             <button type="button" className="btn-secondary" onClick={unduhTemplate} title="Unduh contoh format Excel">
-              <Download size={16} /> Template
+              <Download size={16} /> Template Excel
             </button>
             <button type="button" className="btn-secondary" onClick={bukaDialogImport}>
               <Upload size={16} /> Import dari Excel
@@ -537,6 +754,32 @@ function TabRKA() {
               <X size={20} />
             </button>
             <h2 className="font-display text-xl font-semibold mb-4">{editingId ? 'Ubah Rincian Kegiatan' : 'Tambah Rincian Kegiatan'}</h2>
+
+            <div className="mb-4 p-3 rounded-lg bg-emerald-600/[0.06]">
+              <label className="eyebrow mb-1.5 block text-emerald-700">Pilih dari Katalog Kegiatan BOK (opsional)</label>
+              <select
+                className="input-field"
+                value=""
+                onChange={(e) => {
+                  const item = KATALOG_KEGIATAN_BOK.find((k) => kunciKatalog(k) === e.target.value)
+                  if (item) pilihDariKatalog(item)
+                }}
+              >
+                <option value="">— Ketik manual atau pilih kegiatan dari katalog —</option>
+                {Object.entries(KATALOG_KEGIATAN_DIKELOMPOKKAN).map(([komponen, items]) => (
+                  <optgroup key={komponen} label={komponen}>
+                    {items.map((item) => (
+                      <option key={kunciKatalog(item)} value={kunciKatalog(item)}>
+                        {item.sub_komponen ? `${item.sub_komponen} — ` : ''}{item.rincian_kegiatan}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              <p className="text-xs text-ink-700/40 mt-1">
+                Memilih kegiatan akan mengisi Komponen, Sub Komponen, Rincian Kegiatan & Satuan secara otomatis — Volume, Harga Satuan & Kode Rekening tetap perlu diisi manual.
+              </p>
+            </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -708,6 +951,100 @@ function TabRKA() {
               >
                 {importing && <Loader2 size={16} className="animate-spin" />}
                 Simpan {importRows.filter((r) => r._valid).length} Kegiatan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==== Modal Template/Katalog Kegiatan BOK ==== */}
+      {showTemplate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-4">
+          <div className="card relative overflow-hidden w-full max-w-4xl p-6 max-h-[90vh] overflow-y-auto">
+            <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 to-blue-700" />
+            <button
+              type="button"
+              onClick={() => setShowTemplate(false)}
+              className="absolute top-4 right-4 text-ink-700/40 hover:text-ink-900"
+            >
+              <X size={20} />
+            </button>
+            <h2 className="font-display text-xl font-semibold mb-1">Template Kegiatan BOK</h2>
+            <p className="text-xs text-ink-700/50 mb-4">
+              Pilih kegiatan yang berlaku di puskesmas Anda untuk Tahun Anggaran {tahunFilter}. Kegiatan terpilih akan
+              ditambahkan dengan Volume = 1 &amp; Harga Satuan = Rp 0 sebagai placeholder — tinggal disunting (Volume,
+              Harga Satuan, Kode Rekening, Bulan Pelaksanaan) sesuai kebutuhan riil puskesmas.
+            </p>
+
+            <div className="relative max-w-sm mb-4">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-700/40" />
+              <input
+                className="input-field pl-9"
+                placeholder="Cari kegiatan..."
+                value={templateSearch}
+                onChange={(e) => setTemplateSearch(e.target.value)}
+              />
+            </div>
+
+            {Object.entries(katalogDikelompokkan).map(([komponen, items]) => (
+              <div key={komponen} className="mb-4 border border-ink-900/10 rounded-lg overflow-hidden">
+                <div className="px-3 py-2 bg-emerald-600/[0.06] border-b border-emerald-600/10 flex items-center justify-between">
+                  <p className="font-display font-semibold text-sm text-emerald-800">{komponen}</p>
+                  <div className="flex items-center gap-3 text-xs">
+                    <button type="button" className="text-emerald-700 hover:underline" onClick={() => toggleSemuaDalamKomponen(items, true)}>
+                      Pilih semua
+                    </button>
+                    <button type="button" className="text-ink-700/50 hover:underline" onClick={() => toggleSemuaDalamKomponen(items, false)}>
+                      Batalkan
+                    </button>
+                  </div>
+                </div>
+                <div className="divide-y divide-ink-900/5">
+                  {items.map((item) => {
+                    const kunci = kunciKatalog(item)
+                    const sudahAda = kunciSudahAda.has(kunci)
+                    return (
+                      <label
+                        key={kunci}
+                        className={`flex items-start gap-3 px-3 py-2 text-sm ${sudahAda ? 'opacity-50' : 'cursor-pointer hover:bg-emerald-600/[0.03]'}`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="mt-1"
+                          disabled={sudahAda}
+                          checked={sudahAda ? false : templateSelected.has(kunci)}
+                          onChange={() => toggleTemplateItem(kunci)}
+                        />
+                        <span className="flex-1">
+                          <span className="block font-medium">{item.rincian_kegiatan}</span>
+                          <span className="block text-xs text-ink-700/50">
+                            {item.sub_komponen ? `${item.sub_komponen} — ` : ''}Satuan: {item.satuan}
+                          </span>
+                        </span>
+                        {sudahAda && (
+                          <span className="badge bg-ink-900/10 text-ink-700/60 shrink-0">Sudah ada</span>
+                        )}
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+
+            {katalogTerfilter.length === 0 && (
+              <p className="text-sm text-ink-700/50 text-center py-6">Tidak ada kegiatan yang cocok dengan pencarian.</p>
+            )}
+
+            <div className="flex justify-end gap-3 mt-2">
+              <button type="button" className="btn-secondary" onClick={() => setShowTemplate(false)}>Batal</button>
+              <button
+                type="button"
+                disabled={templateSaving || templateSelected.size === 0}
+                onClick={simpanTemplate}
+                className="btn-primary"
+              >
+                {templateSaving && <Loader2 size={16} className="animate-spin" />}
+                Tambahkan {templateSelected.size} Kegiatan
               </button>
             </div>
           </div>
