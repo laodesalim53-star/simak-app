@@ -18,9 +18,6 @@ function labelJenisLayanan(value) {
   return JENIS_LAYANAN.find((j) => j.value === value)?.label || value || "-";
 }
 
-// Template nama obat/bahan per jenis layanan — sekadar daftar nama umum yang
-// tersedia di puskesmas untuk mempercepat pengisian, BUKAN rekomendasi dosis
-// atau aturan pakai. Dosis dan indikasi tetap sepenuhnya penilaian petugas.
 const TEMPLATE_OBAT = {
   anc: ["Tablet Tambah Darah (Fe)", "Asam Folat", "Kalsium Laktat", "Vitamin B Complex"],
   persalinan: ["Oksitosin", "Vitamin K1", "Salep Mata Antibiotik"],
@@ -57,23 +54,18 @@ function formatTanggalIndonesia(ts) {
   });
 }
 
-// Tambahkan nama obat ke teks yang sudah ada, dipisah koma, tanpa duplikat.
 function tambahKeDaftarObat(teksSaatIni, nama) {
   const daftar = teksSaatIni
     .split(",")
     .map((t) => t.trim())
     .filter(Boolean);
   if (daftar.some((t) => t.toLowerCase() === nama.toLowerCase())) {
-    return teksSaatIni; // sudah ada, tidak diulang
+    return teksSaatIni;
   }
   daftar.push(nama);
   return daftar.join(", ");
 }
 
-// Field form dipakai ulang untuk form Tambah maupun modal Edit, supaya
-// tidak ada dua salinan JSX yang bisa saling tidak sinkron.
-// `setField(field, value)` dipakai khusus untuk aksi klik chip (bukan event
-// input biasa), terpisah dari `ubahField` yang menangani onChange input/textarea.
 function FieldPemeriksaan({ form, ubahField, setField }) {
   const templateObat = TEMPLATE_OBAT[form.jenis_layanan] || [];
 
@@ -155,9 +147,6 @@ function FieldPemeriksaan({ form, ubahField, setField }) {
           placeholder="Ketik atau pilih dari template di bawah"
           className="w-full rounded border px-3 py-2 text-sm"
         />
-        {/* datalist: muncul sebagai saran ketik otomatis bawaan browser,
-            gabungan semua template supaya tetap membantu meski jenis
-            layanan tidak match persis. */}
         <datalist id="daftar-template-obat">
           {Object.values(TEMPLATE_OBAT).flat().map((nama) => (
             <option key={nama} value={nama} />
@@ -282,6 +271,12 @@ export default function FormKunjungan({
       sekolah_id: profil.sekolah_id,
       pasien_id: pasien.id,
       petugas_id: user.id,
+      // Nama pemeriksa diambil dari data pegawai (profil.nama_lengkap sudah
+      // diresolusi dari tabel pegawai_puskesmas oleh loadProfil() di
+      // AuthContext.jsx). Disimpan sebagai teks (bukan cuma id) supaya
+      // riwayat lama tetap menunjukkan nama yang benar meski data pegawai
+      // berubah/dihapus di kemudian hari.
+      nama_pemeriksa: profil?.nama_lengkap || null,
       berat_badan: form.berat_badan ? Number(form.berat_badan) : null,
       tinggi_badan: form.tinggi_badan ? Number(form.tinggi_badan) : null,
       suhu: form.suhu ? Number(form.suhu) : null,
@@ -300,7 +295,7 @@ export default function FormKunjungan({
 
     setPesan({ tipe: "sukses", teks: "Hasil pemeriksaan tersimpan." });
     setForm(KOSONG);
-    muatRiwayat(); // tetap di halaman ini, riwayat langsung tampil di bawah
+    muatRiwayat();
   };
 
   function bukaEdit(k) {
@@ -333,6 +328,8 @@ export default function FormKunjungan({
     if (!modalEdit) return;
     setMenyimpanEdit(true);
     try {
+      // Nama pemeriksa TIDAK ikut diubah saat edit — tetap mencatat siapa
+      // yang awalnya memeriksa, bukan siapa yang terakhir mengedit.
       const { error } = await supabase
         .from("kunjungan")
         .update({
@@ -390,6 +387,12 @@ export default function FormKunjungan({
       </div>
 
       <form onSubmit={simpanKunjungan} className="space-y-3 rounded-lg border bg-white p-4">
+        {/* Info pemeriksa: tampil sebagai pengingat sebelum menyimpan, bukan
+            input — nilainya otomatis diambil dari profil pegawai saat submit. */}
+        <p className="text-xs text-slate-500">
+          Pemeriksa: <span className="font-medium text-slate-700">{profil?.nama_lengkap || "-"}</span>
+        </p>
+
         <FieldPemeriksaan form={form} ubahField={ubahField} setField={setFieldForm} />
 
         {pesan && (
@@ -417,21 +420,23 @@ export default function FormKunjungan({
                 <th className="px-3 py-2">Tanggal</th>
                 <th className="px-3 py-2">Jenis Layanan</th>
                 <th className="px-3 py-2">Keluhan</th>
+                <th className="px-3 py-2">Pemeriksa</th>
                 <th className="px-3 py-2 text-right">Aksi</th>
               </tr>
             </thead>
             <tbody>
               {loadingRiwayat && (
-                <tr><td className="px-3 py-4 text-slate-400" colSpan={4}>Memuat...</td></tr>
+                <tr><td className="px-3 py-4 text-slate-400" colSpan={5}>Memuat...</td></tr>
               )}
               {!loadingRiwayat && riwayat.length === 0 && (
-                <tr><td className="px-3 py-4 text-slate-400" colSpan={4}>Belum ada riwayat pemeriksaan.</td></tr>
+                <tr><td className="px-3 py-4 text-slate-400" colSpan={5}>Belum ada riwayat pemeriksaan.</td></tr>
               )}
               {riwayat.map((k) => (
                 <tr key={k.id} className="border-t align-top">
                   <td className="whitespace-nowrap px-3 py-2">{formatTanggalIndonesia(k.created_at)}</td>
                   <td className="px-3 py-2">{labelJenisLayanan(k.jenis_layanan)}</td>
-                  <td className="max-w-[200px] truncate px-3 py-2">{k.keluhan || "-"}</td>
+                  <td className="max-w-[160px] truncate px-3 py-2">{k.keluhan || "-"}</td>
+                  <td className="px-3 py-2">{k.nama_pemeriksa || "-"}</td>
                   <td className="px-3 py-2">
                     <div className="flex items-center justify-end gap-3">
                       <button onClick={() => bukaEdit(k)} title="Edit riwayat" className="text-slate-500 hover:text-sky-700">
@@ -461,7 +466,7 @@ export default function FormKunjungan({
       {modalEdit && (
         <div className="no-print fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-1 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Pencil size={16} className="text-sky-600" />
                 <h2 className="font-semibold text-slate-800">Edit Riwayat Pemeriksaan</h2>
@@ -470,6 +475,9 @@ export default function FormKunjungan({
                 <X size={18} />
               </button>
             </div>
+            <p className="mb-4 text-xs text-slate-500">
+              Pemeriksa: <span className="font-medium text-slate-700">{modalEdit.nama_pemeriksa || "-"}</span>
+            </p>
 
             <form onSubmit={simpanEdit} className="space-y-3">
               <FieldPemeriksaan form={formEdit} ubahField={ubahFieldEdit} setField={setFieldFormEdit} />
@@ -532,6 +540,7 @@ export default function FormKunjungan({
                     <tr><td className="py-1 align-top">Tindakan</td><td className="py-1">:</td><td className="py-1">{kunjunganCetak.tindakan || "-"}</td></tr>
                     <tr><td className="py-1 align-top">Obat Diberikan</td><td className="py-1">:</td><td className="py-1">{kunjunganCetak.obat_diberikan || "-"}</td></tr>
                     <tr><td className="py-1 align-top">Catatan</td><td className="py-1">:</td><td className="py-1">{kunjunganCetak.catatan || "-"}</td></tr>
+                    <tr><td className="py-1 align-top">Nama Pemeriksa</td><td className="py-1">:</td><td className="py-1 font-medium">{kunjunganCetak.nama_pemeriksa || "-"}</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -569,6 +578,7 @@ export default function FormKunjungan({
                   <tr><td className="py-1 align-top">Tindakan</td><td className="py-1">:</td><td className="py-1">{kunjunganCetak.tindakan || "-"}</td></tr>
                   <tr><td className="py-1 align-top">Obat Diberikan</td><td className="py-1">:</td><td className="py-1">{kunjunganCetak.obat_diberikan || "-"}</td></tr>
                   <tr><td className="py-1 align-top">Catatan</td><td className="py-1">:</td><td className="py-1">{kunjunganCetak.catatan || "-"}</td></tr>
+                  <tr><td className="py-1 align-top">Nama Pemeriksa</td><td className="py-1">:</td><td className="py-1 font-medium">{kunjunganCetak.nama_pemeriksa || "-"}</td></tr>
                 </tbody>
               </table>
             </div>
