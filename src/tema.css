@@ -12,8 +12,9 @@
      import './tema.css'
    ============================================================ */
 
-/* Default = tema sekolah (biru tua), dipakai juga sebelum profil
-   selesai dimuat / saat data-tema belum diset (mis. halaman publik) */
+/* Default = tema sekolah (biru tua ala batik KORPRI: navy pekat + emas mustard),
+   dipakai juga sebelum profil selesai dimuat / saat data-tema belum diset
+   (mis. halaman publik) */
 :root,
 :root[data-tema="sekolah"] {
   --color-primary: #0b3d91;
@@ -22,13 +23,13 @@
   --color-primary-soft: #dbe6f7;
   --color-on-primary: #ffffff;
 
-  /* Khusus Sidebar.jsx (dulu hardcode blue-950/blue-900/indigo-900) */
-  --sidebar-header-gradient: linear-gradient(135deg, #172554, #1e3a8a, #312e81);
-  --sidebar-body-gradient: linear-gradient(180deg, #172554, #1e3a8a, #1e1b4b);
-  --sidebar-solid: #172554;
-  --sidebar-border: rgba(30, 58, 138, 0.5);
-  --sidebar-active-gradient: linear-gradient(90deg, #3b82f6, #818cf8);
-  --sidebar-accent: #fbbf24; /* warna motif batik */
+  /* Khusus Sidebar.jsx — navy lebih pekat/ultramarine, senada kain KORPRI */
+  --sidebar-header-gradient: linear-gradient(135deg, #0a1233, #101f5c, #1a2a6c);
+  --sidebar-body-gradient: linear-gradient(180deg, #0a1233, #101f5c, #050a1f);
+  --sidebar-solid: #0a1233;
+  --sidebar-border: rgba(26, 42, 108, 0.6);
+  --sidebar-active-gradient: linear-gradient(90deg, #1a2a6c, #2e4bb8);
+  --sidebar-accent: #d4af37; /* emas mustard, bukan kuning cerah */
 }
 
 /* Tema KUA (hijau) — jenis_organisasi === 'kantor' */
