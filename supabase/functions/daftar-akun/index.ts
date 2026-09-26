@@ -137,8 +137,8 @@ Deno.serve(async (req) => {
     const hubungan = body.hubungan ?? null
     const nip = String(body.nip ?? '').trim()
 
-    // PERBAIKAN: tambahkan 'puskesmas' sebagai jenis organisasi yang valid,
-    // sejajar dengan 'kantor'. Default tetap 'sekolah' bila tidak dikenali.
+    // Jenis organisasi yang valid: 'sekolah' | 'kantor' | 'puskesmas'.
+    // Default tetap 'sekolah' bila tidak dikenali.
     const jenisOrganisasi: JenisOrganisasi =
       body.jenisOrganisasi === 'kantor'
         ? 'kantor'
