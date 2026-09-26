@@ -13,7 +13,11 @@ const TABS = [
 ];
 
 export default function HalamanBidan({ profil }) {
-  // profil: { id, nama, role, puskesmas_id } — didapat dari sesi login yang sudah ada
+  // profil: { nama, role, sekolah_id, jenis_organisasi } — tenant puskesmas memakai
+  // kolom sekolah_id yang sama dengan sekolah/kantor, dibedakan lewat jenis_organisasi.
+  // CATATAN: profil.id TIDAK bisa dipakai (loadProfil() di AuthContext.jsx tidak
+  // men-select kolom id, jadi selalu undefined). Kalau butuh id user, ambil dari
+  // session.user.id (mis. lewat useAuth()/context), bukan dari profil.id.
   const [tabAktif, setTabAktif] = useState("pendaftaran");
   const [pasienDipilih, setPasienDipilih] = useState(null);
   const [daftarPasien, setDaftarPasien] = useState([]);
@@ -21,11 +25,11 @@ export default function HalamanBidan({ profil }) {
 
   const muatDaftarPasien = useCallback(async () => {
     setLoading(true);
-    // pola filter puskesmas_id sama seperti filter sekolah_id di muatData()
+    // pola filter sekolah_id sama seperti filter sekolah_id di muatData()
     const { data, error } = await supabase
       .from("pasien")
       .select("*")
-      .eq("puskesmas_id", profil.puskesmas_id)
+      .eq("sekolah_id", profil.sekolah_id)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -34,7 +38,7 @@ export default function HalamanBidan({ profil }) {
       setDaftarPasien(data ?? []);
     }
     setLoading(false);
-  }, [profil.puskesmas_id]);
+  }, [profil.sekolah_id]);
 
   useEffect(() => {
     muatDaftarPasien();
