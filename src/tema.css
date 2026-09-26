@@ -21,6 +21,14 @@
   --color-primary-light: #1e5bb8;
   --color-primary-soft: #dbe6f7;
   --color-on-primary: #ffffff;
+
+  /* Khusus Sidebar.jsx (dulu hardcode blue-950/blue-900/indigo-900) */
+  --sidebar-header-gradient: linear-gradient(135deg, #172554, #1e3a8a, #312e81);
+  --sidebar-body-gradient: linear-gradient(180deg, #172554, #1e3a8a, #1e1b4b);
+  --sidebar-solid: #172554;
+  --sidebar-border: rgba(30, 58, 138, 0.5);
+  --sidebar-active-gradient: linear-gradient(90deg, #3b82f6, #818cf8);
+  --sidebar-accent: #fbbf24; /* warna motif batik */
 }
 
 /* Tema KUA (hijau) — jenis_organisasi === 'kantor' */
@@ -30,6 +38,13 @@
   --color-primary-light: #2fa356;
   --color-primary-soft: #dbf0e1;
   --color-on-primary: #ffffff;
+
+  --sidebar-header-gradient: linear-gradient(135deg, #052e16, #14532d, #166534);
+  --sidebar-body-gradient: linear-gradient(180deg, #052e16, #14532d, #052e16);
+  --sidebar-solid: #052e16;
+  --sidebar-border: rgba(20, 83, 45, 0.5);
+  --sidebar-active-gradient: linear-gradient(90deg, #22c55e, #4ade80);
+  --sidebar-accent: #fbbf24;
 }
 
 /* Tema Puskesmas (biru muda) — jenis_organisasi === 'puskesmas' */
@@ -39,6 +54,13 @@
   --color-primary-light: #6fb0ea;
   --color-primary-soft: #e3eefb;
   --color-on-primary: #ffffff;
+
+  --sidebar-header-gradient: linear-gradient(135deg, #0c4a6e, #075985, #0e7490);
+  --sidebar-body-gradient: linear-gradient(180deg, #0c4a6e, #075985, #083344);
+  --sidebar-solid: #0c4a6e;
+  --sidebar-border: rgba(7, 89, 133, 0.5);
+  --sidebar-active-gradient: linear-gradient(90deg, #0ea5e9, #22d3ee);
+  --sidebar-accent: #fbbf24;
 }
 
 /* ------------------------------------------------------------
