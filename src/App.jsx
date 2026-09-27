@@ -133,6 +133,8 @@ const Backup = lazy(() => import('./pages/Backup'))
 const ProfilSekolah = lazy(() => import('./pages/ProfilSekolah'))
 const ManajemenSekolah = lazy(() => import('./pages/ManajemenSekolah'))
 const PPDBPublik = lazy(() => import('./pages/PPDBPublik'))
+const KebijakanPrivasi = lazy(() => import('./pages/KebijakanPrivasi'))
+const SyaratLayanan = lazy(() => import('./pages/SyaratLayanan'))
 const PPDBAdmin = lazy(() => import('./pages/PPDBAdmin'))
 
 const Perpustakaan = lazy(() => import('./pages/Perpustakaan'))
@@ -305,6 +307,8 @@ export default function App() {
           <Route path="/ppdb" element={<PPDBPublik />} />
           <Route path="/ujian-online" element={<UjianOnline />} />
           <Route path="/kuis-seru" element={<KuisSeru />} />
+          <Route path="/kebijakan-privasi" element={<KebijakanPrivasi />} />
+          <Route path="/syarat-layanan" element={<SyaratLayanan />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/menunggu-persetujuan" element={<RouteMenunggu><MenungguPersetujuan /></RouteMenunggu>} />
