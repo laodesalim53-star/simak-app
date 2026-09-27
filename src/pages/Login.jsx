@@ -1,25 +1,104 @@
-import { useState, useEffect, useRef } from 'react'
-import { Link, Navigate, useLocation } from 'react-router-dom'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import { Link, Navigate, useLocation, useParams } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import { Loader2, LogIn, Eye, EyeOff, Send, Check, ArrowLeft } from 'lucide-react'
 
-// Latar belakang "kain merah putih" yang bergelombang seperti kain sungguhan
-// tertiup angin. Dibangun dari 2 lapis path SVG per warna (fase & amplitudo
-// berbeda) supaya terlihat seperti lipatan kain, bukan garis kaku tunggal.
+// =====================================================================
+// TEMA PER JENIS INSTANSI
+// =====================================================================
+// Halaman login TIDAK tahu siapa yang akan masuk sebelum submit form,
+// jadi tema dipilih lewat URL, bukan lewat data akun. Rute yang perlu
+// ditambahkan di App.jsx:
 //
-// Hemat baterai: animasi dijalankan ±30 fps (bukan 60) dan berhenti total
-// bila perangkat meminta "kurangi gerakan" — cukup satu gambar diam.
-function WavyClothBackground() {
+//   <Route path="/login" element={<Login />} />
+//   <Route path="/login/:jenis" element={<Login />} />
+//
+// Lalu setiap instansi diberi tautan sendiri, mis.:
+//   https://app-anda.com/login/sekolah    (default kalau :jenis kosong/tidak dikenal)
+//   https://app-anda.com/login/kua
+//   https://app-anda.com/login/puskesmas
+//
+// Kalau di kemudian hari Anda ingin tema mengikuti data instansi milik
+// akun (bukan URL) itu perlu dua langkah: (1) tampilkan tema netral +
+// kolom email dulu, (2) setelah email diketik, query tabel instansi utk
+// tahu jenisnya, baru render ulang warna — jauh lebih rumit dari sekadar
+// baca URL, jadi disarankan mulai dari pendekatan URL ini dulu.
+
+const TEMA = {
+  sekolah: {
+    label: 'Sekolah',
+    judul: 'SIMAK',
+    tagline: 'Sistem Informasi untuk Sekolah',
+    hurufBadge: 'S',
+    // 4 warna kain: [lapis-atas-1, lapis-atas-2, lapis-bawah-1, lapis-bawah-2]
+    kain: ['#c81e1e', '#e23b3b', '#f5f5f0', '#ffffff'],
+    aksen: '#60a5fa',
+    aksenKuat: '#bfdbfe',
+    tekstasAtas: [
+      'Ing Ngarsa Sung Tuladha — di depan memberi teladan.',
+      'Ing Madya Mangun Karsa — di tengah membangun semangat dan ide.',
+      'Tut Wuri Handayani — di belakang memberi dorongan dan arahan.',
+    ],
+    teksBawah: [
+      'Guru tidak selalu harus di depan.',
+      'Guru memberi ruang bagi murid untuk tumbuh mandiri dan percaya diri.',
+    ],
+  },
+  kua: {
+    label: 'KUA',
+    judul: 'SIMAK',
+    tagline: 'Sistem Informasi untuk Kantor Urusan Agama',
+    hurufBadge: 'K',
+    kain: ['#0d7a4e', '#16a367', '#f5f5f0', '#ffffff'],
+    aksen: '#34d399',
+    aksenKuat: '#bbf7d0',
+    tekstasAtas: [
+      'Melayani urusan keagamaan dengan amanah.',
+      'Pencatatan nikah, rujuk, dan bimbingan keluarga sakinah.',
+    ],
+    teksBawah: [
+      'Keluarga yang kuat dimulai dari pelayanan yang tulus.',
+      'KUA hadir untuk membangun keluarga sakinah, mawaddah, warahmah.',
+    ],
+  },
+  puskesmas: {
+    label: 'Puskesmas',
+    judul: 'SIMAK',
+    tagline: 'Sistem Informasi untuk Puskesmas',
+    hurufBadge: 'P',
+    kain: ['#0e7490', '#0891b2', '#f0fdfa', '#ffffff'],
+    aksen: '#2dd4bf',
+    aksenKuat: '#99f6e4',
+    tekstasAtas: [
+      'Sehat dimulai dari layanan yang dekat dengan masyarakat.',
+      'Puskesmas — garda terdepan pelayanan kesehatan.',
+    ],
+    teksBawah: [
+      'Mencegah lebih baik daripada mengobati.',
+      'Kami hadir untuk kesehatan keluarga Anda, dari posyandu hingga lansia.',
+    ],
+  },
+}
+
+const JENIS_DEFAULT = 'sekolah'
+
+function ambilTema(jenisMentah) {
+  const kunci = (jenisMentah || '').toLowerCase()
+  return TEMA[kunci] || TEMA[JENIS_DEFAULT]
+}
+
+// =====================================================================
+// Latar belakang "kain bergelombang" — warnanya sekarang mengikuti
+// tema (props `kain`), bukan hardcoded merah-putih lagi.
+// =====================================================================
+function WavyClothBackground({ kain }) {
   const redTopRef = useRef(null)
   const redTop2Ref = useRef(null)
   const whiteBottomRef = useRef(null)
   const whiteBottom2Ref = useRef(null)
 
   useEffect(() => {
-    // Sistem koordinat internal SVG dibuat tetap (0-1000) dan diregangkan
-    // penuh ke ukuran layar lewat preserveAspectRatio="none", jadi gelombang
-    // otomatis menyesuaikan di layar mana pun tanpa perlu resize listener.
     const W = 1000
     const H = 1000
     let animationId
@@ -46,9 +125,6 @@ function WavyClothBackground() {
       return `M0,${H} L0,${pts[0].split(',')[1]} L${pts.join(' L')} L${W},${H} Z`
     }
 
-    // Gelombang putih diturunkan ke ±85% tinggi layar (sebelumnya ±76%)
-    // supaya tautan "Daftar" dan kredit di bawah formulir tetap berada di
-    // latar gelap, bukan di atas kain abu-abu yang membuat teksnya pudar.
     function gambar(t) {
       if (redTopRef.current) {
         redTopRef.current.setAttribute('d', wavePathTop(260, 32, 2.5, t))
@@ -82,6 +158,8 @@ function WavyClothBackground() {
     return () => cancelAnimationFrame(animationId)
   }, [])
 
+  const [warnaAtas1, warnaAtas2, warnaBawah1, warnaBawah2] = kain
+
   return (
     <svg
       viewBox="0 0 1000 1000"
@@ -89,15 +167,14 @@ function WavyClothBackground() {
       className="wavy-cloth-svg"
       aria-hidden
     >
-      <path ref={redTopRef} fill="#c81e1e" />
-      <path ref={redTop2Ref} fill="#e23b3b" opacity="0.55" />
-      <path ref={whiteBottomRef} fill="#f5f5f0" />
-      <path ref={whiteBottom2Ref} fill="#ffffff" opacity="0.6" />
+      <path ref={redTopRef} fill={warnaAtas1} />
+      <path ref={redTop2Ref} fill={warnaAtas2} opacity="0.55" />
+      <path ref={whiteBottomRef} fill={warnaBawah1} />
+      <path ref={whiteBottom2Ref} fill={warnaBawah2} opacity="0.6" />
     </svg>
   )
 }
 
-// Kolom kata sandi dengan tombol "lihat/sembunyikan".
 function PasswordField({ id, label, value, onChange, tampil, onToggle, autoComplete, placeholder }) {
   return (
     <div>
@@ -131,6 +208,9 @@ function PasswordField({ id, label, value, onChange, tampil, onToggle, autoCompl
 export default function Login() {
   const { session, signIn } = useAuth()
   const location = useLocation()
+  const { jenis: jenisUrl } = useParams() // dari rute /login/:jenis
+  const tema = useMemo(() => ambilTema(jenisUrl), [jenisUrl])
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -140,14 +220,6 @@ export default function Login() {
   const [shake, setShake] = useState(0)
   const [tampilSandi, setTampilSandi] = useState(false)
 
-  // Tiga tampilan dalam satu halaman:
-  //  'masuk' -> formulir login biasa
-  //  'lupa'  -> minta tautan atur-ulang kata sandi lewat email
-  //  'baru'  -> pengguna datang dari tautan di email, buat kata sandi baru
-  // Tautan atur-ulang dari Supabase membawa "type=recovery" di bagian hash
-  // URL. Dibaca sekali saat pertama render (sebelum Supabase merapikan URL)
-  // supaya pengguna tidak langsung dialihkan ke dasbor tanpa sempat
-  // mengganti kata sandi.
   const [mode, setMode] = useState(() =>
     typeof window !== 'undefined' && /type=recovery/.test(window.location.hash) ? 'baru' : 'masuk'
   )
@@ -155,13 +227,10 @@ export default function Login() {
   const [konfirmasi, setKonfirmasi] = useState('')
 
   useEffect(() => {
-    // Memicu animasi masuk sesaat setelah komponen ter-render
     const t = requestAnimationFrame(() => setMounted(true))
     return () => cancelAnimationFrame(t)
   }, [])
 
-  // Cadangan: bila hash sudah terlanjur dirapikan, Supabase tetap
-  // mengirim kejadian PASSWORD_RECOVERY.
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') setMode('baru')
@@ -169,23 +238,15 @@ export default function Login() {
     return () => data.subscription.unsubscribe()
   }, [])
 
-  // Halaman yang tadinya mau diakses sebelum dialihkan ke sini (dikirim lewat
-  // state `from` oleh ProtectedRoute di App.jsx). Kalau tidak ada — mis. user
-  // buka /login langsung dari menu atau dari halaman Beranda — fallback ke
-  // /dashboard (bukan "/" lagi, karena "/" sekarang halaman Beranda publik).
-  // `location.state.from` adalah objek Location internal react-router yang
-  // hanya bisa diisi lewat <Navigate state={...}> di dalam app sendiri,
-  // jadi aman dari open-redirect lewat query string/URL luar.
   const from = location.state?.from
     ? location.state.from.pathname + (location.state.from.search || '')
     : '/dashboard'
 
-  // Selama mode 'baru', sesi dari tautan email jangan memicu pengalihan.
   if (session && mode !== 'baru') return <Navigate to={from} replace />
 
   function gagal(pesan) {
     setError(pesan)
-    setShake((s) => s + 1) // ganti key supaya animasi shake bisa diulang
+    setShake((s) => s + 1)
   }
 
   function gantiMode(m) {
@@ -221,7 +282,6 @@ export default function Login() {
       )
       return
     }
-    // Pesan sengaja tidak memastikan apakah email terdaftar atau tidak.
     setInfo(
       'Jika email itu terdaftar, tautan untuk membuat kata sandi baru sudah dikirim. Periksa kotak masuk dan folder spam.'
     )
@@ -245,8 +305,6 @@ export default function Login() {
       gagal('Kata sandi gagal diubah. Tautan mungkin sudah kedaluwarsa — minta tautan baru.')
       return
     }
-    // Berhasil: rapikan URL lalu kembali ke mode biasa. Karena sesi sudah
-    // aktif, pengguna otomatis diteruskan ke dasbor.
     window.history.replaceState(null, '', window.location.pathname)
     setPasswordBaru('')
     setKonfirmasi('')
@@ -262,22 +320,30 @@ export default function Login() {
 
   const onSubmit = mode === 'lupa' ? handleLupa : mode === 'baru' ? handleBaru : handleSubmit
 
+  // Variabel CSS dinamis per tema, dioper lewat style inline di root,
+  // jadi seluruh blok <style> di bawah tetap satu dan generik.
+  const varTema = {
+    '--accent': tema.aksen,
+    '--accent-strong': tema.aksenKuat,
+    '--ring': `${tema.aksen}48`,
+    '--ring-soft': `${tema.aksen}1f`,
+  }
+
   return (
-    <div className="login-shell min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
-      <WavyClothBackground />
+    <div className="login-shell min-h-screen flex items-center justify-center px-4 relative overflow-hidden" style={varTema}>
+      <WavyClothBackground kain={tema.kain} />
       <div className="login-overlay" aria-hidden />
 
-      {/* Semboyan Ki Hajar Dewantara, huruf hias, diam di lipatan kain merah */}
       <div className="cloth-text cloth-text-top" aria-hidden>
-        <p>Ing Ngarsa Sung Tuladha — di depan memberi teladan.</p>
-        <p>Ing Madya Mangun Karsa — di tengah membangun semangat dan ide.</p>
-        <p>Tut Wuri Handayani — di belakang memberi dorongan dan arahan.</p>
+        {tema.tekstasAtas.map((baris) => (
+          <p key={baris}>{baris}</p>
+        ))}
       </div>
 
-      {/* Makna filosofis, huruf hias, diam di lipatan kain putih */}
       <div className="cloth-text cloth-text-bottom" aria-hidden>
-        <p>Guru tidak selalu harus di depan.</p>
-        <p>Guru memberi ruang bagi murid untuk tumbuh mandiri dan percaya diri.</p>
+        {tema.teksBawah.map((baris) => (
+          <p key={baris}>{baris}</p>
+        ))}
       </div>
 
       <div className="w-full max-w-sm relative z-10">
@@ -289,12 +355,12 @@ export default function Login() {
           <div className="relative w-12 h-12 mx-auto mb-4">
             <div className="login-badge-glow absolute inset-0 rounded-xl" />
             <div className="login-badge relative w-12 h-12 rounded-xl flex items-center justify-center font-bold text-xl">
-              S
+              {tema.hurufBadge}
             </div>
           </div>
-          <h1 className="login-title text-2xl font-semibold">SIMAK</h1>
+          <h1 className="login-title text-2xl font-semibold">{tema.judul}</h1>
           <p className="login-tagline text-xs font-medium uppercase tracking-[0.16em] mt-2">
-            Sistem informasi untuk Sekolah &amp; KUA
+            {tema.tagline}
           </p>
           <p className="login-school text-sm font-medium mt-1.5">{subjudul}</p>
         </div>
@@ -447,24 +513,19 @@ export default function Login() {
         </p>
       </div>
 
-      {/* Style khusus halaman login */}
+      {/* Style khusus halaman login — generik, warnanya diambil dari
+          variabel --accent/--accent-strong/--ring/--ring-soft yang
+          dioper lewat style inline di root (beda per tema/instansi) */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&display=swap');
 
         .login-shell {
           --bg-1: #05061a;
           --bg-2: #0d1440;
-          --accent: #60a5fa;
-          --accent-strong: #bfdbfe;
-          --ring: rgba(59, 130, 246, 0.28);
-          --ring-soft: rgba(59, 130, 246, 0.12);
           --text-primary: #eaf2ff;
-          --text-accent: #60a5fa;
-          /* dinaikkan dari .55 supaya label, tagline, dan kredit terbaca */
+          --text-accent: var(--accent);
           --code-text: rgba(170, 208, 255, 0.86);
           background: #05061a;
-          /* ruang untuk semboyan di atas & bawah supaya tidak menabrak
-             formulir di layar pendek / ponsel */
           padding-top: 120px;
           padding-bottom: 130px;
         }
@@ -474,7 +535,7 @@ export default function Login() {
 
         .login-shell a:focus-visible,
         .login-shell button:focus-visible {
-          outline: 2px solid #bfdbfe;
+          outline: 2px solid var(--accent-strong);
           outline-offset: 2px;
         }
 
@@ -494,7 +555,6 @@ export default function Login() {
           pointer-events: none;
         }
 
-        /* Huruf hias untuk tulisan di atas kain */
         .cloth-text {
           position: absolute;
           left: 24px;
@@ -512,17 +572,12 @@ export default function Login() {
         }
         .cloth-text p:last-child { margin-bottom: 0; }
 
-        .cloth-text-top {
-          top: 5%;
-        }
+        .cloth-text-top { top: 5%; }
         .cloth-text-top p {
           color: #fdecec;
           text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
         }
 
-        /* PERBAIKAN: sebelumnya teks merah tua di atas kain yang sudah
-           digelapkan overlay (kontras sekitar 2,6:1, hampir tak terbaca).
-           Sekarang teks terang dengan alas gelap tipis (kontras > 7:1). */
         .cloth-text-bottom {
           bottom: 4%;
           left: 50%;
@@ -553,22 +608,22 @@ export default function Login() {
         .login-badge {
           background: linear-gradient(160deg, var(--accent-strong), var(--accent));
           color: #071233;
-          box-shadow: 0 0 18px rgba(59, 130, 246, 0.45);
+          box-shadow: 0 0 18px var(--ring);
         }
 
         .login-title {
           color: var(--text-primary);
-          text-shadow: 0 0 14px rgba(59, 130, 246, 0.35);
+          text-shadow: 0 0 14px var(--ring);
         }
         .login-tagline { color: var(--code-text); }
-        .login-school { color: #93c5fd; }
+        .login-school { color: var(--accent-strong); }
 
         .login-card {
           position: relative;
           border-radius: 16px;
           background: linear-gradient(160deg, rgba(13, 20, 64, 0.9), rgba(5, 6, 26, 0.94));
           border: 1px solid var(--ring-soft);
-          box-shadow: 0 0 40px rgba(59, 130, 246, 0.08), 0 20px 40px rgba(0, 0, 0, 0.5);
+          box-shadow: 0 0 40px var(--ring-soft), 0 20px 40px rgba(0, 0, 0, 0.5);
           backdrop-filter: blur(6px);
         }
         .login-card::before {
@@ -577,7 +632,7 @@ export default function Login() {
           inset: -1px;
           border-radius: 16px;
           padding: 1px;
-          background: linear-gradient(120deg, rgba(59, 130, 246, 0.35), transparent 35%, transparent 65%, rgba(255, 255, 255, 0.15));
+          background: linear-gradient(120deg, var(--ring), transparent 35%, transparent 65%, rgba(255, 255, 255, 0.15));
           -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
           -webkit-mask-composite: xor;
           mask-composite: exclude;
@@ -599,7 +654,7 @@ export default function Login() {
         }
 
         .login-field {
-          background: rgba(59, 130, 246, 0.06);
+          background: var(--ring-soft);
           border: 1px solid var(--ring);
           border-radius: 10px;
           padding: 10px 12px;
@@ -611,7 +666,7 @@ export default function Login() {
         .login-field::placeholder { color: rgba(234, 242, 255, 0.5); }
         .login-field:focus {
           border-color: var(--accent);
-          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+          box-shadow: 0 0 0 3px var(--ring);
         }
         .login-field-wrap { position: relative; }
         .login-field-pw { padding-right: 46px; }
@@ -639,7 +694,7 @@ export default function Login() {
           padding: 6px 2px;
           font-size: 13.5px;
           font-weight: 500;
-          color: #93c5fd;
+          color: var(--accent-strong);
           cursor: pointer;
         }
         .login-link-btn:hover { color: #fff; text-decoration: underline; }
@@ -649,8 +704,8 @@ export default function Login() {
 
         .login-register { color: var(--code-text); }
         .login-register-link {
-          color: #93c5fd;
-          text-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
+          color: var(--accent-strong);
+          text-shadow: 0 0 8px var(--ring);
         }
         .login-register-link:hover { color: #fff; }
 
@@ -665,7 +720,7 @@ export default function Login() {
           font-weight: 600;
           color: #071233;
           background: linear-gradient(135deg, var(--accent-strong), var(--accent));
-          box-shadow: 0 0 20px rgba(59, 130, 246, 0.35);
+          box-shadow: 0 0 20px var(--ring);
           border: none;
           cursor: pointer;
         }
@@ -673,8 +728,8 @@ export default function Login() {
 
         .login-credit { color: var(--code-text); }
         .login-credit span {
-          color: #93c5fd;
-          text-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
+          color: var(--accent-strong);
+          text-shadow: 0 0 8px var(--ring);
         }
 
         @keyframes glow-pulse {
