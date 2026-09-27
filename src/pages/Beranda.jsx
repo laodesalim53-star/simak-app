@@ -50,6 +50,15 @@ const FOTO_ADMIN_CHAT = '/ibu-guru-chat.jpg'
 // Saran: lebar ±1200px, rasio 16:10, format .webp/.png, ukuran < 200 KB.
 const FOTO_HERO = '/screenshot-dasbor.png'
 
+// Logo instansi mitra (Dinas Pendidikan, KUA, Puskesmas/Dinas Kesehatan)
+// yang ditampilkan sebagai baris kepercayaan di beranda. Taruh ketiga file
+// ini di folder public dengan nama persis di bawah — kalau nama file Anda
+// beda, cukup ganti di sini. Logo yang belum ada filenya otomatis tidak
+// ditampilkan (tidak ada gambar rusak), sama seperti pola FOTO_HERO di atas.
+const LOGO_DINAS_PENDIDIKAN = '/logo-dinas-pendidikan.png'
+const LOGO_KUA = '/logo-kua.png'
+const LOGO_PUSKESMAS = '/logo-puskesmas.png'
+
 // ---- Coba Demo: kredensial TIDAK lagi ditulis di sini -----------------
 // Sebelumnya email & password akun demo tertulis polos sebagai konstanta
 // di file ini — masalahnya, kode React ikut dikirim ke browser pengunjung
@@ -561,6 +570,23 @@ export default function Beranda() {
     img.src = FOTO_HERO
   }, [])
 
+  // Cek ketersediaan logo instansi mitra satu per satu — sama seperti
+  // fotoHeroAda, supaya baris logo tetap rapi meski baru sebagian file
+  // yang diunggah (logo yang belum ada filenya otomatis tidak ditampilkan).
+  const [logoAda, setLogoAda] = useState({ pendidikan: false, kua: false, puskesmas: false })
+  useEffect(() => {
+    const daftarLogo = [
+      ['pendidikan', LOGO_DINAS_PENDIDIKAN],
+      ['kua', LOGO_KUA],
+      ['puskesmas', LOGO_PUSKESMAS],
+    ]
+    daftarLogo.forEach(([kunci, src]) => {
+      const img = new Image()
+      img.onload = () => setLogoAda((prev) => ({ ...prev, [kunci]: true }))
+      img.src = src
+    })
+  }, [])
+
   // Gabung rapat langsung dari beranda lewat link/kode yang dibagikan
   // host (misal lewat WhatsApp). Menerima link penuh (.../rapat/xxxx) atau
   // kode ruangan saja.
@@ -937,6 +963,27 @@ export default function Beranda() {
               )}
             </div>
           </div>
+
+          {/* Baris logo instansi mitra (Dinas Pendidikan, KUA, Puskesmas/
+              Dinas Kesehatan) — hanya tampil bila minimal satu file logo
+              berhasil dimuat (lihat logoAda di atas), jadi tidak ada
+              gambar rusak sebelum file-nya diunggah ke folder public. */}
+          {(logoAda.pendidikan || logoAda.kua || logoAda.puskesmas) && (
+            <div className="mitra-bar">
+              <span className="mitra-label">Dipercaya oleh:</span>
+              <div className="mitra-logos">
+                {logoAda.pendidikan && (
+                  <img src={LOGO_DINAS_PENDIDIKAN} alt="Dinas Pendidikan" className="mitra-logo" />
+                )}
+                {logoAda.kua && (
+                  <img src={LOGO_KUA} alt="Kantor Urusan Agama (KUA)" className="mitra-logo" />
+                )}
+                {logoAda.puskesmas && (
+                  <img src={LOGO_PUSKESMAS} alt="Puskesmas / Dinas Kesehatan" className="mitra-logo" />
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="aru-banner">
             <div className="aru-icon"><Users size={20} /></div>
@@ -2102,6 +2149,45 @@ export default function Beranda() {
           line-height: 1.55;
           color: #7A5A1B;
           margin: 0;
+        }
+
+        /* Baris logo instansi mitra (Dinas Pendidikan, KUA, Puskesmas) */
+        .mitra-bar {
+          margin: 14px 36px 0;
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          flex-wrap: wrap;
+          background: #fff;
+          border-radius: 14px;
+          padding: 12px 18px;
+          box-shadow: 0 6px 18px rgba(23, 26, 46, 0.06);
+        }
+        .mitra-label {
+          font-size: 12.5px;
+          font-weight: 700;
+          color: #5B6172;
+          white-space: nowrap;
+        }
+        .mitra-logos {
+          display: flex;
+          align-items: center;
+          gap: 22px;
+          flex-wrap: wrap;
+        }
+        .mitra-logo {
+          height: 34px;
+          width: auto;
+          max-width: 110px;
+          object-fit: contain;
+          filter: grayscale(15%);
+        }
+        @media (max-width: 900px) {
+          .mitra-bar { margin: 12px 20px 0; }
+        }
+        @media (max-width: 560px) {
+          .mitra-bar { margin: 10px 16px 0; padding: 10px 14px; justify-content: center; }
+          .mitra-logo { height: 28px; }
         }
 
         .meet-join {
