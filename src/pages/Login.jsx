@@ -121,6 +121,24 @@ function PasswordField({ id, label, value, onChange, tampil, onToggle, autoCompl
   )
 }
 
+// Tema visual halaman login — warna aksen, teks yang tampil di atas/bawah
+// latar kain merah-putih, dan identitas brand. Objek tunggal di sini
+// supaya gampang disesuaikan tanpa menyentuh bagian JSX di bawah.
+const tema = {
+  aksen: '#F2762B',
+  aksenKuat: '#F2762B',
+  kain: 'merah-putih',
+  hurufBadge: 'S',
+  judul: 'SIMAK',
+  tagline: 'Sekolah, KUA & Puskesmas',
+  tekstasAtas: [
+    'Satu aplikasi, untuk Sekolah, KUA & Puskesmas',
+  ],
+  teksBawah: [
+    'Sistem informasi terpadu untuk pelayanan yang lebih ringan',
+  ],
+}
+
 export default function Login() {
   const { session, signIn } = useAuth()
   const location = useLocation()
