@@ -1,98 +1,16 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
-import { Link, Navigate, useLocation, useParams } from 'react-router-dom'
+import { useState, useEffect, useRef } from 'react'
+import { Link, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import { Loader2, LogIn, Eye, EyeOff, Send, Check, ArrowLeft } from 'lucide-react'
 
-// =====================================================================
-// TEMA PER JENIS INSTANSI
-// =====================================================================
-// Halaman login TIDAK tahu siapa yang akan masuk sebelum submit form,
-// jadi tema dipilih lewat URL, bukan lewat data akun. Rute yang perlu
-// ditambahkan di App.jsx:
+// Latar belakang "kain merah putih" yang bergelombang seperti kain sungguhan
+// tertiup angin. Dibangun dari 2 lapis path SVG per warna (fase & amplitudo
+// berbeda) supaya terlihat seperti lipatan kain, bukan garis kaku tunggal.
 //
-//   <Route path="/login" element={<Login />} />
-//   <Route path="/login/:jenis" element={<Login />} />
-//
-// Lalu setiap instansi diberi tautan sendiri, mis.:
-//   https://app-anda.com/login/sekolah    (default kalau :jenis kosong/tidak dikenal)
-//   https://app-anda.com/login/kua
-//   https://app-anda.com/login/puskesmas
-//
-// Kalau di kemudian hari Anda ingin tema mengikuti data instansi milik
-// akun (bukan URL) itu perlu dua langkah: (1) tampilkan tema netral +
-// kolom email dulu, (2) setelah email diketik, query tabel instansi utk
-// tahu jenisnya, baru render ulang warna — jauh lebih rumit dari sekadar
-// baca URL, jadi disarankan mulai dari pendekatan URL ini dulu.
-
-const TEMA = {
-  sekolah: {
-    label: 'Sekolah',
-    judul: 'SIMAK',
-    tagline: 'Sistem Informasi untuk Sekolah',
-    hurufBadge: 'S',
-    // 4 warna kain: [lapis-atas-1, lapis-atas-2, lapis-bawah-1, lapis-bawah-2]
-    kain: ['#c81e1e', '#e23b3b', '#f5f5f0', '#ffffff'],
-    aksen: '#60a5fa',
-    aksenKuat: '#bfdbfe',
-    tekstasAtas: [
-      'Ing Ngarsa Sung Tuladha — di depan memberi teladan.',
-      'Ing Madya Mangun Karsa — di tengah membangun semangat dan ide.',
-      'Tut Wuri Handayani — di belakang memberi dorongan dan arahan.',
-    ],
-    teksBawah: [
-      'Guru tidak selalu harus di depan.',
-      'Guru memberi ruang bagi murid untuk tumbuh mandiri dan percaya diri.',
-    ],
-  },
-  kua: {
-    label: 'KUA',
-    judul: 'SIMAK',
-    tagline: 'Sistem Informasi untuk Kantor Urusan Agama',
-    hurufBadge: 'K',
-    kain: ['#0d7a4e', '#16a367', '#f5f5f0', '#ffffff'],
-    aksen: '#34d399',
-    aksenKuat: '#bbf7d0',
-    tekstasAtas: [
-      'Melayani urusan keagamaan dengan amanah.',
-      'Pencatatan nikah, rujuk, dan bimbingan keluarga sakinah.',
-    ],
-    teksBawah: [
-      'Keluarga yang kuat dimulai dari pelayanan yang tulus.',
-      'KUA hadir untuk membangun keluarga sakinah, mawaddah, warahmah.',
-    ],
-  },
-  puskesmas: {
-    label: 'Puskesmas',
-    judul: 'SIMAK',
-    tagline: 'Sistem Informasi untuk Puskesmas',
-    hurufBadge: 'P',
-    kain: ['#0e7490', '#0891b2', '#f0fdfa', '#ffffff'],
-    aksen: '#2dd4bf',
-    aksenKuat: '#99f6e4',
-    tekstasAtas: [
-      'Sehat dimulai dari layanan yang dekat dengan masyarakat.',
-      'Puskesmas — garda terdepan pelayanan kesehatan.',
-    ],
-    teksBawah: [
-      'Mencegah lebih baik daripada mengobati.',
-      'Kami hadir untuk kesehatan keluarga Anda, dari posyandu hingga lansia.',
-    ],
-  },
-}
-
-const JENIS_DEFAULT = 'sekolah'
-
-function ambilTema(jenisMentah) {
-  const kunci = (jenisMentah || '').toLowerCase()
-  return TEMA[kunci] || TEMA[JENIS_DEFAULT]
-}
-
-// =====================================================================
-// Latar belakang "kain bergelombang" — warnanya sekarang mengikuti
-// tema (props `kain`), bukan hardcoded merah-putih lagi.
-// =====================================================================
-function WavyClothBackground({ kain }) {
+// Hemat baterai: animasi dijalankan ±30 fps (bukan 60) dan berhenti total
+// bila perangkat meminta "kurangi gerakan" — cukup satu gambar diam.
+function WavyClothBackground() {
   const redTopRef = useRef(null)
   const redTop2Ref = useRef(null)
   const whiteBottomRef = useRef(null)
@@ -158,8 +76,6 @@ function WavyClothBackground({ kain }) {
     return () => cancelAnimationFrame(animationId)
   }, [])
 
-  const [warnaAtas1, warnaAtas2, warnaBawah1, warnaBawah2] = kain
-
   return (
     <svg
       viewBox="0 0 1000 1000"
@@ -167,10 +83,10 @@ function WavyClothBackground({ kain }) {
       className="wavy-cloth-svg"
       aria-hidden
     >
-      <path ref={redTopRef} fill={warnaAtas1} />
-      <path ref={redTop2Ref} fill={warnaAtas2} opacity="0.55" />
-      <path ref={whiteBottomRef} fill={warnaBawah1} />
-      <path ref={whiteBottom2Ref} fill={warnaBawah2} opacity="0.6" />
+      <path ref={redTopRef} fill="#c81e1e" />
+      <path ref={redTop2Ref} fill="#e23b3b" opacity="0.55" />
+      <path ref={whiteBottomRef} fill="#f5f5f0" />
+      <path ref={whiteBottom2Ref} fill="#ffffff" opacity="0.6" />
     </svg>
   )
 }
@@ -208,9 +124,6 @@ function PasswordField({ id, label, value, onChange, tampil, onToggle, autoCompl
 export default function Login() {
   const { session, signIn } = useAuth()
   const location = useLocation()
-  const { jenis: jenisUrl } = useParams() // dari rute /login/:jenis
-  const tema = useMemo(() => ambilTema(jenisUrl), [jenisUrl])
-
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
