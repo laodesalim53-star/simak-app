@@ -4,7 +4,6 @@ import { ArrowRight, LogIn, Video, Download, Monitor, Apple, Smartphone, Share, 
 // PENTING: sesuaikan path import ini dengan lokasi client Supabase Anda
 // yang sudah ada di project (biasanya di src/lib/ atau src/services/).
 import { supabase } from '../lib/supabaseClient'
-import { useAuth } from '../lib/AuthContext'
 import { mulaiSesiDemo } from '../lib/demoSession'
 
 // Widget "Tanya AI" — dimuat malas (lazy) supaya tidak memperberat
@@ -51,16 +50,15 @@ const FOTO_ADMIN_CHAT = '/ibu-guru-chat.jpg'
 // Saran: lebar ±1200px, rasio 16:10, format .webp/.png, ukuran < 200 KB.
 const FOTO_HERO = '/screenshot-dasbor.png'
 
-// Kredensial akun demo (superadmin, data dami). Login dilakukan langsung
-// dari Beranda — tidak lewat halaman /login — supaya pengunjung langsung
-// masuk dalam satu klik. Akun ini sendiri (di Supabase) tidak dikunci;
-// yang membatasi hanya sesi di perangkat pengunjung (lihat demoSession.js).
-const DEMO_EMAIL = 'sdnusantara@gmail.com'
-const DEMO_PASSWORD = 'Demo123'
-const DEMO_KUA_EMAIL = 'demokua@sdnusantara.gmail.com' 
-const DEMO_KUA_PASSWORD = 'DemoKua123'
-const DEMO_PUSKESMAS_EMAIL = 'demopuskesmas@sdnusantara.gmail.com'
-const DEMO_PUSKESMAS_PASSWORD = 'DemoPuskesmas123'
+// ---- Coba Demo: kredensial TIDAK lagi ditulis di sini -----------------
+// Sebelumnya email & password akun demo tertulis polos sebagai konstanta
+// di file ini — masalahnya, kode React ikut dikirim ke browser pengunjung
+// apa adanya, jadi siapa pun bisa buka DevTools dan membaca kredensial
+// tersebut. Sekarang proses login demo dipindah ke Supabase Edge Function
+// "demo-login": fungsi itu yang menyimpan email/password akun demo sebagai
+// SECRET di sisi server, melakukan sign-in, lalu mengirim balik hanya
+// access_token & refresh_token untuk dipasang sebagai sesi di browser.
+// Lihat file supabase/functions/demo-login/index.ts yang menyertai ini.
 
 // ---- Pembantu localStorage & ID sesi ----------------------------------
 // localStorage bisa melempar error (mode privat, WebView lama, penyimpanan
@@ -487,7 +485,6 @@ function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 
 
 export default function Beranda() {
   const navigate = useNavigate()
-  const { signIn } = useAuth()
 
   // Jenis instansi yang sedang dilihat pengunjung: Semua / Sekolah / KUA.
   // Disimpan di URL (?untuk=kua) supaya bisa dibagikan — mis. link khusus
@@ -584,30 +581,40 @@ export default function Beranda() {
   }
 
   // ---- Coba Demo: login langsung dari Beranda -------------------------
-  // Tidak lewat halaman /login — satu klik, langsung masuk. Kredensial
-  // ada di konstanta DEMO_EMAIL/DEMO_PASSWORD di atas. Sesi demo di
-  // perangkat ini otomatis berakhir 1 jam kemudian (lihat demoSession.js
-  // & DemoSessionWatcher.jsx yang dipasang di App.jsx).
+  // Tidak lewat halaman /login — satu klik, langsung masuk. Berbeda dari
+  // sebelumnya, kredensial akun demo TIDAK ada di kode ini: fungsi Edge
+  // "demo-login" di Supabase yang menyimpannya sebagai secret di server,
+  // melakukan sign-in, lalu mengembalikan access_token & refresh_token
+  // yang kita pasang sebagai sesi lewat supabase.auth.setSession(...).
+  // Sesi demo di perangkat ini otomatis berakhir 1 jam kemudian (lihat
+  // demoSession.js & DemoSessionWatcher.jsx yang dipasang di App.jsx).
   const [demoLoading, setDemoLoading] = useState(false)
   const [demoError, setDemoError] = useState('')
 
-async function cobaDemo() {
-  if (demoLoading) return
-  setDemoError('')
-  setDemoLoading(true)
-  const emailDemo =
-    untuk === 'kua' ? DEMO_KUA_EMAIL : untuk === 'puskesmas' ? DEMO_PUSKESMAS_EMAIL : DEMO_EMAIL
-  const passwordDemo =
-    untuk === 'kua' ? DEMO_KUA_PASSWORD : untuk === 'puskesmas' ? DEMO_PUSKESMAS_PASSWORD : DEMO_PASSWORD
-  const { error } = await signIn(emailDemo, passwordDemo)
-  setDemoLoading(false)
-  if (error) {
-    setDemoError('Sesi demo sedang tidak tersedia. Silakan coba lagi sebentar lagi.')
-    return
+  async function cobaDemo() {
+    if (demoLoading) return
+    setDemoError('')
+    setDemoLoading(true)
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('demo-login', {
+        body: { untuk },
+      })
+      if (fnError || !data?.access_token || !data?.refresh_token) {
+        throw fnError || new Error('Respons demo-login tidak lengkap')
+      }
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+      })
+      if (sessionError) throw sessionError
+      mulaiSesiDemo()
+      navigate('/dashboard')
+    } catch {
+      setDemoError('Sesi demo sedang tidak tersedia. Silakan coba lagi sebentar lagi.')
+    } finally {
+      setDemoLoading(false)
+    }
   }
-  mulaiSesiDemo()
-  navigate('/dashboard')
-}
 
   // Browser berbasis Chromium (Edge/Chrome) memberi tahu kapan situs ini
   // bisa dipasang sebagai aplikasi. Kejadiannya disimpan supaya tombol
@@ -686,7 +693,7 @@ async function cobaDemo() {
   const [showLiveChat, setShowLiveChat] = useState(false)
 
   // Live chat — pesan pengunjung disimpan ke tabel Supabase
-  // "live_chat_pesan" supaya langsung muncul di aplikasi/dashboard admin.
+  // "live_chat_pesan" sehingga langsung muncul di aplikasi/dashboard admin.
   // Setiap pengunjung punya sesi_id unik (disimpan di localStorage) agar
   // balasan admin bisa diarahkan ke percakapan yang tepat.
   const [namaPengunjung, setNamaPengunjung] = useState(
@@ -854,9 +861,8 @@ async function cobaDemo() {
                     <ArrowRight size={16} strokeWidth={2.5} />
                   </Link>
                   {/* Tombol Coba Demo: login langsung dari Beranda (bukan
-                      lewat /login) memakai kredensial akun demo di
-                      DEMO_EMAIL/DEMO_PASSWORD di atas. Sesi demo di
-                      perangkat ini otomatis berakhir 1 jam kemudian. */}
+                      lewat /login) lewat Edge Function "demo-login" — lihat
+                      penjelasan di fungsi cobaDemo() di atas. */}
                   <button
                     type="button"
                     onClick={cobaDemo}
@@ -1185,6 +1191,15 @@ async function cobaDemo() {
                 Daftar sekarang
                 <ArrowRight size={16} strokeWidth={2.5} />
               </Link>
+            </div>
+            {/* Baris legal: link ke Kebijakan Privasi & Syarat Layanan.
+                Ditaruh di footer karena ini konvensi umum yang dicari
+                pengunjung (terutama instansi pemerintah yang mengevaluasi
+                keamanan data sebelum mendaftar). */}
+            <div className="footer-legal">
+              <span>&copy; {new Date().getFullYear()} SIMAK</span>
+              <Link to="/kebijakan-privasi">Kebijakan Privasi</Link>
+              <Link to="/syarat-layanan">Syarat Layanan</Link>
             </div>
           </div>
 
@@ -2664,6 +2679,24 @@ async function cobaDemo() {
           text-decoration: none;
           white-space: nowrap;
         }
+        .footer-legal {
+          position: relative;
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          flex-wrap: wrap;
+          margin-top: 18px;
+          padding-top: 16px;
+          border-top: 1px solid rgba(255,255,255,0.12);
+          font-size: 12.5px;
+          color: #9DA1C7;
+        }
+        .footer-legal a {
+          color: #C9F0FF;
+          text-decoration: none;
+          font-weight: 600;
+        }
+        .footer-legal a:hover { text-decoration: underline; }
 
         /* Pemilih jenis instansi (Semua / Sekolah / KUA) */
         .aud-switch {
@@ -2810,6 +2843,7 @@ async function cobaDemo() {
           .area-showcase-heading { padding: 16px 16px 0; }
           .footer-content { flex-direction: column; align-items: stretch; text-align: center; }
           .beranda-cta { width: 100%; }
+          .footer-legal { justify-content: center; text-align: center; }
           .ios-modal { padding: 20px; border-radius: 16px; }
         }
 
