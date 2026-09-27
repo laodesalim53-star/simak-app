@@ -245,7 +245,7 @@ export default function BeritaAcaraUjianSekolah() {
     <div className="min-h-screen bg-slate-100">
       <GayaCetakSK />
       <GayaPadatSatuHalaman />
-      <BarAtasCetak onKembali={() => navigate('/gudang-sk/portal-ujian')} judul="Berita Acara Ujian" />
+      <BarAtasCetak onKembali={() => navigate('/gudang-sk/portal-ujian')} judul="Berita Acara Ujian Sekolah" />
 
       {/* ── Panel isian (tidak ikut tercetak) ── */}
       <div className="no-print max-w-3xl mx-auto px-3 pt-4">
