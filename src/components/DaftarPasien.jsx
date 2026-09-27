@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { Pencil, Trash2, Printer, X, Camera, ImagePlus } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { Pencil, Trash2, Printer, X, IdCard, HeartPulse, Loader2 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import KopSurat from "./KopSurat"; // sesuaikan path kalau KopSurat ada di folder lain
 
@@ -22,20 +22,125 @@ function formatTanggalIndonesia(tgl) {
   });
 }
 
-export default function DaftarPasien({ data, loading, onRefresh, onPilihKunjungan }) {
+// Batasi teks maksimal 2 baris (tanpa perlu plugin line-clamp Tailwind) —
+// dipakai supaya alamat panjang tidak membuat tinggi kartu jadi tidak konsisten.
+const BATAS_2_BARIS = {
+  display: "-webkit-box",
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: "vertical",
+  overflow: "hidden",
+};
+
+// QR code lewat layanan publik QR Server (tanpa dependensi tambahan), sama
+// seperti pola di KartuPesertaUjian.jsx. Isinya NIK + nama, sekadar identitas
+// cepat untuk dipindai petugas saat pasien datang berobat lagi.
+function QRImg({ value, size = 56 }) {
+  const src = `https://api.qrserver.com/v1/create-qr-code/?size=${size * 3}x${size * 3}&data=${encodeURIComponent(value)}`;
+  return <img src={src} alt="QR pasien" width={size} height={size} style={{ display: "block" }} />;
+}
+
+// ===================== KARTU BEROBAT =====================
+// Gaya visual (gradient header, sudut rounded, garis-garis warna di footer,
+// QR code) diambil dari template KartuUjian di KartuPesertaUjian.jsx — hanya
+// tampilannya yang dipakai ulang, logika & datanya sepenuhnya baru, khusus
+// identitas pasien puskesmas. Ukuran kartu dibuat model kartu identitas
+// (landscape, muat di dompet), bukan model potret panjang seperti kartu
+// ujian, karena itu yang lazim untuk kartu berobat.
+function KartuBerobat({ pasien, puskesmas }) {
+  const qrValue = `NIK:${pasien.nik}|NAMA:${pasien.nama}`;
+
+  return (
+    <div
+      className="kartu-berobat relative flex shrink-0 flex-col overflow-hidden rounded-[18px] border border-emerald-900/10 bg-white shadow-lg shadow-emerald-900/10"
+      style={{ width: "9cm", height: "5.6cm" }}
+    >
+      <div
+        className="h-1.5 w-full shrink-0"
+        style={{ backgroundImage: "linear-gradient(90deg, #047857 0%, #047857 65%, #0ea5e9 65%, #0ea5e9 100%)" }}
+      />
+
+      {/* Header */}
+      <div className="shrink-0 bg-gradient-to-br from-[#065f46] to-[#047857] px-3.5 py-2.5 text-white">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] bg-white/15">
+            <HeartPulse size={17} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[9.5px] uppercase tracking-wide text-white/70">Kartu Berobat</p>
+            <p className="font-display text-[13.5px] font-bold leading-tight" style={BATAS_2_BARIS}>
+              {puskesmas.nama || "Puskesmas"}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="flex min-h-0 flex-1 items-stretch justify-between gap-3 px-3.5 py-2.5">
+        <div className="flex min-w-0 flex-1 flex-col justify-center gap-[3px]">
+          <p className="font-display text-[14px] font-bold leading-snug text-slate-900" style={BATAS_2_BARIS}>
+            {pasien.nama}
+          </p>
+          <Baris label="NIK" nilai={pasien.nik} />
+          <Baris label="Tgl Lahir" nilai={formatTanggalIndonesia(pasien.tanggal_lahir)} />
+          <Baris label="Gol. Darah" nilai={pasien.golongan_darah || "-"} />
+          <p className="mt-0.5 text-[9.5px] leading-snug text-slate-500" style={BATAS_2_BARIS}>
+            {pasien.alamat || "-"}
+          </p>
+        </div>
+
+        <div className="flex shrink-0 flex-col items-center justify-center gap-1">
+          <div className="flex items-center justify-center rounded-[8px] border border-slate-200 bg-white p-1" style={{ width: 58, height: 58 }}>
+            <QRImg value={qrValue} size={52} />
+          </div>
+          <p className="text-center text-[8px] leading-tight text-slate-400">Tunjukkan saat berobat</p>
+        </div>
+      </div>
+
+      <div
+        className="h-1.5 w-full shrink-0 opacity-90"
+        style={{ backgroundImage: "repeating-linear-gradient(90deg, #047857 0 14px, #0ea5e9 14px 28px)" }}
+      />
+    </div>
+  );
+}
+
+function Baris({ label, nilai }) {
+  return (
+    <div className="grid grid-cols-[62px_1fr] items-baseline gap-1.5">
+      <span className="text-[9.5px] text-slate-500">{label}</span>
+      <span className="truncate text-[11px] font-semibold text-slate-900">{nilai}</span>
+    </div>
+  );
+}
+
+export default function DaftarPasien({ profil, data, loading, onRefresh, onPilihKunjungan }) {
   const [cari, setCari] = useState("");
   const [modalEdit, setModalEdit] = useState(null); // pasien yang sedang diedit
   const [formEdit, setFormEdit] = useState(FORM_KOSONG);
   const [menyimpan, setMenyimpan] = useState(false);
   const [menghapusId, setMenghapusId] = useState(null);
   const [pasienCetak, setPasienCetak] = useState(null);
+  const [pasienKartu, setPasienKartu] = useState(null);
 
-  // Foto KTP pada modal edit: fotoKtpFile hanya diisi kalau pengguna memilih
-  // foto baru (dari kamera atau galeri); fotoKtpPreview dipakai untuk pratinjau
-  // (bisa berupa foto lama dari server atau foto baru yang belum diunggah).
-  const [fotoKtpFile, setFotoKtpFile] = useState(null);
-  const [fotoKtpPreview, setFotoKtpPreview] = useState(null);
-  const [mengunggahFoto, setMengunggahFoto] = useState(false);
+  const [puskesmas, setPuskesmas] = useState({ nama: "", alamat: "" });
+
+  // Identitas puskesmas untuk header Kartu Berobat — diambil dari tabel
+  // profil_puskesmas (sama seperti pola di DaftarHadirPuskesmas.jsx),
+  // memakai profil.sekolah_id (tenant puskesmas/kantor/sekolah berbagi
+  // kolom sekolah_id yang sama).
+  useEffect(() => {
+    if (!profil?.sekolah_id) return;
+    supabase
+      .from("profil_puskesmas")
+      .select("nama_puskesmas, alamat")
+      .eq("sekolah_id", profil.sekolah_id)
+      .maybeSingle()
+      .then(({ data: pk }) => {
+        if (pk) {
+          setPuskesmas({ nama: pk.nama_puskesmas || "", alamat: pk.alamat || "" });
+        }
+      });
+  }, [profil?.sekolah_id]);
 
   const hasilFilter = useMemo(() => {
     if (!cari) return data;
@@ -55,74 +160,26 @@ export default function DaftarPasien({ data, loading, onRefresh, onPilihKunjunga
       alamat: pasien.alamat || "",
       no_hp: pasien.no_hp || "",
     });
-    // Foto lama (kalau ada) dipakai sebagai pratinjau awal. Sesuaikan nama
-    // kolomnya kalau di database Anda berbeda dari "foto_ktp_url".
-    setFotoKtpFile(null);
-    setFotoKtpPreview(pasien.foto_ktp_url || null);
     setModalEdit(pasien);
   }
 
   function tutupEdit() {
     if (menyimpan) return;
-    // Hanya cabut URL kalau itu URL lokal (blob) hasil pilih foto baru, bukan
-    // URL dari server yang mungkin masih dipakai di tempat lain.
-    if (fotoKtpFile && fotoKtpPreview) URL.revokeObjectURL(fotoKtpPreview);
     setModalEdit(null);
     setFormEdit(FORM_KOSONG);
-    setFotoKtpFile(null);
-    setFotoKtpPreview(null);
   }
 
   const ubahFieldEdit = (field) => (e) =>
     setFormEdit((prev) => ({ ...prev, [field]: e.target.value }));
-
-  // Dipanggil baik oleh tombol "Ambil Foto" (kamera) maupun "Upload dari
-  // Galeri" — keduanya memakai input file yang sama, hanya beda atribut
-  // capture, jadi cukup satu handler.
-  function handlePilihFotoKtp(e) {
-    const f = e.target.files?.[0];
-    e.target.value = "";
-    if (!f) return;
-    if (fotoKtpFile && fotoKtpPreview) URL.revokeObjectURL(fotoKtpPreview);
-    setFotoKtpFile(f);
-    setFotoKtpPreview(URL.createObjectURL(f));
-  }
-
-  function hapusFotoTerpilih() {
-    if (fotoKtpFile && fotoKtpPreview) URL.revokeObjectURL(fotoKtpPreview);
-    setFotoKtpFile(null);
-    setFotoKtpPreview(modalEdit?.foto_ktp_url || null);
-  }
-
-  // Unggah foto KTP ke Supabase Storage. PENTING: sesuaikan nama bucket
-  // "foto-ktp" ini dengan bucket yang sudah Anda buat di project Supabase.
-  async function unggahFotoKtp(file, pasienId) {
-    const ekstensi = (file.name.split(".").pop() || "jpg").toLowerCase();
-    const path = `${pasienId}-${Date.now()}.${ekstensi}`;
-    const { error: errUpload } = await supabase.storage
-      .from("foto-ktp")
-      .upload(path, file, { upsert: true, cacheControl: "3600" });
-    if (errUpload) throw errUpload;
-    const { data } = supabase.storage.from("foto-ktp").getPublicUrl(path);
-    return data.publicUrl;
-  }
 
   async function simpanEdit(e) {
     e.preventDefault();
     if (!modalEdit) return;
     setMenyimpan(true);
     try {
-      const payload = { ...formEdit };
-      if (fotoKtpFile) {
-        setMengunggahFoto(true);
-        // Kolom "foto_ktp_url" di bawah ini juga perlu disesuaikan kalau
-        // nama kolom di tabel "pasien" Anda berbeda.
-        payload.foto_ktp_url = await unggahFotoKtp(fotoKtpFile, modalEdit.id);
-        setMengunggahFoto(false);
-      }
       const { error } = await supabase
         .from("pasien")
-        .update(payload)
+        .update(formEdit)
         .eq("id", modalEdit.id);
       if (error) throw error;
       tutupEdit();
@@ -131,7 +188,6 @@ export default function DaftarPasien({ data, loading, onRefresh, onPilihKunjunga
       alert("Gagal menyimpan perubahan: " + (err.message || "terjadi kesalahan"));
     } finally {
       setMenyimpan(false);
-      setMengunggahFoto(false);
     }
   }
 
@@ -224,8 +280,15 @@ export default function DaftarPasien({ data, loading, onRefresh, onPilihKunjunga
                       <Pencil size={16} />
                     </button>
                     <button
+                      onClick={() => setPasienKartu(p)}
+                      title="Cetak kartu berobat"
+                      className="text-slate-500 hover:text-emerald-700"
+                    >
+                      <IdCard size={16} />
+                    </button>
+                    <button
                       onClick={() => setPasienCetak(p)}
-                      title="Cetak data pasien"
+                      title="Cetak data pasien (lembar identitas)"
                       className="text-slate-500 hover:text-slate-800"
                     >
                       <Printer size={16} />
@@ -336,69 +399,6 @@ export default function DaftarPasien({ data, loading, onRefresh, onPilihKunjunga
                 />
               </div>
 
-              {/* Foto KTP: dua tombol terpisah supaya di HP pengguna bisa
-                  memilih antara langsung memotret (capture="environment")
-                  atau mengunggah foto yang sudah ada di galeri (tanpa
-                  capture). Tanpa ini, browser mobile langsung memaksa buka
-                  kamera dan tidak ada opsi memilih file yang sudah ada. */}
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Foto KTP</label>
-                {fotoKtpPreview ? (
-                  <div className="mb-2 flex items-start gap-2">
-                    <img
-                      src={fotoKtpPreview}
-                      alt="Pratinjau foto KTP"
-                      className="h-24 w-32 rounded-lg border object-cover"
-                    />
-                    {fotoKtpFile && (
-                      <button
-                        type="button"
-                        onClick={hapusFotoTerpilih}
-                        disabled={menyimpan}
-                        className="text-xs font-medium text-red-600 hover:underline disabled:opacity-50"
-                      >
-                        Batalkan foto baru
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <p className="mb-2 text-xs text-slate-400">Belum ada foto.</p>
-                )}
-                <div className="flex flex-wrap gap-2">
-                  <label
-                    className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 ${
-                      menyimpan ? "pointer-events-none opacity-50" : ""
-                    }`}
-                  >
-                    <Camera size={14} />
-                    Ambil Foto
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      onChange={handlePilihFotoKtp}
-                      className="hidden"
-                      disabled={menyimpan}
-                    />
-                  </label>
-                  <label
-                    className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 ${
-                      menyimpan ? "pointer-events-none opacity-50" : ""
-                    }`}
-                  >
-                    <ImagePlus size={14} />
-                    Upload dari Galeri
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handlePilihFotoKtp}
-                      className="hidden"
-                      disabled={menyimpan}
-                    />
-                  </label>
-                </div>
-              </div>
-
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
@@ -413,7 +413,7 @@ export default function DaftarPasien({ data, loading, onRefresh, onPilihKunjunga
                   disabled={menyimpan}
                   className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
                 >
-                  {mengunggahFoto ? "Mengunggah foto..." : menyimpan ? "Menyimpan..." : "Simpan"}
+                  {menyimpan ? "Menyimpan..." : "Simpan"}
                 </button>
               </div>
             </form>
@@ -421,11 +421,65 @@ export default function DaftarPasien({ data, loading, onRefresh, onPilihKunjunga
         </div>
       )}
 
-      {/* ===================== AREA CETAK ===================== */}
+      {/* ===================== MODAL KARTU BEROBAT ===================== */}
+      {pasienKartu && (
+        <>
+          <div className="no-print fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+            <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="font-semibold text-slate-800">Kartu Berobat</h2>
+                <button onClick={() => setPasienKartu(null)} className="text-slate-400 hover:text-slate-600">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="flex justify-center">
+                <KartuBerobat pasien={pasienKartu} puskesmas={puskesmas} />
+              </div>
+
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  onClick={() => setPasienKartu(null)}
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                >
+                  Tutup
+                </button>
+                <button
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+                >
+                  <Printer size={16} /> Cetak
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Versi khusus print, disembunyikan di layar, muncul hanya saat
+              print — menghindari modal & backdrop ikut tercetak. */}
+          <div className="print-only hidden">
+            <div className="flex justify-center p-6">
+              <KartuBerobat pasien={pasienKartu} puskesmas={puskesmas} />
+            </div>
+          </div>
+
+          <style>{`
+            @media print {
+              .no-print { display: none !important; }
+              .print-only { display: block !important; }
+              .kartu-berobat { break-inside: avoid; }
+              * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+              }
+            }
+          `}</style>
+        </>
+      )}
+
+      {/* ===================== AREA CETAK (LEMBAR IDENTITAS) ===================== */}
       {pasienCetak && (
         <>
-          {/* Tombol kontrol cetak, ikut ter-sembunyi otomatis saat print
-              lewat class no-print (sama seperti pola di DaftarHadirPuskesmas.jsx) */}
           <div className="no-print fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
             <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
               <div className="mb-4 flex items-center justify-between">
@@ -470,9 +524,6 @@ export default function DaftarPasien({ data, loading, onRefresh, onPilihKunjunga
             </div>
           </div>
 
-          {/* Versi khusus print: disembunyikan di layar, muncul hanya saat print,
-              menghindari modal ikut tercetak (pola sama dengan .no-print /
-              .print-only di DaftarHadirPuskesmas.jsx). */}
           <div className="print-only hidden">
             <div className="lembar-cetak-pasien-print p-6">
               <KopSurat />
