@@ -14,6 +14,7 @@ import {
   ArrowLeftRight,
   CalendarDays,
   FileSignature,
+  FileCheck2,
 } from 'lucide-react'
 import Layout from '../components/Layout'
 import { PALET_WARNA, BatikOverlay, IsiKartuHub } from '../components/hub'
@@ -82,6 +83,15 @@ const daftarDokumen = [
     warna: 'amber',
     siap: true,
   },
+{
+  id: 'berita-acara-ujian-sekolah',
+  judul: 'Berita Acara Ujian Sekolah',
+  deskripsi: 'Berita acara pembukaan sampul soal per mata pelajaran: jumlah peserta, kode soal, dan catatan pelaksanaan.',
+  icon: FileCheck2,
+  path: '/gudang-sk/portal-ujian/berita-acara-ujian-sekolah',
+  warna: 'blue',
+  siap: true,
+},
 ]
 
 export default function PortalUjian() {
