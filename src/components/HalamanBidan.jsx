@@ -118,14 +118,15 @@ export default function HalamanBidan({ profil }) {
           />
         )}
 
-        {tabAktif === "daftar" && (
-          <DaftarPasien
+         {tabAktif === "daftar" && (
+           <DaftarPasien
+            profil={profil}
             data={daftarPasien}
             loading={loading}
             onRefresh={muatDaftarPasien}
             onPilihKunjungan={bukaKunjunganUntuk}
-          />
-        )}
+        />
+      )}
 
         {tabAktif === "kunjungan" && (
           <FormKunjungan
