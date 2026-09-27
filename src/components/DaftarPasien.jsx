@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Pencil, Trash2, Printer, X } from "lucide-react";
+import { Pencil, Trash2, Printer, X, Camera, ImagePlus } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import KopSurat from "./KopSurat"; // sesuaikan path kalau KopSurat ada di folder lain
 
@@ -30,6 +30,13 @@ export default function DaftarPasien({ data, loading, onRefresh, onPilihKunjunga
   const [menghapusId, setMenghapusId] = useState(null);
   const [pasienCetak, setPasienCetak] = useState(null);
 
+  // Foto KTP pada modal edit: fotoKtpFile hanya diisi kalau pengguna memilih
+  // foto baru (dari kamera atau galeri); fotoKtpPreview dipakai untuk pratinjau
+  // (bisa berupa foto lama dari server atau foto baru yang belum diunggah).
+  const [fotoKtpFile, setFotoKtpFile] = useState(null);
+  const [fotoKtpPreview, setFotoKtpPreview] = useState(null);
+  const [mengunggahFoto, setMengunggahFoto] = useState(false);
+
   const hasilFilter = useMemo(() => {
     if (!cari) return data;
     const kunci = cari.toLowerCase();
@@ -48,26 +55,74 @@ export default function DaftarPasien({ data, loading, onRefresh, onPilihKunjunga
       alamat: pasien.alamat || "",
       no_hp: pasien.no_hp || "",
     });
+    // Foto lama (kalau ada) dipakai sebagai pratinjau awal. Sesuaikan nama
+    // kolomnya kalau di database Anda berbeda dari "foto_ktp_url".
+    setFotoKtpFile(null);
+    setFotoKtpPreview(pasien.foto_ktp_url || null);
     setModalEdit(pasien);
   }
 
   function tutupEdit() {
     if (menyimpan) return;
+    // Hanya cabut URL kalau itu URL lokal (blob) hasil pilih foto baru, bukan
+    // URL dari server yang mungkin masih dipakai di tempat lain.
+    if (fotoKtpFile && fotoKtpPreview) URL.revokeObjectURL(fotoKtpPreview);
     setModalEdit(null);
     setFormEdit(FORM_KOSONG);
+    setFotoKtpFile(null);
+    setFotoKtpPreview(null);
   }
 
   const ubahFieldEdit = (field) => (e) =>
     setFormEdit((prev) => ({ ...prev, [field]: e.target.value }));
+
+  // Dipanggil baik oleh tombol "Ambil Foto" (kamera) maupun "Upload dari
+  // Galeri" — keduanya memakai input file yang sama, hanya beda atribut
+  // capture, jadi cukup satu handler.
+  function handlePilihFotoKtp(e) {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    if (fotoKtpFile && fotoKtpPreview) URL.revokeObjectURL(fotoKtpPreview);
+    setFotoKtpFile(f);
+    setFotoKtpPreview(URL.createObjectURL(f));
+  }
+
+  function hapusFotoTerpilih() {
+    if (fotoKtpFile && fotoKtpPreview) URL.revokeObjectURL(fotoKtpPreview);
+    setFotoKtpFile(null);
+    setFotoKtpPreview(modalEdit?.foto_ktp_url || null);
+  }
+
+  // Unggah foto KTP ke Supabase Storage. PENTING: sesuaikan nama bucket
+  // "foto-ktp" ini dengan bucket yang sudah Anda buat di project Supabase.
+  async function unggahFotoKtp(file, pasienId) {
+    const ekstensi = (file.name.split(".").pop() || "jpg").toLowerCase();
+    const path = `${pasienId}-${Date.now()}.${ekstensi}`;
+    const { error: errUpload } = await supabase.storage
+      .from("foto-ktp")
+      .upload(path, file, { upsert: true, cacheControl: "3600" });
+    if (errUpload) throw errUpload;
+    const { data } = supabase.storage.from("foto-ktp").getPublicUrl(path);
+    return data.publicUrl;
+  }
 
   async function simpanEdit(e) {
     e.preventDefault();
     if (!modalEdit) return;
     setMenyimpan(true);
     try {
+      const payload = { ...formEdit };
+      if (fotoKtpFile) {
+        setMengunggahFoto(true);
+        // Kolom "foto_ktp_url" di bawah ini juga perlu disesuaikan kalau
+        // nama kolom di tabel "pasien" Anda berbeda.
+        payload.foto_ktp_url = await unggahFotoKtp(fotoKtpFile, modalEdit.id);
+        setMengunggahFoto(false);
+      }
       const { error } = await supabase
         .from("pasien")
-        .update(formEdit)
+        .update(payload)
         .eq("id", modalEdit.id);
       if (error) throw error;
       tutupEdit();
@@ -76,6 +131,7 @@ export default function DaftarPasien({ data, loading, onRefresh, onPilihKunjunga
       alert("Gagal menyimpan perubahan: " + (err.message || "terjadi kesalahan"));
     } finally {
       setMenyimpan(false);
+      setMengunggahFoto(false);
     }
   }
 
@@ -280,6 +336,69 @@ export default function DaftarPasien({ data, loading, onRefresh, onPilihKunjunga
                 />
               </div>
 
+              {/* Foto KTP: dua tombol terpisah supaya di HP pengguna bisa
+                  memilih antara langsung memotret (capture="environment")
+                  atau mengunggah foto yang sudah ada di galeri (tanpa
+                  capture). Tanpa ini, browser mobile langsung memaksa buka
+                  kamera dan tidak ada opsi memilih file yang sudah ada. */}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Foto KTP</label>
+                {fotoKtpPreview ? (
+                  <div className="mb-2 flex items-start gap-2">
+                    <img
+                      src={fotoKtpPreview}
+                      alt="Pratinjau foto KTP"
+                      className="h-24 w-32 rounded-lg border object-cover"
+                    />
+                    {fotoKtpFile && (
+                      <button
+                        type="button"
+                        onClick={hapusFotoTerpilih}
+                        disabled={menyimpan}
+                        className="text-xs font-medium text-red-600 hover:underline disabled:opacity-50"
+                      >
+                        Batalkan foto baru
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <p className="mb-2 text-xs text-slate-400">Belum ada foto.</p>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <label
+                    className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 ${
+                      menyimpan ? "pointer-events-none opacity-50" : ""
+                    }`}
+                  >
+                    <Camera size={14} />
+                    Ambil Foto
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handlePilihFotoKtp}
+                      className="hidden"
+                      disabled={menyimpan}
+                    />
+                  </label>
+                  <label
+                    className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 ${
+                      menyimpan ? "pointer-events-none opacity-50" : ""
+                    }`}
+                  >
+                    <ImagePlus size={14} />
+                    Upload dari Galeri
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePilihFotoKtp}
+                      className="hidden"
+                      disabled={menyimpan}
+                    />
+                  </label>
+                </div>
+              </div>
+
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
@@ -294,7 +413,7 @@ export default function DaftarPasien({ data, loading, onRefresh, onPilihKunjunga
                   disabled={menyimpan}
                   className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
                 >
-                  {menyimpan ? "Menyimpan..." : "Simpan"}
+                  {mengunggahFoto ? "Mengunggah foto..." : menyimpan ? "Menyimpan..." : "Simpan"}
                 </button>
               </div>
             </form>
