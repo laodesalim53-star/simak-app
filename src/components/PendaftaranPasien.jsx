@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Camera, Loader2, PenLine, RotateCcw, Sparkles, X } from 'lucide-react'
+import { Camera, ImageUp, Loader2, PenLine, RotateCcw, Sparkles, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient' // sesuaikan path
 import SudutEditor from '../components/SudutEditor'
 import { siapkanFoto, suntingSudutFoto } from '../lib/kameraPdf'
@@ -283,18 +283,32 @@ export default function PendaftaranPasien({ profil, onTersimpan }) {
         )}
 
         {!foto && (
-          <label className={`inline-flex cursor-pointer items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 ${kunci ? 'pointer-events-none opacity-50' : ''}`}>
-            <Camera size={16} />
-            Buka Kamera untuk Foto KTP
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handleAmbilFoto}
-              className="hidden"
-              disabled={kunci}
-            />
-          </label>
+          <div className="flex flex-wrap gap-2">
+            <label className={`inline-flex cursor-pointer items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 ${kunci ? 'pointer-events-none opacity-50' : ''}`}>
+              <Camera size={16} />
+              Buka Kamera untuk Foto KTP
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handleAmbilFoto}
+                className="hidden"
+                disabled={kunci}
+              />
+            </label>
+
+            <label className={`inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 ${kunci ? 'pointer-events-none opacity-50' : ''}`}>
+              <ImageUp size={16} />
+              Upload dari Galeri
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleAmbilFoto}
+                className="hidden"
+                disabled={kunci}
+              />
+            </label>
+          </div>
         )}
 
         {bacaFoto && (
@@ -321,8 +335,13 @@ export default function PendaftaranPasien({ profil, onTersimpan }) {
             <div className="flex flex-wrap items-center gap-3 text-sm">
               <label className="inline-flex cursor-pointer items-center gap-1.5 font-medium text-slate-700 hover:text-slate-900">
                 <RotateCcw size={14} />
-                Ambil ulang
+                Ambil ulang (kamera)
                 <input type="file" accept="image/*" capture="environment" onChange={handleAmbilFoto} className="hidden" disabled={kunci} />
+              </label>
+              <label className="inline-flex cursor-pointer items-center gap-1.5 font-medium text-slate-700 hover:text-slate-900">
+                <ImageUp size={14} />
+                Ganti dari galeri
+                <input type="file" accept="image/*" onChange={handleAmbilFoto} className="hidden" disabled={kunci} />
               </label>
               <button
                 type="button"
