@@ -31,7 +31,7 @@ export default function TugasHarian({ profil }) {
     setLoading(true);
     const { data, error } = await supabase
       .from("tugas_bidan")
-      .select("*")
+      .select("id, judul, status, kunjungan_id")
       .eq("petugas_id", userId)
       .eq("tanggal", tanggalHariIni())
       .order("created_at");
@@ -86,7 +86,7 @@ export default function TugasHarian({ profil }) {
       sekolah_id: profil.sekolah_id,
       petugas_id: userId,
       judul: judulBaru.trim(),
-      tanggal: tanggalHariIni(), // sebelumnya tidak diisi, padahal muat() memfilter berdasarkan tanggal ini
+      tanggal: tanggalHariIni(), // penting: muat() memfilter berdasarkan tanggal ini
     });
     if (!error) {
       setJudulBaru("");
@@ -183,7 +183,7 @@ export default function TugasHarian({ profil }) {
         )}
       </div>
 
-      {/* ===================== TUGAS HARIAN SAYA (fitur lama) ===================== */}
+      {/* ===================== TUGAS HARIAN SAYA ===================== */}
       <div>
         <h3 className="mb-2 text-sm font-semibold text-slate-700">Tugas Harian Saya</h3>
         <form onSubmit={tambahTugas} className="mb-4 flex gap-2">
@@ -210,17 +210,24 @@ export default function TugasHarian({ profil }) {
               key={t.id}
               className="flex items-center justify-between rounded border bg-white px-3 py-2"
             >
-              <span
-                className={
-                  t.status === "selesai" ? "text-slate-400 line-through" : ""
-                }
-              >
-                {t.judul}
-              </span>
+              <div className="min-w-0">
+                <span
+                  className={`block truncate ${
+                    t.status === "selesai" ? "text-slate-400 line-through" : ""
+                  }`}
+                >
+                  {t.judul}
+                </span>
+                {t.kunjungan_id && (
+                  <span className="mt-0.5 inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                    Otomatis dari pemeriksaan
+                  </span>
+                )}
+              </div>
               <select
                 value={t.status}
                 onChange={(e) => ubahStatus(t.id, e.target.value)}
-                className="rounded border px-2 py-1 text-xs"
+                className="ml-2 shrink-0 rounded border px-2 py-1 text-xs"
               >
                 <option value="belum">Belum</option>
                 <option value="proses">Proses</option>
