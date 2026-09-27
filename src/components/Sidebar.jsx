@@ -351,6 +351,9 @@ function getGroupsPuskesmasAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBe
         { to: '/profil-puskesmas', label: 'Profil Puskesmas', icon: Building2 },
         { to: '/keuangan-bok', label: 'Keuangan BOK', icon: Wallet },
         { to: '/daftar-hadir-puskesmas', label: 'Daftar Hadir Pegawai', icon: ClipboardList },
+        { to: '/str-sip-puskesmas', label: 'STR & SIP Pegawai', icon: ShieldCheck },
+        { to: '/jadwal-piket-puskesmas', label: 'Jadwal Piket/Jaga', icon: CalendarRange },
+        { to: '/cuti-izin-puskesmas', label: 'Cuti & Izin Pegawai', icon: CalendarCheck },
       ],
     },
     {
@@ -447,6 +450,8 @@ function getLinksPuskesmasPegawai(jumlahPesanBelumDibaca = 0) {
     { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
     { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
     { to: '/presensi-puskesmas', label: 'Presensi', icon: ClipboardCheck },
+    { to: '/jadwal-piket-saya', label: 'Jadwal Piket Saya', icon: CalendarRange },
+    { to: '/cuti-izin-saya', label: 'Cuti & Izin Saya', icon: CalendarCheck },
     { to: '/bidan-puskesmas', label: 'Bidan / Mantri', icon: FolderHeart },
     { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
     { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
