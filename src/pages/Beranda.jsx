@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowRight, LogIn, Video, Download, Monitor, Apple, Smartphone, Share, SquarePlus, X, BookOpen, IdCard, Wallet, MessageCircle, Settings, Users, ShoppingBag, Phone, Send, Fish, Shell, Shirt, Pencil, Building2, Landmark, Megaphone, FileText, Library, ClipboardCheck, ClipboardList, UploadCloud, CheckCircle2 } from 'lucide-react'
+import { ArrowRight, LogIn, Video, Download, Monitor, Apple, Smartphone, Share, SquarePlus, X, BookOpen, IdCard, Wallet, MessageCircle, Settings, Users, ShoppingBag, Phone, Send, Fish, Shell, Shirt, Pencil, Building2, Landmark, Megaphone, FileText, Library, ClipboardCheck, ClipboardList, UploadCloud, CheckCircle2, Stethoscope, HeartPulse, Pill } from 'lucide-react'
 // PENTING: sesuaikan path import ini dengan lokasi client Supabase Anda
 // yang sudah ada di project (biasanya di src/lib/ atau src/services/).
 import { supabase } from '../lib/supabaseClient'
@@ -26,12 +26,12 @@ const TanyaAI = lazy(() => import('../components/TanyaAI'))
 // kontak mengambang) — bukan berkedip/berputar/berjalan di banyak tempat
 // sekaligus, supaya situs terasa tepercaya untuk sistem resmi sekolah & kantor.
 //
-// DUA INSTANSI: halaman ini melayani dua mitra tetap — Sekolah dan KUA
-// (Kantor Urusan Agama) — bukan platform pendaftaran terbuka untuk banyak
-// instansi sembarang. Karena itu semua copy di bawah SENGAJA menyebut
-// "Sekolah & KUA" secara eksplisit, dan modul yang sifatnya khusus
-// pendidikan diberi badge "Khusus sekolah" supaya pengguna dari KUA tidak
-// salah ekspektasi.
+// TIGA INSTANSI: halaman ini melayani tiga mitra tetap — Sekolah, KUA
+// (Kantor Urusan Agama), dan Puskesmas — bukan platform pendaftaran terbuka
+// untuk banyak instansi sembarang. Karena itu semua copy di bawah SENGAJA
+// menyebut "Sekolah, KUA & Puskesmas" secara eksplisit, dan modul yang
+// sifatnya khusus satu jenis instansi diberi badge "Khusus ..." supaya
+// pengguna dari jenis instansi lain tidak salah ekspektasi.
 
 const NOMOR_WA_ADMIN = '6282197574897'
 
@@ -59,6 +59,8 @@ const DEMO_EMAIL = 'sdnusantara@gmail.com'
 const DEMO_PASSWORD = 'Demo123'
 const DEMO_KUA_EMAIL = 'demokua@sdnusantara.gmail.com' 
 const DEMO_KUA_PASSWORD = 'DemoKua123'
+const DEMO_PUSKESMAS_EMAIL = 'demopuskesmas@sdnusantara.gmail.com'
+const DEMO_PUSKESMAS_PASSWORD = 'DemoPuskesmas123'
 
 // ---- Pembantu localStorage & ID sesi ----------------------------------
 // localStorage bisa melempar error (mode privat, WebView lama, penyimpanan
@@ -107,6 +109,7 @@ const OPSI_UNTUK = [
   { id: 'semua', label: 'Semua' },
   { id: 'sekolah', label: 'Sekolah' },
   { id: 'kua', label: 'KUA' },
+  { id: 'puskesmas', label: 'Puskesmas' },
 ]
 
 const DAFTAR_AREA = [
@@ -172,23 +175,63 @@ const DAFTAR_AREA = [
     ],
   },
   {
-    id: 'keuangan', warna: '#B15A17', ikon: Wallet, untuk: ['sekolah', 'kua'],
-    nama: 'Keuangan Sekolah & KUA', judul: 'Keuangan sekolah & KUA',
+    id: 'pelayanan-pasien', warna: '#B23A48', ikon: Stethoscope, untuk: ['puskesmas'],
+    nama: 'Pelayanan Pasien', judul: 'Pelayanan pasien',
+    items: [
+      'Pendaftaran & antrean pasien',
+      'Rekam medis elektronik',
+      'Rujukan ke rumah sakit',
+      'Jadwal dokter & poli',
+    ],
+  },
+  {
+    id: 'farmasi', warna: '#0E7C86', ikon: Pill, untuk: ['puskesmas'],
+    nama: 'Farmasi & Obat', judul: 'Farmasi & obat',
+    items: [
+      'Stok obat & alat kesehatan',
+      'Resep & pengeluaran obat',
+      'Laporan persediaan farmasi',
+    ],
+  },
+  {
+    id: 'kesmas', warna: '#C2703D', ikon: HeartPulse, untuk: ['puskesmas'],
+    nama: 'Kesehatan Masyarakat', judul: 'Kesehatan masyarakat',
+    items: [
+      'Posyandu & imunisasi',
+      'Penyuluhan kesehatan',
+      'Laporan program kesehatan masyarakat',
+    ],
+  },
+  {
+    id: 'laporan-puskesmas', warna: '#2F5D8A', ikon: ClipboardCheck, untuk: ['puskesmas'],
+    nama: 'Laporan & Perencanaan Puskesmas', judul: 'Laporan & perencanaan puskesmas',
+    items: [
+      'Laporan Kepala Puskesmas dengan tanda tangan otomatis',
+      'Laporan bulanan puskesmas',
+      'Rencana kerja tahunan',
+      'Ringkasan aset: inventaris & kondisi bangunan',
+    ],
+  },
+  {
+    id: 'keuangan', warna: '#B15A17', ikon: Wallet, untuk: ['sekolah', 'kua', 'puskesmas'],
+    nama: 'Keuangan Sekolah, KUA & Puskesmas', judul: 'Keuangan sekolah, KUA & puskesmas',
     items: [
       { t: 'Keuangan sekolah & kas kelas', u: ['sekolah'] },
       { t: 'Keuangan & anggaran KUA', u: ['kua'] },
+      { t: 'Keuangan & anggaran puskesmas', u: ['puskesmas'] },
       'Kuitansi & nota otomatis',
       'Laporan bulanan',
       'Backup data terjadwal',
     ],
   },
   {
-    id: 'komunikasi', warna: '#6B4FA0', ikon: MessageCircle, untuk: ['sekolah', 'kua'],
+    id: 'komunikasi', warna: '#6B4FA0', ikon: MessageCircle, untuk: ['sekolah', 'kua', 'puskesmas'],
     nama: 'Komunikasi', judul: 'Komunikasi & publikasi',
     items: [
       'Pengumuman & agenda',
       { t: 'Pesan langsung antar warga sekolah', u: ['sekolah'] },
       { t: 'Pesan langsung antar staf KUA', u: ['kua'] },
+      { t: 'Pesan langsung antar staf puskesmas', u: ['puskesmas'] },
       'Rapat online lewat video',
       'Galeri foto kegiatan',
       'Scan dokumen jadi Word',
@@ -196,14 +239,16 @@ const DAFTAR_AREA = [
     ],
   },
   {
-    id: 'manajemen', warna: '#146B71', ikon: Settings, untuk: ['sekolah', 'kua'],
-    nama: 'Manajemen Sekolah & KUA', judul: 'Manajemen sekolah & KUA',
+    id: 'manajemen', warna: '#146B71', ikon: Settings, untuk: ['sekolah', 'kua', 'puskesmas'],
+    nama: 'Manajemen Sekolah, KUA & Puskesmas', judul: 'Manajemen sekolah, KUA & puskesmas',
     items: [
       { t: 'Data guru & inventaris sekolah', u: ['sekolah'] },
       { t: 'Data pegawai, presensi & daftar hadir KUA', u: ['kua'] },
+      { t: 'Data pegawai, presensi & daftar hadir puskesmas', u: ['puskesmas'] },
       { t: 'Inventaris & kondisi bangunan KUA', u: ['kua'] },
+      { t: 'Inventaris & kondisi bangunan puskesmas', u: ['puskesmas'] },
       { t: 'Profil & identitas sekolah', u: ['sekolah'] },
-      { t: 'Profil kantor, kop surat & tanda tangan otomatis', u: ['kua'] },
+      { t: 'Profil kantor, kop surat & tanda tangan otomatis', u: ['kua', 'puskesmas'] },
       'Kalender kerja & hari libur',
       'Persetujuan akun pengguna baru',
     ],
@@ -311,6 +356,44 @@ const LANGKAH_MULAI = {
         'Keuangan, anggaran & laporan bulanan KUA',
       ],
       catatan: 'Semua data tersinkron otomatis ke laporan Kepala KUA.',
+    },
+  ],
+  puskesmas: [
+    {
+      ikon: Building2, judul: 'Lengkapi Profil Puskesmas',
+      desc: 'Isi identitas puskesmas, logo & kop surat resmi.',
+      menu: 'Menu: Profil Puskesmas',
+      penjelasan: 'Isi identitas puskesmas lengkap — data ini dipakai otomatis di kop surat & laporan resmi.',
+      poin: [
+        'Logo Dinas Kesehatan & Kantor Kabupaten',
+        'Data puskesmas: alamat, kecamatan, kabupaten, kontak',
+        'Tanda tangan elektronik Kepala Puskesmas untuk laporan otomatis',
+      ],
+      catatan: 'Jangan lupa klik Simpan setelah semua data terisi.',
+    },
+    {
+      ikon: ClipboardList, judul: 'Atur Data Pegawai & Poli',
+      desc: 'Lengkapi data pegawai, dokter & jadwal poli.',
+      menu: 'Menu: Data Pegawai',
+      penjelasan: 'Lengkapi data pegawai, dokter, dan jadwal poli agar pendaftaran & presensi bisa langsung dipakai.',
+      poin: [
+        'Tambahkan data pegawai, dokter & bidan',
+        'Lengkapi jabatan & NIP masing-masing pegawai',
+        'Atur jadwal poli dan jam layanan',
+      ],
+      catatan: 'Setelah data pegawai lengkap, jangan lupa klik Simpan.',
+    },
+    {
+      ikon: CheckCircle2, judul: 'Mulai Kelola Layanan Pasien',
+      desc: 'Pendaftaran, rekam medis, farmasi & laporan langsung siap pakai.',
+      menu: 'Layanan Pasien, Farmasi & Kesehatan Masyarakat',
+      penjelasan: 'Setelah profil & data pegawai lengkap, seluruh layanan langsung siap dipakai.',
+      poin: [
+        'Pendaftaran pasien & rekam medis elektronik',
+        'Stok obat & laporan farmasi',
+        'Posyandu, imunisasi & laporan kesehatan masyarakat',
+      ],
+      catatan: 'Semua data tersinkron otomatis ke laporan Kepala Puskesmas.',
     },
   ],
 }
@@ -430,9 +513,14 @@ export default function Beranda() {
     }))
 
   // Langkah mulai (cuplikan promosi) yang tampil: KUA memakai versi KUA,
-  // selain itu (Semua/Sekolah) memakai versi Sekolah karena itu alur yang
-  // paling umum dipakai saat ini.
-  const langkahMulaiTampil = untuk === 'kua' ? LANGKAH_MULAI.kua : LANGKAH_MULAI.sekolah
+  // Puskesmas memakai versi Puskesmas, selain itu (Semua/Sekolah) memakai
+  // versi Sekolah karena itu alur yang paling umum dipakai saat ini.
+  const langkahMulaiTampil =
+    untuk === 'kua'
+      ? LANGKAH_MULAI.kua
+      : untuk === 'puskesmas'
+        ? LANGKAH_MULAI.puskesmas
+        : LANGKAH_MULAI.sekolah
 
   // Klik tile -> gulir ke kartu area yang bersangkutan. Menghormati
   // pengaturan "kurangi gerakan" milik perangkat.
@@ -451,7 +539,7 @@ export default function Beranda() {
   // Graph di index.html, bukan dari sini.
   useEffect(() => {
     const judulSebelumnya = document.title
-    document.title = 'SIMAK — Aplikasi terpadu untuk Sekolah & KUA'
+    document.title = 'SIMAK — Aplikasi terpadu untuk Sekolah, KUA & Puskesmas'
     let meta = document.querySelector('meta[name="description"]')
     if (!meta) {
       meta = document.createElement('meta')
@@ -460,7 +548,7 @@ export default function Beranda() {
     }
     meta.setAttribute(
       'content',
-      'SIMAK: sistem informasi terpadu untuk Sekolah dan Kantor Urusan Agama (KUA) — akademik, administrasi, keuangan, laporan, dan komunikasi dalam satu aplikasi.'
+      'SIMAK: sistem informasi terpadu untuk Sekolah, Kantor Urusan Agama (KUA), dan Puskesmas — akademik, administrasi, pelayanan kesehatan, keuangan, laporan, dan komunikasi dalam satu aplikasi.'
     )
     return () => {
       document.title = judulSebelumnya
@@ -507,8 +595,10 @@ async function cobaDemo() {
   if (demoLoading) return
   setDemoError('')
   setDemoLoading(true)
-  const emailDemo = untuk === 'kua' ? DEMO_KUA_EMAIL : DEMO_EMAIL
-  const passwordDemo = untuk === 'kua' ? DEMO_KUA_PASSWORD : DEMO_PASSWORD
+  const emailDemo =
+    untuk === 'kua' ? DEMO_KUA_EMAIL : untuk === 'puskesmas' ? DEMO_PUSKESMAS_EMAIL : DEMO_EMAIL
+  const passwordDemo =
+    untuk === 'kua' ? DEMO_KUA_PASSWORD : untuk === 'puskesmas' ? DEMO_PUSKESMAS_PASSWORD : DEMO_PASSWORD
   const { error } = await signIn(emailDemo, passwordDemo)
   setDemoLoading(false)
   if (error) {
@@ -745,18 +835,18 @@ async function cobaDemo() {
                   <div className="brand-logo-icon"><Landmark size={22} strokeWidth={2.5} /></div>
                   <span className="brand-logo-text">SIMAK</span>
                   {/* Badge kecil di samping logo menandaskan bahwa platform ini
-                      sekarang melayani dua jenis pendaftar: sekolah & kantor. */}
+                      sekarang melayani tiga jenis pendaftar: sekolah, kantor & puskesmas. */}
                   <span className="brand-logo-badge">
                     <Building2 size={11} strokeWidth={2.6} />
-                    Sekolah &amp; KUA
+                    Sekolah, KUA &amp; Puskesmas
                   </span>
                 </div>
-                <h1 className="beranda-title">Satu aplikasi, untuk Sekolah &amp; KUA</h1>
+                <h1 className="beranda-title">Satu aplikasi, untuk Sekolah, KUA &amp; Puskesmas</h1>
                 <p className="beranda-sub">
-                  Sistem informasi terpadu untuk Sekolah dan Kantor Urusan Agama (KUA), dengan{' '}
-                  {DAFTAR_AREA.length} area utama dan puluhan modul siap pakai — dari akademik dan
-                  administrasi siswa, penyuluhan dan kepenghuluan, hingga keuangan, komunikasi,
-                  dan laporan pimpinan.
+                  Sistem informasi terpadu untuk Sekolah, Kantor Urusan Agama (KUA), dan Puskesmas,
+                  dengan {DAFTAR_AREA.length} area utama dan puluhan modul siap pakai — dari
+                  akademik dan administrasi siswa, penyuluhan dan kepenghuluan, hingga pelayanan
+                  kesehatan, keuangan, komunikasi, dan laporan pimpinan.
                 </p>
                 <div className="header-actions">
                   <Link to={linkDaftar} className="btn-primary">
@@ -786,8 +876,8 @@ async function cobaDemo() {
                       Route "/toko" memang sudah publik di App.jsx. Diberi
                       gaya outline (bukan solid) supaya tidak bersaing dengan
                       CTA utama "Daftar sekarang". Disembunyikan pada
-                      tampilan KUA karena Toko Sekolah khusus sekolah. */}
-                  {untuk !== 'kua' && (
+                      tampilan KUA/Puskesmas karena Toko Sekolah khusus sekolah. */}
+                  {untuk !== 'kua' && untuk !== 'puskesmas' && (
                     <Link to="/toko" className="btn-outline-toko">
                       <ShoppingBag size={16} strokeWidth={2.5} />
                       Lihat Toko Sekolah
@@ -845,9 +935,9 @@ async function cobaDemo() {
           <div className="aru-banner">
             <div className="aru-icon"><Users size={20} /></div>
             <p className="aru-text">
-              Salam hangat untuk Bapak/Ibu Guru dan staf KUA (Kantor Urusan Agama) di Kabupaten
-              Kepulauan Aru — SIMAK dibuat untuk membantu sekolah maupun KUA Anda mengelola data
-              lebih ringan, dari ruang kelas hingga meja kerja.
+              Salam hangat untuk Bapak/Ibu Guru, staf KUA (Kantor Urusan Agama), dan tenaga
+              Puskesmas — SIMAK dibuat untuk membantu sekolah, KUA, maupun Puskesmas Anda mengelola
+              data lebih ringan, dari ruang kelas hingga meja kerja.
             </p>
           </div>
 
@@ -934,21 +1024,25 @@ async function cobaDemo() {
               <h2 className="area-showcase-title" aria-live="polite">
                 {untuk === 'kua'
                   ? `${areaTampil.length} area untuk KUA`
-                  : untuk === 'sekolah'
-                    ? `${areaTampil.length} area untuk Sekolah`
-                    : `${areaTampil.length} area, untuk Sekolah & KUA`}
+                  : untuk === 'puskesmas'
+                    ? `${areaTampil.length} area untuk Puskesmas`
+                    : untuk === 'sekolah'
+                      ? `${areaTampil.length} area untuk Sekolah`
+                      : `${areaTampil.length} area, untuk Sekolah, KUA & Puskesmas`}
               </h2>
               <p className="area-showcase-sub">
                 {untuk === 'semua' ? (
                   <>
                     Pilih jenis instansi Anda untuk melihat modul yang tersedia. Badge{' '}
-                    <span className="badge-sekolah-inline">Khusus sekolah</span> dan{' '}
-                    <span className="badge-kua-inline">Khusus KUA</span> menandai modul yang hanya
-                    tampil untuk jenis akun tersebut.
+                    <span className="badge-sekolah-inline">Khusus sekolah</span>,{' '}
+                    <span className="badge-kua-inline">Khusus KUA</span>, dan{' '}
+                    <span className="badge-puskesmas-inline">Khusus puskesmas</span> menandai modul
+                    yang hanya tampil untuk jenis akun tersebut.
                   </>
                 ) : (
                   <>
-                    Semua modul di bawah tersedia untuk akun {untuk === 'kua' ? 'KUA' : 'sekolah'}.
+                    Semua modul di bawah tersedia untuk akun{' '}
+                    {untuk === 'kua' ? 'KUA' : untuk === 'puskesmas' ? 'puskesmas' : 'sekolah'}.
                     Kewenangan tiap pengguna (admin, kepala, pegawai) diatur setelah login.
                   </>
                 )}
@@ -982,6 +1076,7 @@ async function cobaDemo() {
                   <>
                     {badgeJenis === 'sekolah' && <span className="tile-badge-sekolah">Khusus sekolah</span>}
                     {badgeJenis === 'kua' && <span className="tile-badge-kua">Khusus KUA</span>}
+                    {badgeJenis === 'puskesmas' && <span className="tile-badge-puskesmas">Khusus puskesmas</span>}
                     {a.tanpaLogin && <span className="tile-toko-badge">Tanpa login</span>}
                     <div className="tile-icon"><Ikon size={15} strokeWidth={2.4} /></div>
                     <p className="tile-label">Area {a.nomor}</p>
@@ -1070,6 +1165,7 @@ async function cobaDemo() {
                     <span className="cat-tag" style={{ background: a.warna }}>Area {a.nomor}</span>
                     {badgeJenis === 'sekolah' && <span className="cat-card-badge-sekolah">Khusus sekolah</span>}
                     {badgeJenis === 'kua' && <span className="cat-card-badge-kua">Khusus KUA</span>}
+                    {badgeJenis === 'puskesmas' && <span className="cat-card-badge-puskesmas">Khusus puskesmas</span>}
                     {judul}
                     {daftar}
                   </div>
@@ -1082,8 +1178,8 @@ async function cobaDemo() {
             <BatikOverlay patternId="batikFooter" strokeColor="#d4af37" opacity={0.7} size={56} />
             <div className="footer-content">
               <div>
-                <p className="beranda-footer-title">Tertarik menerapkannya di sekolah atau KUA Anda?</p>
-                <p className="beranda-footer-sub">Gratis selama masa promo berlaku. Daftar akun untuk sekolah maupun KUA Anda sekarang.</p>
+                <p className="beranda-footer-title">Tertarik menerapkannya di sekolah, KUA, atau Puskesmas Anda?</p>
+                <p className="beranda-footer-sub">Gratis selama masa promo berlaku. Daftar akun untuk sekolah, KUA, maupun Puskesmas Anda sekarang.</p>
               </div>
               <Link to={linkDaftar} className="beranda-cta">
                 Daftar sekarang
@@ -1159,7 +1255,7 @@ async function cobaDemo() {
           >
             <div className="ios-modal-header">
               <h3 className="ios-modal-title" id="panduan-modal-judul">
-                Panduan Mulai — {untuk === 'kua' ? 'KUA' : 'Sekolah'}
+                Panduan Mulai — {untuk === 'kua' ? 'KUA' : untuk === 'puskesmas' ? 'Puskesmas' : 'Sekolah'}
               </h3>
               <button
                 type="button"
@@ -2572,6 +2668,7 @@ async function cobaDemo() {
         /* Pemilih jenis instansi (Semua / Sekolah / KUA) */
         .aud-switch {
           display: inline-flex;
+          flex-wrap: wrap;
           gap: 4px;
           margin-top: 14px;
           padding: 4px;
@@ -2632,9 +2729,47 @@ async function cobaDemo() {
           box-shadow: 0 4px 10px rgba(0,0,0,0.18);
           white-space: nowrap;
         }
+
+        .badge-puskesmas-inline {
+          display: inline-block;
+          background: #FDA4AF;
+          color: #881337;
+          font-size: 11.5px;
+          font-weight: 800;
+          padding: 2px 8px;
+          border-radius: 999px;
+          vertical-align: 1px;
+        }
+        .tile-badge-puskesmas {
+          position: absolute;
+          top: -8px;
+          left: -6px;
+          background: #FDA4AF;
+          color: #881337;
+          font-size: 11px;
+          font-weight: 800;
+          padding: 3px 8px;
+          border-radius: 999px;
+          box-shadow: 0 4px 10px rgba(0,0,0,0.18);
+          z-index: 2;
+          white-space: nowrap;
+        }
+        .cat-card-badge-puskesmas {
+          position: absolute;
+          top: -9px;
+          right: 14px;
+          background: #FDA4AF;
+          color: #881337;
+          font-size: 11px;
+          font-weight: 800;
+          padding: 3px 9px;
+          border-radius: 999px;
+          box-shadow: 0 4px 10px rgba(0,0,0,0.18);
+          white-space: nowrap;
+        }
         @media (max-width: 560px) {
           .aud-switch { display: flex; width: 100%; }
-          .aud-btn { flex: 1; padding: 9px 8px; }
+          .aud-btn { flex: 1 1 40%; padding: 9px 8px; }
         }
 
         /* Tablet / layar sedang (mis. Android tablet, iPad mini) */
