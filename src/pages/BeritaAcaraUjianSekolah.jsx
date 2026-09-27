@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
+import { supabase } from '../lib/supabaseClient'
 import {
   AreaLembar,
   BagianSK as Bagian,
@@ -11,11 +12,41 @@ import {
   KopSK,
   LembarSK,
   SEKOLAH_KOSONG,
+  ambilGuruDanKelas,
   ambilProfilSekolah,
   inputSK as inputCls,
   isi,
   isoHariIni,
+  urutkanGuru,
 } from './CetakSK'
+
+// --- Dipinjam dari DaftarHadirSiswaUjian.jsx / KartuPesertaUjian.jsx: ---
+// pengenal Kelas 6 & status peserta, supaya sumber datanya sama persis
+// dengan halaman Kartu Peserta Ujian / Pengaturan Ruang.
+
+// Kelas 6 bisa ditulis dengan angka ("6A", "Kelas 6") atau angka Romawi
+// ("VIA", "Kelas VI"), jadi kecocokan dicek dari kedua kemungkinan itu.
+function isKelas6(namaKelas) {
+  const nama = (namaKelas || '').trim().toUpperCase()
+  if (!nama) return false
+  if (/^6\b/.test(nama)) return true
+  if (/KELAS\s*6\b/.test(nama)) return true
+  if (/^VI([^I]|$)/.test(nama)) return true
+  if (/KELAS\s*VI([^I]|$)/.test(nama)) return true
+  return false
+}
+
+// Hanya siswa yang No. Peserta Ujian-nya sudah terisi yang dianggap "peserta"
+// resmi dan boleh dihitung di berita acara.
+function sudahTerdaftarPeserta(siswa) {
+  const nilai = siswa?.no_peserta_ujian
+  return nilai !== null && nilai !== undefined && String(nilai).trim() !== ''
+}
+
+// Urut alami berdasarkan No. Peserta (mis. "...-9" sebelum "...-10").
+function urutkanNoPeserta(a, b) {
+  return String(a.noPeserta).localeCompare(String(b.noPeserta), undefined, { numeric: true })
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BeritaAcaraUjianSekolah — lembar Berita Acara Penyelenggara Ujian Sekolah,
@@ -175,10 +206,25 @@ function BarisRincian({ label, nilai, satuan }) {
 
 export default function BeritaAcaraUjianSekolah() {
   const navigate = useNavigate()
-  const { sekolahId } = useAuth()
+  // Aman untuk dua bentuk AuthContext: ada `sekolahId` langsung, atau hanya
+  // lewat profil.sekolah_id (sama seperti DaftarHadirSiswaUjian.jsx).
+  const { sekolahId: sekolahIdCtx, profil } = useAuth()
+  const sekolahId = sekolahIdCtx || profil?.sekolah_id
   const sudahMuat = useRef(false)
 
   const [sekolah, setSekolah] = useState(SEKOLAH_KOSONG)
+
+  // --- Guru (untuk dipilih sebagai Pengawas I & II) ---
+  const [guru, setGuru] = useState([])
+
+  // --- Peserta (ditarik otomatis dari tabel siswa, sama sumbernya dengan
+  //     Kartu Peserta Ujian / Daftar Hadir Siswa Ujian) ---
+  const [siswaSemua, setSiswaSemua] = useState([])
+  const [memuatSiswa, setMemuatSiswa] = useState(true)
+  const [galatSiswa, setGalatSiswa] = useState('')
+  // Kehadiran per siswa (id -> true/false). Default semua hadir; dicentang-
+  // hilangkan satu per satu kalau ada yang tidak hadir saat pelaksanaan.
+  const [kehadiran, setKehadiran] = useState({})
 
   const [sk, setSk] = useState({
     tanggalPelaksanaan: isoHariIni(),
@@ -186,6 +232,10 @@ export default function BeritaAcaraUjianSekolah() {
     pukulMulai: '',
     pukulSelesai: '',
     ruang: '',
+    // Dipakai hanya sebagai cadangan kalau ruang ini belum punya data siswa
+    // di sistem (mis. sekolah belum mengisi Pengaturan Ruang) — begitu ada
+    // data siswa untuk ruang tersebut, angka & nomor di bawah dihitung
+    // otomatis dan field manual ini diabaikan.
     jumlahSeharusnya: '',
     jumlahTidakHadir: '',
     nomorTidakHadir: '',
@@ -198,10 +248,8 @@ export default function BeritaAcaraUjianSekolah() {
     jumlahBlankoBA: '',
     jumlahDaftarHadir: '',
     catatan: CATATAN_AWAL,
-    pengawas1Nama: '',
-    pengawas1Nip: '',
-    pengawas2Nama: '',
-    pengawas2Nip: '',
+    pengawas1Id: '',
+    pengawas2Id: '',
   })
 
   const [memuat, setMemuat] = useState(true)
@@ -215,8 +263,12 @@ export default function BeritaAcaraUjianSekolah() {
     setMemuat(true)
     setGalat('')
     try {
-      const ps = await ambilProfilSekolah(sekolahId)
+      const [ps, gk] = await Promise.all([
+        ambilProfilSekolah(sekolahId),
+        ambilGuruDanKelas(sekolahId),
+      ])
       setSekolah(ps.sekolah)
+      setGuru(urutkanGuru(gk.guru))
       sudahMuat.current = true
     } catch (e) {
       console.error('Gagal memuat data Berita Acara Ujian Sekolah:', e)
@@ -226,12 +278,127 @@ export default function BeritaAcaraUjianSekolah() {
     }
   }
 
+  // Sama seperti muatSiswa() di DaftarHadirSiswaUjian.jsx: ambil semua siswa
+  // sekolah (join kelas), filter Kelas 6 di sisi client, lalu filter lagi
+  // hanya yang sudah punya No. Peserta Ujian.
+  async function muatSiswa() {
+    if (!sekolahId) {
+      setMemuatSiswa(false)
+      return
+    }
+    setMemuatSiswa(true)
+    setGalatSiswa('')
+    try {
+      const { data, error } = await supabase
+        .from('siswa')
+        .select('id, nama_lengkap, nisn, no_peserta_ujian, ruang_ujian, kelas(nama_kelas)')
+        .eq('sekolah_id', sekolahId)
+        .order('nama_lengkap')
+
+      if (error) throw error
+
+      const peserta = (data || [])
+        .filter((s) => isKelas6(s.kelas?.nama_kelas))
+        .filter(sudahTerdaftarPeserta)
+        .map((s) => ({
+          id: s.id,
+          nama: s.nama_lengkap,
+          noPeserta: s.no_peserta_ujian,
+          noInduk: s.nisn,
+          ruangUjian: s.ruang_ujian || '',
+        }))
+      setSiswaSemua(peserta)
+    } catch (e) {
+      console.error('Gagal memuat daftar peserta ujian:', e)
+      setGalatSiswa(e?.message || 'Daftar peserta tidak dapat dibaca.')
+      setSiswaSemua([])
+    } finally {
+      setMemuatSiswa(false)
+    }
+  }
+
   useEffect(() => {
     muatDariData()
+    muatSiswa()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sekolahId])
 
   const ubahSk = (k) => (e) => setSk((s) => ({ ...s, [k]: e.target.value }))
+
+  // ── Guru / Pengawas ──
+  const guruPerId = useMemo(() => {
+    const m = {}
+    guru.forEach((g) => { m[g.id] = g })
+    return m
+  }, [guru])
+
+  // Pengawas II tidak boleh sama dengan Pengawas I, dan sebaliknya.
+  const pilihanPengawas1 = useMemo(() => guru.filter((g) => g.id !== sk.pengawas2Id), [guru, sk.pengawas2Id])
+  const pilihanPengawas2 = useMemo(() => guru.filter((g) => g.id !== sk.pengawas1Id), [guru, sk.pengawas1Id])
+
+  const pengawas1 = guruPerId[sk.pengawas1Id]
+  const pengawas2 = guruPerId[sk.pengawas2Id]
+
+  // ── Ruang & peserta ──
+  // Daftar ruang = nilai ruang_ujian unik yang sudah diisi lewat halaman
+  // Kartu Peserta Ujian > Pengaturan Ruang, diurutkan alami (1, 2, 10, ...).
+  const daftarRuang = useMemo(
+    () =>
+      [...new Set(siswaSemua.map((s) => s.ruangUjian).filter(Boolean))].sort((a, b) =>
+        String(a).localeCompare(String(b), undefined, { numeric: true })
+      ),
+    [siswaSemua]
+  )
+
+  // Begitu daftar ruang termuat, otomatis pilih ruang pertama kalau form
+  // belum punya pilihan (atau pilihan lama sudah tidak ada lagi).
+  useEffect(() => {
+    if (daftarRuang.length === 0) return
+    if (!sk.ruang || !daftarRuang.includes(sk.ruang)) {
+      setSk((s) => ({ ...s, ruang: daftarRuang[0] }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [daftarRuang])
+
+  // Peserta pada ruang yang sedang dipilih, terurut sesuai No. Peserta.
+  const siswaRuang = useMemo(
+    () => siswaSemua.filter((s) => s.ruangUjian === sk.ruang).sort(urutkanNoPeserta),
+    [siswaSemua, sk.ruang]
+  )
+
+  // Begitu daftar peserta ruang berubah, kehadiran defaultnya HADIR semua —
+  // hanya siswa yang belum ada di state yang diisi default true, supaya
+  // centang yang sudah diubah tangan sebelumnya tidak ikut ter-reset.
+  useEffect(() => {
+    setKehadiran((k) => {
+      const next = { ...k }
+      let berubah = false
+      siswaRuang.forEach((s) => {
+        if (!(s.id in next)) {
+          next[s.id] = true
+          berubah = true
+        }
+      })
+      return berubah ? next : k
+    })
+  }, [siswaRuang])
+
+  const pesertaHadir = useMemo(() => siswaRuang.filter((s) => kehadiran[s.id] !== false), [siswaRuang, kehadiran])
+  const pesertaTidakHadir = useMemo(() => siswaRuang.filter((s) => kehadiran[s.id] === false), [siswaRuang, kehadiran])
+
+  const adaDataPeserta = siswaRuang.length > 0
+  const toggleHadir = (id) => setKehadiran((k) => ({ ...k, [id]: !(k[id] !== false) }))
+
+  // Nilai yang dicetak: pakai hasil hitung otomatis kalau ruang ini sudah
+  // punya data peserta di sistem, kalau belum (data kosong) pakai isian
+  // manual di form sebagai cadangan.
+  const jumlahSeharusnyaCetak = adaDataPeserta ? String(siswaRuang.length) : sk.jumlahSeharusnya
+  const jumlahHadirCetak = adaDataPeserta ? String(pesertaHadir.length) : sk.jumlahHadir
+  const jumlahTidakHadirCetak = adaDataPeserta ? String(pesertaTidakHadir.length) : sk.jumlahTidakHadir
+  const nomorHadirCetak = adaDataPeserta ? pesertaHadir.map((s) => s.noPeserta).join(', ') : sk.nomorHadir
+  const nomorTidakHadirCetak = adaDataPeserta
+    ? pesertaTidakHadir.map((s) => s.noPeserta).join(', ')
+    : sk.nomorTidakHadir
 
   // ── Susun isi dokumen ──
   const namaSekolah = isi(sekolah.nama, 'NAMA SEKOLAH')
@@ -268,13 +435,28 @@ export default function BeritaAcaraUjianSekolah() {
           </div>
         </Bagian>
 
-        <Bagian judul="a. Pelaksanaan Ujian Sekolah" keterangan="Tanggal, jam, ruang, dan jumlah peserta.">
+        <Bagian
+          judul="a. Pelaksanaan Ujian Sekolah"
+          keterangan={
+            adaDataPeserta
+              ? `Jumlah & nomor peserta dihitung otomatis dari data siswa Kelas 6 (Ruang ${sk.ruang}) — ${siswaRuang.length} peserta. Centang untuk menandai yang TIDAK hadir.`
+              : 'Ruang ini belum punya data peserta di sistem — isi jumlah & nomor peserta secara manual di bawah.'
+          }
+        >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Tanggal pelaksanaan">
               <input type="date" className={inputCls} value={sk.tanggalPelaksanaan} onChange={ubahSk('tanggalPelaksanaan')} />
             </Field>
-            <Field label="Ruang">
-              <input className={inputCls} value={sk.ruang} onChange={ubahSk('ruang')} placeholder="mis. I (Satu)" />
+            <Field label="Ruang" keterangan={daftarRuang.length > 0 ? 'Daftar diambil dari ruang yang sudah diisi lewat Pengaturan Ruang.' : undefined}>
+              {daftarRuang.length > 0 ? (
+                <select className={inputCls} value={sk.ruang} onChange={ubahSk('ruang')}>
+                  {daftarRuang.map((r) => (
+                    <option key={r} value={r}>Ruang {r}</option>
+                  ))}
+                </select>
+              ) : (
+                <input className={inputCls} value={sk.ruang} onChange={ubahSk('ruang')} placeholder="mis. I (Satu)" />
+              )}
             </Field>
             <Field label="Pukul mulai">
               <input type="time" className={inputCls} value={sk.pukulMulai} onChange={ubahSk('pukulMulai')} />
@@ -282,22 +464,48 @@ export default function BeritaAcaraUjianSekolah() {
             <Field label="Pukul selesai">
               <input type="time" className={inputCls} value={sk.pukulSelesai} onChange={ubahSk('pukulSelesai')} />
             </Field>
-            <Field label="Jumlah peserta seharusnya">
-              <input className={inputCls} value={sk.jumlahSeharusnya} onChange={ubahSk('jumlahSeharusnya')} inputMode="numeric" />
-            </Field>
-            <Field label="Jumlah peserta tidak hadir">
-              <input className={inputCls} value={sk.jumlahTidakHadir} onChange={ubahSk('jumlahTidakHadir')} inputMode="numeric" />
-            </Field>
-            <Field label="Nomor peserta tidak hadir" className="sm:col-span-2">
-              <input className={inputCls} value={sk.nomorTidakHadir} onChange={ubahSk('nomorTidakHadir')} placeholder="kosongkan jika tidak ada" />
-            </Field>
-            <Field label="Jumlah peserta hadir">
-              <input className={inputCls} value={sk.jumlahHadir} onChange={ubahSk('jumlahHadir')} inputMode="numeric" />
-            </Field>
-            <Field label="Nomor peserta hadir" className="sm:col-span-2">
-              <input className={inputCls} value={sk.nomorHadir} onChange={ubahSk('nomorHadir')} placeholder="mis. 1 s.d. 6" />
-            </Field>
           </div>
+
+          {memuatSiswa ? (
+            <p className="mt-3 flex items-center gap-2 text-sm text-slate-500">
+              <Loader2 size={14} className="animate-spin" /> Memuat daftar peserta…
+            </p>
+          ) : galatSiswa ? (
+            <p className="mt-3 text-sm text-amber-700">Daftar peserta belum bisa dibaca ({galatSiswa}).</p>
+          ) : adaDataPeserta ? (
+            <div className="mt-3 rounded-xl border border-slate-200 divide-y divide-slate-100">
+              {siswaRuang.map((s) => {
+                const hadir = kehadiran[s.id] !== false
+                return (
+                  <label key={s.id} className="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer">
+                    <input type="checkbox" checked={!hadir} onChange={() => toggleHadir(s.id)} className="rounded" />
+                    <span className={hadir ? 'text-slate-700' : 'text-red-600 line-through'}>
+                      {s.noPeserta} — {s.nama}
+                    </span>
+                    {!hadir && <span className="ml-auto text-xs text-red-500">tidak hadir</span>}
+                  </label>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Jumlah peserta seharusnya">
+                <input className={inputCls} value={sk.jumlahSeharusnya} onChange={ubahSk('jumlahSeharusnya')} inputMode="numeric" />
+              </Field>
+              <Field label="Jumlah peserta tidak hadir">
+                <input className={inputCls} value={sk.jumlahTidakHadir} onChange={ubahSk('jumlahTidakHadir')} inputMode="numeric" />
+              </Field>
+              <Field label="Nomor peserta tidak hadir" className="sm:col-span-2">
+                <input className={inputCls} value={sk.nomorTidakHadir} onChange={ubahSk('nomorTidakHadir')} placeholder="kosongkan jika tidak ada" />
+              </Field>
+              <Field label="Jumlah peserta hadir">
+                <input className={inputCls} value={sk.jumlahHadir} onChange={ubahSk('jumlahHadir')} inputMode="numeric" />
+              </Field>
+              <Field label="Nomor peserta hadir" className="sm:col-span-2">
+                <input className={inputCls} value={sk.nomorHadir} onChange={ubahSk('nomorHadir')} placeholder="mis. 1 s.d. 6" />
+              </Field>
+            </div>
+          )}
         </Bagian>
 
         <Bagian judul="b. Pembukaan sampul ujian" keterangan="Mata pelajaran, kode soal, dan jumlah eksemplar.">
@@ -329,19 +537,23 @@ export default function BeritaAcaraUjianSekolah() {
           </Field>
         </Bagian>
 
-        <Bagian judul="Pengawas" keterangan="Dua pengawas yang membuat dan menandatangani berita acara, berdampingan.">
+        <Bagian judul="Pengawas" keterangan="Dipilih dari data guru; nama dan NIP di lembar cetak terisi otomatis.">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Nama Pengawas I">
-              <input className={inputCls} value={sk.pengawas1Nama} onChange={ubahSk('pengawas1Nama')} />
+            <Field label="Pengawas I">
+              <select className={inputCls} value={sk.pengawas1Id} onChange={ubahSk('pengawas1Id')}>
+                <option value="">— pilih guru —</option>
+                {pilihanPengawas1.map((g) => (
+                  <option key={g.id} value={g.id}>{g.nama_lengkap}</option>
+                ))}
+              </select>
             </Field>
-            <Field label="NIP Pengawas I">
-              <input className={inputCls} value={sk.pengawas1Nip} onChange={ubahSk('pengawas1Nip')} inputMode="numeric" />
-            </Field>
-            <Field label="Nama Pengawas II">
-              <input className={inputCls} value={sk.pengawas2Nama} onChange={ubahSk('pengawas2Nama')} />
-            </Field>
-            <Field label="NIP Pengawas II">
-              <input className={inputCls} value={sk.pengawas2Nip} onChange={ubahSk('pengawas2Nip')} inputMode="numeric" />
+            <Field label="Pengawas II">
+              <select className={inputCls} value={sk.pengawas2Id} onChange={ubahSk('pengawas2Id')}>
+                <option value="">— pilih guru —</option>
+                {pilihanPengawas2.map((g) => (
+                  <option key={g.id} value={g.id}>{g.nama_lengkap}</option>
+                ))}
+              </select>
             </Field>
           </div>
         </Bagian>
@@ -379,11 +591,11 @@ export default function BeritaAcaraUjianSekolah() {
                 <tbody>
                   <BarisRincian label="Pada Sekolah" nilai={namaSekolah} />
                   <BarisRincian label="Ruang" nilai={isi(sk.ruang, '…')} />
-                  <BarisRincian label="Jumlah Peserta Seharusnya" nilai={isi(sk.jumlahSeharusnya, '…')} satuan="Orang" />
-                  <BarisRincian label="Jumlah Peserta Yang Tidak Hadir" nilai={isi(sk.jumlahTidakHadir, '0')} satuan="Orang" />
-                  <BarisRincian label="Yaitu Nomor" nilai={isi(sk.nomorTidakHadir, '-')} />
-                  <BarisRincian label="Jumlah Peserta yang Hadir" nilai={isi(sk.jumlahHadir, '…')} satuan="Orang" />
-                  <BarisRincian label="Yaitu Nomor" nilai={isi(sk.nomorHadir, '-')} />
+                  <BarisRincian label="Jumlah Peserta Seharusnya" nilai={isi(jumlahSeharusnyaCetak, '…')} satuan="Orang" />
+                  <BarisRincian label="Jumlah Peserta Yang Tidak Hadir" nilai={isi(jumlahTidakHadirCetak, '0')} satuan="Orang" />
+                  <BarisRincian label="Yaitu Nomor" nilai={isi(nomorTidakHadirCetak, '-')} />
+                  <BarisRincian label="Jumlah Peserta yang Hadir" nilai={isi(jumlahHadirCetak, '…')} satuan="Orang" />
+                  <BarisRincian label="Yaitu Nomor" nilai={isi(nomorHadirCetak, '-')} />
                 </tbody>
               </table>
             </div>
@@ -427,13 +639,13 @@ export default function BeritaAcaraUjianSekolah() {
                         <td className="no">2.</td>
                         <td className="label">Nama</td>
                         <td className="titik">:</td>
-                        <td>{isi(sk.pengawas1Nama, '…')}</td>
+                        <td>{isi(pengawas1?.nama_lengkap, '…')}</td>
                       </tr>
                       <tr>
                         <td className="no">3.</td>
                         <td className="label">NIP</td>
                         <td className="titik">:</td>
-                        <td>{isi(sk.pengawas1Nip, '…')}</td>
+                        <td>{isi(pengawas1?.nip, '…')}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -452,13 +664,13 @@ export default function BeritaAcaraUjianSekolah() {
                         <td className="no">2.</td>
                         <td className="label">Nama</td>
                         <td className="titik">:</td>
-                        <td>{isi(sk.pengawas2Nama, '…')}</td>
+                        <td>{isi(pengawas2?.nama_lengkap, '…')}</td>
                       </tr>
                       <tr>
                         <td className="no">3.</td>
                         <td className="label">NIP</td>
                         <td className="titik">:</td>
-                        <td>{isi(sk.pengawas2Nip, '…')}</td>
+                        <td>{isi(pengawas2?.nip, '…')}</td>
                       </tr>
                     </tbody>
                   </table>
