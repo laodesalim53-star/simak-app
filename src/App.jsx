@@ -310,6 +310,7 @@ export default function App() {
           <Route path="/kebijakan-privasi" element={<KebijakanPrivasi />} />
           <Route path="/syarat-layanan" element={<SyaratLayanan />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/login/:jenis" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/menunggu-persetujuan" element={<RouteMenunggu><MenungguPersetujuan /></RouteMenunggu>} />
           <Route path="/persetujuan-akun" element={<ProtectedRoute adminUtamaOnly><PersetujuanAkun /></ProtectedRoute>} />
