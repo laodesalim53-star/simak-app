@@ -18,6 +18,9 @@ function labelJenisLayanan(value) {
   return JENIS_LAYANAN.find((j) => j.value === value)?.label || value || "-";
 }
 
+// Template nama obat/bahan per jenis layanan — sekadar daftar nama umum yang
+// tersedia di puskesmas untuk mempercepat pengisian, BUKAN rekomendasi dosis
+// atau aturan pakai. Dosis dan indikasi tetap sepenuhnya penilaian petugas.
 const TEMPLATE_OBAT = {
   anc: ["Tablet Tambah Darah (Fe)", "Asam Folat", "Kalsium Laktat", "Vitamin B Complex"],
   persalinan: ["Oksitosin", "Vitamin K1", "Salep Mata Antibiotik"],
@@ -54,6 +57,10 @@ function formatTanggalIndonesia(ts) {
   });
 }
 
+function tanggalHariIni() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function tambahKeDaftarObat(teksSaatIni, nama) {
   const daftar = teksSaatIni
     .split(",")
@@ -66,6 +73,10 @@ function tambahKeDaftarObat(teksSaatIni, nama) {
   return daftar.join(", ");
 }
 
+// Field form dipakai ulang untuk form Tambah maupun modal Edit, supaya
+// tidak ada dua salinan JSX yang bisa saling tidak sinkron.
+// `setField(field, value)` dipakai khusus untuk aksi klik chip (bukan event
+// input biasa), terpisah dari `ubahField` yang menangani onChange input/textarea.
 function FieldPemeriksaan({ form, ubahField, setField }) {
   const templateObat = TEMPLATE_OBAT[form.jenis_layanan] || [];
 
@@ -266,36 +277,59 @@ export default function FormKunjungan({
       return;
     }
 
-    const { error } = await supabase.from("kunjungan").insert({
-      ...form,
-      sekolah_id: profil.sekolah_id,
-      pasien_id: pasien.id,
-      petugas_id: user.id,
-      // Nama pemeriksa diambil dari data pegawai (profil.nama_lengkap sudah
-      // diresolusi dari tabel pegawai_puskesmas oleh loadProfil() di
-      // AuthContext.jsx). Disimpan sebagai teks (bukan cuma id) supaya
-      // riwayat lama tetap menunjukkan nama yang benar meski data pegawai
-      // berubah/dihapus di kemudian hari.
-      nama_pemeriksa: profil?.nama_lengkap || null,
-      berat_badan: form.berat_badan ? Number(form.berat_badan) : null,
-      tinggi_badan: form.tinggi_badan ? Number(form.tinggi_badan) : null,
-      suhu: form.suhu ? Number(form.suhu) : null,
-      lingkar_lengan: form.lingkar_lengan ? Number(form.lingkar_lengan) : null,
-      usia_kehamilan_minggu: form.usia_kehamilan_minggu
-        ? Number(form.usia_kehamilan_minggu)
-        : null,
-    });
+    const { data: kunjunganBaru, error } = await supabase
+      .from("kunjungan")
+      .insert({
+        ...form,
+        sekolah_id: profil.sekolah_id,
+        pasien_id: pasien.id,
+        petugas_id: user.id,
+        // Nama pemeriksa diambil dari data pegawai (profil.nama_lengkap sudah
+        // diresolusi dari tabel pegawai_puskesmas oleh loadProfil() di
+        // AuthContext.jsx). Disimpan sebagai teks (bukan cuma id) supaya
+        // riwayat lama tetap menunjukkan nama yang benar meski data pegawai
+        // berubah/dihapus di kemudian hari.
+        nama_pemeriksa: profil?.nama_lengkap || null,
+        berat_badan: form.berat_badan ? Number(form.berat_badan) : null,
+        tinggi_badan: form.tinggi_badan ? Number(form.tinggi_badan) : null,
+        suhu: form.suhu ? Number(form.suhu) : null,
+        lingkar_lengan: form.lingkar_lengan ? Number(form.lingkar_lengan) : null,
+        usia_kehamilan_minggu: form.usia_kehamilan_minggu
+          ? Number(form.usia_kehamilan_minggu)
+          : null,
+      })
+      .select("id")
+      .single();
 
-    setMenyimpan(false);
     if (error) {
       console.error(error);
+      setMenyimpan(false);
       setPesan({ tipe: "error", teks: "Gagal menyimpan kunjungan." });
       return;
     }
 
+    // Catat otomatis sebagai Tugas Harian milik petugas yang memeriksa —
+    // supaya pemeriksaan yang sudah dilakukan langsung terlihat sebagai
+    // riwayat kerja hari itu di TugasHarian.jsx, tanpa perlu diketik ulang
+    // manual. Kegagalan di sini TIDAK membatalkan kunjungan yang sudah
+    // tersimpan, cukup dicatat di console — data pemeriksaan tetap prioritas.
+    const { error: errTugas } = await supabase.from("tugas_bidan").insert({
+      sekolah_id: profil.sekolah_id,
+      petugas_id: user.id,
+      judul: `Periksa: ${pasien.nama} (${labelJenisLayanan(form.jenis_layanan)})`,
+      deskripsi: form.hasil_pemeriksaan || null,
+      tanggal: tanggalHariIni(),
+      status: "selesai",
+      kunjungan_id: kunjunganBaru.id,
+    });
+    if (errTugas) {
+      console.error("Gagal mencatat tugas harian otomatis:", errTugas.message);
+    }
+
+    setMenyimpan(false);
     setPesan({ tipe: "sukses", teks: "Hasil pemeriksaan tersimpan." });
     setForm(KOSONG);
-    muatRiwayat();
+    muatRiwayat(); // tetap di halaman ini, riwayat langsung tampil di bawah
   };
 
   function bukaEdit(k) {
@@ -344,6 +378,18 @@ export default function FormKunjungan({
         })
         .eq("id", modalEdit.id);
       if (error) throw error;
+
+      // Sinkronkan judul/deskripsi entri Tugas Harian otomatis yang terkait
+      // kunjungan ini (kalau ada) supaya tidak menampilkan info lama yang
+      // sudah usang. Aman kalau tidak ada baris yang cocok (tidak error).
+      await supabase
+        .from("tugas_bidan")
+        .update({
+          judul: `Periksa: ${pasien.nama} (${labelJenisLayanan(formEdit.jenis_layanan)})`,
+          deskripsi: formEdit.hasil_pemeriksaan || null,
+        })
+        .eq("kunjungan_id", modalEdit.id);
+
       tutupEdit();
       muatRiwayat();
     } catch (err) {
@@ -359,6 +405,8 @@ export default function FormKunjungan({
     }
     setMenghapusId(k.id);
     try {
+      // Entri Tugas Harian otomatis yang terkait ikut terhapus lewat
+      // "on delete cascade" pada kolom kunjungan_id di tabel tugas_bidan.
       const { error } = await supabase.from("kunjungan").delete().eq("id", k.id);
       if (error) throw error;
       muatRiwayat();
