@@ -160,7 +160,7 @@ function getGroupsAdmin(
         { to: '/buat-ujian', label: 'Buat Ujian', icon: FilePlus },
         { to: '/hasil-ujian', label: 'Hasil Ujian', icon: ClipboardList },
         { to: '/bank-soal', label: 'Bank Soal', icon: Database },
-        { to: '/materi-kelas', label: 'Materi Pembelajaran', icon: BookMarked }, 
+        { to: '/materi-kelas', label: 'Materi Pembelajaran', icon: BookMarked },
         { to: '/buat-kuis-seru', label: 'Kuis Seru (Kls 1-3)', icon: Gamepad2 },
       ],
     },
@@ -206,7 +206,7 @@ function getGroupsAdmin(
         { to: '/perbaikan-data-siswa', label: 'Perbaikan Data Siswa', icon: UserCog },
         { to: '/surat', label: 'Surat Masuk/Keluar', icon: Mail },
         { to: '/gudang-sk', label: 'Gudang SK', icon: FileStack },
-        { to: '/gudang-sk/portal-ujian', label: 'Portal Ujian', icon: ClipboardCheck }, 
+        { to: '/gudang-sk/portal-ujian', label: 'Portal Ujian', icon: ClipboardCheck },
         { to: '/ppdb-admin', label: 'PPDB Siswa Baru', icon: UserPlus },
         // Laporan Kepegawaian Guru: satu pintu untuk semua laporan guru,
         // TERMASUK Laporan Bulanan, Cetak Sampul, Data Ujian 8355 & Cetak
@@ -230,6 +230,7 @@ function getGroupsAdmin(
             ]
           : []),
         { to: '/kartu', label: 'Cetak Kartu', icon: IdCard },
+        { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
       ],
     },
   ]
@@ -300,6 +301,7 @@ function getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelum
         { to: '/agenda', label: 'Agenda Kantor', icon: CalendarDays },
         { to: '/surat', label: 'Surat Masuk/Keluar', icon: Mail },
         { to: '/surat-pengantar', label: 'Surat Pengantar', icon: Stamp },
+        { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
         { to: '/backup', label: 'Backup Data', icon: DatabaseBackup },
         // "Persetujuan Akun", "Verifikasi Nikah", "Laporan Kepala KUA" dan
         // "Laporan Bulanan KUA" hanya untuk admin utama.
@@ -363,6 +365,7 @@ function getGroupsPuskesmasAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBe
       links: [
         { to: '/agenda', label: 'Agenda Puskesmas', icon: CalendarDays },
         { to: '/surat', label: 'Surat Masuk/Keluar', icon: Mail },
+        { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
         { to: '/backup', label: 'Backup Data', icon: DatabaseBackup },
         // "Persetujuan Akun" hanya untuk admin utama / kepala puskesmas.
         ...(isAdminUtama
@@ -416,6 +419,7 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
   { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
   { to: '/link-layanan', label: 'Link Layanan', icon: Link2 },
+  { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
   ]
 }
 
@@ -440,6 +444,7 @@ function getLinksKantorPegawai(jumlahPesanBelumDibaca = 0) {
     { to: '/agenda', label: 'Agenda Kantor', icon: CalendarDays },
     { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
     { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
+    { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
   ]
 }
 
@@ -462,6 +467,7 @@ function getLinksPuskesmasPegawai(jumlahPesanBelumDibaca = 0) {
     { to: '/agenda', label: 'Agenda Puskesmas', icon: CalendarDays },
     { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
     { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
+    { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
   ]
 }
 
