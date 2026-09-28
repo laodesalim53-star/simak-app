@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
+import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import { useNavigate } from 'react-router-dom'
 import { Printer, ArrowLeft, Mail } from 'lucide-react'
 import Layout from '../components/Layout'
+import KopSurat from '../components/KopSurat'
 
 // Ganti kalau nama bucket storage-mu berbeda
 const LOGO_BUCKET = 'profil-kantor'
@@ -82,6 +84,7 @@ const labelCls = 'block text-xs font-medium text-slate-600 mb-1'
 
 export default function SuratPengantar() {
   const navigate = useNavigate()
+  const { sekolahId } = useAuth()
   const [profilKantor, setProfilKantor] = useState(null)
 
   const hariIni = new Date()
@@ -106,14 +109,20 @@ export default function SuratPengantar() {
 
   const ubah = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
 
+  // Profil kantor di-scope per kantor lewat sekolah_id (sama seperti
+  // DaftarHadirPegawai.jsx & ProfilKantor.jsx), bukan id=1 yang hardcode.
   useEffect(() => {
+    if (!sekolahId) {
+      setProfilKantor(null)
+      return
+    }
     supabase
       .from('profil_kantor')
-      .select('nama_kantor, alamat, kabupaten, kecamatan, telepon, email, kepala_kua, nip_kepala_kua, logo_path, ttd_kepala_kua_path')
-      .eq('id', 1)
+      .select('nama_kantor, kabupaten, kecamatan, kepala_kua, nip_kepala_kua, ttd_kepala_kua_path')
+      .eq('sekolah_id', sekolahId)
       .maybeSingle()
       .then(({ data }) => setProfilKantor(data))
-  }, [])
+  }, [sekolahId])
 
   const namaKabupaten = (profilKantor?.kabupaten || '').replace(/^kabupaten\s+/i, '').trim()
   const namaKantor = profilKantor?.nama_kantor || 'Kantor Urusan Agama'
@@ -139,9 +148,6 @@ export default function SuratPengantar() {
     setForm((f) => ({ ...f, tanggal: tanggalAkhirBulan(tahun, bulan) }))
   }, [bulan, tahun])
 
-  const logoUrl = profilKantor?.logo_path
-    ? supabase.storage.from(LOGO_BUCKET).getPublicUrl(profilKantor.logo_path).data.publicUrl
-    : null
   const ttdKepalaKuaUrl = profilKantor?.ttd_kepala_kua_path
     ? supabase.storage.from(LOGO_BUCKET).getPublicUrl(profilKantor.ttd_kepala_kua_path).data.publicUrl
     : null
@@ -274,31 +280,8 @@ export default function SuratPengantar() {
           color: '#0f172a',
         }}
       >
-        {/* === KOP SURAT OTOMATIS === */}
-        <div className="kop-surat flex items-center gap-4 border-b-2 border-slate-800 pb-3 mb-5">
-          {logoUrl && (
-            <img src={logoUrl} alt="Logo Instansi" className="w-20 h-20 object-contain shrink-0" />
-          )}
-          <div className="text-center flex-1 leading-tight">
-            <p className="font-bold uppercase text-[13pt]">Kementerian Agama Republik Indonesia</p>
-            {namaKabupaten && (
-              <p className="font-bold uppercase text-[13pt]">
-                Kantor Kementerian Agama Kabupaten {namaKabupaten}
-              </p>
-            )}
-            <p className="font-bold uppercase text-[13pt]">
-              {profilKantor?.nama_kantor || 'Nama Kantor Belum Diatur'}
-            </p>
-            {profilKantor?.alamat && <p className="text-[10pt]">{profilKantor.alamat}</p>}
-            {(profilKantor?.telepon || profilKantor?.email) && (
-              <p className="text-[10pt]">
-                {[profilKantor?.email && `E-mail: ${profilKantor.email}`, profilKantor?.telepon && `Telepon: ${profilKantor.telepon}`]
-                  .filter(Boolean)
-                  .join('  ')}
-              </p>
-            )}
-          </div>
-        </div>
+        {/* === KOP SURAT OTOMATIS (komponen yang sama dengan Daftar Hadir Pegawai) === */}
+        <KopSurat />
 
         {/* === NOMOR, SIFAT, LAMPIRAN, PERIHAL === */}
         <div className="flex justify-between gap-4">
@@ -398,7 +381,7 @@ export default function SuratPengantar() {
             margin-left: auto !important;
             margin-right: auto !important;
           }
-          .ttd-block, .tembusan-block, .kop-surat {
+          .ttd-block, .tembusan-block {
             page-break-inside: avoid;
             break-inside: avoid;
           }
