@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import {
   ShieldCheck, ShieldAlert, ShieldX, Search, Copy, Check, Printer, Loader2,
 } from 'lucide-react'
-import { supabase } from '../lib/supabase' // sesuaikan path client Supabase Anda
+import { supabase } from '../lib/supabaseClient'
 
 // Halaman PUBLIK (tanpa login). Daftarkan di App.jsx di luar route yang butuh auth:
 //   <Route path="/verifikasi-dokumen/:kode?" element={<Verifikasi />} />
