@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Printer, Loader2, AlertTriangle, RectangleHorizontal, RectangleVertical } from 'lucide-react'
 import { useIdentitasInstansi } from '../lib/identitasInstansi'
+import { useAuth } from '../lib/AuthContext'
 
 // Daftar jenis laporan untuk tenant SEKOLAH. Dipakai CetakSampulHub.jsx lewat
 // indeks. Untuk kantor/puskesmas, daftar jenis laporan ada di
@@ -36,7 +37,19 @@ export const TEMA_SAMPUL = [
   { id: 'floral-hijau', label: 'Tema 14 — Hijau Floral Elegan (Landscape)' },
   { id: 'kotak-emas-hijau', label: 'Tema 15 — Kotak Emas & Pita Hijau (Landscape)' },
   { id: 'ombak-hijau', label: 'Tema 16 — Hijau Ombak Mengalir (Landscape)' },
+  // Tema 17-19: sampul per jenis instansi (logo mengikuti tenant yang login).
+  { id: 'kesehatan-hijau', label: 'Tema 17 — Kesehatan Hijau (Puskesmas)' },
+  { id: 'pendidikan-biru', label: 'Tema 18 — Pendidikan Biru Emas (Sekolah)' },
+  { id: 'kua-hijau-emas', label: 'Tema 19 — Mihrab Hijau Emas (KUA)' },
 ]
+
+// Tema 17-19 dikaitkan ke jenis bingkainya. Dipakai untuk menentukan tema
+// awal per tenant dan untuk menggambar bingkai di pola Kop Resmi.
+const JENIS_BINGKAI_TENANT = {
+  'kesehatan-hijau': 'kesehatan',
+  'pendidikan-biru': 'pendidikan',
+  'kua-hijau-emas': 'kua',
+}
 
 // Dua pola tata letak sampul yang tersedia. Pola tema warna (TEMA_SAMPUL) tetap
 // sama untuk keduanya — pola ini hanya menentukan SUSUNAN kontennya.
@@ -1108,6 +1121,259 @@ function SampulBingkaiHijau({ tema, logoUrl, judulTampil, subJudul, labelTahun, 
   )
 }
 
+// ---------------------------------------------------------------------------
+// TEMA 17–19 — Sampul per jenis instansi (desain dari gambar referensi):
+//   17 Kesehatan Hijau  -> Puskesmas : segitiga sudut hijau, gelombang hijau,
+//                          hati berdenyut EKG di kiri bawah
+//   18 Pendidikan Biru  -> Sekolah   : lengkung atas biru-emas, gelombang biru
+//                          di bawah, tumpukan buku + gelas pensil
+//   19 Mihrab Hijau Emas-> KUA       : lengkung mihrab putih di bingkai hijau,
+//                          bintang segi delapan emas di sudut, siluet masjid
+// Emblem/logo pada gambar referensi SENGAJA tidak dibawa — tempatnya diisi
+// logoUrl milik tenant yang sedang login (identitas.logoUrl), jadi logo
+// Puskesmas / Sekolah / Kemenag otomatis sesuai instansinya masing-masing.
+// Semua digambar dengan SVG berukuran mm (viewBox = ukuran kertas), sehingga
+// berlaku untuk portrait maupun landscape tanpa gambar melar.
+// ---------------------------------------------------------------------------
+
+// Path bintang segi delapan (dua persegi diputar 45 derajat).
+function bintang8(cx, cy, r, ri = r * 0.62) {
+  const titik = []
+  for (let i = 0; i < 16; i++) {
+    const sudut = ((i * 22.5 - 90) * Math.PI) / 180
+    const rad = i % 2 === 0 ? r : ri
+    titik.push(`${(cx + rad * Math.cos(sudut)).toFixed(2)} ${(cy + rad * Math.sin(sudut)).toFixed(2)}`)
+  }
+  return `M${titik.join(' L')} Z`
+}
+
+// Menggambar `children` di empat sudut secara cermin. Titik (0,0) lokal =
+// sudut halaman yang digeser sebesar `inset`.
+function EmpatSudutSvg({ w, h, inset, children }) {
+  return (
+    <>
+      <g transform={`translate(${inset} ${inset})`}>{children}</g>
+      <g transform={`translate(${w - inset} ${inset}) scale(-1 1)`}>{children}</g>
+      <g transform={`translate(${inset} ${h - inset}) scale(1 -1)`}>{children}</g>
+      <g transform={`translate(${w - inset} ${h - inset}) scale(-1 -1)`}>{children}</g>
+    </>
+  )
+}
+
+function BingkaiKesehatan({ w, h }) {
+  const hijau = '#15803d'
+  const gelap = '#166534'
+  const terang = '#86efac'
+  const muda = '#bbf7d0'
+  const ins = 9
+  const c = 11
+  const b = h - 3
+  const dalam = `M${ins + c} ${ins} H${w - ins - c} L${w - ins} ${ins + c} V${h - ins - c} L${w - ins - c} ${h - ins} H${ins + c} L${ins} ${h - ins - c} V${ins + c} Z`
+  return (
+    <>
+      <rect x="3" y="3" width={w - 6} height={h - 6} fill="none" stroke={hijau} strokeWidth="1.6" />
+      <path d={dalam} fill="none" stroke="#22c55e" strokeWidth="0.7" />
+      {/* tiga lapis gelombang di dasar halaman */}
+      <path d={`M3 ${h - 34} C${w * 0.3} ${h - 52}, ${w * 0.62} ${h - 14}, ${w - 3} ${h - 42} L${w - 3} ${b} L3 ${b} Z`} fill={terang} opacity="0.6" />
+      <path d={`M3 ${h - 22} C${w * 0.28} ${h - 40}, ${w * 0.6} ${h - 6}, ${w - 3} ${h - 30} L${w - 3} ${b} L3 ${b} Z`} fill="#22c55e" opacity="0.85" />
+      <path d={`M3 ${h - 13} C${w * 0.3} ${h - 26}, ${w * 0.65} ${h - 4}, ${w - 3} ${h - 18} L${w - 3} ${b} L3 ${b} Z`} fill={gelap} />
+      {/* hati berdenyut (EKG) di kiri bawah */}
+      <g transform={`translate(28 ${h - 47})`}>
+        <path d="M0 11 C-17 -1 -14 -14 -7 -14 C-3 -14 0 -11 0 -8 C0 -11 3 -14 7 -14 C14 -14 17 -1 0 11 Z" fill="#fff" stroke={gelap} strokeWidth="1.1" />
+        <path d="M-21 0 H-9 L-6 -6 L-2 6 L2 -5 L5 0 H21" fill="none" stroke={gelap} strokeWidth="1.1" strokeLinejoin="round" strokeLinecap="round" />
+      </g>
+      {/* segitiga hijau di empat sudut */}
+      <EmpatSudutSvg w={w} h={h} inset={3}>
+        <polygon points="0,0 32,0 0,32" fill={gelap} />
+        <path d="M4 20 L20 4" stroke={terang} strokeWidth="0.9" />
+        <path d="M5 23 L23 5" stroke={muda} strokeWidth="0.5" />
+      </EmpatSudutSvg>
+    </>
+  )
+}
+
+function BingkaiPendidikan({ w, h }) {
+  const biru = '#1d4ed8'
+  const biruMuda = '#3b82f6'
+  const emas = '#facc15'
+  const b = h - 3
+  return (
+    <>
+      <rect x="3" y="3" width={w - 6} height={h - 6} fill="none" stroke={biru} strokeWidth="1.6" />
+      <rect x="6" y="6" width={w - 12} height={h - 12} fill="none" stroke={emas} strokeWidth="0.7" />
+      <rect x="8.4" y="8.4" width={w - 16.8} height={h - 16.8} fill="none" stroke={biru} strokeWidth="0.5" />
+      <rect x="10.6" y="10.6" width={w - 21.2} height={h - 21.2} fill="none" stroke={emas} strokeWidth="0.35" />
+      {/* lengkung biru + garis emas di atas */}
+      <path d={`M3 3 H${w - 3} V26 Q${w / 2} -4 3 26 Z`} fill={biru} />
+      <path d={`M3 31 Q${w / 2} 1 ${w - 3} 31`} fill="none" stroke={emas} strokeWidth="1.4" />
+      <path d={`M3 34 Q${w / 2} 4 ${w - 3} 34`} fill="none" stroke={biru} strokeWidth="0.6" />
+      {/* gelombang biru di dasar halaman, naik ke kanan */}
+      <path d={`M3 ${h - 22} C${w * 0.32} ${h - 4}, ${w * 0.62} ${h - 34}, ${w - 3} ${h - 58} L${w - 3} ${b} L3 ${b} Z`} fill={biruMuda} />
+      <path d={`M3 ${h - 16} C${w * 0.32} ${h + 2}, ${w * 0.62} ${h - 28}, ${w - 3} ${h - 52}`} fill="none" stroke={emas} strokeWidth="3.2" />
+      <path d={`M3 ${h - 12} C${w * 0.32} ${h + 6}, ${w * 0.62} ${h - 24}, ${w - 3} ${h - 47} L${w - 3} ${b} L3 ${b} Z`} fill={biru} />
+      {/* kunci kecil di sudut */}
+      <EmpatSudutSvg w={w} h={h} inset={13}>
+        <path d="M0 0 H7 V1.6 H1.6 V7 H0 Z" fill={emas} />
+      </EmpatSudutSvg>
+      {/* tumpukan buku + gelas pensil di kiri bawah */}
+      <g transform={`translate(12 ${h - 13})`}>
+        <rect x="0" y="-5" width="36" height="5" fill={biru} />
+        <rect x="1.5" y="-3.7" width="33" height="1.3" fill="#fff" />
+        <rect x="3" y="-10" width="32" height="5" fill={emas} />
+        <rect x="4.5" y="-8.7" width="29" height="1.3" fill="#fff" />
+        <rect x="1" y="-15" width="33" height="5" fill={biru} />
+        <rect x="2.5" y="-13.7" width="30" height="1.3" fill="#fff" />
+        <rect x="3" y="-27" width="11" height="12" rx="1" fill={biru} />
+        <path d="M5 -27 L4 -36" stroke={emas} strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M8.5 -27 L9.5 -37" stroke={biru} strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M12 -27 L14 -35" stroke={emas} strokeWidth="1.6" strokeLinecap="round" />
+      </g>
+    </>
+  )
+}
+
+function BingkaiKUA({ w, h }) {
+  const hijau = '#14532d'
+  const emas = '#d4af37'
+  const cx = w / 2
+  // lengkung mihrab putih di dalam bingkai hijau
+  const dalam = `M11 ${h - 11} V36 Q11 26 22 26 H${cx - 24} C${cx - 15} 26 ${cx - 12} 17 ${cx} 7 C${cx + 12} 17 ${cx + 15} 26 ${cx + 24} 26 H${w - 22} Q${w - 11} 26 ${w - 11} 36 V${h - 11} Z`
+  const lengkungBukit = `M11 ${h - 43} C${w * 0.3} ${h - 25}, ${w * 0.62} ${h - 45}, ${w - 11} ${h - 35}`
+  return (
+    <>
+      <rect x="3" y="3" width={w - 6} height={h - 6} fill={hijau} />
+      <rect x="5.2" y="5.2" width={w - 10.4} height={h - 10.4} fill="none" stroke={emas} strokeWidth="0.4" />
+      <path d={dalam} fill="#fff" stroke={emas} strokeWidth="0.9" />
+      {/* bukit hijau + siluet masjid di kanan bawah */}
+      <path d={`${lengkungBukit} V${h - 11} H11 Z`} fill={hijau} />
+      <g transform={`translate(${w - 13} ${h - 37})`} fill={hijau}>
+        <rect x="-50" y="-3" width="50" height="10" />
+        <path d="M-33 -3 A9 9 0 0 1 -15 -3 Z" />
+        <rect x="-24.4" y="-16" width="0.8" height="4" />
+        <path d="M-46 -3 A4 4 0 0 1 -38 -3 Z" />
+        <path d="M-13 -3 A3.2 3.2 0 0 1 -6.6 -3 Z" />
+        <rect x="-6" y="-30" width="5" height="27" />
+        <path d="M-6.6 -30 L-3.5 -35 L-0.4 -30 Z" />
+        <circle cx="-3.5" cy="-36" r="0.9" />
+      </g>
+      <path d={lengkungBukit} fill="none" stroke={emas} strokeWidth="2.2" />
+      <path d={`M11 ${h - 47} C${w * 0.3} ${h - 29}, ${w * 0.62} ${h - 49}, ${w - 11} ${h - 39}`} fill="none" stroke={emas} strokeWidth="0.5" />
+      {/* bintang segi delapan emas di empat sudut */}
+      <EmpatSudutSvg w={w} h={h} inset={3}>
+        <path d={bintang8(11, 11, 9.5)} fill="none" stroke={emas} strokeWidth="0.8" />
+        <path d={bintang8(11, 11, 5.6, 3.4)} fill={emas} opacity="0.9" />
+        <circle cx="11" cy="11" r="1.6" fill={hijau} />
+        <path d={bintang8(26, 7, 3.4)} fill="none" stroke={emas} strokeWidth="0.6" />
+      </EmpatSudutSvg>
+    </>
+  )
+}
+
+// Lapisan latar bingkai sesuai jenis (kesehatan / pendidikan / kua).
+function LatarBingkaiTenant({ jenis, orientasi }) {
+  const landscape = orientasi === 'landscape'
+  const w = landscape ? 297 : 210
+  const h = landscape ? 210 : 297
+  return (
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      preserveAspectRatio="none"
+      aria-hidden="true"
+      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 0, pointerEvents: 'none' }}
+    >
+      {jenis === 'kesehatan' && <BingkaiKesehatan w={w} h={h} />}
+      {jenis === 'pendidikan' && <BingkaiPendidikan w={w} h={h} />}
+      {jenis === 'kua' && <BingkaiKUA w={w} h={h} />}
+    </svg>
+  )
+}
+
+// Padding isi (atas, kiri-kanan, bawah) supaya teks tidak menabrak hiasan
+// bingkai: lengkung di atas (pendidikan, KUA) dan gelombang/masjid di bawah.
+function paddingBingkaiTenant(jenis, orientasi) {
+  const tabel = {
+    portrait: { kesehatan: '26mm 22mm 58mm', pendidikan: '38mm 22mm 60mm', kua: '36mm 26mm 60mm' },
+    landscape: { kesehatan: '20mm 30mm 42mm', pendidikan: '32mm 30mm 46mm', kua: '30mm 34mm 42mm' },
+  }
+  return tabel[orientasi === 'landscape' ? 'landscape' : 'portrait'][jenis]
+}
+
+const PALET_TENANT = {
+  kesehatan: { judul: '#166534', kop: '#14532d', aksen: '#16a34a', tahun: '#15803d' },
+  pendidikan: { judul: '#1d4ed8', kop: '#1e3a8a', aksen: '#eab308', tahun: '#b45309' },
+  kua: { judul: '#14532d', kop: '#14532d', aksen: '#b8860b', tahun: '#b8860b' },
+}
+
+// Garis pemisah dengan ornamen kecil di tengah (daun / belah ketupat / bintang).
+function PemisahOrnamen({ jenis, warna }) {
+  return (
+    <div className="flex items-center justify-center gap-2 mt-3 w-full">
+      <span style={{ height: '1px', width: '34mm', background: warna }} />
+      <svg width="14" height="14" viewBox="-7 -7 14 14">
+        {jenis === 'kua' ? (
+          <path d={bintang8(0, 0, 6)} fill={warna} />
+        ) : jenis === 'pendidikan' ? (
+          <path d="M0 -5 L5 0 L0 5 L-5 0 Z" fill={warna} />
+        ) : (
+          <path d="M0 5 C-6 1 -5 -5 0 -6 C5 -5 6 1 0 5 Z" fill={warna} />
+        )}
+      </svg>
+      <span style={{ height: '1px', width: '34mm', background: warna }} />
+    </div>
+  )
+}
+
+function SampulTenant({ jenis, logoUrl, judulTampil, subJudul, labelTahun, tahunAnggaran, barisIdentitas, dibuatOleh, orientasi }) {
+  const pal = PALET_TENANT[jenis]
+  return (
+    <div
+      className="lembar-cetak print-only bg-white mx-auto my-6 flex flex-col relative overflow-hidden"
+      style={dimensiHalaman(orientasi)}
+    >
+      <div
+        className="flex-1 flex flex-col relative overflow-hidden"
+        style={{ padding: paddingBingkaiTenant(jenis, orientasi) }}
+      >
+        <LatarBingkaiTenant jenis={jenis} orientasi={orientasi} />
+        <div className="relative flex-1 flex flex-col" style={{ zIndex: 1 }}>
+        <div className="flex flex-col items-center text-center">
+          {logoUrl && (
+            <img
+              src={logoUrl}
+              alt="Logo"
+              className="object-contain mb-2"
+              style={{ width: '26mm', height: '26mm' }}
+            />
+          )}
+          <h1 className="text-xl font-extrabold uppercase leading-snug max-w-[150mm]" style={{ color: pal.judul }}>
+            {judulTampil || 'Judul Laporan'}
+          </h1>
+          {subJudul && (
+            <h2 className="text-sm font-bold uppercase mt-2 tracking-wide text-slate-700">{subJudul}</h2>
+          )}
+          {tahunAnggaran && (
+            <p className="text-sm font-bold uppercase mt-1 tracking-wide" style={{ color: pal.tahun }}>
+              {labelTahun} {tahunAnggaran}
+            </p>
+          )}
+          <PemisahOrnamen jenis={jenis} warna={pal.aksen} />
+        </div>
+
+        <div className="mt-6 flex-1 text-sm">
+          <TabelIdentitasDua barisIdentitas={barisIdentitas} warnaLabel={pal.kop} orientasi={orientasi} />
+        </div>
+
+        {dibuatOleh && (
+          <div className="text-right pt-3">
+            <p className="text-sm italic text-slate-800">Dibuat Oleh : {dibuatOleh}</p>
+          </div>
+        )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const KOMPONEN_TEMA = {
   gelombang: SampulGelombang,
   geometris: SampulGeometris,
@@ -1125,10 +1391,13 @@ const KOMPONEN_TEMA = {
   'floral-hijau': (props) => <SampulBingkaiHijau tema="floral-hijau" {...props} />,
   'kotak-emas-hijau': (props) => <SampulBingkaiHijau tema="kotak-emas-hijau" {...props} />,
   'ombak-hijau': (props) => <SampulBingkaiHijau tema="ombak-hijau" {...props} />,
+  'kesehatan-hijau': (props) => <SampulTenant jenis="kesehatan" {...props} />,
+  'pendidikan-biru': (props) => <SampulTenant jenis="pendidikan" {...props} />,
+  'kua-hijau-emas': (props) => <SampulTenant jenis="kua" {...props} />,
 }
 
 // ---------------------------------------------------------------------------
-// POLA KOP RESMI — satu komponen yang dipakai bersama oleh ke-16 tema warna.
+// POLA KOP RESMI — satu komponen yang dipakai bersama oleh ke-19 tema warna.
 // Susunannya meniru kop dinas resmi (3 baris kop rata tengah → judul laporan
 // → logo besar di tengah → "TAHUN PELAJARAN/ANGGARAN ..." di bawah), persis
 // pola pada dokumen contoh yang diunggah. Warna & bingkai tiap baris ikut
@@ -1151,19 +1420,29 @@ const GAYA_KOP_RESMI = {
   'floral-hijau': { background: '#ffffff', border: '1.5px solid #166534', border2: '1px solid #86efac', kopColor: '#14532d', judulColor: '#166534', aksenColor: '#166534' },
   'kotak-emas-hijau': { background: '#ffffff', border: '2px solid #d4af37', kopColor: '#14532d', judulColor: '#166534', aksenColor: '#d4af37' },
   'ombak-hijau': { background: '#ffffff', border: '2px solid #166534', kopColor: '#14532d', judulColor: '#166534', aksenColor: '#4ade80' },
+  // Tema 17-19: bingkainya digambar oleh LatarBingkaiTenant, jadi tidak ada border CSS.
+  'kesehatan-hijau': { background: '#ffffff', border: 'none', kopColor: '#14532d', judulColor: '#166534', aksenColor: '#16a34a' },
+  'pendidikan-biru': { background: '#ffffff', border: 'none', kopColor: '#1e3a8a', judulColor: '#1d4ed8', aksenColor: '#eab308' },
+  'kua-hijau-emas': { background: '#ffffff', border: 'none', kopColor: '#14532d', judulColor: '#14532d', aksenColor: '#b8860b' },
 }
 
 function SampulKopResmi({ tema, logoUrl, kopBaris1, kopBaris2, kopBaris3, judulUtama, kodeLaporan, subJudulEkstra, labelTahun, tahunAnggaran, orientasi }) {
   const gaya = GAYA_KOP_RESMI[tema] || GAYA_KOP_RESMI.gelombang
+  const jenisBingkai = JENIS_BINGKAI_TENANT[tema] // undefined untuk tema 1-16
   return (
     <div
       className="lembar-cetak print-only mx-auto my-6 flex flex-col relative overflow-hidden"
-      style={{ ...dimensiHalaman(orientasi), padding: '10mm', background: gaya.background }}
+      style={{ ...dimensiHalaman(orientasi), padding: jenisBingkai ? 0 : '10mm', background: gaya.background }}
     >
       <div
         className="flex-1 flex flex-col items-center relative overflow-hidden px-10 py-10"
-        style={{ border: gaya.border, borderRadius: '4px' }}
+        style={{
+          border: jenisBingkai ? 'none' : gaya.border,
+          borderRadius: '4px',
+          ...(jenisBingkai ? { padding: paddingBingkaiTenant(jenisBingkai, orientasi) } : {}),
+        }}
       >
+        {jenisBingkai && <LatarBingkaiTenant jenis={jenisBingkai} orientasi={orientasi} />}
         {gaya.border2 && (
           <div style={{ position: 'absolute', inset: '6px', border: gaya.border2, borderRadius: '2px', zIndex: 0, pointerEvents: 'none' }} />
         )}
@@ -1222,6 +1501,10 @@ const SKALA_PRATINJAU = 0.62
  * puskesmas). Identitas instansi (nama, logo, alamat, pimpinan) diambil
  * otomatis lewat useIdentitasInstansi() sesuai tenant akun yang login.
  *
+ * Tema awal mengikuti tenant: kantor -> Tema 19 (KUA), puskesmas -> Tema 17
+ * (Kesehatan), selain itu -> Tema 18 (Pendidikan). Pengguna tetap bebas
+ * memilih tema lain lewat dropdown.
+ *
  * Props:
  * - jenisLaporanAwal   : jenis laporan default saat halaman dibuka. Kalau tidak ada
  *                        di daftar jenis laporan tenant, dipakai jenis pertama.
@@ -1251,13 +1534,19 @@ export default function SampulLaporan({
 }) {
   const navigate = useNavigate()
   const { cfg, identitas, loading, error: errorMuat } = useIdentitasInstansi()
+  const { isKantor, isPuskesmas } = useAuth()
 
   // Jenis laporan yang tersedia mengikuti tipe tenant (sekolah/kantor/puskesmas)
   const opsiJenis = cfg.jenisLaporan
   const jenisAwalValid = opsiJenis.includes(jenisLaporanAwal) ? jenisLaporanAwal : opsiJenis[0]
 
+  // Tema bawaan sesuai jenis tenant. Kalau pengguna belum memilih tema sendiri,
+  // tema ikut berubah begitu status tenant selesai dimuat dari AuthContext.
+  const temaTenant = isKantor ? 'kua-hijau-emas' : isPuskesmas ? 'kesehatan-hijau' : 'pendidikan-biru'
+
   const [polaSampul, setPolaSampul] = useState(polaSampulAwal)
-  const [tema, setTema] = useState('gelombang')
+  const [tema, setTema] = useState(temaTenant)
+  const [temaDipilihManual, setTemaDipilihManual] = useState(false)
   const [orientasi, setOrientasi] = useState('portrait') // 'portrait' | 'landscape'
   const [jenisLaporan, setJenisLaporan] = useState(jenisAwalValid)
   const [judulBebas, setJudulBebas] = useState('')
@@ -1274,6 +1563,10 @@ export default function SampulLaporan({
   const [labelTahunPilihan, setLabelTahunPilihan] = useState(
     PILIHAN_LABEL_TAHUN.includes(labelTahun) ? labelTahun : PILIHAN_LABEL_TAHUN[0]
   )
+
+  useEffect(() => {
+    if (!temaDipilihManual) setTema(temaTenant)
+  }, [temaTenant, temaDipilihManual])
 
   const judulTampil = jenisLaporan === 'Lainnya (isi bebas)' ? judulBebas : jenisLaporan
 
@@ -1399,7 +1692,7 @@ export default function SampulLaporan({
               </div>
               {orientasi === 'landscape' && (
                 <p className="mt-1 text-[11px] text-slate-400">
-                  Tema 11–16 (Bingkai Hijau) tabel identitasnya otomatis jadi 2 kolom di landscape, jadi lebih pas dibanding tema lain.
+                  Tema 11–16 (Bingkai Hijau) dan Tema 17–19 (per instansi) tabel identitasnya otomatis jadi 2 kolom di landscape, jadi lebih pas dibanding tema lain.
                 </p>
               )}
             </div>
@@ -1433,11 +1726,16 @@ export default function SampulLaporan({
               Tema Sampul
               <select
                 value={tema}
-                onChange={(e) => setTema(e.target.value)}
+                onChange={(e) => {
+                  setTema(e.target.value)
+                  setTemaDipilihManual(true)
+                }}
                 className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5 font-medium"
               >
                 {TEMA_SAMPUL.map((t) => (
-                  <option key={t.id} value={t.id}>{t.label}</option>
+                  <option key={t.id} value={t.id}>
+                    {t.label}{t.id === temaTenant ? ' ★ sesuai instansi Anda' : ''}
+                  </option>
                 ))}
               </select>
             </label>
