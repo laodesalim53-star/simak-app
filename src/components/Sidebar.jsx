@@ -168,6 +168,7 @@ function getGroupsAdmin(
       label: 'Keuangan & Aset',
       links: [
         { to: '/keuangan', label: 'Keuangan', icon: Wallet },
+        { to: '/bku-bank', label: 'BKU Bank (BOS-K5)', icon: PiggyBank },
         { to: '/kuitansi', label: 'Kuitansi', icon: Receipt },
         { to: '/kuitansi-jasa', label: 'Kuitansi Jasa', icon: Receipt },
         { to: '/nota', label: 'Nota Belanja', icon: ShoppingCart },
