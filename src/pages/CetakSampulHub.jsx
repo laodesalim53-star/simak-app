@@ -2,13 +2,17 @@ import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, FileText, Menu, X } from 'lucide-react'
 import SampulLaporan, { JENIS_LAPORAN_PRESET } from '../components/SampulLaporan'
+import { CONFIG_INSTANSI } from '../lib/identitasInstansi'
+import { useAuth } from '../lib/AuthContext'
 
-// --- Daftar menu jenis laporan ---------------------------------------------
-// Setiap item = satu "varian" halaman Cetak Sampul yang dulu berupa file
-// terpisah (CetakSampul.jsx, CetakSampulSemester.jsx, CetakSampul8355.jsx, dst).
-// Sekarang semuanya jadi satu entri di sini, tinggal ditambah kalau perlu
-// varian baru — tidak perlu bikin file/route baru lagi.
-const MENU_SAMPUL = [
+// --- Daftar menu jenis laporan PER TIPE TENANT ------------------------------
+// Sekolah  : menu lengkap seperti sebelumnya (BOS, 8355, semester, dst).
+// Kantor / Puskesmas : menu umum yang relevan untuk instansi non-sekolah.
+// Cukup tambah entri di sini untuk varian baru — tidak perlu file/route baru.
+// Teks jenisLaporanAwal HARUS sama persis dengan salah satu isi
+// CONFIG_INSTANSI[tenant].jenisLaporan (src/lib/identitasInstansi.js).
+
+const MENU_SEKOLAH = [
   {
     key: 'bebas',
     label: 'Pilih Bebas',
@@ -22,11 +26,7 @@ const MENU_SAMPUL = [
   {
     key: 'bulanan',
     label: 'Laporan Bulanan',
-    props: {
-      jenisLaporanAwal: JENIS_LAPORAN_PRESET[0],
-      kunciJenisLaporan: true,
-      labelHalaman: 'Cetak Sampul Laporan Bulanan',
-    },
+    props: { jenisLaporanAwal: JENIS_LAPORAN_PRESET[0], kunciJenisLaporan: true, labelHalaman: 'Cetak Sampul Laporan Bulanan' },
   },
   {
     key: 'semester',
@@ -76,34 +76,54 @@ const MENU_SAMPUL = [
   {
     key: 'bku',
     label: 'Laporan Keuangan (BKU)',
-    props: {
-      jenisLaporanAwal: JENIS_LAPORAN_PRESET[5],
-      kunciJenisLaporan: true,
-      labelHalaman: 'Cetak Sampul BKU',
-    },
+    props: { jenisLaporanAwal: JENIS_LAPORAN_PRESET[5], kunciJenisLaporan: true, labelHalaman: 'Cetak Sampul BKU' },
   },
   {
     key: 'inventaris',
     label: 'Inventaris Sarana & Prasarana',
-    props: {
-      jenisLaporanAwal: JENIS_LAPORAN_PRESET[6],
-      kunciJenisLaporan: true,
-      labelHalaman: 'Cetak Sampul Inventaris',
-    },
+    props: { jenisLaporanAwal: JENIS_LAPORAN_PRESET[6], kunciJenisLaporan: true, labelHalaman: 'Cetak Sampul Inventaris' },
   },
   {
-    key: 'kegiatan-sekolah',
+    key: 'kegiatan',
     label: 'Laporan Kegiatan Sekolah',
-    props: {
-      jenisLaporanAwal: JENIS_LAPORAN_PRESET[7],
-      kunciJenisLaporan: true,
-      labelHalaman: 'Cetak Sampul Kegiatan Sekolah',
-    },
+    props: { jenisLaporanAwal: JENIS_LAPORAN_PRESET[7], kunciJenisLaporan: true, labelHalaman: 'Cetak Sampul Kegiatan Sekolah' },
   },
 ]
 
+// Menu umum untuk tenant non-sekolah — dibangun dari daftar jenis laporan di
+// CONFIG_INSTANSI supaya teks selalu sinkron.
+function buatMenuUmum(tenant) {
+  const daftar = CONFIG_INSTANSI[tenant].jenisLaporan
+  const [bulanan, tahunan, keuangan, inventaris, kegiatan] = daftar
+  const item = (key, teks) => ({
+    key,
+    label: teks,
+    props: { jenisLaporanAwal: teks, kunciJenisLaporan: true, labelTahun: 'Tahun Anggaran', labelHalaman: `Cetak Sampul ${teks}` },
+  })
+  return [
+    {
+      key: 'bebas',
+      label: 'Pilih Bebas',
+      keterangan: 'Pilih sendiri jenis laporan dari daftar',
+      props: { jenisLaporanAwal: bulanan, kunciJenisLaporan: false, tampilkanBank: false, labelHalaman: 'Cetak Sampul Laporan' },
+    },
+    { ...item('bulanan', bulanan), props: { ...item('bulanan', bulanan).props, tampilkanBank: false } },
+    { ...item('tahunan', tahunan), props: { ...item('tahunan', tahunan).props, tampilkanBank: false } },
+    item('keuangan', keuangan),
+    { ...item('inventaris', inventaris), props: { ...item('inventaris', inventaris).props, tampilkanBank: false } },
+    { ...item('kegiatan', kegiatan), props: { ...item('kegiatan', kegiatan).props, tampilkanBank: false } },
+  ]
+}
+
+const MENU_PER_TENANT = {
+  sekolah: MENU_SEKOLAH,
+  kantor: buatMenuUmum('kantor'),
+  puskesmas: buatMenuUmum('puskesmas'),
+}
+
 // Alias supaya link lama (?jenis=semester, ?jenis=8355 dari redirect route
-// /cetak-sampul-semester dan /cetak-sampul-8355) tetap mengarah ke menu yang benar.
+// /cetak-sampul-semester dan /cetak-sampul-8355) tetap mengarah ke menu yang
+// benar. Hanya berlaku untuk tenant sekolah; tenant lain jatuh ke menu pertama.
 const ALIAS_JENIS = {
   semester: 'semester',
   8355: '8355',
@@ -112,16 +132,21 @@ const ALIAS_JENIS = {
 export default function CetakSampulHub() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const { isKantor, isPuskesmas } = useAuth()
+
+  const tenant = isKantor ? 'kantor' : isPuskesmas ? 'puskesmas' : 'sekolah'
+  const MENU_SAMPUL = MENU_PER_TENANT[tenant]
 
   const jenisAwal = searchParams.get('jenis')
-  const keyAwal = ALIAS_JENIS[jenisAwal] || MENU_SAMPUL[0].key
+  const keyAlias = ALIAS_JENIS[jenisAwal]
+  const keyAwal = MENU_SAMPUL.some((m) => m.key === keyAlias) ? keyAlias : MENU_SAMPUL[0].key
 
   const [activeKey, setActiveKey] = useState(keyAwal)
   const [sidebarTerbuka, setSidebarTerbuka] = useState(false)
 
   const menuAktif = useMemo(
     () => MENU_SAMPUL.find((m) => m.key === activeKey) || MENU_SAMPUL[0],
-    [activeKey]
+    [activeKey, MENU_SAMPUL]
   )
 
   function pilihMenu(key) {
@@ -201,10 +226,10 @@ export default function CetakSampulHub() {
           </button>
         </div>
 
-        {/* key={activeKey} memastikan semua state form di SampulLaporan
-            (tema, tahun, dibuat oleh, dst) direset bersih setiap kali
-            pindah menu, bukan malah tercampur dari menu sebelumnya. */}
-        <SampulLaporan key={activeKey} {...menuAktif.props} />
+        {/* key memastikan semua state form di SampulLaporan direset bersih
+            setiap kali pindah menu (dan tenant), bukan tercampur dari menu
+            sebelumnya. */}
+        <SampulLaporan key={`${tenant}-${activeKey}`} {...menuAktif.props} />
       </div>
     </div>
   )
