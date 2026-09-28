@@ -13,6 +13,51 @@ import { supabase } from '../lib/supabaseClient'
 // - ditambahkan override @media screen supaya .lembar-cetak.print-only
 //   TETAP tampil di layar (butuh diisi manual sebelum cetak), menang atas
 //   aturan global index.css yang menyembunyikan .print-only di layar.
+//
+// Terhubung dengan data guru:
+// - Guru kelas (guru yang menjadi wali_kelas_id di tabel kelas):
+//   semua mapel ditandai √, Jumlah = 24 jam, Wajib = 24 jam.
+// - Kepala sekolah (nama cocok dengan profil_sekolah.kepala_sekolah):
+//   Jumlah = 24 jam dari tugas tambahan, Wajib = 24 jam.
+// - Guru mapel lain: jumlah = total jam di kolom mapel yang diisi manual.
+// - Lebih / Kurang dihitung otomatis dari selisih Jumlah dan Wajib.
+
+const JAM_WAJIB = 24
+
+const KOLOM_MAPEL = [
+  { key: 'ppkn', label: 'PPKN' },
+  { key: 'agama', label: 'AGAMA' },
+  { key: 'bhs_indo', label: 'BHS. INDO' },
+  { key: 'ipa', label: 'IPA/SAINS' },
+  { key: 'ips', label: 'IPS' },
+  { key: 'matematika', label: 'MTK' },
+  { key: 'kertakes', label: 'KERTAKES' },
+  { key: 'mulok', label: 'MULOK' },
+  { key: 'penjaskes', label: 'PENJASKES' },
+  { key: 'peng_diri', label: 'PENG. DIRI' },
+  { key: 'lainnya', label: '...........' },
+]
+
+const SEMUA_KEY_MAPEL = KOLOM_MAPEL.map((m) => m.key)
+
+// Mapel yang ditandai untuk guru kelas. Hapus 'agama' / 'penjaskes' dari
+// daftar ini kalau di sekolah Anda diajar oleh guru mapel tersendiri.
+const KEY_MAPEL_GURU_KELAS = KOLOM_MAPEL.filter((m) => m.key !== 'lainnya').map((m) => m.key)
+
+function normNama(s) {
+  return (s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+function hitungSelisih(jumlah, wajib) {
+  const j = parseFloat(jumlah)
+  const w = parseFloat(wajib)
+  if (isNaN(j) || isNaN(w)) return { kelebihan: '', kekurangan: '' }
+  return {
+    kelebihan: j > w ? String(j - w) : '0',
+    kekurangan: j < w ? String(w - j) : '0',
+  }
+}
+
 export default function LaporanTenagaPengajar() {
   const navigate = useNavigate()
   const { sekolahId: sekolahIdSaya } = useAuth()
@@ -24,20 +69,6 @@ export default function LaporanTenagaPengajar() {
   const [semester, setSemester] = useState('Ganjil')
   const [tahunAwal, setTahunAwal] = useState('')
   const [tahunAkhir, setTahunAkhir] = useState('')
-
-  const KOLOM_MAPEL = [
-    { key: 'ppkn', label: 'PPKN' },
-    { key: 'agama', label: 'AGAMA' },
-    { key: 'bhs_indo', label: 'BHS. INDO' },
-    { key: 'ipa', label: 'IPA/SAINS' },
-    { key: 'ips', label: 'IPS' },
-    { key: 'matematika', label: 'MTK' },
-    { key: 'kertakes', label: 'KERTAKES' },
-    { key: 'mulok', label: 'MULOK' },
-    { key: 'penjaskes', label: 'PENJASKES' },
-    { key: 'peng_diri', label: 'PENG. DIRI' },
-    { key: 'lainnya', label: '...........' },
-  ]
 
   useEffect(() => {
     async function muat() {
@@ -52,12 +83,12 @@ export default function LaporanTenagaPengajar() {
         supabase.from('profil_sekolah').select('*').eq('sekolah_id', sekolahId).maybeSingle(),
         supabase
           .from('guru')
-          .select('id, nama_lengkap, status_kepegawaian, status')
+          .select('id, nama_lengkap, status_kepegawaian, status, jenis_ptk, tugas_tambahan, mata_pelajaran')
           .eq('sekolah_id', sekolahId)
           .order('nama_lengkap'),
         supabase
           .from('kelas')
-          .select('id, nama_kelas, wali_kelas_id')
+          .select('id, nama_kelas, tingkat, tahun_ajaran, wali_kelas_id')
           .eq('sekolah_id', sekolahId),
       ])
 
@@ -71,12 +102,62 @@ export default function LaporanTenagaPengajar() {
 
       const daftarGuru = guru || []
       const daftarKelas = kelas || []
+      const namaKepsek = normNama(sekolah?.kepala_sekolah)
+
+      // Tahun pelajaran diambil dari data Kelas (format "2026/2027")
+      const taKelas = daftarKelas.find((k) => k.tahun_ajaran)?.tahun_ajaran || ''
+      const mTa = taKelas.match(/(\d{4})\D+(\d{4})/)
+      if (mTa) {
+        setTahunAwal((v) => v || mTa[1])
+        setTahunAkhir((v) => v || mTa[2])
+      }
 
       const rowsAwal = daftarGuru.map((g) => {
-        const kelasWali = daftarKelas.find((k) => k.wali_kelas_id === g.id)
-        const isiAwal = { kelas: kelasWali ? kelasWali.nama_kelas : '', jumlah: '', wajib: '', kelebihan: '', kekurangan: '', absen_s: '', absen_i: '', absen_a: '', absen_jumlah: '', ket: '' }
-        KOLOM_MAPEL.forEach((m) => { isiAwal[m.key] = '' })
-        return { id: g.id, nama_lengkap: g.nama_lengkap, ...isiAwal }
+        // Guru kelas: wali kelas di tabel kelas, atau Jenis PTK "Guru Kelas" (Data Guru)
+        const kelasWali = daftarKelas.filter((k) => k.wali_kelas_id === g.id)
+        const jenisPtk = (g.jenis_ptk || '').toLowerCase()
+        const tugasTambahan = (g.tugas_tambahan || '').toLowerCase()
+        const isGuruKelas = kelasWali.length > 0 || jenisPtk.includes('guru kelas')
+
+        // Kepala sekolah: Jenis PTK / Tugas Tambahan berisi "kepala sekolah",
+        // atau (fallback) nama cocok dengan profil_sekolah.kepala_sekolah
+        const n = normNama(g.nama_lengkap)
+        const cocokNama =
+          !!namaKepsek && !!n && (n === namaKepsek || n.includes(namaKepsek) || namaKepsek.includes(n))
+        const isKepsek =
+          jenisPtk.includes('kepala sekolah') || tugasTambahan.includes('kepala sekolah') || cocokNama
+
+        const isi = {
+          kelas: kelasWali.map((k) => k.nama_kelas).join(', '),
+          jumlah: '',
+          wajib: String(JAM_WAJIB),
+          kelebihan: '',
+          kekurangan: '',
+          absen_s: '',
+          absen_i: '',
+          absen_a: '',
+          absen_jumlah: '',
+          ket: '',
+          otomatis: false, // true = jumlah tidak dihitung dari kolom mapel
+        }
+        SEMUA_KEY_MAPEL.forEach((k) => { isi[k] = '' })
+
+        if (isKepsek) {
+          // Kepala sekolah: jam dari tugas tambahan (kualifikasi 24 jam)
+          isi.kelas = ''
+          isi.jumlah = String(JAM_WAJIB)
+          isi.ket = 'Tugas Tambahan Kepala Sekolah'
+          isi.otomatis = true
+        } else if (isGuruKelas) {
+          // Guru kelas: mengajar semua mapel, rata-rata 24 jam/minggu
+          KEY_MAPEL_GURU_KELAS.forEach((k) => { isi[k] = '√' })
+          isi.jumlah = String(JAM_WAJIB)
+          isi.ket = 'Guru Kelas'
+          isi.otomatis = true
+        }
+
+        Object.assign(isi, hitungSelisih(isi.jumlah, isi.wajib))
+        return { id: g.id, nama_lengkap: g.nama_lengkap, ...isi }
       })
 
       setRows(rowsAwal)
@@ -87,7 +168,23 @@ export default function LaporanTenagaPengajar() {
   }, [sekolahIdSaya])
 
   function updateCell(id, key, value) {
-    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [key]: value } : r)))
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.id !== id) return r
+        const baru = { ...r, [key]: value }
+
+        // Guru mapel: jumlah otomatis = total jam di kolom mapel
+        if (!r.otomatis && SEMUA_KEY_MAPEL.includes(key)) {
+          const total = SEMUA_KEY_MAPEL.reduce((a, k) => a + (parseFloat(baru[k]) || 0), 0)
+          baru.jumlah = total > 0 ? String(total) : ''
+        }
+
+        if (key === 'jumlah' || key === 'wajib' || SEMUA_KEY_MAPEL.includes(key)) {
+          Object.assign(baru, hitungSelisih(baru.jumlah, baru.wajib))
+        }
+        return baru
+      })
+    )
   }
 
   function formatKabupaten(teks) {
@@ -100,7 +197,7 @@ export default function LaporanTenagaPengajar() {
     )
   }
 
-  // Sel isian tabel — sekarang mengikuti pola LaporanSemester.jsx:
+  // Sel isian tabel — mengikuti pola LaporanSemester.jsx:
   // input untuk layar (no-print) + span untuk hasil cetak (only-print),
   // supaya di kertas hanya muncul teks polos tanpa kotak/garis input.
   function SelIsian({ value, onChange, width = 34 }) {
@@ -136,7 +233,7 @@ export default function LaporanTenagaPengajar() {
           <ArrowLeft size={16} /> Kembali
         </button>
         <p className="no-print text-xs text-slate-400 max-w-md text-center hidden sm:block">
-          Isi kolom bidang studi &amp; jam mengajar langsung di tabel sebelum menekan Cetak. Isian ini tidak disimpan.
+          Guru kelas &amp; kepala sekolah terisi otomatis 24 jam. Isi jam mapel guru lain langsung di tabel sebelum menekan Cetak. Isian ini tidak disimpan.
         </p>
         <button
           onClick={() => window.print()}
