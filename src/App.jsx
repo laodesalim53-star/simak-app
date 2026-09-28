@@ -87,9 +87,10 @@ const DaftarHadirPengawasUjian = lazy(() => import('./pages/DaftarHadirPengawasU
 const BeritaAcaraSerahTerimaAS = lazy(() => import('./pages/BeritaAcaraSerahTerimaAS'))
 const PaktaIntegritas = lazy(() => import('./pages/PaktaIntegritas'))
 const BeritaAcaraUjianSekolah = lazy(() => import('./pages/BeritaAcaraUjianSekolah'))
-// Cetak Sampul Laporan (generik, kop otomatis dari profil_sekolah) — satu
-// halaman dengan sidebar menu, menggantikan file terpisah CetakSampul.jsx /
-// CetakSampulSemester.jsx / CetakSampul8355.jsx.
+// Cetak Sampul Laporan (generik untuk semua tenant: sekolah, kantor, puskesmas —
+// kop & identitas otomatis dari profil instansi masing-masing lewat
+// useIdentitasInstansi). Satu halaman dengan sidebar menu, menggantikan file
+// terpisah CetakSampul.jsx / CetakSampulSemester.jsx / CetakSampul8355.jsx.
 const CetakSampulHub = lazy(() => import('./pages/CetakSampulHub'))
 const DataUjian8355 = lazy(() => import('./pages/DataUjian8355'))
 const Cetak8355 = lazy(() => import('./pages/Cetak8355'))
@@ -430,18 +431,20 @@ export default function App() {
           <Route path="/gudang-sk/portal-ujian/jadwal-pengawas-ruang" element={<ProtectedRoute adminOnly><JadwalPengawasRuangUjian /></ProtectedRoute>} />
           <Route path="/gudang-sk/portal-ujian/pakta-integritas" element={<ProtectedRoute adminOnly><PaktaIntegritas /></ProtectedRoute>} />
           <Route path="/gudang-sk/portal-ujian/berita-acara-ujian-sekolah" element={<ProtectedRoute adminOnly><BeritaAcaraUjianSekolah /></ProtectedRoute>} />
-          {/* Cetak Sampul Laporan — satu halaman dengan sidebar menu berisi
-              semua jenis laporan (Bulanan, Semester, 8355, LPJ BOS, dst).
-              Dikunci adminOnly — dulu ada versi kedua tanpa adminOnly di bagian
-              Akademik yang bikin bentrok, sudah dihapus. */}
-          <Route path="/cetak-sampul" element={<ProtectedRoute adminOnly><CetakSampulHub /></ProtectedRoute>} />
-          {/* Link lama dipertahankan (redirect) supaya bookmark/tautan yang
-              sudah pernah dibagikan tidak mati. */}
-          <Route path="/cetak-sampul-semester" element={<Navigate to="/cetak-sampul?jenis=semester" replace />} />
-          <Route path="/cetak-sampul-8355" element={<Navigate to="/cetak-sampul?jenis=8355" replace />} />
-          <Route path="/data-ujian-8355" element={<ProtectedRoute adminOnly><DataUjian8355 /></ProtectedRoute>} />
-          <Route path="/cetak-8355" element={<ProtectedRoute adminOnly><Cetak8355 /></ProtectedRoute>} />
-
+{/* Cetak Sampul Laporan — satu halaman dengan sidebar menu berisi jenis
+    laporan sesuai tipe tenant (sekolah: Bulanan, Semester, 8355, LPJ BOS, dst;
+    kantor & puskesmas: Bulanan, Tahunan, Keuangan, Inventaris, Kegiatan).
+    Terbuka untuk SEMUA pengguna yang sudah login (bukan adminOnly) — identitas
+    sampul mengikuti tenant akun lewat useIdentitasInstansi(). Pastikan hanya
+    ADA SATU route /cetak-sampul di file ini (dulu pernah bentrok dengan versi
+    kedua di bagian Akademik). */}
+<Route path="/cetak-sampul" element={<ProtectedRoute><CetakSampulHub /></ProtectedRoute>} />
+{/* Link lama dipertahankan (redirect) supaya bookmark/tautan yang
+    sudah pernah dibagikan tidak mati. */}
+<Route path="/cetak-sampul-semester" element={<Navigate to="/cetak-sampul?jenis=semester" replace />} />
+<Route path="/cetak-sampul-8355" element={<Navigate to="/cetak-sampul?jenis=8355" replace />} />
+<Route path="/data-ujian-8355" element={<ProtectedRoute adminOnly><DataUjian8355 /></ProtectedRoute>} />
+<Route path="/cetak-8355" element={<ProtectedRoute adminOnly><Cetak8355 /></ProtectedRoute>} />
           {/* ============================================================
               4. AKADEMIK — jadwal, presensi, nilai, rapor, kelulusan
              ============================================================ */}
