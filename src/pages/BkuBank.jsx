@@ -4,6 +4,8 @@ import {
   Loader2, Download, FileUp, Trash2, Sparkles, Landmark, Printer, Plus, ArrowUpDown, FileSpreadsheet,
 } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
+import { useAuth } from '../lib/AuthContext'
+import { supabase } from '../lib/supabaseClient'
 import {
   bukaPdf, renderHalaman, ambilTekslayer, jumlahHuruf, buatWorkerOcr, ocrCanvas,
   scanDenganAI, klusterTabel, FAKTOR_KOLOM, buatXlsx, formatUkuran,
@@ -39,6 +41,9 @@ function muatProfil() {
 export default function BkuBank() {
   const sekarang = new Date()
   const [profil, setProfil] = useState(muatProfil)
+  const { sekolahId } = useAuth()
+  const [muatData, setMuatData] = useState(false)
+  const [infoData, setInfoData] = useState('')
   const [semester, setSemester] = useState(sekarang.getMonth() >= 6 ? '2' : '1')
   const [tahun, setTahun] = useState(sekarang.getFullYear())
   const [gaya, setGaya] = useState('en')
@@ -81,6 +86,65 @@ export default function BkuBank() {
     setTahun(thn)
     setTglAwal(periodeSemester(sem, thn).tglSaldoAwal)
   }
+
+  // Isi otomatis identitas, kepala sekolah, dan bendahara dari data sekolah.
+  // Nilai dari database menimpa isian lama; kolom yang kosong di database
+  // tetap memakai isian yang tersimpan di perangkat.
+  async function isiDariDataSekolah() {
+    if (!sekolahId) return
+    setMuatData(true)
+    setInfoData('')
+    try {
+      const [{ data: sk }, { data: guru }] = await Promise.all([
+        supabase.from('profil_sekolah').select('*').eq('sekolah_id', sekolahId).maybeSingle(),
+        supabase
+          .from('guru')
+          .select('nama_lengkap, nip, tugas_tambahan')
+          .eq('sekolah_id', sekolahId)
+          .eq('status', 'aktif')
+          .ilike('tugas_tambahan', '%bendahara%'),
+      ])
+
+      const bersihKab = (t) =>
+        (t || '').replace(/^PEMERINTAH\s+KABUPATEN\s+/i, '').replace(/^KABUPATEN\s+/i, '').trim()
+      // Utamakan "Bendahara BOS" bila ada lebih dari satu bendahara.
+      const bend = (guru || []).find((g) => /bos/i.test(g.tugas_tambahan || '')) || (guru || [])[0]
+      const desa = sk?.desa || sk?.kelurahan || ''
+
+      const isi = {
+        nama: sk?.nama_sekolah,
+        desa: [desa, sk?.kecamatan].filter(Boolean).join(' / '),
+        kab: bersihKab(sk?.kabupaten),
+        prov: sk?.provinsi,
+        tempat: sk?.tempat_ttd || desa || sk?.kecamatan,
+        kepsek: sk?.kepala_sekolah,
+        nipKepsek: sk?.nip_kepala_sekolah,
+        bendahara: bend?.nama_lengkap,
+        nipBendahara: bend?.nip,
+      }
+      const terisi = Object.fromEntries(Object.entries(isi).filter(([, v]) => v))
+      setProfil((p) => ({ ...p, ...terisi }))
+
+      const kurang = []
+      if (!sk) kurang.push('profil sekolah')
+      else if (!sk.kepala_sekolah) kurang.push('kepala sekolah')
+      if (!bend) kurang.push('bendahara')
+      setInfoData(
+        kurang.length
+          ? `Data ${kurang.join(' dan ')} belum ditemukan, silakan isi manual.`
+          : 'Identitas, kepala sekolah, dan bendahara terisi dari data sekolah.'
+      )
+    } catch {
+      setInfoData('Gagal memuat data sekolah. Isi manual atau coba lagi.')
+    } finally {
+      setMuatData(false)
+    }
+  }
+
+  useEffect(() => {
+    isiDariDataSekolah()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sekolahId])
 
   // ---------- Hitung saldo berjalan ----------
   const rekap = useMemo(() => {
@@ -302,7 +366,19 @@ export default function BkuBank() {
 
           {/* 1. Identitas */}
           <section className="bg-white rounded-2xl shadow-sm p-6 space-y-4">
-            <p className="text-sm font-semibold text-ink-950">1. Identitas sekolah dan periode</p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-ink-950">1. Identitas sekolah dan periode</p>
+              <button
+                type="button"
+                onClick={isiDariDataSekolah}
+                disabled={muatData || !sekolahId}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-ink-950/15 hover:bg-ink-950/5 disabled:opacity-40"
+              >
+                {muatData && <Loader2 size={14} className="animate-spin" />}
+                Muat ulang dari data sekolah
+              </button>
+            </div>
+            {infoData && <p className="text-xs text-ink-700 bg-paper rounded-lg px-3 py-2">{infoData}</p>}
             <div className="grid sm:grid-cols-2 gap-4">
               <div><label className="label-field">Nama Sekolah</label><input className="input-field" value={profil.nama} onChange={setP('nama')} placeholder="SD NEGERI ..." /></div>
               <div><label className="label-field">Desa/Kecamatan</label><input className="input-field" value={profil.desa} onChange={setP('desa')} /></div>
