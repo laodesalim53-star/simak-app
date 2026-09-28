@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Printer, Loader2, AlertTriangle, RectangleHorizontal, RectangleVertical } from 'lucide-react'
-import { useAuth } from '../lib/AuthContext'
-import { supabase } from '../lib/supabaseClient'
+import { useIdentitasInstansi } from '../lib/identitasInstansi'
 
+// Daftar jenis laporan untuk tenant SEKOLAH. Dipakai CetakSampulHub.jsx lewat
+// indeks. Untuk kantor/puskesmas, daftar jenis laporan ada di
+// CONFIG_INSTANSI (src/lib/identitasInstansi.js). Jaga agar daftar sekolah di
+// sana tetap sama dengan yang ini.
 export const JENIS_LAPORAN_PRESET = [
   'Laporan Bulanan',
   'Laporan Semester',
@@ -157,7 +160,7 @@ function PitaDiagonalHijauEmas({ style }) {
   )
 }
 
-// Tabel identitas sekolah. Saat orientasi landscape, daftar dipecah jadi
+// Tabel identitas instansi. Saat orientasi landscape, daftar dipecah jadi
 // 2 kolom berdampingan supaya memanfaatkan lebar halaman (bukan cuma satu
 // kolom sempit di tengah kertas lebar) — ini alasan utama tema 11-16 lebih
 // pas dipakai landscape dibanding tema-tema lama.
@@ -1165,11 +1168,11 @@ function SampulKopResmi({ tema, logoUrl, kopBaris1, kopBaris2, kopBaris3, judulU
           <div style={{ position: 'absolute', inset: '6px', border: gaya.border2, borderRadius: '2px', zIndex: 0, pointerEvents: 'none' }} />
         )}
 
-        {/* Kop 3 baris — Pemerintah Kab/Kota, Nama Dinas, Nama Sekolah */}
+        {/* Kop 3 baris — Pemerintah/Kementerian, Nama Dinas/Kantor, Nama Instansi */}
         <div className="text-center relative" style={{ zIndex: 1 }}>
           <p className="font-bold uppercase leading-snug" style={{ color: gaya.kopColor, fontSize: '15px' }}>{kopBaris1 || 'PEMERINTAH KABUPATEN ...'}</p>
-          <p className="font-bold uppercase leading-snug" style={{ color: gaya.kopColor, fontSize: '15px' }}>{kopBaris2 || 'DINAS PENDIDIKAN DAN KEBUDAYAAN'}</p>
-          <p className="font-bold uppercase leading-snug" style={{ color: gaya.kopColor, fontSize: '15px' }}>{kopBaris3 || 'NAMA SEKOLAH'}</p>
+          <p className="font-bold uppercase leading-snug" style={{ color: gaya.kopColor, fontSize: '15px' }}>{kopBaris2 || 'NAMA DINAS / KANTOR'}</p>
+          <p className="font-bold uppercase leading-snug" style={{ color: gaya.kopColor, fontSize: '15px' }}>{kopBaris3 || 'NAMA INSTANSI'}</p>
         </div>
 
         {/* Judul laporan + kode (mis. nomor 8355) */}
@@ -1215,17 +1218,20 @@ function SampulKopResmi({ tema, logoUrl, kopBaris1, kopBaris2, kopBaris3, judulU
 const SKALA_PRATINJAU = 0.62
 
 /**
- * Komponen sampul laporan yang reusable.
+ * Komponen sampul laporan yang reusable untuk SEMUA tenant (sekolah, kantor,
+ * puskesmas). Identitas instansi (nama, logo, alamat, pimpinan) diambil
+ * otomatis lewat useIdentitasInstansi() sesuai tenant akun yang login.
  *
  * Props:
- * - jenisLaporanAwal   : jenis laporan default saat halaman dibuka (default: preset ke-4 / LPJ BOS)
+ * - jenisLaporanAwal   : jenis laporan default saat halaman dibuka. Kalau tidak ada
+ *                        di daftar jenis laporan tenant, dipakai jenis pertama.
  * - kunciJenisLaporan  : true = dropdown "Jenis Laporan" disembunyikan, jenis laporan tetap
  *                        (dipakai oleh halaman cabang seperti Sampul Semester / Sampul 8355)
  * - subJudulAwal       : isi awal field Sub Judul
  * - labelTahun         : label AWAL yang tampil di depan tahun pada sampul, default 'Tahun Anggaran'
  *                        (mis. 'Tahun Ajaran' untuk laporan semester/8355). Pengguna tetap bisa
  *                        mengganti pilihan ini sendiri lewat dropdown "Label Tahun" di form.
- * - tampilkanBank      : true/false — tampilkan baris Nama Bank & Nomor Rekening di identitas sekolah
+ * - tampilkanBank      : true/false — tampilkan baris Nama Bank & Nomor Rekening di identitas
  *                        (hanya berlaku untuk Pola Sampul Dekoratif)
  * - tampilkanKelas     : true/false — tampilkan field & baris "Kelas" (dipakai untuk sampul 8355 Kelas 6)
  * - kelasAwal          : isi awal field Kelas (mis. 'VI')
@@ -1244,17 +1250,16 @@ export default function SampulLaporan({
   polaSampulAwal = 'dekoratif',
 }) {
   const navigate = useNavigate()
-  const { sekolahId } = useAuth()
+  const { cfg, identitas, loading, error: errorMuat } = useIdentitasInstansi()
 
-  const [profilSekolah, setProfilSekolah] = useState(null)
-  const [logoUrl, setLogoUrl] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [errorMuat, setErrorMuat] = useState('')
+  // Jenis laporan yang tersedia mengikuti tipe tenant (sekolah/kantor/puskesmas)
+  const opsiJenis = cfg.jenisLaporan
+  const jenisAwalValid = opsiJenis.includes(jenisLaporanAwal) ? jenisLaporanAwal : opsiJenis[0]
 
   const [polaSampul, setPolaSampul] = useState(polaSampulAwal)
   const [tema, setTema] = useState('gelombang')
   const [orientasi, setOrientasi] = useState('portrait') // 'portrait' | 'landscape'
-  const [jenisLaporan, setJenisLaporan] = useState(jenisLaporanAwal)
+  const [jenisLaporan, setJenisLaporan] = useState(jenisAwalValid)
   const [judulBebas, setJudulBebas] = useState('')
   const [subJudul, setSubJudul] = useState(subJudulAwal)
   const [tahunAnggaran, setTahunAnggaran] = useState('')
@@ -1265,54 +1270,25 @@ export default function SampulLaporan({
   const [dibuatOleh, setDibuatOleh] = useState('')
   const [kelas, setKelas] = useState(kelasAwal)
   const [jenisWilayah, setJenisWilayah] = useState('Kabupaten') // 'Kabupaten' | 'Kota' — khusus Kop Resmi
-  const [namaDinas, setNamaDinas] = useState('DINAS PENDIDIKAN DAN KEBUDAYAAN') // khusus Kop Resmi
+  const [namaDinas, setNamaDinas] = useState('') // khusus Kop Resmi, diisi dari profil di effect bawah
   const [labelTahunPilihan, setLabelTahunPilihan] = useState(
     PILIHAN_LABEL_TAHUN.includes(labelTahun) ? labelTahun : PILIHAN_LABEL_TAHUN[0]
   )
 
   const judulTampil = jenisLaporan === 'Lainnya (isi bebas)' ? judulBebas : jenisLaporan
 
+  // Isi form dari profil instansi begitu selesai dimuat
   useEffect(() => {
-    async function muat() {
-      setLoading(true)
-      setErrorMuat('')
-      if (!sekolahId) {
-        setLoading(false)
-        return
-      }
-
-      const { data: sekolah, error: sekolahError } = await supabase
-        .from('profil_sekolah')
-        .select('*')
-        .eq('sekolah_id', sekolahId)
-        .maybeSingle()
-
-      if (sekolahError) {
-        console.error('Gagal memuat profil sekolah:', sekolahError)
-        setErrorMuat(
-          `Gagal memuat profil sekolah dari database, sehingga kop di sampul ini bisa kosong. ` +
-          `Coba muat ulang halaman; kalau masih gagal, periksa console browser (F12). Detail: ${sekolahError.message || ''}`
-        )
-      }
-
-      setProfilSekolah(sekolah || null)
-      setNamaBank(sekolah?.nama_bank || '')
-      setNomorRekening(sekolah?.nomor_rekening || sekolah?.no_rekening || '')
-      setDesaKelurahan(sekolah?.desa_kelurahan || sekolah?.desa || '')
-      setEmailSekolah(sekolah?.email || sekolah?.website || '')
-      setDibuatOleh(sekolah?.kepala_sekolah || '')
-
-      if (sekolah?.logo_path) {
-        const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(sekolah.logo_path)
-        setLogoUrl(pub?.publicUrl || '')
-      } else {
-        setLogoUrl('')
-      }
-
-      setLoading(false)
-    }
-    muat()
-  }, [sekolahId])
+    if (loading) return
+    setNamaBank(identitas.namaBank)
+    setNomorRekening(identitas.nomorRekening)
+    setDesaKelurahan(identitas.desa)
+    setEmailSekolah(identitas.email)
+    setDibuatOleh(identitas.pimpinan)
+    setNamaDinas(
+      cfg.namaDinas({ ...identitas, kabupaten: bersihkanWilayah(identitas.kabupaten, 'kabupaten') })
+    )
+  }, [loading, identitas]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return (
@@ -1322,17 +1298,17 @@ export default function SampulLaporan({
     )
   }
 
-  const kabupatenBersih = bersihkanWilayah(profilSekolah?.kabupaten, 'kabupaten')
+  const kabupatenBersih = bersihkanWilayah(identitas.kabupaten, 'kabupaten')
 
   const barisIdentitas = [
-    { label: 'Nama Sekolah', nilai: profilSekolah?.nama_sekolah },
-    { label: 'NPSN', nilai: profilSekolah?.npsn },
-    { label: 'Alamat', nilai: profilSekolah?.alamat },
+    { label: cfg.labelNama, nilai: identitas.nama },
+    ...(cfg.labelKode ? [{ label: cfg.labelKode, nilai: identitas.kode }] : []),
+    { label: 'Alamat', nilai: identitas.alamat },
     { label: 'Desa/Kelurahan', nilai: desaKelurahan },
-    { label: 'Kecamatan', nilai: bersihkanWilayah(profilSekolah?.kecamatan, 'kecamatan') },
+    { label: 'Kecamatan', nilai: bersihkanWilayah(identitas.kecamatan, 'kecamatan') },
     { label: 'Kab/Kota', nilai: kabupatenBersih },
-    { label: 'Provinsi', nilai: profilSekolah?.provinsi },
-    { label: 'Kode Pos', nilai: profilSekolah?.kode_pos },
+    { label: 'Provinsi', nilai: identitas.provinsi },
+    { label: 'Kode Pos', nilai: identitas.kodePos },
     ...(tampilkanKelas ? [{ label: 'Kelas', nilai: kelas }] : []),
     ...(tampilkanBank
       ? [
@@ -1340,17 +1316,17 @@ export default function SampulLaporan({
           { label: 'Nomor Rekening', nilai: nomorRekening },
         ]
       : []),
-    { label: 'E-mail Sekolah', nilai: emailSekolah },
+    { label: `E-mail ${cfg.labelInstansi}`, nilai: emailSekolah },
   ]
 
   // Data khusus pola Kop Resmi: kop 3 baris + judul/kode terpisah.
   const { judul: judulKopResmi, kode: kodeKopResmi } = pisahJudulKode(judulTampil)
   const propsKopResmi = {
     tema,
-    logoUrl,
-    kopBaris1: `PEMERINTAH ${jenisWilayah.toUpperCase()}${kabupatenBersih ? ` ${kabupatenBersih.toUpperCase()}` : ''}`,
+    logoUrl: identitas.logoUrl,
+    kopBaris1: cfg.kopAtas(jenisWilayah, kabupatenBersih),
     kopBaris2: namaDinas,
-    kopBaris3: profilSekolah?.nama_sekolah || '',
+    kopBaris3: identitas.nama,
     judulUtama: judulKopResmi,
     kodeLaporan: kodeKopResmi,
     subJudulEkstra: subJudul,
@@ -1359,7 +1335,16 @@ export default function SampulLaporan({
     orientasi,
   }
 
-  const propsSampul = { logoUrl, judulTampil, subJudul, labelTahun: labelTahunPilihan, tahunAnggaran, barisIdentitas, dibuatOleh, orientasi }
+  const propsSampul = {
+    logoUrl: identitas.logoUrl,
+    judulTampil,
+    subJudul,
+    labelTahun: labelTahunPilihan,
+    tahunAnggaran,
+    barisIdentitas,
+    dibuatOleh,
+    orientasi,
+  }
   const KomponenAktif = KOMPONEN_TEMA[tema] || SampulGelombang
   const dimensi = dimensiHalaman(orientasi)
 
@@ -1439,8 +1424,8 @@ export default function SampulLaporan({
               </div>
               <p className="mt-1 text-[11px] text-slate-400">
                 {polaSampul === 'dekoratif'
-                  ? 'Logo bulat kecil + tabel identitas sekolah lengkap.'
-                  : 'Kop dinas 3 baris + logo besar di tengah, seperti kop surat resmi.'}
+                  ? `Logo bulat kecil + tabel identitas ${cfg.labelInstansi.toLowerCase()} lengkap.`
+                  : 'Kop 3 baris + logo besar di tengah, seperti kop surat resmi.'}
               </p>
             </div>
 
@@ -1461,7 +1446,7 @@ export default function SampulLaporan({
               <div className="text-xs text-slate-500">
                 Jenis Laporan
                 <div className="mt-0.5 w-full text-sm border border-slate-200 bg-slate-50 rounded px-2 py-1.5 text-slate-700 font-medium">
-                  {jenisLaporanAwal}
+                  {jenisAwalValid}
                 </div>
               </div>
             ) : (
@@ -1472,7 +1457,7 @@ export default function SampulLaporan({
                   onChange={(e) => setJenisLaporan(e.target.value)}
                   className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
                 >
-                  {JENIS_LAPORAN_PRESET.map((j) => (
+                  {opsiJenis.map((j) => (
                     <option key={j} value={j}>{j}</option>
                   ))}
                 </select>
@@ -1506,7 +1491,7 @@ export default function SampulLaporan({
                   </select>
                 </label>
                 <label className="text-xs text-slate-500">
-                  Nama Dinas
+                  Nama Dinas / Kantor
                   <input
                     type="text"
                     value={namaDinas}
@@ -1570,7 +1555,7 @@ export default function SampulLaporan({
             {polaSampul === 'dekoratif' && (
               <>
                 <label className="text-xs text-slate-500">
-                  Desa/Kelurahan <span className="text-slate-400">(belum ada di profil sekolah)</span>
+                  Desa/Kelurahan <span className="text-slate-400">(bisa diisi manual bila belum ada di profil)</span>
                   <input
                     type="text"
                     value={desaKelurahan}
@@ -1593,7 +1578,7 @@ export default function SampulLaporan({
                       />
                     </label>
                     <label className="text-xs text-slate-500">
-                      Nomor Rekening <span className="text-slate-400">(belum ada di profil sekolah)</span>
+                      Nomor Rekening <span className="text-slate-400">(bisa diisi manual)</span>
                       <input
                         type="text"
                         value={nomorRekening}
@@ -1606,7 +1591,7 @@ export default function SampulLaporan({
                 )}
 
                 <label className="text-xs text-slate-500">
-                  E-mail Sekolah
+                  E-mail {cfg.labelInstansi}
                   <input
                     type="text"
                     value={emailSekolah}
