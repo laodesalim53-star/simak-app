@@ -129,6 +129,7 @@ const KeuanganKelas = lazy(() => import('./pages/KeuanganKelas'))
 const Kuitansi = lazy(() => import('./pages/Kuitansi'))
 const Nota = lazy(() => import('./pages/Nota'))
 const KuitansiJasa = lazy(() => import('./pages/KuitansiJasa'))
+const BkuBank = lazy(() => import('./pages/BkuBank'))
 const Backup = lazy(() => import('./pages/Backup'))
 const ProfilSekolah = lazy(() => import('./pages/ProfilSekolah'))
 const ManajemenSekolah = lazy(() => import('./pages/ManajemenSekolah'))
@@ -492,6 +493,7 @@ export default function App() {
           <Route path="/kuitansi" element={<ProtectedRoute adminOnly><Kuitansi /></ProtectedRoute>} />
           <Route path="/nota" element={<ProtectedRoute adminOnly><NotaDenganSekolah /></ProtectedRoute>} />
           <Route path="/kuitansi-jasa" element={<ProtectedRoute adminOnly><KuitansiJasa /></ProtectedRoute>} />
+          <Route path="/bku-bank" element={<ProtectedRoute adminOnly><BkuBank /></ProtectedRoute>} />
           <Route path="/backup" element={<ProtectedRoute adminOnly><Backup /></ProtectedRoute>} />
           <Route path="/profil-sekolah" element={<ProtectedRoute adminUtamaOnly><ProfilSekolah /></ProtectedRoute>} />
           <Route path="/manajemen-sekolah" element={<ProtectedRoute superAdminOnly><ManajemenSekolah /></ProtectedRoute>} />
