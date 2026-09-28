@@ -1,33 +1,37 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../lib/AuthContext";
 import { supabase } from "../lib/supabaseClient";
 
 /**
- * LisensiCetak — versi otomatis per sekolah (multi-tenant)
+ * LisensiCetak — catatan kaki cetak dengan LINK PERMANEN + QR
  * -------------------------------------------------------------
- * Aplikasi ini dipakai banyak sekolah sekaligus, jadi komponen
- * ini TIDAK memakai nama tetap. Ia membaca sendiri profil sekolah
- * dari akun yang sedang login (sama seperti NotaDenganSekolah /
- * Kuitansi.jsx), lalu menampilkannya di catatan kaki setiap
- * halaman yang dicetak.
+ * Setiap kali halaman dicetak (atau "Save as PDF"):
+ *   1. Kode dokumen 16 karakter sudah disiapkan lebih dulu (tidak menunggu jaringan),
+ *      jadi kode di cetakan pasti sama dengan yang dicatat.
+ *   2. Saat dialog cetak dibuka, kode itu dicatat ke tabel `dokumen_terbit`
+ *      (lihat dokumen_terbit.sql). Kalau gagal (offline), disimpan di antrean
+ *      lokal dan dikirim ulang otomatis saat online / saat aplikasi dibuka lagi.
+ *   3. Footer mencetak link https://.../verifikasi-dokumen/KODE + kode QR-nya.
  *
- * Pasang SEKALI di root (App.jsx), di dalam CartProvider, di luar
- * Suspense — supaya jejaknya tetap muncul walau halaman rute
- * sedang lazy-load:
+ * Butuh:  npm i qrcode
  *
- *   <LisensiCetak />
+ * Pasang SEKALI di App.jsx (di dalam CartProvider, di luar Suspense):
+ *   <LisensiCetak baseUrl="https://domain-tetap-anda.id" />
  *
- * Kalau untuk sementara ingin memaksa satu nama tetap (mis. saat
- * profil sekolah belum lengkap), bisa override lewat props:
- *
- *   <LisensiCetak produk="Nama Sekolah Manual" />
+ * Isi `baseUrl` dengan domain tetap. Kalau kosong, dipakai alamat situs saat ini
+ * (jangan dipakai di alamat preview/sementara: link cetakan jadi tidak permanen).
  */
 
-function buatKodeCetak(prefix) {
-  const t = Date.now().toString(36).toUpperCase();
-  const r = Math.random().toString(36).slice(2, 6).toUpperCase();
-  return `${prefix}-${t}-${r}`;
+const KUNCI_TERTUNDA = "dokumen_terbit_tertunda";
+
+// 16 karakter heksadesimal acak (64 bit), huruf besar
+function buatKodeDokumen() {
+  const b = new Uint8Array(8);
+  crypto.getRandomValues(b);
+  return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("").toUpperCase();
 }
+
+const kelompok = (k) => k.replace(/(.{4})(?=.)/g, "$1-");
 
 function waktuCetak() {
   return new Date().toLocaleString("id-ID", {
@@ -39,23 +43,73 @@ function waktuCetak() {
   });
 }
 
+function bacaTertunda() {
+  try {
+    return JSON.parse(localStorage.getItem(KUNCI_TERTUNDA) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function tulisTertunda(arr) {
+  try {
+    localStorage.setItem(KUNCI_TERTUNDA, JSON.stringify(arr));
+  } catch {
+    /* penyimpanan lokal tidak tersedia */
+  }
+}
+
+async function kirimDokumen(baris) {
+  const { error } = await supabase.from("dokumen_terbit").insert(baris);
+  // 23505 = kode sudah tercatat sebelumnya → anggap berhasil
+  return !error || error.code === "23505";
+}
+
+async function kirimTertunda(userId) {
+  const antre = bacaTertunda();
+  if (!antre.length) return;
+  const sisa = [];
+  for (const b of antre) {
+    if (b.dibuat_oleh !== userId) {
+      sisa.push(b); // milik akun lain, kirim nanti saat akun itu login
+      continue;
+    }
+    if (!(await kirimDokumen(b))) sisa.push(b);
+  }
+  tulisTertunda(sisa);
+}
+
 export default function LisensiCetak({
-  produk,          // override manual (opsional) — kalau kosong, diambil dari profil_sekolah
+  produk, // override nama instansi (opsional)
   pemilik = "",
   lisensi = "Dokumen dihasilkan secara elektronik oleh aplikasi sekolah.",
   situs = "",
-  prefixKode = "SMK",
+  baseUrl, // domain tetap untuk link permanen
+  modul, // 'sekolah' | 'kua' | 'puskesmas' | 'umum' (opsional, otomatis kalau kosong)
   onCetak,
 }) {
   const { profil } = useAuth();
   const sekolahId = profil?.sekolah_id;
+  const userId = profil?.id;
 
   const [namaSekolah, setNamaSekolah] = useState(null);
-  const [kode, setKode] = useState(() => buatKodeCetak(prefixKode));
+  const [kode, setKode] = useState(buatKodeDokumen);
+  const [qr, setQr] = useState("");
   const [waktu, setWaktu] = useState(waktuCetak);
 
-  // Ambil profil sekolah milik akun yang sedang login — sama seperti
-  // pola di NotaDenganSekolah, supaya tiap sekolah lihat namanya sendiri.
+  const produkTampil = produk || namaSekolah || "Aplikasi Sekolah";
+  const modulTampil = modul || (profil?.puskesmas_id ? "puskesmas" : "sekolah");
+  const dasarUrl = (baseUrl || (typeof window !== "undefined" ? window.location.origin : "")).replace(/\/+$/, "");
+  const link = `${dasarUrl}/verifikasi-dokumen/${kode}`;
+  const punyaLink = Boolean(userId); // tanpa login, dokumen tidak bisa dicatat → tidak ada link
+
+  // nilai terbaru untuk dipakai handler cetak (tanpa memasang ulang listener)
+  const terkini = useRef({});
+  terkini.current = { kode, link, userId, sekolahId, modul: modulTampil, produk: produkTampil, onCetak };
+  const dicatat = useRef(false);
+  const waktuRef = useRef(null);
+
+  // Nama instansi dari akun yang login
   useEffect(() => {
     if (!sekolahId) return;
     supabase
@@ -68,42 +122,89 @@ export default function LisensiCetak({
       });
   }, [sekolahId]);
 
-  const produkTampil = produk || namaSekolah || "Aplikasi Sekolah";
-
+  // Kirim ulang catatan yang tertunda (offline sebelumnya)
   useEffect(() => {
-    const segarkan = () => {
-      const baru = buatKodeCetak(prefixKode);
-      setKode(baru);
-      setWaktu(waktuCetak());
-      // Kait opsional: simpan jejak cetak ke database (siapa mencetak apa, kapan)
-      onCetak?.({
-        kode: baru,
-        produk: produkTampil,
-        sekolahId,
-        dicetakPada: new Date().toISOString(),
+    if (!userId) return;
+    kirimTertunda(userId);
+    const saatOnline = () => kirimTertunda(userId);
+    window.addEventListener("online", saatOnline);
+    return () => window.removeEventListener("online", saatOnline);
+  }, [userId]);
+
+  // QR untuk kode yang sedang disiapkan (dibuat SEBELUM cetak, jadi sudah ada di halaman)
+  useEffect(() => {
+    if (!punyaLink) return;
+    let batal = false;
+    import("qrcode")
+      .then((m) => (m.default || m).toDataURL(link, { margin: 0, width: 240, errorCorrectionLevel: "M" }))
+      .then((url) => {
+        if (!batal) setQr(url);
+      })
+      .catch(() => {
+        if (!batal) setQr("");
+      });
+    return () => {
+      batal = true;
+    };
+  }, [link, punyaLink]);
+
+  // Catat saat dialog cetak dibuka; siapkan kode baru setelah selesai/batal
+  useEffect(() => {
+    const catat = () => {
+      const t = terkini.current;
+      if (dicatat.current || !t.userId) return;
+      dicatat.current = true;
+
+      // waktu cetak ditulis langsung ke DOM agar sudah benar sebelum pratinjau dibuat
+      if (waktuRef.current) waktuRef.current.textContent = waktuCetak();
+
+      const baris = {
+        kode: t.kode,
+        jenis: "Dokumen cetak",
+        judul: (document.title || "").trim().slice(0, 120) || null,
+        modul: t.modul,
+        sekolah_id: t.sekolahId ?? null,
+        instansi_nama: t.produk,
+        dibuat_oleh: t.userId,
+        dibuat_pada: new Date().toISOString(),
+      };
+      kirimDokumen(baris).then((ok) => {
+        if (!ok) tulisTertunda([...bacaTertunda(), baris]);
       });
 
-      // --- Paksa reflow sebelum Chrome membuat pratinjau cetak ---
-      // Chrome kadang tidak langsung merender elemen `position: fixed`
-      // pada pratinjau pertama (baru muncul setelah ada interaksi lain
-      // di dialog print, mis. centang "Headers and footers"). Membaca
-      // offsetHeight memaksa browser menghitung ulang layout SEBELUM
-      // pratinjau dibuat, sehingga catatan ini langsung tampil tanpa
-      // perlu klik apa pun lagi.
+      t.onCetak?.({
+        kode: t.kode,
+        link: t.link,
+        produk: t.produk,
+        sekolahId: t.sekolahId,
+        dicetakPada: baris.dibuat_pada,
+      });
+
+      // paksa reflow supaya footer `position: fixed` langsung tampil di pratinjau pertama
       // eslint-disable-next-line no-unused-expressions
       document.body.offsetHeight;
     };
 
-    window.addEventListener("beforeprint", segarkan);
+    const segarkan = () => {
+      dicatat.current = false;
+      setKode(buatKodeDokumen());
+      setQr("");
+      setWaktu(waktuCetak());
+    };
+
     const mq = window.matchMedia?.("print");
-    const onMq = (e) => e.matches && segarkan();
+    const onMq = (e) => (e.matches ? catat() : segarkan());
+
+    window.addEventListener("beforeprint", catat);
+    window.addEventListener("afterprint", segarkan);
     mq?.addEventListener?.("change", onMq);
 
     return () => {
-      window.removeEventListener("beforeprint", segarkan);
+      window.removeEventListener("beforeprint", catat);
+      window.removeEventListener("afterprint", segarkan);
       mq?.removeEventListener?.("change", onMq);
     };
-  }, [prefixKode, produkTampil, sekolahId, onCetak]);
+  }, []);
 
   return (
     <>
@@ -111,7 +212,7 @@ export default function LisensiCetak({
         .jejak-lisensi { display: none; }
 
         @media print {
-          @page { margin-bottom: 18mm; }
+          @page { margin-bottom: 24mm; }
 
           .jejak-lisensi {
             display: block;
@@ -130,84 +231,52 @@ export default function LisensiCetak({
           .jejak-baris {
             display: flex;
             justify-content: space-between;
-            align-items: baseline;
+            align-items: center;
             gap: 6mm;
           }
+          .jejak-teks { min-width: 0; flex: 1; }
           .jejak-lisensi p { margin: 0; }
           .jejak-produk { font-style: italic; color: #222; }
           .jejak-ket { color: #6b6b6b; }
+          .jejak-link {
+            font-size: 7pt;
+            color: #222;
+            word-break: break-all;
+          }
           .jejak-kode {
             font-family: "Courier New", monospace;
             font-size: 6pt;
-            white-space: nowrap;
             color: #666;
+          }
+          .jejak-qr {
+            flex: none;
+            width: 15mm;
+            height: 15mm;
+            image-rendering: pixelated;
           }
         }
       `}</style>
 
       <footer className="jejak-lisensi" aria-hidden="true">
         <div className="jejak-baris">
-          <p>
-            <span className="jejak-produk">{produkTampil}</span>
-            {pemilik && <span className="jejak-ket"> — hak cipta {pemilik}</span>}
-            {situs && <span className="jejak-ket"> · {situs}</span>}
-          </p>
-          <p className="jejak-kode">{kode} · {waktu}</p>
+          <div className="jejak-teks">
+            <p>
+              <span className="jejak-produk">{produkTampil}</span>
+              {pemilik && <span className="jejak-ket"> — hak cipta {pemilik}</span>}
+              {situs && <span className="jejak-ket"> · {situs}</span>}
+            </p>
+            {lisensi && <p className="jejak-ket">{lisensi}</p>}
+            {punyaLink && (
+              <p className="jejak-link">Verifikasi keaslian dokumen: {link}</p>
+            )}
+            <p className="jejak-kode">
+              {punyaLink && <>Kode {kelompok(kode)} · </>}
+              <span ref={waktuRef}>{waktu}</span>
+            </p>
+          </div>
+          {punyaLink && qr && <img className="jejak-qr" src={qr} alt="" />}
         </div>
-        {lisensi && <p className="jejak-ket">{lisensi}</p>}
       </footer>
     </>
   );
 }
-
-/* ============================================================
-   Pemasangan di App.jsx (di dalam CartProvider, setelah Suspense):
-
-     <CartProvider>
-       <Suspense fallback={<FallbackLoader />}>
-         <Routes>
-           ...
-         </Routes>
-       </Suspense>
-
-       <LisensiCetak />
-     </CartProvider>
-
-   Karena LisensiCetak sekarang memanggil useAuth() sendiri, ia
-   HARUS berada di dalam komponen yang sudah dibungkus AuthProvider
-   di pohon React (biasanya AuthProvider ada di main.jsx/index.jsx
-   membungkus <App />, bukan di dalam App.jsx itu sendiri — jadi
-   ini seharusnya aman tanpa perubahan tambahan).
-
-   Menyimpan jejak cetak ke Supabase (opsional, per-sekolah):
-
-     <LisensiCetak
-       onCetak={async ({ kode, produk, sekolahId, dicetakPada }) => {
-         const { data: { user } } = await supabase.auth.getUser();
-         await supabase.from("log_cetak").insert({
-           kode, produk, sekolah_id: sekolahId,
-           user_id: user?.id, dicetak_pada: dicetakPada,
-         });
-       }}
-     />
-
-   Tabel log_cetak:
-     create table log_cetak (
-       id bigint generated always as identity primary key,
-       kode text not null,
-       produk text,
-       sekolah_id uuid,
-       user_id uuid references auth.users(id),
-       dicetak_pada timestamptz default now()
-     );
-
-   Catatan:
-   - Sebelum profil_sekolah selesai dimuat, produkTampil sementara
-     menampilkan "Aplikasi Sekolah". Ini normal — begitu data datang,
-     nama sekolah muncul di cetakan berikutnya. Kalau ingin memaksa
-     tunggu data siap dulu sebelum tombol cetak aktif, itu diatur di
-     halaman yang memanggil window.print(), bukan di komponen ini.
-   - Sesuaikan path import useAuth/supabase di atas ("../lib/...")
-     kalau lokasi file LisensiCetak.jsx Anda berbeda kedalamannya
-     dari folder lib/.
-============================================================ */
