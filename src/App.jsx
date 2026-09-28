@@ -44,6 +44,7 @@ const PresensiPuskesmas = lazy(() => import('./pages/PresensiPuskesmas'))
 const DaftarHadirPuskesmas = lazy(() => import('./pages/DaftarHadirPuskesmas'))
 const PendaftaranNikah = lazy(() => import('./pages/PendaftaranNikah'))   // BARU
 const VerifikasiNikah = lazy(() => import('./pages/VerifikasiNikah'))     // BARU
+const Verifikasi = lazy(() => import('./pages/Verifikasi'))
 const Kelas = lazy(() => import('./pages/Kelas'))
 
 const LaporanNominatifGuru = lazy(() => import('./pages/LaporanNominatifGuru'))
@@ -315,6 +316,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/login/:jenis" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/verifikasi-dokumen/:kode?" element={<Verifikasi />} />
           <Route path="/menunggu-persetujuan" element={<RouteMenunggu><MenungguPersetujuan /></RouteMenunggu>} />
           <Route path="/persetujuan-akun" element={<ProtectedRoute adminUtamaOnly><PersetujuanAkun /></ProtectedRoute>} />
           {/* Verifikasi Nikah: khusus admin_utama, sama seperti persetujuan akun —
