@@ -24,7 +24,7 @@ const PROFIL_KOSONG = {
 
 const METODE = [
   { value: 'tesseract', label: 'OCR Cepat', desc: 'Berjalan di perangkat Anda, gratis, cocok untuk scan yang jelas' },
-  { value: 'ai', label: 'AI Scan (Gemini)', desc: 'Lebih akurat untuk scan buram, tetapi gambar dikirim ke server AI' },
+  { value: 'ai', label: 'AI Scan (Gemini)', desc: 'Lebih akurat untuk foto atau scan buram, termasuk cetakan buku tabungan. Gambar dikirim ke server AI' },
 ]
 
 const bulatkan = (n) => Math.round(n * 100) / 100
@@ -222,7 +222,13 @@ export default function BkuBank() {
     setAwal(hasil.awal)
     setCatatan(
       `${hasil.baris.length} transaksi terbaca.` +
-        (hasil.dibuang ? ` ${hasil.dibuang} baris di luar periode ${periode.teks} tidak dimasukkan.` : '')
+        (hasil.dibuang ? ` ${hasil.dibuang} baris di luar periode ${periode.teks} tidak dimasukkan.` : '') +
+        (hasil.disisipkan
+          ? ` ${hasil.disisipkan} baris tidak terbaca (mis. tertutup noda atau lipatan) disisipkan dari selisih saldo, mohon lengkapi tanggal, kode, dan uraiannya.`
+          : '') +
+        (hasil.awalDihitung
+          ? ' Saldo awal dihitung dari transaksi pertama. Bila ada transaksi sebelumnya yang tidak ikut terscan, ubah saldo awal dan tambahkan barisnya.'
+          : '')
     )
   }
 
@@ -561,7 +567,8 @@ export default function BkuBank() {
               </table>
             </div>
             <p className="text-xs text-ink-700/60">
-              No. Kode dan No Bukti tidak ada di rekening koran, isi sendiri bila diperlukan. Saldo dihitung ulang otomatis setiap ada perubahan.
+              No. Kode terisi dari kode transaksi bank (mis. 1051, 5058) bila ada, dan uraian diisi dari arti kodenya. No Bukti isi sendiri.
+              Saldo dihitung ulang otomatis setiap ada perubahan. Jangan urutkan tanggal bila urutan di buku bank berbeda dengan urutan tanggal.
             </p>
           </section>
 
