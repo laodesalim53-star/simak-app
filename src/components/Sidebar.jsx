@@ -299,6 +299,7 @@ function getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelum
       links: [
         { to: '/agenda', label: 'Agenda Kantor', icon: CalendarDays },
         { to: '/surat', label: 'Surat Masuk/Keluar', icon: Mail },
+        { to: '/surat-pengantar', label: 'Surat Pengantar', icon: Stamp },
         { to: '/backup', label: 'Backup Data', icon: DatabaseBackup },
         // "Persetujuan Akun", "Verifikasi Nikah", "Laporan Kepala KUA" dan
         // "Laporan Bulanan KUA" hanya untuk admin utama.
