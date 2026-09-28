@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { saveAs } from 'file-saver'
 import {
   Loader2, Download, FileUp, Trash2, Sparkles, Landmark, Printer, Plus, ArrowUpDown, FileSpreadsheet,
+  RotateCcw, RotateCw,
 } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
 import { useAuth } from '../lib/AuthContext'
@@ -52,6 +53,14 @@ export default function BkuBank() {
   const [tglAwal, setTglAwal] = useState(() => periodeSemester(sekarang.getMonth() >= 6 ? '2' : '1', sekarang.getFullYear()).tglSaldoAwal)
   const [awal, setAwal] = useState(0)
   const [baris, setBaris] = useState([])
+
+  // Riwayat untuk tombol Batal / Ulangi (tabel transaksi, saldo awal, tanggal saldo awal).
+  const [riwayat, setRiwayat] = useState({ lalu: [], depan: [] })
+  const [pesanUndo, setPesanUndo] = useState('')
+  const terakhirEdit = useRef({ kunci: '', waktu: 0 })
+  const timerUndo = useRef(null)
+  const dataRef = useRef({ baris: [], awal: 0, tglAwal: '' })
+  dataRef.current = { baris, awal, tglAwal }
 
   const [file, setFile] = useState(null)
   const [info, setInfo] = useState(null)
@@ -209,6 +218,7 @@ export default function BkuBank() {
   }
 
   function terapkanUrai(teks) {
+    simpanRiwayat('')
     const hasil = uraiTeks(teks, { semester, tahun, rapikan, filterPeriode })
     if (!hasil.baris.length) {
       setBaris([])
@@ -287,21 +297,103 @@ export default function BkuBank() {
     }
   }
 
+  // ---------- Batal / Ulangi ----------
+  const MAKS_RIWAYAT = 100
+
+  // Simpan kondisi SEBELUM perubahan. Ketikan beruntun pada sel yang sama
+  // (kunci sama, jeda < 1 detik) digabung jadi satu langkah supaya Batal
+  // tidak harus ditekan huruf demi huruf.
+  function simpanRiwayat(kunci) {
+    const sekarang = Date.now()
+    if (kunci && terakhirEdit.current.kunci === kunci && sekarang - terakhirEdit.current.waktu < 1000) {
+      terakhirEdit.current.waktu = sekarang
+      return
+    }
+    terakhirEdit.current = { kunci, waktu: sekarang }
+    const snap = dataRef.current
+    setRiwayat((r) => ({ lalu: [...r.lalu, snap].slice(-MAKS_RIWAYAT), depan: [] }))
+  }
+
+  function terapkanSnap(snap) {
+    setBaris(snap.baris)
+    setAwal(snap.awal)
+    setTglAwal(snap.tglAwal)
+    terakhirEdit.current = { kunci: '', waktu: 0 }
+  }
+
+  function tampilPesanUndo(teks) {
+    setPesanUndo(teks)
+    clearTimeout(timerUndo.current)
+    timerUndo.current = setTimeout(() => setPesanUndo(''), 10000)
+  }
+
+  function batalkanPerubahan() {
+    if (!riwayat.lalu.length) return
+    const sebelum = riwayat.lalu[riwayat.lalu.length - 1]
+    setRiwayat({ lalu: riwayat.lalu.slice(0, -1), depan: [...riwayat.depan, dataRef.current] })
+    terapkanSnap(sebelum)
+    setPesanUndo('')
+  }
+
+  function ulangiPerubahan() {
+    if (!riwayat.depan.length) return
+    const berikut = riwayat.depan[riwayat.depan.length - 1]
+    setRiwayat({ lalu: [...riwayat.lalu, dataRef.current], depan: riwayat.depan.slice(0, -1) })
+    terapkanSnap(berikut)
+    setPesanUndo('')
+  }
+
+  // Pintasan Ctrl+Z / Ctrl+Y (Cmd di Mac). Di dalam kotak isian, Ctrl+Z tetap
+  // memakai bawaan browser untuk membatalkan ketikan; gunakan tombol Batal untuk tabel.
+  useEffect(() => {
+    function onKey(e) {
+      if (!(e.ctrlKey || e.metaKey)) return
+      const tag = (e.target?.tagName || '').toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target?.isContentEditable) return
+      const k = e.key.toLowerCase()
+      if (k === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        batalkanPerubahan()
+      } else if (k === 'y' || (k === 'z' && e.shiftKey)) {
+        e.preventDefault()
+        ulangiPerubahan()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
+  useEffect(() => () => clearTimeout(timerUndo.current), [])
+
   // ---------- Edit tabel ----------
-  const ubahBaris = (id, kolom, nilai) =>
+  const ubahBaris = (id, kolom, nilai) => {
+    simpanRiwayat(`${id}:${kolom}`)
     setBaris((lama) => lama.map((r) => (r.id === id ? { ...r, [kolom]: nilai } : r)))
+  }
   const angkaDari = (v) => (v === '' ? 0 : Number(v))
-  const hapusBaris = (id) => setBaris((lama) => lama.filter((r) => r.id !== id))
-  const tambahBaris = () =>
+  const hapusBaris = (id) => {
+    simpanRiwayat('')
+    setBaris((lama) => lama.filter((r) => r.id !== id))
+    tampilPesanUndo('Baris dihapus.')
+  }
+  const tambahBaris = () => {
+    simpanRiwayat('')
     setBaris((lama) => [
       ...lama,
       { id: idBaru(), tgl: lama[lama.length - 1]?.tgl || periode.awal, kode: '', bukti: '', uraian: '', masuk: 0, keluar: 0, saldoBank: null, periksa: false },
     ])
-  const urutkan = () => setBaris((lama) => [...lama].sort((a, b) => (a.tgl < b.tgl ? -1 : a.tgl > b.tgl ? 1 : 0)))
+  }
+  const urutkan = () => {
+    simpanRiwayat('')
+    setBaris((lama) => [...lama].sort((a, b) => (a.tgl < b.tgl ? -1 : a.tgl > b.tgl ? 1 : 0)))
+    tampilPesanUndo('Baris diurutkan menurut tanggal.')
+  }
   const kosongkan = () => {
+    simpanRiwayat('')
     setBaris([])
     setAwal(0)
     setCatatan('')
+    tampilPesanUndo('Semua transaksi dikosongkan.')
   }
 
   // ---------- Keluaran ----------
@@ -513,11 +605,19 @@ export default function BkuBank() {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-semibold text-ink-950">3. Periksa dan sunting transaksi</p>
               <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={batalkanPerubahan} disabled={!riwayat.lalu.length} title="Batal (Ctrl+Z)" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-ink-950/15 hover:bg-ink-950/5 disabled:opacity-40"><RotateCcw size={14} /> Batal{riwayat.lalu.length ? ` (${riwayat.lalu.length})` : ''}</button>
+                <button type="button" onClick={ulangiPerubahan} disabled={!riwayat.depan.length} title="Ulangi (Ctrl+Y)" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-ink-950/15 hover:bg-ink-950/5 disabled:opacity-40"><RotateCw size={14} /> Ulangi</button>
                 <button type="button" onClick={tambahBaris} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-ink-950/15 hover:bg-ink-950/5"><Plus size={14} /> Tambah baris</button>
                 <button type="button" onClick={urutkan} disabled={baris.length < 2} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-ink-950/15 hover:bg-ink-950/5 disabled:opacity-40"><ArrowUpDown size={14} /> Urutkan tanggal</button>
                 <button type="button" onClick={kosongkan} disabled={!baris.length} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 disabled:opacity-40"><Trash2 size={14} /> Kosongkan</button>
               </div>
             </div>
+            {pesanUndo && (
+              <div className="flex items-center justify-between gap-3 text-xs text-ink-950 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">
+                <span>{pesanUndo}</span>
+                <button type="button" onClick={batalkanPerubahan} className="font-semibold text-sky-700 hover:underline">Batalkan</button>
+              </div>
+            )}
             {perluCek > 0 && (
               <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
                 {perluCek} baris perlu dicek (latar kuning): arah penerimaan/pengeluaran ditebak dari kata uraian, atau saldo hitungan
@@ -540,10 +640,10 @@ export default function BkuBank() {
                 </thead>
                 <tbody>
                   <tr className="border-t border-ink-950/5 bg-paper/50">
-                    <td className="px-2 py-1"><input type="date" className="input-field !py-1 !text-xs" value={tglAwal} onChange={(e) => setTglAwal(e.target.value)} /></td>
+                    <td className="px-2 py-1"><input type="date" className="input-field !py-1 !text-xs" value={tglAwal} onChange={(e) => { simpanRiwayat('tglAwal'); setTglAwal(e.target.value) }} /></td>
                     <td /><td />
                     <td className="px-2 py-1 font-medium">Saldo Awal</td>
-                    <td className="px-2 py-1"><input type="number" step="0.01" className="input-field !py-1 !text-xs text-right" value={awal === 0 ? '' : awal} onChange={(e) => setAwal(angkaDari(e.target.value))} placeholder="0" /></td>
+                    <td className="px-2 py-1"><input type="number" step="0.01" className="input-field !py-1 !text-xs text-right" value={awal === 0 ? '' : awal} onChange={(e) => { simpanRiwayat('awal'); setAwal(angkaDari(e.target.value)) }} placeholder="0" /></td>
                     <td className="px-2 py-1 text-right text-ink-700/60">-</td>
                     <td className="px-2 py-1 text-right font-medium">{f(awal)}</td>
                     <td />
