@@ -155,6 +155,7 @@ const RKTPPenyuluh2 = lazy(() => import('./pages/RKTPPenyuluh2'))
 const LaporanKepenghuluan = lazy(() => import('./pages/LaporanKepenghuluan'))
 const LaporanKepalaKUA = lazy(() => import('./pages/LaporanKepalaKUA'))
 const LaporanBulananKUA = lazy(() => import('./pages/LaporanBulananKUA'))   // BARU
+const SuratPengantar = lazy(() => import('./pages/SuratPengantar')) 
 const RencanaKerjaTahunan = lazy(() => import('./pages/RencanaKerjaTahunan'))
 const MateriMajelisTaklim = lazy(() => import('./pages/MateriMajelisTaklim'))
 const PusatKelompokBinaan = lazy(() => import('./pages/PusatKelompokBinaan'))
@@ -350,6 +351,7 @@ export default function App() {
               admin_utama (Kepala KUA). Lihat menu "Keagamaan" tenant kantor
               di Sidebar.jsx (getGroupsKantorAdmin). */}
           <Route path="/laporan-bulanan-kua" element={<ProtectedRoute adminUtamaOnly><LaporanBulananKUA /></ProtectedRoute>} />
+          <Route path="/surat-pengantar" element={<ProtectedRoute adminOnly><SuratPengantar /></ProtectedRoute>} />
           {/* Materi Majelis Taklim: khusus pengguna kantor — jangan buka ke ProtectedRoute biasa. */}
           <Route path="/materi-majelis-taklim" element={<ProtectedRoute adminOnly><MateriMajelisTaklim /></ProtectedRoute>} />
           <Route path="/pusat-kelompok-binaan" element={<ProtectedRoute><PusatKelompokBinaan /></ProtectedRoute>} />
