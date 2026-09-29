@@ -606,12 +606,12 @@ export default function DaftarHadirPegawai() {
         <p className="no-print text-sm text-slate-500">Memuat data...</p>
       ) : mode === 'kolektif' ? (
         <div
-          className="lembar-cetak print-only bg-white rounded-2xl border border-slate-100 p-5 sm:p-8 mx-auto"
+          className="lembar-cetak lembar-kolektif print-only bg-white rounded-2xl border border-slate-100 p-5 sm:p-8 mx-auto"
           style={{ width: '297mm' }}
         >
           <KopSurat />
 
-          <div className="text-center mb-5">
+          <div className="judul-kolektif text-center mb-5">
             <h1 className="font-display text-base font-bold uppercase text-slate-900 underline">
               Rekapitulasi Daftar Hadir {K.istilahPegawai}
             </h1>
@@ -672,59 +672,66 @@ export default function DaftarHadirPegawai() {
             </tbody>
           </table>
 
-          <p className="text-[9px] text-slate-500 mt-2">
-            Keterangan: H = Hadir, I = Izin, S = Sakit, A = Alpa/Tanpa Keterangan.
-            <span className="text-red-600"> Angka tanggal merah</span> = hari Minggu/libur.
-          </p>
-
           {K.tandaTanganTunggal ? (
-            // Sekolah: satu blok tanda tangan Kepala Sekolah di sisi kanan
-            <div className="ttd-block flex justify-end mt-10 text-sm text-slate-700">
-              <div className="text-center w-56">
+            // Sekolah: keterangan di kiri, tanda tangan Kepala Sekolah di kanan
+            // dalam satu baris supaya hemat tempat dan muat 1 lembar.
+            <div className="blok-bawah flex items-start justify-between gap-6 mt-2">
+              <p className="text-[9px] text-slate-500">
+                Keterangan: H = Hadir, I = Izin, S = Sakit, A = Alpa/Tanpa Keterangan.
+                <span className="text-red-600"> Angka tanggal merah</span> = hari Minggu/libur.
+              </p>
+              <div className="ttd-block text-center w-52 shrink-0 text-[11px] leading-tight text-slate-700">
                 <p>{tempatTtd ? `${tempatTtd}, ${tanggalCetak}` : '\u00A0'}</p>
                 <p>{jabatanKepala}</p>
-                <div className="h-20 flex items-end justify-center">
+                <div className="h-10 flex items-end justify-center">
                   {ttdKepalaUrl && (
-                    <img src={ttdKepalaUrl} alt={`Tanda Tangan ${jabatanKepala}`} className="max-h-20 object-contain" />
+                    <img src={ttdKepalaUrl} alt={`Tanda Tangan ${jabatanKepala}`} className="max-h-10 object-contain" />
                   )}
                 </div>
-                <p className="font-semibold border-t border-slate-400 pt-1">
+                <p className="font-semibold border-t border-slate-400 pt-0.5">
                   ({P?.kepala || '..............................'})
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className="text-[10px] text-slate-500">
                   NIP. {P?.nipKepala || '..............................'}
                 </p>
               </div>
             </div>
           ) : (
-          <div className="ttd-block flex justify-between mt-10 text-sm text-slate-700">
-              <div className="text-center w-48">
-                <p>Mengetahui,</p>
-                <p>{jabatanKepala}</p>
-                <div className="h-20 flex items-end justify-center">
-                  {ttdKepalaUrl && (
-                    <img src={ttdKepalaUrl} alt={`Tanda Tangan ${jabatanKepala}`} className="max-h-20 object-contain" />
-                  )}
+            <>
+              <p className="text-[9px] text-slate-500 mt-2">
+                Keterangan: H = Hadir, I = Izin, S = Sakit, A = Alpa/Tanpa Keterangan.
+                <span className="text-red-600"> Angka tanggal merah</span> = hari Minggu/libur.
+              </p>
+
+              <div className="ttd-block flex justify-between mt-10 text-sm text-slate-700">
+                <div className="text-center w-48">
+                  <p>Mengetahui,</p>
+                  <p>{jabatanKepala}</p>
+                  <div className="h-20 flex items-end justify-center">
+                    {ttdKepalaUrl && (
+                      <img src={ttdKepalaUrl} alt={`Tanda Tangan ${jabatanKepala}`} className="max-h-20 object-contain" />
+                    )}
+                  </div>
+                  <p className="font-semibold border-t border-slate-400 pt-1">
+                    ({P?.kepala || '..............................'})
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    NIP. {P?.nipKepala || '..............................'}
+                  </p>
                 </div>
-                <p className="font-semibold border-t border-slate-400 pt-1">
-                  ({P?.kepala || '..............................'})
-                </p>
-                <p className="text-xs text-slate-500">
-                  NIP. {P?.nipKepala || '..............................'}
-                </p>
+                <div className="text-center w-48">
+                  <p>{tempatTtd ? `${tempatTtd}, ${tanggalCetak}` : '\u00A0'}</p>
+                  <p>Dibuat oleh</p>
+                  <div className="h-20" />
+                  <p className="font-semibold border-t border-slate-400 pt-1">
+                    ({profil?.nama_lengkap || '..............................'})
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    NIP. {profil?.nip || '..............................'}
+                  </p>
+                </div>
               </div>
-              <div className="text-center w-48">
-                <p>{tempatTtd ? `${tempatTtd}, ${tanggalCetak}` : '\u00A0'}</p>
-                <p>Dibuat oleh</p>
-                <div className="h-20" />
-                <p className="font-semibold border-t border-slate-400 pt-1">
-                  ({profil?.nama_lengkap || '..............................'})
-                </p>
-                <p className="text-xs text-slate-500">
-                  NIP. {profil?.nip || '..............................'}
-                </p>
-              </div>
-            </div>
+            </>
           )}
         </div>
       ) : (
@@ -998,10 +1005,28 @@ export default function DaftarHadirPegawai() {
           .no-print-cursor {
             cursor: default !important;
           }
+
+          /* Padatkan mode Kolektif supaya tanda tangan muat 1 lembar */
+          .lembar-kolektif {
+            padding: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+          }
+          .lembar-kolektif .judul-kolektif {
+            margin-bottom: 6px !important;
+          }
+          .lembar-kolektif tbody td {
+            padding-top: 1px !important;
+            padding-bottom: 1px !important;
+          }
+          .lembar-kolektif .blok-bawah {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
         }
         @page {
           size: A4 landscape;
-          margin: 10mm;
+          margin: 6mm;
         }
         @page perorangan {
           size: A4 portrait;
