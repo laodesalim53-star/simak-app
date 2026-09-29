@@ -14,6 +14,9 @@ import { supabase } from "../lib/supabaseClient";
  *      lokal dan dikirim ulang otomatis saat online / saat aplikasi dibuka lagi.
  *   3. Footer mencetak link https://.../verifikasi-dokumen/KODE + kode QR-nya.
  *
+ * Tata letak cetak: footer kecil (2 baris, 5,5pt) diletakkan di dalam MARGIN BAWAH
+ * kertas (margin 12 mm), bukan di area isi dokumen, sehingga isi cetakan tidak tertimpa.
+ *
  * Butuh:  npm i qrcode
  *
  * Pasang SEKALI di App.jsx (di dalam CartProvider, di luar Suspense):
@@ -234,7 +237,8 @@ export default function LisensiCetak({
         .jejak-lisensi { display: none; }
 
         @media print {
-          @page { margin-bottom: 24mm; }
+          /* hanya margin bawah; ukuran kertas (A4/A3, portrait/landscape) tetap diatur halamannya */
+          @page { margin-bottom: 12mm; }
 
           .jejak-lisensi,
           .jejak-lisensi * {
@@ -246,14 +250,18 @@ export default function LisensiCetak({
             transform: none !important;
             z-index: 2147483647;
             position: fixed !important;
-            left: 0; right: 0; bottom: 0;
-            padding: 2mm 6mm 3mm;
-            border-top: 0.4pt solid #9a9a9a;
-            background: #fff;
+            left: 0; right: 0;
+            /* turun ke dalam margin bawah: 2–8 mm di bawah area isi */
+            bottom: -8mm;
+            height: 6mm;
+            overflow: hidden;
+            padding: 0;
+            border: 0;
+            background: transparent;
             font-family: Georgia, "Times New Roman", serif;
-            font-size: 6.6pt;
-            line-height: 1.45;
-            color: #444;
+            font-size: 5.5pt;
+            line-height: 1.3;
+            color: #555;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
@@ -261,53 +269,54 @@ export default function LisensiCetak({
             display: flex;
             justify-content: space-between;
             align-items: center;
-            gap: 6mm;
+            gap: 3mm;
+            height: 100%;
           }
           .jejak-teks { min-width: 0; flex: 1; }
-          .jejak-lisensi p { margin: 0; }
+          .jejak-lisensi p {
+            margin: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
           .jejak-produk { font-style: italic; color: #222; }
           .jejak-ket { color: #6b6b6b; }
-          .jejak-link {
-            font-size: 7pt;
-            color: #222;
-            word-break: break-all;
-          }
-          .jejak-kode {
-            font-family: "Courier New", monospace;
-            font-size: 6pt;
-            color: #666;
-          }
+          .jejak-link { color: #222; }
+          .jejak-kode { font-family: "Courier New", monospace; font-size: 5pt; color: #666; }
           .jejak-qr {
             flex: none;
-            width: 15mm;
-            height: 15mm;
+            width: 8mm;
+            height: 8mm;
             image-rendering: pixelated;
           }
         }
       `}</style>
 
       {createPortal(
-      <div className="jejak-lisensi" aria-hidden="true">
-        <div className="jejak-baris">
-          <div className="jejak-teks">
-            <p>
-              <span className="jejak-produk">{produkTampil}</span>
-              {pemilik && <span className="jejak-ket"> — hak cipta {pemilik}</span>}
-              {situs && <span className="jejak-ket"> · {situs}</span>}
-            </p>
-            {lisensi && <p className="jejak-ket">{lisensi}</p>}
-            {punyaLink && (
-              <p className="jejak-link">Verifikasi keaslian dokumen: {link}</p>
-            )}
-            <p className="jejak-kode">
-              {punyaLink && <>Kode {kelompok(kode)} · </>}
-              <span ref={waktuRef}>{waktu}</span>
-            </p>
+        <div className="jejak-lisensi" aria-hidden="true">
+          <div className="jejak-baris">
+            <div className="jejak-teks">
+              <p>
+                <span className="jejak-produk">{produkTampil}</span>
+                {pemilik && <span className="jejak-ket"> — hak cipta {pemilik}</span>}
+                {situs && <span className="jejak-ket"> · {situs}</span>}
+                {lisensi && <span className="jejak-ket"> · {lisensi}</span>}
+              </p>
+              <p>
+                {punyaLink && (
+                  <>
+                    <span className="jejak-link">Verifikasi: {link}</span>
+                    <span className="jejak-kode"> · Kode {kelompok(kode)}</span>
+                    <span className="jejak-kode"> · </span>
+                  </>
+                )}
+                <span className="jejak-kode" ref={waktuRef}>{waktu}</span>
+              </p>
+            </div>
+            {punyaLink && tampilkanQr && qr && <img className="jejak-qr" src={qr} alt="" />}
           </div>
-          {punyaLink && tampilkanQr && qr && <img className="jejak-qr" src={qr} alt="" />}
-        </div>
-      </div>,
-      document.body
+        </div>,
+        document.body
       )}
     </>
   );
