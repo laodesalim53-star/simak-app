@@ -83,9 +83,10 @@ async function kirimTertunda(userId) {
 export default function LisensiCetak({
   produk, // override nama instansi (opsional)
   pemilik = "",
-  lisensi = "Dokumen dihasilkan secara elektronik oleh aplikasi sekolah.",
+  lisensi = "Dokumen dihasilkan secara elektronik oleh aplikasi SIMAK.",
   situs = "",
   baseUrl, // domain tetap untuk link permanen
+  tampilkanQr = false, // QR disembunyikan; set true untuk menampilkannya lagi
   modul, // 'sekolah' | 'kua' | 'puskesmas' | 'umum' (opsional, otomatis kalau kosong)
   onCetak,
 }) {
@@ -150,7 +151,7 @@ export default function LisensiCetak({
 
   // QR untuk kode yang sedang disiapkan (dibuat SEBELUM cetak, jadi sudah ada di halaman)
   useEffect(() => {
-    if (!punyaLink) return;
+    if (!punyaLink || !tampilkanQr) return;
     let batal = false;
     import("qrcode")
       .then((m) => (m.default || m).toDataURL(link, { margin: 0, width: 240, errorCorrectionLevel: "M" }))
@@ -163,7 +164,7 @@ export default function LisensiCetak({
     return () => {
       batal = true;
     };
-  }, [link, punyaLink]);
+  }, [link, punyaLink, tampilkanQr]);
 
   // Catat saat dialog cetak dibuka; siapkan kode baru setelah selesai/batal
   useEffect(() => {
@@ -303,7 +304,7 @@ export default function LisensiCetak({
               <span ref={waktuRef}>{waktu}</span>
             </p>
           </div>
-          {punyaLink && qr && <img className="jejak-qr" src={qr} alt="" />}
+          {punyaLink && tampilkanQr && qr && <img className="jejak-qr" src={qr} alt="" />}
         </div>
       </div>,
       document.body
