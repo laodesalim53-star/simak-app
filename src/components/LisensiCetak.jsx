@@ -5,15 +5,19 @@ import { supabase } from "../lib/supabaseClient";
 /**
  * LisensiCetak — catatan kaki cetak dengan LINK PERMANEN
  * -------------------------------------------------------
- * Footer dicetak lewat margin box @page (@bottom-center), sehingga selalu berada
- * di paling bawah setiap lembar kertas, di dalam margin, dan tidak menimpa isi.
- * Butuh Chrome/Edge 131+ (margin box @page).
+ * Lisensi dicetak SEKALI di akhir dokumen (setelah tanda tangan), sebagai elemen
+ * biasa yang disisipkan saat dialog cetak dibuka dan dilepas setelah selesai.
+ * Tidak memakai @page / margin box, sehingga:
+ *  - tidak mengubah margin atau tata letak dokumen mana pun,
+ *  - tidak menimpa isi di halaman 2, 3, dst.,
+ *  - tidak mendorong blok tanda tangan ke halaman berikutnya.
  *
  * Pasang SEKALI di App.jsx (di dalam CartProvider, di luar Suspense):
  *   <LisensiCetak baseUrl="https://domain-tetap-anda.id" />
  */
 
 const KUNCI_TERTUNDA = "dokumen_terbit_tertunda";
+const KELAS_FOOTER = "lisensi-cetak-akhir";
 
 function buatKodeDokumen() {
   const b = new Uint8Array(8);
@@ -32,9 +36,6 @@ function waktuCetak() {
     minute: "2-digit",
   });
 }
-
-// aman dipakai di dalam string CSS content: "..."
-const cssStr = (s) => String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\s*\n\s*/g, " ");
 
 function bacaTertunda() {
   try {
@@ -115,61 +116,32 @@ export default function LisensiCetak({
   };
   const dicatat = useRef(false);
   const waktuRef = useRef(waktuCetak());
-  const styleRef = useRef(null);
 
-  // Tulis ulang CSS footer cetak (teks footer ada di dalam CSS @page)
-  // Footer SATU BARIS + margin bawah tipis agar tidak mendorong isi (tanda tangan) ke halaman 2.
-  const tulisCss = () => {
-    const el = styleRef.current;
-    if (!el) return;
-    const t = terkini.current;
-    const bagian = [
-      t.produk + (t.pemilik ? ` — hak cipta ${t.pemilik}` : ""),
-      t.situs,
-      t.lisensi,
-      t.punyaLink ? `Verifikasi: ${t.link} · Kode ${kelompok(t.kode)}` : "",
-      waktuRef.current,
-    ].filter(Boolean);
-    const satuBaris = bagian.join(" · ");
-
-    el.textContent = `
-      @media print {
-        @page {
-          margin-bottom: 5mm;
-          @bottom-center {
-            content: "${cssStr(satuBaris)}";
-            white-space: nowrap;
-            width: 100%;
-            vertical-align: bottom;
-            text-align: center;
-            padding-bottom: 0.8mm;
-            font-family: Georgia, "Times New Roman", serif;
-            font-size: 4pt;
-            line-height: 1.1;
-            color: #666;
-          }
-        }
-      }
-    `;
-  };
-
-  // Buat elemen <style> sekali
+  // CSS statis: sembunyi di layar, tampil kecil di akhir dokumen saat dicetak
   useEffect(() => {
     const el = document.createElement("style");
     el.setAttribute("data-lisensi-cetak", "");
+    el.textContent = `
+      .${KELAS_FOOTER} { display: none; }
+      @media print {
+        .${KELAS_FOOTER} {
+          display: block;
+          margin: 2mm 0 0;
+          padding: 0;
+          text-align: center;
+          font-family: Georgia, "Times New Roman", serif;
+          font-size: 4.5pt;
+          line-height: 1.25;
+          color: #666;
+          break-before: avoid;
+          break-inside: avoid;
+          page-break-inside: avoid;
+        }
+      }
+    `;
     document.head.appendChild(el);
-    styleRef.current = el;
-    tulisCss();
-    return () => {
-      el.remove();
-      styleRef.current = null;
-    };
+    return () => el.remove();
   }, []);
-
-  // Perbarui footer bila data berubah
-  useEffect(() => {
-    tulisCss();
-  }, [kode, link, punyaLink, produkTampil, pemilik, situs, lisensi]);
 
   // Nama instansi dari akun yang login
   useEffect(() => {
@@ -193,8 +165,35 @@ export default function LisensiCetak({
     return () => window.removeEventListener("online", saatOnline);
   }, [userId]);
 
-  // Catat saat dialog cetak dibuka; siapkan kode baru setelah selesai/batal
+  // Sisipkan / lepas lisensi di akhir dokumen, catat dokumen, siapkan kode baru
   useEffect(() => {
+    const lepasFooter = () => {
+      document.querySelectorAll(`.${KELAS_FOOTER}`).forEach((n) => n.remove());
+    };
+
+    const pasangFooter = () => {
+      lepasFooter();
+      const t = terkini.current;
+
+      const baris1 =
+        t.produk +
+        (t.pemilik ? ` — hak cipta ${t.pemilik}` : "") +
+        (t.situs ? ` · ${t.situs}` : "") +
+        (t.lisensi ? ` · ${t.lisensi}` : "");
+      const baris2 = t.punyaLink
+        ? `Verifikasi: ${t.link} · Kode ${kelompok(t.kode)} · ${waktuRef.current}`
+        : waktuRef.current;
+
+      const box = document.createElement("div");
+      box.className = KELAS_FOOTER;
+      [baris1, baris2].forEach((teks) => {
+        const p = document.createElement("div");
+        p.textContent = teks;
+        box.appendChild(p);
+      });
+      document.body.appendChild(box);
+    };
+
     const catat = () => {
       const t = terkini.current;
       if (dicatat.current) return;
@@ -203,10 +202,6 @@ export default function LisensiCetak({
         return;
       }
       dicatat.current = true;
-
-      // waktu cetak diperbarui langsung ke CSS sebelum pratinjau dibuat
-      waktuRef.current = waktuCetak();
-      tulisCss();
 
       const baris = {
         kode: t.kode,
@@ -231,22 +226,30 @@ export default function LisensiCetak({
       });
     };
 
-    const segarkan = () => {
+    const sebelumCetak = () => {
+      if (!dicatat.current) waktuRef.current = waktuCetak();
+      catat();
+      pasangFooter();
+    };
+
+    const sesudahCetak = () => {
+      lepasFooter();
       dicatat.current = false;
       waktuRef.current = waktuCetak();
       setKode(buatKodeDokumen());
     };
 
     const mq = window.matchMedia?.("print");
-    const onMq = (e) => (e.matches ? catat() : segarkan());
+    const onMq = (e) => (e.matches ? sebelumCetak() : sesudahCetak());
 
-    window.addEventListener("beforeprint", catat);
-    window.addEventListener("afterprint", segarkan);
+    window.addEventListener("beforeprint", sebelumCetak);
+    window.addEventListener("afterprint", sesudahCetak);
     mq?.addEventListener?.("change", onMq);
 
     return () => {
-      window.removeEventListener("beforeprint", catat);
-      window.removeEventListener("afterprint", segarkan);
+      lepasFooter();
+      window.removeEventListener("beforeprint", sebelumCetak);
+      window.removeEventListener("afterprint", sesudahCetak);
       mq?.removeEventListener?.("change", onMq);
     };
   }, []);
