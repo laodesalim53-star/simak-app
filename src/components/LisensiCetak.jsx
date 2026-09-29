@@ -3,14 +3,16 @@ import { useAuth } from "../lib/AuthContext";
 import { supabase } from "../lib/supabaseClient";
 
 /**
- * LisensiCetak — catatan kaki cetak dengan LINK PERMANEN
+ * LisensiCetak — WATERMARK cetak dengan LINK PERMANEN
  * -------------------------------------------------------
- * Lisensi dicetak sebagai teks SAMAR (opacity rendah, 4pt) yang menempel di bawah
- * setiap lembar. Elemen fixed disisipkan saat dialog cetak dibuka dan dilepas
- * setelah selesai. Tidak memakai @page / margin box, sehingga:
+ * Lisensi dicetak sebagai watermark SAMAR di poros (tengah) setiap lembar kertas.
+ * Elemen fixed disisipkan saat dialog cetak dibuka dan dilepas setelah selesai.
+ * Tidak memakai @page / margin box, sehingga:
  *  - tidak mengubah margin atau tata letak dokumen mana pun,
- *  - tidak mendorong isi / tanda tangan ke halaman berikutnya,
- *  - tetap terbaca tipis tetapi tidak mengganggu bila menimpa isi.
+ *  - tidak mendorong isi / tanda tangan ke halaman berikutnya (position: fixed),
+ *  - diletakkan DI ATAS isi dengan opasitas rendah + mix-blend-mode: multiply,
+ *    jadi tidak bisa tertutup latar putih tabel/kotak, dan tulisan di bawahnya
+ *    tetap terbaca. Kalau tertimpa tulisan lain, lisensi tetap tercetak.
  *
  * Pasang SEKALI di App.jsx (di dalam CartProvider, di luar Suspense):
  *   <LisensiCetak baseUrl="https://domain-tetap-anda.id" />
@@ -117,7 +119,7 @@ export default function LisensiCetak({
   const dicatat = useRef(false);
   const waktuRef = useRef(waktuCetak());
 
-  // CSS statis: sembunyi di layar, tampil kecil di akhir dokumen saat dicetak
+  // CSS statis: sembunyi di layar, tampil sebagai watermark samar di tengah kertas saat dicetak
   useEffect(() => {
     const el = document.createElement("style");
     el.setAttribute("data-lisensi-cetak", "");
@@ -125,26 +127,47 @@ export default function LisensiCetak({
       .${KELAS_FOOTER} { display: none; }
       @media print {
         .${KELAS_FOOTER} {
-          display: block !important;
+          display: flex !important;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
           visibility: visible !important;
           position: fixed !important;
-          left: 0 !important;
-          right: 0 !important;
-          bottom: 4mm !important;
+          top: 50% !important;
+          left: 50% !important;
+          width: 150mm !important;
+          transform: translate(-50%, -50%) rotate(-30deg) !important;
           margin: 0 !important;
-          padding: 0 8mm !important;
+          padding: 0 !important;
           text-align: center;
           font-family: Georgia, "Times New Roman", serif;
-          font-size: 4pt;
-          line-height: 1.2;
           color: #000 !important;
-          opacity: 0.45 !important;
+          opacity: 0.12 !important;
+          mix-blend-mode: multiply;
           pointer-events: none;
           z-index: 2147483647;
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
         }
         .${KELAS_FOOTER} * { visibility: visible !important; }
+        .${KELAS_FOOTER} .lc-judul {
+          font-size: 20pt;
+          font-weight: 700;
+          letter-spacing: 1px;
+          line-height: 1.2;
+        }
+        .${KELAS_FOOTER} .lc-baris {
+          font-size: 8pt;
+          line-height: 1.4;
+          margin-top: 2mm;
+        }
+        .${KELAS_FOOTER} .lc-kode {
+          font-size: 7pt;
+          line-height: 1.4;
+          margin-top: 1mm;
+          letter-spacing: 0.5px;
+          word-break: break-all;
+        }
       }
     `;
     document.head.appendChild(el);
@@ -173,7 +196,7 @@ export default function LisensiCetak({
     return () => window.removeEventListener("online", saatOnline);
   }, [userId]);
 
-  // Sisipkan / lepas lisensi di akhir dokumen, catat dokumen, siapkan kode baru
+  // Sisipkan / lepas watermark, catat dokumen, siapkan kode baru
   useEffect(() => {
     const lepasFooter = () => {
       document.querySelectorAll(`.${KELAS_FOOTER}`).forEach((n) => n.remove());
@@ -183,22 +206,31 @@ export default function LisensiCetak({
       lepasFooter();
       const t = terkini.current;
 
-      const baris1 =
-        t.produk +
-        (t.pemilik ? ` — hak cipta ${t.pemilik}` : "") +
-        (t.situs ? ` · ${t.situs}` : "") +
-        (t.lisensi ? ` · ${t.lisensi}` : "");
-      const baris2 = t.punyaLink
+      const judul = t.produk;
+      const bagian = [
+        t.pemilik ? `Hak cipta ${t.pemilik}` : "",
+        t.situs || "",
+        t.lisensi || "",
+      ].filter(Boolean);
+      const baris = bagian.join(" · ");
+      const barisKode = t.punyaLink
         ? `Verifikasi: ${t.link} · Kode ${kelompok(t.kode)} · ${waktuRef.current}`
         : waktuRef.current;
 
       const box = document.createElement("div");
       box.className = KELAS_FOOTER;
-      [baris1, baris2].forEach((teks) => {
-        const p = document.createElement("div");
-        p.textContent = teks;
-        box.appendChild(p);
-      });
+
+      const buat = (kelas, teks) => {
+        if (!teks) return;
+        const d = document.createElement("div");
+        d.className = kelas;
+        d.textContent = teks;
+        box.appendChild(d);
+      };
+      buat("lc-judul", judul);
+      buat("lc-baris", baris);
+      buat("lc-kode", barisKode);
+
       document.body.appendChild(box);
     };
 
