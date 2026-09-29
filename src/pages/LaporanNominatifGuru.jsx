@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Printer, Loader2 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
+import KopSurat from '../components/KopSurat'
 
 // Halaman cetak "DAFTAR NOMINATIF PEGAWAI" — versi KANTOR dari
 // LaporanNominatifGuru.jsx. Bedanya:
