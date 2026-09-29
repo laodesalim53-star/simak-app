@@ -5,21 +5,109 @@ import { Printer, Pencil } from 'lucide-react'
 import Layout from '../components/Layout'
 import KopSurat from '../components/KopSurat'
 
-// Ganti 'logo' di bawah ini kalau nama bucket storage-mu berbeda
-const LOGO_BUCKET = 'profil-kantor'
-
 const NAMA_BULAN = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
 ]
 
-// Kolom tabel `presensi_pegawai_kantor` — disamakan dengan PresensiKantor.jsx
-const KOLOM_RELASI_PEGAWAI = 'pegawai_kantor_id' // FK ke pegawai_kantor.id
-const KOLOM_TANGGAL = 'tanggal'                  // date
-const KOLOM_STATUS = 'status'                    // text: hadir / izin / sakit / alpa
-const KOLOM_KETERANGAN = 'keterangan'            // text, opsional
-const KOLOM_JAM_MASUK = 'jam_masuk'              // time/text, opsional — kolom "Kedatangan"
-const KOLOM_JAM_PULANG = 'jam_pulang'            // time/text, opsional — kolom "Kepulangan"
+// =====================================================================
+// KONFIGURASI PER TENANT
+// Halaman ini dipakai bersama oleh tenant KANTOR (KUA) dan SEKOLAH.
+// Semua yang berbeda antar tenant dikumpulkan di sini. Kalau nama
+// tabel/kolom di database-mu berbeda, cukup ubah di blok ini saja.
+//
+// Setiap `petakanProfil` mengubah baris profil mentah menjadi bentuk
+// seragam: { namaUnit, kecamatan, kabupaten, tempatTtd, kepala,
+// nipKepala, ttdPath, jabatanKepala, barisJabatanPerorangan }
+// =====================================================================
+const KONFIG = {
+  kantor: {
+    judulHalaman: 'Daftar Hadir Pegawai',
+    subjudul: 'Rekap kehadiran pegawai per bulan, otomatis dari data pegawai, siap cetak.',
+    istilahPegawai: 'Pegawai',
+    bucket: 'profil-kantor',
+
+    tabelPegawai: 'pegawai_kantor',
+    selectPegawai: 'id, nama_lengkap, jabatan, nip',
+    urutPegawai: 'nama_lengkap',
+    filterAktif: { kolom: 'status', nilai: 'aktif' },
+
+    tabelPresensi: 'presensi_pegawai_kantor',
+    kolomRelasi: 'pegawai_kantor_id', // FK ke tabelPegawai.id
+
+    // Mode Perorangan: Sabtu ikut dianggap libur (format manual KUA)
+    sabtuLibur: true,
+
+    profil: {
+      tabel: 'profil_kantor',
+      select:
+        'nama_kantor, alamat, kabupaten, kecamatan, telepon, email, kepala_kua, nip_kepala_kua, tempat_ttd, logo_path, ttd_kepala_kua_path',
+    },
+    petakanProfil: (d) => ({
+      namaUnit: d.nama_kantor || (d.kecamatan ? `KUA Kec. ${d.kecamatan}` : '-'),
+      kecamatan: d.kecamatan,
+      kabupaten: d.kabupaten,
+      tempatTtd: d.tempat_ttd,
+      kepala: d.kepala_kua,
+      nipKepala: d.nip_kepala_kua,
+      ttdPath: d.ttd_kepala_kua_path,
+      jabatanKepala: 'Kepala KUA',
+      barisJabatanPerorangan: [
+        'Kepala Kantor Urusan Agama',
+        `Kecamatan ${d.kecamatan || '..............................'}`,
+      ],
+    }),
+  },
+
+  // ------------------------------------------------------------------
+  // SEKOLAH — nama tabel/kolom di bawah adalah ASUMSI. Cocokkan dengan
+  // skema Supabase-mu (lihat catatan di pesan).
+  // ------------------------------------------------------------------
+  sekolah: {
+    judulHalaman: 'Daftar Hadir Guru & Tenaga Kependidikan',
+    subjudul: 'Rekap kehadiran guru dan tenaga kependidikan per bulan, siap cetak.',
+    istilahPegawai: 'Guru & Tenaga Kependidikan',
+    bucket: 'profil-sekolah',
+
+    tabelPegawai: 'guru',
+    selectPegawai: 'id, nama_lengkap:nama, jabatan, nip', // alias: kolom `nama` -> nama_lengkap
+    urutPegawai: 'nama',
+    filterAktif: null, // contoh kalau ada: { kolom: 'status', nilai: 'aktif' }
+
+    tabelPresensi: 'presensi_guru',
+    kolomRelasi: 'guru_id', // FK ke tabelPegawai.id
+
+    // Sekolah umumnya masuk Senin–Sabtu atau Senin–Jumat; ubah sesuai kebijakan
+    sabtuLibur: false,
+
+    profil: {
+      tabel: 'profil_sekolah',
+      select:
+        'nama_sekolah, alamat, kabupaten, kecamatan, kepala_sekolah, nip_kepala_sekolah, tempat_ttd, ttd_kepala_sekolah_path',
+    },
+    petakanProfil: (d) => ({
+      namaUnit: d.nama_sekolah || '-',
+      kecamatan: d.kecamatan,
+      kabupaten: d.kabupaten,
+      tempatTtd: d.tempat_ttd,
+      kepala: d.kepala_sekolah,
+      nipKepala: d.nip_kepala_sekolah,
+      ttdPath: d.ttd_kepala_sekolah_path,
+      jabatanKepala: 'Kepala Sekolah',
+      barisJabatanPerorangan: [
+        'Kepala Sekolah',
+        d.nama_sekolah || '..............................',
+      ],
+    }),
+  },
+}
+
+// Kolom tabel presensi (sama untuk semua tenant, disamakan dengan PresensiKantor.jsx)
+const KOLOM_TANGGAL = 'tanggal'            // date
+const KOLOM_STATUS = 'status'              // text: hadir / izin / sakit / alpa
+const KOLOM_KETERANGAN = 'keterangan'      // text, opsional
+const KOLOM_JAM_MASUK = 'jam_masuk'        // time/text, opsional — kolom "Kedatangan"
+const KOLOM_JAM_PULANG = 'jam_pulang'      // time/text, opsional — kolom "Kepulangan"
 
 // Tabel hari libur — DIASUMSIKAN nama tabelnya `hari_libur` dengan kolom
 // `tanggal` (date), sama seperti yang dipakai menu "Hari Libur" di sidebar.
@@ -67,8 +155,13 @@ function formatJam(nilai) {
 }
 
 export default function DaftarHadirPegawai() {
-  const { profil, sekolahId } = useAuth()
-  const [profilKantor, setProfilKantor] = useState(null)
+  const { profil, sekolahId, isKantor } = useAuth()
+
+  // Pilih konfigurasi sesuai jenis tenant (kantor / sekolah)
+  const jenis = isKantor ? 'kantor' : 'sekolah'
+  const K = KONFIG[jenis]
+
+  const [profilMentah, setProfilMentah] = useState(null)
   const [pegawaiList, setPegawaiList] = useState([])
   const [presensiMap, setPresensiMap] = useState({})
   const [tanggalLibur, setTanggalLibur] = useState(new Set()) // angka tanggal (1-31) yang libur bulan ini
@@ -103,34 +196,38 @@ export default function DaftarHadirPegawai() {
     return hariKe(hari) === 0
   }
 
-  // Dipakai mode Kolektif (tetap seperti sebelumnya: Minggu + hari libur)
+  // Dipakai mode Kolektif: Minggu + hari libur
   function apakahLibur(hari) {
     return apakahMinggu(hari) || tanggalLibur.has(hari)
   }
 
-  // Dipakai mode Perorangan (Sabtu ikut dianggap libur, sesuai format manual)
+  // Dipakai mode Perorangan (Sabtu ikut libur hanya jika K.sabtuLibur = true)
   function labelLibur(hari) {
     const h = hariKe(hari)
     if (h === 0) return 'AHAD'
-    if (h === 6) return 'SABTU'
+    if (h === 6 && K.sabtuLibur) return 'SABTU'
     if (tanggalLibur.has(hari)) return 'LIBUR'
     return null
   }
 
-  // Query profil_kantor kini di-scope per kantor lewat sekolah_id (bukan
-  // lagi id=1 yang hardcode), sama seperti ProfilKantor.jsx.
+  // Profil unit (kantor/sekolah), di-scope per tenant lewat sekolah_id
   useEffect(() => {
     if (!sekolahId) {
-      setProfilKantor(null)
+      setProfilMentah(null)
       return
     }
     supabase
-      .from('profil_kantor')
-      .select('nama_kantor, alamat, kabupaten, kecamatan, telepon, email, kepala_kua, nip_kepala_kua, tempat_ttd, logo_path, ttd_kepala_kua_path')
+      .from(K.profil.tabel)
+      .select(K.profil.select)
       .eq('sekolah_id', sekolahId)
       .maybeSingle()
-      .then(({ data }) => setProfilKantor(data))
-  }, [sekolahId])
+      .then(({ data, error }) => {
+        if (error) {
+          console.error(`Gagal memuat ${K.profil.tabel} — cek nama tabel/kolom di KONFIG.${jenis}.profil:`, error)
+        }
+        setProfilMentah(data || null)
+      })
+  }, [sekolahId, jenis]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     async function muatData() {
@@ -141,13 +238,17 @@ export default function DaftarHadirPegawai() {
         return
       }
       setLoading(true)
+      setPegawaiTerpilihId('')
 
-      const { data: pegawai } = await supabase
-        .from('pegawai_kantor')
-        .select('id, nama_lengkap, jabatan, nip')
+      let kueriPegawai = supabase
+        .from(K.tabelPegawai)
+        .select(K.selectPegawai)
         .eq('sekolah_id', sekolahId)
-        .eq('status', 'aktif')
-        .order('nama_lengkap', { ascending: true })
+      if (K.filterAktif) kueriPegawai = kueriPegawai.eq(K.filterAktif.kolom, K.filterAktif.nilai)
+      const { data: pegawai, error: errorPegawai } = await kueriPegawai.order(K.urutPegawai, { ascending: true })
+      if (errorPegawai) {
+        console.error(`Gagal memuat ${K.tabelPegawai} — cek KONFIG.${jenis}:`, errorPegawai)
+      }
 
       const daftarPegawai = pegawai || []
       setPegawaiList(daftarPegawai)
@@ -160,13 +261,13 @@ export default function DaftarHadirPegawai() {
       // tetap jalan (kolom yang hilang cuma tampil kosong).
       const ambilPresensi = (kolom) =>
         supabase
-          .from('presensi_pegawai_kantor')
+          .from(K.tabelPresensi)
           .select(kolom)
           .eq('sekolah_id', sekolahId)
           .gte(KOLOM_TANGGAL, tanggalAwal)
           .lte(KOLOM_TANGGAL, tanggalAkhir)
 
-      const kolomDasar = `${KOLOM_RELASI_PEGAWAI}, ${KOLOM_TANGGAL}, ${KOLOM_STATUS}`
+      const kolomDasar = `${K.kolomRelasi}, ${KOLOM_TANGGAL}, ${KOLOM_STATUS}`
       let { data: presensi, error } = await ambilPresensi(
         `${kolomDasar}, ${KOLOM_KETERANGAN}, ${KOLOM_JAM_MASUK}, ${KOLOM_JAM_PULANG}`
       )
@@ -180,7 +281,7 @@ export default function DaftarHadirPegawai() {
           const dasar = await ambilPresensi(kolomDasar)
           presensi = dasar.data
           if (dasar.error) {
-            console.error('Gagal memuat presensi — cek nama kolom di presensi_pegawai_kantor:', dasar.error)
+            console.error(`Gagal memuat presensi — cek nama kolom di ${K.tabelPresensi}:`, dasar.error)
           }
         }
       }
@@ -188,7 +289,7 @@ export default function DaftarHadirPegawai() {
       // Susun jadi map: { [pegawai_id]: { [tanggal]: { ... } } }
       const map = {}
       for (const baris of presensi || []) {
-        const idPegawai = baris[KOLOM_RELASI_PEGAWAI]
+        const idPegawai = baris[K.kolomRelasi]
         const tgl = new Date(baris[KOLOM_TANGGAL]).getDate()
         const statusMentah = String(baris[KOLOM_STATUS] || '').toLowerCase()
         const singkatan = SINGKATAN_STATUS[statusMentah] || statusMentah.charAt(0).toUpperCase() || '-'
@@ -230,7 +331,7 @@ export default function DaftarHadirPegawai() {
 
     muatData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bulan, tahun, jumlahHari, sekolahId])
+  }, [bulan, tahun, jumlahHari, sekolahId, jenis])
 
   useEffect(() => {
     if (!pegawaiTerpilihId && pegawaiList.length > 0) {
@@ -238,18 +339,21 @@ export default function DaftarHadirPegawai() {
     }
   }, [pegawaiList, pegawaiTerpilihId])
 
-  const ttdKepalaKuaUrl = profilKantor?.ttd_kepala_kua_path
-    ? supabase.storage.from(LOGO_BUCKET).getPublicUrl(profilKantor.ttd_kepala_kua_path).data.publicUrl
+  // Profil yang sudah diseragamkan (sama bentuknya untuk kantor & sekolah)
+  const P = useMemo(() => (profilMentah ? K.petakanProfil(profilMentah) : null), [profilMentah, K])
+
+  const ttdKepalaUrl = P?.ttdPath
+    ? supabase.storage.from(K.bucket).getPublicUrl(P.ttdPath).data.publicUrl
     : null
 
-  const tempatTtd = profilKantor?.tempat_ttd || profilKantor?.kabupaten || ''
+  const jabatanKepala = P?.jabatanKepala || K.petakanProfil({}).jabatanKepala
+  const tempatTtd = P?.tempatTtd || P?.kabupaten || ''
   const tanggalCetak = formatTanggalIndonesia(new Date())
   // Daftar hadir manual ditandatangani per akhir bulan berjalan
   const tanggalAkhirBulan = formatTanggalIndonesia(new Date(tahun, bulan - 1, jumlahHari))
 
-  const unitKerja =
-    profilKantor?.nama_kantor ||
-    (profilKantor?.kecamatan ? `KUA Kec. ${profilKantor.kecamatan}` : '-')
+  const unitKerja = P?.namaUnit || '-'
+  const barisJabatanPerorangan = P?.barisJabatanPerorangan || K.petakanProfil({}).barisJabatanPerorangan
 
   function hitungRekap(idPegawai) {
     const dataBulan = presensiMap[idPegawai] || {}
@@ -310,9 +414,9 @@ export default function DaftarHadirPegawai() {
       // supaya kita tahu harus update atau insert (tanpa bergantung pada
       // constraint unique yang mungkin belum ada di tabel).
       const { data: existing, error: errorCek } = await supabase
-        .from('presensi_pegawai_kantor')
+        .from(K.tabelPresensi)
         .select('id')
-        .eq(KOLOM_RELASI_PEGAWAI, pegawaiId)
+        .eq(K.kolomRelasi, pegawaiId)
         .eq(KOLOM_TANGGAL, tanggalStr)
         .maybeSingle()
 
@@ -328,14 +432,14 @@ export default function DaftarHadirPegawai() {
       let error
       if (existing) {
         ;({ error } = await supabase
-          .from('presensi_pegawai_kantor')
+          .from(K.tabelPresensi)
           .update(payload)
           .eq('id', existing.id))
       } else {
         ;({ error } = await supabase
-          .from('presensi_pegawai_kantor')
+          .from(K.tabelPresensi)
           .insert({
-            [KOLOM_RELASI_PEGAWAI]: pegawaiId,
+            [K.kolomRelasi]: pegawaiId,
             [KOLOM_TANGGAL]: tanggalStr,
             sekolah_id: sekolahId,
             ...payload,
@@ -370,9 +474,9 @@ export default function DaftarHadirPegawai() {
       const tanggalStr = `${tahun}-${String(bulan).padStart(2, '0')}-${String(hari).padStart(2, '0')}`
 
       const { error } = await supabase
-        .from('presensi_pegawai_kantor')
+        .from(K.tabelPresensi)
         .delete()
-        .eq(KOLOM_RELASI_PEGAWAI, pegawaiId)
+        .eq(K.kolomRelasi, pegawaiId)
         .eq(KOLOM_TANGGAL, tanggalStr)
 
       if (error) throw error
@@ -392,10 +496,7 @@ export default function DaftarHadirPegawai() {
     : null
 
   return (
-    <Layout
-      title="Daftar Hadir Pegawai"
-      subtitle="Rekap kehadiran pegawai per bulan, otomatis dari data pegawai, siap cetak."
-    >
+    <Layout title={K.judulHalaman} subtitle={K.subjudul}>
       <div className="no-print flex flex-wrap items-center justify-between gap-3 mb-5">
         <div className="flex flex-wrap items-center gap-2">
           <select
@@ -471,7 +572,7 @@ export default function DaftarHadirPegawai() {
 
           <div className="text-center mb-5">
             <h1 className="font-display text-base font-bold uppercase text-slate-900 underline">
-              Rekapitulasi Daftar Hadir Pegawai
+              Rekapitulasi Daftar Hadir {K.istilahPegawai}
             </h1>
             <p className="text-sm text-slate-700 mt-0.5">
               Bulan {NAMA_BULAN[bulan - 1]} {tahun}
@@ -538,17 +639,17 @@ export default function DaftarHadirPegawai() {
           <div className="ttd-block flex justify-between mt-10 text-sm text-slate-700">
             <div className="text-center w-48">
               <p>Mengetahui,</p>
-              <p>Kepala KUA</p>
+              <p>{jabatanKepala}</p>
               <div className="h-20 flex items-end justify-center">
-                {ttdKepalaKuaUrl && (
-                  <img src={ttdKepalaKuaUrl} alt="Tanda Tangan Kepala KUA" className="max-h-20 object-contain" />
+                {ttdKepalaUrl && (
+                  <img src={ttdKepalaUrl} alt={`Tanda Tangan ${jabatanKepala}`} className="max-h-20 object-contain" />
                 )}
               </div>
               <p className="font-semibold border-t border-slate-400 pt-1">
-                ({profilKantor?.kepala_kua || '..............................'})
+                ({P?.kepala || '..............................'})
               </p>
               <p className="text-xs text-slate-500">
-                NIP. {profilKantor?.nip_kepala_kua || '..............................'}
+                NIP. {P?.nipKepala || '..............................'}
               </p>
             </div>
             <div className="text-center w-48">
@@ -675,22 +776,23 @@ export default function DaftarHadirPegawai() {
                 </tbody>
               </table>
 
-              {/* Tanda tangan Kepala KUA di sisi kanan, seperti contoh manual */}
+              {/* Tanda tangan pimpinan di sisi kanan, seperti contoh manual */}
               <div className="ttd-block flex justify-end mt-4 text-[11px] text-slate-800">
                 <div className="w-64 text-left">
                   <p>{tempatTtd ? `${tempatTtd}, ${tanggalAkhirBulan}` : tanggalAkhirBulan}</p>
-                  <p>Kepala Kantor Urusan Agama</p>
-                  <p>Kecamatan {profilKantor?.kecamatan || '..............................'}</p>
+                  {barisJabatanPerorangan.map((baris, i) => (
+                    <p key={i}>{baris}</p>
+                  ))}
                   <div className="h-14 flex items-end">
-                    {ttdKepalaKuaUrl && (
-                      <img src={ttdKepalaKuaUrl} alt="Tanda Tangan Kepala KUA" className="max-h-14 object-contain" />
+                    {ttdKepalaUrl && (
+                      <img src={ttdKepalaUrl} alt={`Tanda Tangan ${jabatanKepala}`} className="max-h-14 object-contain" />
                     )}
                   </div>
                   <p className="font-semibold">
-                    {profilKantor?.kepala_kua || '..............................'}
+                    {P?.kepala || '..............................'}
                   </p>
                   <p className="text-[10px] text-slate-600">
-                    NIP. {profilKantor?.nip_kepala_kua || '..............................'}
+                    NIP. {P?.nipKepala || '..............................'}
                   </p>
                 </div>
               </div>
