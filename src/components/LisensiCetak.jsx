@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useAuth } from "../lib/AuthContext";
 import { supabase } from "../lib/supabaseClient";
 
@@ -234,9 +235,16 @@ export default function LisensiCetak({
         @media print {
           @page { margin-bottom: 24mm; }
 
+          .jejak-lisensi,
+          .jejak-lisensi * {
+            visibility: visible !important;
+          }
           .jejak-lisensi {
-            display: block;
-            position: fixed;
+            display: block !important;
+            opacity: 1 !important;
+            transform: none !important;
+            z-index: 2147483647;
+            position: fixed !important;
             left: 0; right: 0; bottom: 0;
             padding: 2mm 6mm 3mm;
             border-top: 0.4pt solid #9a9a9a;
@@ -277,7 +285,8 @@ export default function LisensiCetak({
         }
       `}</style>
 
-      <footer className="jejak-lisensi" aria-hidden="true">
+      {createPortal(
+      <div className="jejak-lisensi" aria-hidden="true">
         <div className="jejak-baris">
           <div className="jejak-teks">
             <p>
@@ -296,7 +305,9 @@ export default function LisensiCetak({
           </div>
           {punyaLink && qr && <img className="jejak-qr" src={qr} alt="" />}
         </div>
-      </footer>
+      </div>,
+      document.body
+      )}
     </>
   );
 }
