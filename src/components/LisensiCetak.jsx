@@ -90,7 +90,23 @@ export default function LisensiCetak({
 }) {
   const { profil } = useAuth();
   const sekolahId = profil?.sekolah_id;
-  const userId = profil?.id;
+
+  // ID akun diambil langsung dari sesi Supabase (sama dengan auth.uid() yang dicek RLS),
+  // tidak bergantung pada bentuk objek `profil` di AuthContext.
+  const [userId, setUserId] = useState(null);
+  useEffect(() => {
+    let aktif = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (aktif) setUserId(data?.session?.user?.id ?? null);
+    });
+    const { data: langganan } = supabase.auth.onAuthStateChange((_e, sesi) => {
+      if (aktif) setUserId(sesi?.user?.id ?? null);
+    });
+    return () => {
+      aktif = false;
+      langganan?.subscription?.unsubscribe?.();
+    };
+  }, []);
 
   const [namaSekolah, setNamaSekolah] = useState(null);
   const [kode, setKode] = useState(buatKodeDokumen);
@@ -152,7 +168,11 @@ export default function LisensiCetak({
   useEffect(() => {
     const catat = () => {
       const t = terkini.current;
-      if (dicatat.current || !t.userId) return;
+      if (dicatat.current) return;
+      if (!t.userId) {
+        console.warn("[LisensiCetak] Tidak ada sesi login, dokumen tidak dicatat dan link tidak dicetak.");
+        return;
+      }
       dicatat.current = true;
 
       // waktu cetak ditulis langsung ke DOM agar sudah benar sebelum pratinjau dibuat
