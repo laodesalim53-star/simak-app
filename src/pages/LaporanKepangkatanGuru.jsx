@@ -3,11 +3,17 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Printer, Loader2 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
+import KopSurat from '../components/KopSurat'
 
 // Halaman cetak "DATA KEPANGKATAN GURU/PEGAWAI" — kolektif semua guru di
 // satu sekolah sekaligus. Mengikuti pola LaporanBiodataGuru.jsx (kop surat,
 // toolbar no-print, panel input Semester/Tahun Pelajaran, lembar-cetak
 // print-only A4 landscape, blok tanda tangan).
+//
+// KOP SURAT: sekarang memakai komponen bersama <KopSurat /> (src/components/
+// KopSurat.jsx), bukan lagi kop yang ditulis manual di file ini. Logo dan
+// data instansi diambil sendiri oleh KopSurat, jadi state logoUrl dan
+// pengambilan logo di sini sudah dihapus.
 //
 // Urutan baris tabel:
 // 1. Kepala Sekolah SELALU paling atas, terlepas dari golongannya.
@@ -30,7 +36,6 @@ export default function LaporanKepangkatanGuru() {
   const navigate = useNavigate()
   const { sekolahId: sekolahIdSaya } = useAuth()
   const [profilSekolah, setProfilSekolah] = useState(null)
-  const [logoUrl, setLogoUrl] = useState('')
   const [daftarGuru, setDaftarGuru] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -98,14 +103,6 @@ export default function LaporanKepangkatanGuru() {
       ])
 
       setProfilSekolah(sekolah || null)
-
-      if (sekolah?.logo_path) {
-        const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(sekolah.logo_path)
-        setLogoUrl(pub?.publicUrl || '')
-      } else {
-        setLogoUrl('')
-      }
-
       setDaftarGuru(urutkanGuru(guru || []))
       setLoading(false)
     }
@@ -182,31 +179,7 @@ export default function LaporanKepangkatanGuru() {
       </div>
 
       <div className="lembar-cetak print-only bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '297mm', minHeight: '210mm' }}>
-        <div className="flex items-center gap-4 border-b-4 border-black pb-3 mb-4">
-          {logoUrl && (
-            <img src={logoUrl} alt="Logo" className="w-16 h-16 object-contain shrink-0" />
-          )}
-          <div className="text-center flex-1">
-            <p className="text-sm font-medium uppercase">
-              Pemerintah Kabupaten {formatKabupaten(profilSekolah?.kabupaten)}
-            </p>
-            <p className="text-sm font-medium uppercase">
-              {profilSekolah?.dinas_pendidikan || 'Dinas Pendidikan'}
-            </p>
-            <p className="text-lg font-bold uppercase">{profilSekolah?.nama_sekolah || 'Nama Sekolah'}</p>
-            <p className="text-xs">
-              {[profilSekolah?.alamat, profilSekolah?.kecamatan, profilSekolah?.kabupaten, profilSekolah?.provinsi]
-                .filter(Boolean)
-                .join(', ')}
-              {profilSekolah?.kode_pos ? ` ${profilSekolah.kode_pos}` : ''}
-            </p>
-            {(profilSekolah?.telepon || profilSekolah?.email || profilSekolah?.website) && (
-              <p className="text-xs">
-                {[profilSekolah?.telepon, profilSekolah?.email, profilSekolah?.website].filter(Boolean).join(' | ')}
-              </p>
-            )}
-          </div>
-        </div>
+        <KopSurat />
 
         <h1 className="text-center font-bold text-base uppercase underline mb-1">
           Data Kepangkatan Guru/Pegawai
