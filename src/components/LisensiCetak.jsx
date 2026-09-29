@@ -138,7 +138,7 @@ export default function LisensiCetak({
           font-size: 4pt;
           line-height: 1.2;
           color: #000 !important;
-          opacity: 0.3 !important;
+          opacity: 0.45 !important;
           pointer-events: none;
           z-index: 2147483647;
           -webkit-print-color-adjust: exact;
