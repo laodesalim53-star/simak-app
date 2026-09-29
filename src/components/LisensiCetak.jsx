@@ -118,33 +118,34 @@ export default function LisensiCetak({
   const styleRef = useRef(null);
 
   // Tulis ulang CSS footer cetak (teks footer ada di dalam CSS @page)
+  // Footer SATU BARIS + margin bawah tipis agar tidak mendorong isi (tanda tangan) ke halaman 2.
   const tulisCss = () => {
     const el = styleRef.current;
     if (!el) return;
     const t = terkini.current;
-    const baris1 =
-      t.produk +
-      (t.pemilik ? ` — hak cipta ${t.pemilik}` : "") +
-      (t.situs ? ` · ${t.situs}` : "") +
-      (t.lisensi ? ` · ${t.lisensi}` : "");
-    const baris2 = t.punyaLink
-      ? `Verifikasi: ${t.link} · Kode ${kelompok(t.kode)} · ${waktuRef.current}`
-      : waktuRef.current;
+    const bagian = [
+      t.produk + (t.pemilik ? ` — hak cipta ${t.pemilik}` : ""),
+      t.situs,
+      t.lisensi,
+      t.punyaLink ? `Verifikasi: ${t.link} · Kode ${kelompok(t.kode)}` : "",
+      waktuRef.current,
+    ].filter(Boolean);
+    const satuBaris = bagian.join(" · ");
 
     el.textContent = `
       @media print {
         @page {
-          margin-bottom: 10mm;
+          margin-bottom: 5mm;
           @bottom-center {
-            content: "${cssStr(baris1)}\\A ${cssStr(baris2)}";
-            white-space: pre-line;
+            content: "${cssStr(satuBaris)}";
+            white-space: nowrap;
             width: 100%;
             vertical-align: bottom;
             text-align: center;
-            padding-bottom: 1.5mm;
+            padding-bottom: 0.8mm;
             font-family: Georgia, "Times New Roman", serif;
-            font-size: 4.5pt;
-            line-height: 1.25;
+            font-size: 4pt;
+            line-height: 1.1;
             color: #666;
           }
         }
