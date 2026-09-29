@@ -41,6 +41,7 @@ const KONFIG = {
 
     // Mode Perorangan: Sabtu ikut dianggap libur (format manual KUA)
     sabtuLibur: true,
+    tandaTanganTunggal: false, // kantor: Mengetahui (kiri) + Dibuat oleh (kanan)
 
     profil: {
       tabel: 'profil_kantor',
@@ -93,6 +94,8 @@ const KONFIG = {
 
     // Sekolah umumnya masuk Senin–Sabtu atau Senin–Jumat; ubah sesuai kebijakan
     sabtuLibur: false,
+    // Sekolah: satu tanda tangan saja (Kepala Sekolah, dengan QR), di sisi kanan
+    tandaTanganTunggal: true,
 
     profil: {
       tabel: 'profil_sekolah',
@@ -674,34 +677,55 @@ export default function DaftarHadirPegawai() {
             <span className="text-red-600"> Angka tanggal merah</span> = hari Minggu/libur.
           </p>
 
-          <div className="ttd-block flex justify-between mt-10 text-sm text-slate-700">
-            <div className="text-center w-48">
-              <p>Mengetahui,</p>
-              <p>{jabatanKepala}</p>
-              <div className="h-20 flex items-end justify-center">
-                {ttdKepalaUrl && (
-                  <img src={ttdKepalaUrl} alt={`Tanda Tangan ${jabatanKepala}`} className="max-h-20 object-contain" />
-                )}
+          {K.tandaTanganTunggal ? (
+            // Sekolah: satu blok tanda tangan Kepala Sekolah di sisi kanan
+            <div className="ttd-block flex justify-end mt-10 text-sm text-slate-700">
+              <div className="text-center w-56">
+                <p>{tempatTtd ? `${tempatTtd}, ${tanggalCetak}` : '\u00A0'}</p>
+                <p>{jabatanKepala}</p>
+                <div className="h-20 flex items-end justify-center">
+                  {ttdKepalaUrl && (
+                    <img src={ttdKepalaUrl} alt={`Tanda Tangan ${jabatanKepala}`} className="max-h-20 object-contain" />
+                  )}
+                </div>
+                <p className="font-semibold border-t border-slate-400 pt-1">
+                  ({P?.kepala || '..............................'})
+                </p>
+                <p className="text-xs text-slate-500">
+                  NIP. {P?.nipKepala || '..............................'}
+                </p>
               </div>
-              <p className="font-semibold border-t border-slate-400 pt-1">
-                ({P?.kepala || '..............................'})
-              </p>
-              <p className="text-xs text-slate-500">
-                NIP. {P?.nipKepala || '..............................'}
-              </p>
             </div>
-            <div className="text-center w-48">
-              <p>{tempatTtd ? `${tempatTtd}, ${tanggalCetak}` : '\u00A0'}</p>
-              <p>Dibuat oleh</p>
-              <div className="h-20" />
-              <p className="font-semibold border-t border-slate-400 pt-1">
-                ({profil?.nama_lengkap || '..............................'})
-              </p>
-              <p className="text-xs text-slate-500">
-                NIP. {profil?.nip || '..............................'}
-              </p>
+          ) : (
+          <div className="ttd-block flex justify-between mt-10 text-sm text-slate-700">
+              <div className="text-center w-48">
+                <p>Mengetahui,</p>
+                <p>{jabatanKepala}</p>
+                <div className="h-20 flex items-end justify-center">
+                  {ttdKepalaUrl && (
+                    <img src={ttdKepalaUrl} alt={`Tanda Tangan ${jabatanKepala}`} className="max-h-20 object-contain" />
+                  )}
+                </div>
+                <p className="font-semibold border-t border-slate-400 pt-1">
+                  ({P?.kepala || '..............................'})
+                </p>
+                <p className="text-xs text-slate-500">
+                  NIP. {P?.nipKepala || '..............................'}
+                </p>
+              </div>
+              <div className="text-center w-48">
+                <p>{tempatTtd ? `${tempatTtd}, ${tanggalCetak}` : '\u00A0'}</p>
+                <p>Dibuat oleh</p>
+                <div className="h-20" />
+                <p className="font-semibold border-t border-slate-400 pt-1">
+                  ({profil?.nama_lengkap || '..............................'})
+                </p>
+                <p className="text-xs text-slate-500">
+                  NIP. {profil?.nip || '..............................'}
+                </p>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       ) : (
         // === MODE PERORANGAN: format Daftar Hadir Manual (A4 potret) ===
