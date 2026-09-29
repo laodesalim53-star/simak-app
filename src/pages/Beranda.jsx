@@ -36,6 +36,10 @@ const TanyaAI = lazy(() => import('../components/TanyaAI'))
 // menyebut "Sekolah, KUA & Puskesmas" secara eksplisit, dan modul yang
 // sifatnya khusus satu jenis instansi diberi badge "Khusus ..." supaya
 // pengguna dari jenis instansi lain tidak salah ekspektasi.
+//
+// SUSUNAN HERO (atas ke bawah): tombol aksi (Daftar sekarang, Sudah punya
+// akun? Masuk, Lihat Toko Sekolah, Coba Demo) -> pemilih jenis instansi
+// (Semua / Sekolah / KUA / Puskesmas) -> baris "Instal aplikasi".
 
 const NOMOR_WA_ADMIN = '6282197574897'
 
@@ -491,7 +495,7 @@ function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 
 export default function Beranda() {
   const navigate = useNavigate()
 
-  // Jenis instansi yang sedang dilihat pengunjung: Semua / Sekolah / KUA.
+  // Jenis instansi yang sedang dilihat pengunjung: Semua / Sekolah / KUA / Puskesmas.
   // Disimpan di URL (?untuk=kua) supaya bisa dibagikan — mis. link khusus
   // untuk KUA: https://situs-anda/?untuk=kua
   const [searchParams, setSearchParams] = useSearchParams()
@@ -860,23 +864,14 @@ export default function Beranda() {
                   akademik dan administrasi siswa, penyuluhan dan kepenghuluan, hingga pelayanan
                   kesehatan, keuangan, komunikasi, dan laporan pimpinan.
                 </p>
+
+                {/* 1) Tombol aksi utama: Daftar sekarang, Masuk, Lihat Toko
+                    Sekolah, lalu Coba Demo. */}
                 <div className="header-actions">
                   <Link to={linkDaftar} className="btn-primary">
                     Daftar sekarang
                     <ArrowRight size={16} strokeWidth={2.5} />
                   </Link>
-                  {/* Tombol Coba Demo: login langsung dari Beranda (bukan
-                      lewat /login) lewat Edge Function "demo-login" — lihat
-                      penjelasan di fungsi cobaDemo() di atas. */}
-                  <button
-                    type="button"
-                    onClick={cobaDemo}
-                    disabled={demoLoading}
-                    className="btn-demo"
-                    aria-busy={demoLoading}
-                  >
-                    {demoLoading ? 'Memuat demo…' : 'Coba Demo'}
-                  </button>
                   <Link to="/login" className="btn-ghost">
                     <LogIn size={15} strokeWidth={2.5} />
                     Sudah punya akun? Masuk
@@ -894,12 +889,43 @@ export default function Beranda() {
                       Lihat Toko Sekolah
                     </Link>
                   )}
+                  {/* Tombol Coba Demo: login langsung dari Beranda (bukan
+                      lewat /login) lewat Edge Function "demo-login" — lihat
+                      penjelasan di fungsi cobaDemo() di atas. */}
+                  <button
+                    type="button"
+                    onClick={cobaDemo}
+                    disabled={demoLoading}
+                    className="btn-demo"
+                    aria-busy={demoLoading}
+                  >
+                    {demoLoading ? 'Memuat demo…' : 'Coba Demo'}
+                  </button>
                 </div>
 
                 {demoError && (
                   <p className="demo-error-msg" role="alert">{demoError}</p>
                 )}
 
+                {/* 2) Pemilih jenis instansi: kelompok tombol dengan status
+                    tekan (aria-pressed), bukan tab — karena tidak ada panel
+                    tab terpisah, hanya isi halaman yang disaring. Dipindah
+                    ke hero supaya pengunjung langsung memilih instansinya. */}
+                <div className="aud-switch aud-switch-hero" role="group" aria-label="Pilih jenis instansi">
+                  {OPSI_UNTUK.map((o) => (
+                    <button
+                      key={o.id}
+                      type="button"
+                      aria-pressed={untuk === o.id}
+                      className={`aud-btn${untuk === o.id ? ' active' : ''}`}
+                      onClick={() => pilihUntuk(o.id)}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* 3) Instal aplikasi */}
                 {!sudahTerpasang && (
                   <div className="install-row">
                     <span className="install-label">Instal aplikasi:</span>
@@ -1057,7 +1083,7 @@ export default function Beranda() {
               <p className="area-showcase-sub">
                 {untuk === 'semua' ? (
                   <>
-                    Pilih jenis instansi Anda untuk melihat modul yang tersedia. Badge{' '}
+                    Pilih jenis instansi Anda di bagian atas untuk melihat modul yang tersedia. Badge{' '}
                     <span className="badge-sekolah-inline">Khusus sekolah</span>,{' '}
                     <span className="badge-kua-inline">Khusus KUA</span>, dan{' '}
                     <span className="badge-puskesmas-inline">Khusus puskesmas</span> menandai modul
@@ -1071,22 +1097,7 @@ export default function Beranda() {
                   </>
                 )}
               </p>
-              {/* Pemilih jenis instansi: kelompok tombol dengan status
-                  tekan (aria-pressed), bukan tab — karena tidak ada panel
-                  tab terpisah, hanya isi halaman yang disaring. */}
-              <div className="aud-switch" role="group" aria-label="Pilih jenis instansi">
-                {OPSI_UNTUK.map((o) => (
-                  <button
-                    key={o.id}
-                    type="button"
-                    aria-pressed={untuk === o.id}
-                    className={`aud-btn${untuk === o.id ? ' active' : ''}`}
-                    onClick={() => pilihUntuk(o.id)}
-                  >
-                    {o.label}
-                  </button>
-                ))}
-              </div>
+              {/* Pemilih jenis instansi sudah dipindah ke hero (bagian atas). */}
             </div>
 
             <div className="tile-strip">
@@ -2755,7 +2766,7 @@ export default function Beranda() {
         }
         .footer-legal a:hover { text-decoration: underline; }
 
-        /* Pemilih jenis instansi (Semua / Sekolah / KUA) */
+        /* Pemilih jenis instansi (Semua / Sekolah / KUA / Puskesmas) */
         .aud-switch {
           display: inline-flex;
           flex-wrap: wrap;
@@ -2781,6 +2792,17 @@ export default function Beranda() {
         }
         .aud-btn:hover { background: #F1F3FA; }
         .aud-btn.active { background: #2D3072; color: #fff; }
+
+        /* Pemilih di hero: latar gelap agar menyatu dengan header */
+        .aud-switch-hero {
+          margin-top: 16px;
+          background: rgba(255,255,255,0.1);
+          border: 1px solid rgba(255,255,255,0.18);
+          box-shadow: none;
+        }
+        .aud-switch-hero .aud-btn { color: #E4E6FA; }
+        .aud-switch-hero .aud-btn:hover { background: rgba(255,255,255,0.12); }
+        .aud-switch-hero .aud-btn.active { background: #F2762B; color: #fff; }
 
         .badge-kua-inline {
           display: inline-block;
