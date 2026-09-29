@@ -213,6 +213,8 @@ function getGroupsAdmin(
         // 8355 (menu-menu terpisah untuk itu semua sudah dihapus dari sini
         // — sekarang jadi kartu di dalam halaman ini, lihat PusatLaporanGuru.jsx).
         { to: '/laporan-guru', label: 'Pusat Laporan Kepegawaian', icon: GraduationCap },
+        // BARU: Daftar Hadir Guru & Tendik (komponen DaftarHadirPegawai.jsx dipakai bersama tenant kantor)
+        { to: '/daftar-hadir-pegawai', label: 'Daftar Hadir Guru & Tendik', icon: ClipboardList },
         { to: '/hari-libur', label: 'Hari Libur', icon: CalendarOff },
         { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
         { to: '/backup', label: 'Backup Data', icon: DatabaseBackup },
