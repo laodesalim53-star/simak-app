@@ -310,9 +310,15 @@ export default function DaftarHadirPegawai() {
         try {
           const { baris } = susunDaftarHadir(daftarPegawai, presensi || [], tahun, bulan)
           const petaJabatan = new Map(baris.map((b) => [String(b.id), b.jabatan]))
-          setPegawaiList(
-            daftarPegawai.map((p) => ({ ...p, jabatan: petaJabatan.get(String(p.id)) || p.jabatan }))
-          )
+          const denganJabatan = daftarPegawai.map((p) => ({
+            ...p,
+            jabatan: petaJabatan.get(String(p.id)) || p.jabatan,
+          }))
+          // Kepala Sekolah (KS) selalu di urutan paling atas; sisanya tetap
+          // urut nama seperti hasil query (sort di JS bersifat stabil).
+          const apakahKepala = (p) => /^(KS|KEPALA)/i.test(String(p.jabatan || '').trim())
+          denganJabatan.sort((a, b) => Number(apakahKepala(b)) - Number(apakahKepala(a)))
+          setPegawaiList(denganJabatan)
         } catch (e) {
           console.warn('susunDaftarHadir gagal — Jabatan memakai nilai bawaan:', e)
         }
