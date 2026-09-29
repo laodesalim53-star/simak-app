@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import { Printer, Pencil } from 'lucide-react'
 import Layout from '../components/Layout'
 import KopSurat from '../components/KopSurat'
+import { susunDaftarHadir } from '../lib/daftarHadirUtils'
 
 const NAMA_BULAN = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -79,8 +80,11 @@ const KONFIG = {
     // Difilter per sekolah; kalau tabel guru ternyata tidak punya kolom
     // sekolah_id, query otomatis diulang tanpa filter (mengandalkan RLS).
     filterSekolahPegawai: true,
-    // Kolom "Jabatan" di tabel diisi mata pelajaran (guru belum tentu punya kolom jabatan)
+    // Sementara (sebelum util jalan) Jabatan diisi mata pelajaran; setelah presensi
+    // dimuat, Jabatan ditimpa hasil susunDaftarHadir (KS / GK) seperti di
+    // LaporanDaftarHadirGuru.jsx — lihat `jabatanDariUtil` di muatData.
     petakanPegawai: (p) => ({ ...p, jabatan: p.mata_pelajaran || 'Guru' }),
+    jabatanDariUtil: true,
 
     tabelPresensi: 'presensi_guru',
     kolomRelasi: 'guru_id', // FK ke guru.id
@@ -296,6 +300,21 @@ export default function DaftarHadirPegawai() {
           if (dasar.error) {
             console.error(`Gagal memuat presensi — cek nama kolom di ${K.tabelPresensi}:`, dasar.error)
           }
+        }
+      }
+
+      // Jabatan mengikuti pola Daftar Hadir Guru (singkatan KS / GK):
+      // ambil langsung dari susunDaftarHadir, fungsi yang sama dipakai
+      // LaporanDaftarHadirGuru.jsx, supaya aturannya tidak dobel.
+      if (K.jabatanDariUtil && daftarPegawai.length > 0) {
+        try {
+          const { baris } = susunDaftarHadir(daftarPegawai, presensi || [], tahun, bulan)
+          const petaJabatan = new Map(baris.map((b) => [String(b.id), b.jabatan]))
+          setPegawaiList(
+            daftarPegawai.map((p) => ({ ...p, jabatan: petaJabatan.get(String(p.id)) || p.jabatan }))
+          )
+        } catch (e) {
+          console.warn('susunDaftarHadir gagal — Jabatan memakai nilai bawaan:', e)
         }
       }
 
