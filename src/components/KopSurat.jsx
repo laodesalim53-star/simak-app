@@ -44,7 +44,7 @@ export default function KopSurat() {
     } else if (jenis === 'kantor') {
       supabase
         .from('profil_kantor')
-        .select('nama_kementerian, nama_kantor_kabupaten, nama_kantor, alamat, kode_pos, kecamatan, kabupaten, telepon, email, logo_path')
+        .select('nama_kementerian, nama_kantor_kabupaten, nama_kantor, alamat, kecamatan, kabupaten, telepon, email, logo_path')
         .eq('sekolah_id', sekolahId)
         .maybeSingle()
         .then(({ data }) => setProfilKantor(data))
