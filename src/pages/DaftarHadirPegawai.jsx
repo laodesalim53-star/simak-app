@@ -31,9 +31,12 @@ const KONFIG = {
     selectPegawai: 'id, nama_lengkap, jabatan, nip',
     urutPegawai: 'nama_lengkap',
     filterAktif: { kolom: 'status', nilai: 'aktif' },
+    filterSekolahPegawai: true,
+    petakanPegawai: (p) => p,
 
     tabelPresensi: 'presensi_pegawai_kantor',
     kolomRelasi: 'pegawai_kantor_id', // FK ke tabelPegawai.id
+    filterSekolahPresensi: true,
 
     // Mode Perorangan: Sabtu ikut dianggap libur (format manual KUA)
     sabtuLibur: true,
@@ -60,8 +63,8 @@ const KONFIG = {
   },
 
   // ------------------------------------------------------------------
-  // SEKOLAH — nama tabel/kolom di bawah adalah ASUMSI. Cocokkan dengan
-  // skema Supabase-mu (lihat catatan di pesan).
+  // SEKOLAH — tabel/kolom dicocokkan dengan LaporanDaftarHadirGuru.jsx
+  // (guru, presensi_guru, profil_sekolah, bucket profil-sekolah).
   // ------------------------------------------------------------------
   sekolah: {
     judulHalaman: 'Daftar Hadir Guru & Tenaga Kependidikan',
@@ -70,12 +73,19 @@ const KONFIG = {
     bucket: 'profil-sekolah',
 
     tabelPegawai: 'guru',
-    selectPegawai: 'id, nama_lengkap:nama, jabatan, nip', // alias: kolom `nama` -> nama_lengkap
-    urutPegawai: 'nama',
-    filterAktif: null, // contoh kalau ada: { kolom: 'status', nilai: 'aktif' }
+    selectPegawai: 'id, nip, nama_lengkap, mata_pelajaran',
+    urutPegawai: 'nama_lengkap',
+    filterAktif: { kolom: 'status', nilai: 'aktif' },
+    // Difilter per sekolah; kalau tabel guru ternyata tidak punya kolom
+    // sekolah_id, query otomatis diulang tanpa filter (mengandalkan RLS).
+    filterSekolahPegawai: true,
+    // Kolom "Jabatan" di tabel diisi mata pelajaran (guru belum tentu punya kolom jabatan)
+    petakanPegawai: (p) => ({ ...p, jabatan: p.mata_pelajaran || 'Guru' }),
 
     tabelPresensi: 'presensi_guru',
-    kolomRelasi: 'guru_id', // FK ke tabelPegawai.id
+    kolomRelasi: 'guru_id', // FK ke guru.id
+    // Sama seperti LaporanDaftarHadirGuru: presensi dibaca lewat guru_id saja
+    filterSekolahPresensi: false,
 
     // Sekolah umumnya masuk Senin–Sabtu atau Senin–Jumat; ubah sesuai kebijakan
     sabtuLibur: false,
@@ -83,7 +93,7 @@ const KONFIG = {
     profil: {
       tabel: 'profil_sekolah',
       select:
-        'nama_sekolah, alamat, kabupaten, kecamatan, kepala_sekolah, nip_kepala_sekolah, tempat_ttd, ttd_kepala_sekolah_path',
+        'nama_sekolah, dinas_pendidikan, alamat, kabupaten, kecamatan, kepala_sekolah, nip_kepala_sekolah, tempat_ttd, ttd_kepala_sekolah_path',
     },
     petakanProfil: (d) => ({
       namaUnit: d.nama_sekolah || '-',
@@ -240,17 +250,22 @@ export default function DaftarHadirPegawai() {
       setLoading(true)
       setPegawaiTerpilihId('')
 
-      let kueriPegawai = supabase
-        .from(K.tabelPegawai)
-        .select(K.selectPegawai)
-        .eq('sekolah_id', sekolahId)
-      if (K.filterAktif) kueriPegawai = kueriPegawai.eq(K.filterAktif.kolom, K.filterAktif.nilai)
-      const { data: pegawai, error: errorPegawai } = await kueriPegawai.order(K.urutPegawai, { ascending: true })
+      const bangunKueriPegawai = (pakaiFilterSekolah) => {
+        let q = supabase.from(K.tabelPegawai).select(K.selectPegawai)
+        if (pakaiFilterSekolah) q = q.eq('sekolah_id', sekolahId)
+        if (K.filterAktif) q = q.eq(K.filterAktif.kolom, K.filterAktif.nilai)
+        return q.order(K.urutPegawai, { ascending: true })
+      }
+      let { data: pegawai, error: errorPegawai } = await bangunKueriPegawai(K.filterSekolahPegawai)
+      if (errorPegawai && K.filterSekolahPegawai) {
+        console.warn(`Filter sekolah_id di ${K.tabelPegawai} gagal — mengulang tanpa filter:`, errorPegawai.message)
+        ;({ data: pegawai, error: errorPegawai } = await bangunKueriPegawai(false))
+      }
       if (errorPegawai) {
         console.error(`Gagal memuat ${K.tabelPegawai} — cek KONFIG.${jenis}:`, errorPegawai)
       }
 
-      const daftarPegawai = pegawai || []
+      const daftarPegawai = (pegawai || []).map(K.petakanPegawai)
       setPegawaiList(daftarPegawai)
 
       const tanggalAwal = `${tahun}-${String(bulan).padStart(2, '0')}-01`
@@ -259,13 +274,11 @@ export default function DaftarHadirPegawai() {
       // Coba ambil lengkap dengan jam masuk/pulang & keterangan. Kalau salah
       // satu kolom tidak ada di tabel, query diulang bertahap supaya halaman
       // tetap jalan (kolom yang hilang cuma tampil kosong).
-      const ambilPresensi = (kolom) =>
-        supabase
-          .from(K.tabelPresensi)
-          .select(kolom)
-          .eq('sekolah_id', sekolahId)
-          .gte(KOLOM_TANGGAL, tanggalAwal)
-          .lte(KOLOM_TANGGAL, tanggalAkhir)
+      const ambilPresensi = (kolom) => {
+        let q = supabase.from(K.tabelPresensi).select(kolom)
+        if (K.filterSekolahPresensi) q = q.eq('sekolah_id', sekolahId)
+        return q.gte(KOLOM_TANGGAL, tanggalAwal).lte(KOLOM_TANGGAL, tanggalAkhir)
+      }
 
       const kolomDasar = `${K.kolomRelasi}, ${KOLOM_TANGGAL}, ${KOLOM_STATUS}`
       let { data: presensi, error } = await ambilPresensi(
