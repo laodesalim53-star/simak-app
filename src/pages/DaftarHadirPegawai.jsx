@@ -1008,6 +1008,7 @@ export default function DaftarHadirPegawai() {
 
           /* Padatkan mode Kolektif supaya tanda tangan muat 1 lembar */
           .lembar-kolektif {
+            page: kolektif;
             padding: 0 !important;
             border: none !important;
             border-radius: 0 !important;
@@ -1027,6 +1028,12 @@ export default function DaftarHadirPegawai() {
         @page {
           size: A4 landscape;
           margin: 6mm;
+        }
+        /* Named page lebih spesifik dari @page biasa, jadi tidak tertimpa
+           "@page { margin-bottom: 24mm }" milik LisensiCetak. */
+        @page kolektif {
+          size: A4 landscape;
+          margin: 6mm 6mm 12mm 6mm;
         }
         @page perorangan {
           size: A4 portrait;
