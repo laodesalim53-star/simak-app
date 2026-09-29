@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabaseClient";
 /**
  * LisensiCetak — WATERMARK cetak dengan LINK PERMANEN
  * -------------------------------------------------------
- * Lisensi dicetak sebagai watermark SAMAR di tepi bawah setiap lembar kertas.
+ * Lisensi dicetak sebagai watermark SAMAR di tepi bawah setiap lembar kertas (bottom: 10mm agar tidak terpotong margin printer).
  * Elemen fixed disisipkan saat dialog cetak dibuka dan dilepas setelah selesai.
  * Tidak memakai @page / margin box, sehingga:
  *  - tidak mengubah margin atau tata letak dokumen mana pun,
@@ -135,7 +135,7 @@ export default function LisensiCetak({
           position: fixed !important;
           left: 0 !important;
           right: 0 !important;
-          bottom: 3mm !important;
+          bottom: 10mm !important;
           margin: 0 !important;
           padding: 0 8mm !important;
           text-align: center;
@@ -156,12 +156,12 @@ export default function LisensiCetak({
           line-height: 1.2;
         }
         .${KELAS_FOOTER} .lc-baris {
-          font-size: 4.5pt;
+          font-size: 5pt;
           line-height: 1.2;
           margin-top: 0.5mm;
         }
         .${KELAS_FOOTER} .lc-kode {
-          font-size: 4.5pt;
+          font-size: 5pt;
           line-height: 1.2;
           margin-top: 0.3mm;
           word-break: break-all;
