@@ -901,6 +901,14 @@ export default function Beranda() {
                   >
                     {demoLoading ? 'Memuat demo…' : 'Coba Demo'}
                   </button>
+                  {/* Logo instansi mitra (Dinas Pendidikan, KUA, Puskesmas/
+                      Dinas Kesehatan) — hanya logo, tanpa teks. Disematkan
+                      langsung (base64, lihat src/assets/logoMitra.js). */}
+                  <div className="hero-logos">
+                    <img src={LOGO_DINAS_PENDIDIKAN} alt="Dinas Pendidikan" className="mitra-logo" />
+                    <img src={LOGO_KUA} alt="Kantor Urusan Agama (KUA)" className="mitra-logo" />
+                    <img src={LOGO_PUSKESMAS} alt="Puskesmas / Dinas Kesehatan" className="mitra-logo" />
+                  </div>
                 </div>
 
                 {demoError && (
@@ -966,19 +974,6 @@ export default function Beranda() {
                   />
                 </div>
               )}
-            </div>
-          </div>
-
-          {/* Baris logo instansi mitra (Dinas Pendidikan, KUA, Puskesmas/
-              Dinas Kesehatan) — logo disematkan langsung (base64, lihat
-              src/assets/logoMitra.js), jadi selalu tampil tanpa perlu file
-              terpisah di folder public/. */}
-          <div className="mitra-bar">
-            <span className="mitra-label">Dipercaya oleh:</span>
-            <div className="mitra-logos">
-              <img src={LOGO_DINAS_PENDIDIKAN} alt="Dinas Pendidikan" className="mitra-logo" />
-              <img src={LOGO_KUA} alt="Kantor Urusan Agama (KUA)" className="mitra-logo" />
-              <img src={LOGO_PUSKESMAS} alt="Puskesmas / Dinas Kesehatan" className="mitra-logo" />
             </div>
           </div>
 
@@ -2133,42 +2128,25 @@ export default function Beranda() {
           margin: 0;
         }
 
-        /* Baris logo instansi mitra (Dinas Pendidikan, KUA, Puskesmas) */
-        .mitra-bar {
-          margin: 14px 36px 0;
-          display: flex;
+        /* Logo instansi mitra di hero, di samping tombol Coba Demo.
+           Latar putih supaya logo tetap jelas di atas header gelap. */
+        .hero-logos {
+          display: inline-flex;
           align-items: center;
-          gap: 16px;
-          flex-wrap: wrap;
+          gap: 14px;
           background: #fff;
-          border-radius: 14px;
-          padding: 12px 18px;
-          box-shadow: 0 6px 18px rgba(23, 26, 46, 0.06);
-        }
-        .mitra-label {
-          font-size: 12.5px;
-          font-weight: 700;
-          color: #5B6172;
-          white-space: nowrap;
-        }
-        .mitra-logos {
-          display: flex;
-          align-items: center;
-          gap: 22px;
-          flex-wrap: wrap;
+          border-radius: 999px;
+          padding: 6px 16px;
+          min-height: 44px;
         }
         .mitra-logo {
-          height: 34px;
+          height: 30px;
           width: auto;
-          max-width: 110px;
+          max-width: 90px;
           object-fit: contain;
-          filter: grayscale(15%);
-        }
-        @media (max-width: 900px) {
-          .mitra-bar { margin: 12px 20px 0; }
         }
         @media (max-width: 560px) {
-          .mitra-bar { margin: 10px 16px 0; padding: 10px 14px; justify-content: center; }
+          .hero-logos { justify-content: center; width: 100%; }
           .mitra-logo { height: 28px; }
         }
 
