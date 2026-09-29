@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabaseClient";
 /**
  * LisensiCetak — WATERMARK cetak dengan LINK PERMANEN
  * -------------------------------------------------------
- * Lisensi dicetak sebagai watermark SAMAR di poros (tengah) setiap lembar kertas.
+ * Lisensi dicetak sebagai watermark SAMAR di tepi bawah setiap lembar kertas.
  * Elemen fixed disisipkan saat dialog cetak dibuka dan dilepas setelah selesai.
  * Tidak memakai @page / margin box, sehingga:
  *  - tidak mengubah margin atau tata letak dokumen mana pun,
@@ -130,19 +130,18 @@ export default function LisensiCetak({
           display: flex !important;
           flex-direction: column;
           align-items: center;
-          justify-content: center;
+          justify-content: flex-end;
           visibility: visible !important;
           position: fixed !important;
-          top: 50% !important;
-          left: 50% !important;
-          width: 150mm !important;
-          transform: translate(-50%, -50%) rotate(-30deg) !important;
+          left: 0 !important;
+          right: 0 !important;
+          bottom: 3mm !important;
           margin: 0 !important;
-          padding: 0 !important;
+          padding: 0 8mm !important;
           text-align: center;
           font-family: Georgia, "Times New Roman", serif;
           color: #000 !important;
-          opacity: 0.12 !important;
+          opacity: 0.35 !important;
           mix-blend-mode: multiply;
           pointer-events: none;
           z-index: 2147483647;
@@ -151,21 +150,20 @@ export default function LisensiCetak({
         }
         .${KELAS_FOOTER} * { visibility: visible !important; }
         .${KELAS_FOOTER} .lc-judul {
-          font-size: 20pt;
+          font-size: 8pt;
           font-weight: 700;
-          letter-spacing: 1px;
+          letter-spacing: 0.3px;
           line-height: 1.2;
         }
         .${KELAS_FOOTER} .lc-baris {
-          font-size: 8pt;
-          line-height: 1.4;
-          margin-top: 2mm;
+          font-size: 4.5pt;
+          line-height: 1.2;
+          margin-top: 0.5mm;
         }
         .${KELAS_FOOTER} .lc-kode {
-          font-size: 7pt;
-          line-height: 1.4;
-          margin-top: 1mm;
-          letter-spacing: 0.5px;
+          font-size: 4.5pt;
+          line-height: 1.2;
+          margin-top: 0.3mm;
           word-break: break-all;
         }
       }
