@@ -5,12 +5,12 @@ import { supabase } from "../lib/supabaseClient";
 /**
  * LisensiCetak — catatan kaki cetak dengan LINK PERMANEN
  * -------------------------------------------------------
- * Lisensi dicetak SEKALI di akhir dokumen (setelah tanda tangan), sebagai elemen
- * biasa yang disisipkan saat dialog cetak dibuka dan dilepas setelah selesai.
- * Tidak memakai @page / margin box, sehingga:
+ * Lisensi dicetak sebagai teks SAMAR (opacity rendah, 4pt) yang menempel di bawah
+ * setiap lembar. Elemen fixed disisipkan saat dialog cetak dibuka dan dilepas
+ * setelah selesai. Tidak memakai @page / margin box, sehingga:
  *  - tidak mengubah margin atau tata letak dokumen mana pun,
- *  - tidak menimpa isi di halaman 2, 3, dst.,
- *  - tidak mendorong blok tanda tangan ke halaman berikutnya.
+ *  - tidak mendorong isi / tanda tangan ke halaman berikutnya,
+ *  - tetap terbaca tipis tetapi tidak mengganggu bila menimpa isi.
  *
  * Pasang SEKALI di App.jsx (di dalam CartProvider, di luar Suspense):
  *   <LisensiCetak baseUrl="https://domain-tetap-anda.id" />
@@ -125,18 +125,26 @@ export default function LisensiCetak({
       .${KELAS_FOOTER} { display: none; }
       @media print {
         .${KELAS_FOOTER} {
-          display: block;
-          margin: 2mm 0 0;
-          padding: 0;
+          display: block !important;
+          visibility: visible !important;
+          position: fixed !important;
+          left: 0 !important;
+          right: 0 !important;
+          bottom: 4mm !important;
+          margin: 0 !important;
+          padding: 0 8mm !important;
           text-align: center;
           font-family: Georgia, "Times New Roman", serif;
-          font-size: 4.5pt;
-          line-height: 1.25;
-          color: #666;
-          break-before: avoid;
-          break-inside: avoid;
-          page-break-inside: avoid;
+          font-size: 4pt;
+          line-height: 1.2;
+          color: #000 !important;
+          opacity: 0.3 !important;
+          pointer-events: none;
+          z-index: 2147483647;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
         }
+        .${KELAS_FOOTER} * { visibility: visible !important; }
       }
     `;
     document.head.appendChild(el);
