@@ -1203,7 +1203,7 @@ export default function Beranda() {
             <div className="footer-content">
               <div>
                 <p className="beranda-footer-title">Tertarik menerapkannya di sekolah, KUA, atau Puskesmas Anda?</p>
-                <p className="beranda-footer-sub">Gratis selama masa promo berlaku. Daftar akun untuk sekolah, KUA, maupun Puskesmas Anda sekarang.</p>
+                <p className="beranda-footer-sub"> Daftar Gratis akun untuk sekolah, KUA, maupun Puskesmas Anda sekarang.</p>
               </div>
               <Link to={linkDaftar} className="beranda-cta">
                 Daftar sekarang
