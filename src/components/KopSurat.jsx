@@ -100,7 +100,7 @@ export default function KopSurat() {
             </p>
             {profilSekolah?.kecamatan && (
               <p className="text-[11px] font-medium uppercase text-slate-700 leading-tight">
-                Kecamatan {profilSekolah.kecamatan}
+                {profilSekolah.kecamatan}
               </p>
             )}
             {barisAlamat && (
