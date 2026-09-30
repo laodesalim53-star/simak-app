@@ -41,6 +41,9 @@ const KONFIG = {
 
     // Mode Perorangan: Sabtu ikut dianggap libur (format manual KUA)
     sabtuLibur: true,
+    // Istilah nama hari libur di mode Perorangan (KUA memakai "AHAD")
+    namaHariMinggu: 'AHAD',
+    namaHariSabtu: 'SABTU',
     tandaTanganTunggal: false, // kantor: Mengetahui (kiri) + Dibuat oleh (kanan)
 
     profil: {
@@ -94,6 +97,9 @@ const KONFIG = {
 
     // Sekolah umumnya masuk Senin–Sabtu atau Senin–Jumat; ubah sesuai kebijakan
     sabtuLibur: false,
+    // Istilah nama hari libur di mode Perorangan (sekolah memakai "MINGGU")
+    namaHariMinggu: 'MINGGU',
+    namaHariSabtu: 'SABTU',
     // Sekolah: satu tanda tangan saja (Kepala Sekolah, dengan QR), di sisi kanan
     tandaTanganTunggal: true,
 
@@ -218,11 +224,12 @@ export default function DaftarHadirPegawai() {
     return apakahMinggu(hari) || tanggalLibur.has(hari)
   }
 
-  // Dipakai mode Perorangan (Sabtu ikut libur hanya jika K.sabtuLibur = true)
+  // Dipakai mode Perorangan (Sabtu ikut libur hanya jika K.sabtuLibur = true).
+  // Nama hari mengikuti istilah tiap tenant (KUA: AHAD, sekolah: MINGGU).
   function labelLibur(hari) {
     const h = hariKe(hari)
-    if (h === 0) return 'AHAD'
-    if (h === 6 && K.sabtuLibur) return 'SABTU'
+    if (h === 0) return K.namaHariMinggu || 'MINGGU'
+    if (h === 6 && K.sabtuLibur) return K.namaHariSabtu || 'SABTU'
     if (tanggalLibur.has(hari)) return 'LIBUR'
     return null
   }
