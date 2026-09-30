@@ -87,7 +87,7 @@ const KONFIG = {
     // Sementara (sebelum util jalan) Jabatan diisi mata pelajaran; setelah presensi
     // dimuat, Jabatan ditimpa hasil susunDaftarHadir (KS / GK) seperti di
     // LaporanDaftarHadirGuru.jsx — lihat `jabatanDariUtil` di muatData.
-    petakanPegawai: (p) => ({ ...p, jabatan: p.mata_pelajaran || 'Guru' }),
+    petakanPegawai: (p) => ({ ...p, jabatan: p.mata_pelajaran || 'G.K' }),
     jabatanDariUtil: true,
 
     tabelPresensi: 'presensi_guru',
@@ -175,6 +175,11 @@ function formatJam(nilai) {
   const cocok = teks.match(/(\d{1,2}):(\d{2})/)
   if (!cocok) return teks
   return `${cocok[1].padStart(2, '0')}:${cocok[2]}`
+}
+
+// Ubah singkatan jabatan dari util: G.P -> G.K (K.S dan lainnya tidak berubah)
+function normalisasiJabatan(jabatan) {
+  return /^G\.?\s?P\.?$/i.test(String(jabatan || '').trim()) ? 'G.K' : jabatan
 }
 
 export default function DaftarHadirPegawai() {
@@ -316,13 +321,16 @@ export default function DaftarHadirPegawai() {
       // Jabatan mengikuti pola Daftar Hadir Guru (singkatan KS / GK):
       // ambil langsung dari susunDaftarHadir, fungsi yang sama dipakai
       // LaporanDaftarHadirGuru.jsx, supaya aturannya tidak dobel.
+      // Singkatan G.P dari util diganti menjadi G.K lewat normalisasiJabatan.
       if (K.jabatanDariUtil && daftarPegawai.length > 0) {
         try {
           const { baris } = susunDaftarHadir(daftarPegawai, presensi || [], tahun, bulan)
-          const petaJabatan = new Map(baris.map((b) => [String(b.id), b.jabatan]))
+          const petaJabatan = new Map(
+            baris.map((b) => [String(b.id), normalisasiJabatan(b.jabatan)])
+          )
           const denganJabatan = daftarPegawai.map((p) => ({
             ...p,
-            jabatan: petaJabatan.get(String(p.id)) || p.jabatan,
+            jabatan: petaJabatan.get(String(p.id)) || normalisasiJabatan(p.jabatan),
           }))
           // Kepala Sekolah (KS) selalu di urutan paling atas; sisanya tetap
           // urut nama seperti hasil query (sort di JS bersifat stabil).
