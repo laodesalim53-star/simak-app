@@ -183,11 +183,16 @@ function normalisasiJabatan(jabatan) {
 }
 
 export default function DaftarHadirPegawai() {
-  const { profil, sekolahId, isKantor } = useAuth()
+  const { profil, sekolahId, isKantor, isAdmin } = useAuth()
 
   // Pilih konfigurasi sesuai jenis tenant (kantor / sekolah)
   const jenis = isKantor ? 'kantor' : 'sekolah'
   const K = KONFIG[jenis]
+
+  // Hanya admin (admin, admin_utama, superadmin, kepala_*) yang boleh mengedit
+  // presensi. Akun guru/pegawai biasa hanya bisa melihat & mencetak.
+  const hanyaLihat = !isAdmin
+  const kelasKlik = hanyaLihat ? '' : 'cursor-pointer hover:bg-teal-50'
 
   const [profilMentah, setProfilMentah] = useState(null)
   const [pegawaiList, setPegawaiList] = useState([])
@@ -427,7 +432,17 @@ export default function DaftarHadirPegawai() {
 
   // ==== Fungsi-fungsi fitur edit presensi ====
 
+  // Props klik sel untuk edit; kosong untuk akun yang hanya boleh melihat
+  function propSelEdit(pegawaiId, hari) {
+    if (hanyaLihat) return {}
+    return {
+      onClick: () => bukaEditPresensi(pegawaiId, hari),
+      title: 'Klik untuk edit presensi',
+    }
+  }
+
   function bukaEditPresensi(pegawaiId, hari) {
+    if (hanyaLihat) return
     const data = presensiMap[pegawaiId]?.[hari]
     setFormEdit({
       status: data?.statusRaw || 'hadir',
@@ -460,7 +475,7 @@ export default function DaftarHadirPegawai() {
 
   async function simpanPresensi(e) {
     e.preventDefault()
-    if (!modalEdit) return
+    if (!modalEdit || hanyaLihat) return
     setMenyimpan(true)
     try {
       const { pegawaiId, hari } = modalEdit
@@ -522,7 +537,7 @@ export default function DaftarHadirPegawai() {
   }
 
   async function hapusPresensi() {
-    if (!modalEdit) return
+    if (!modalEdit || hanyaLihat) return
     if (!window.confirm('Hapus data presensi tanggal ini?')) return
     setMenyimpan(true)
     try {
@@ -607,7 +622,9 @@ export default function DaftarHadirPegawai() {
             </select>
           )}
 
-          <span className="text-xs text-slate-400 hidden sm:inline">Klik sel tanggal untuk edit presensi</span>
+          {!hanyaLihat && (
+            <span className="text-xs text-slate-400 hidden sm:inline">Klik sel tanggal untuk edit presensi</span>
+          )}
         </div>
         <button
           onClick={() => window.print()}
@@ -670,9 +687,8 @@ export default function DaftarHadirPegawai() {
                     {daftarHari.map((hari) => (
                       <td
                         key={hari}
-                        onClick={() => bukaEditPresensi(pegawai.id, hari)}
-                        title="Klik untuk edit presensi"
-                        className={`no-print-cursor border border-slate-300 text-center cursor-pointer hover:bg-teal-50 ${apakahLibur(hari) ? 'text-red-600' : ''}`}
+                        {...propSelEdit(pegawai.id, hari)}
+                        className={`no-print-cursor border border-slate-300 text-center ${kelasKlik} ${apakahLibur(hari) ? 'text-red-600' : ''}`}
                       >
                         {dataBulanIni[hari]?.singkatan || ''}
                       </td>
@@ -820,9 +836,8 @@ export default function DaftarHadirPegawai() {
                       return (
                         <tr
                           key={hari}
-                          onClick={() => bukaEditPresensi(pegawaiTerpilih.id, hari)}
-                          title="Klik untuk edit presensi"
-                          className="no-print-cursor text-red-600 font-semibold cursor-pointer hover:bg-teal-50"
+                          {...propSelEdit(pegawaiTerpilih.id, hari)}
+                          className={`no-print-cursor text-red-600 font-semibold ${kelasKlik}`}
                         >
                           <td className="border border-slate-400 text-center h-[19px]">{hari}</td>
                           <td className="border border-slate-400 text-center whitespace-nowrap">
@@ -838,9 +853,8 @@ export default function DaftarHadirPegawai() {
                     return (
                       <tr
                         key={hari}
-                        onClick={() => bukaEditPresensi(pegawaiTerpilih.id, hari)}
-                        title="Klik untuk edit presensi"
-                        className="no-print-cursor cursor-pointer hover:bg-teal-50"
+                        {...propSelEdit(pegawaiTerpilih.id, hari)}
+                        className={`no-print-cursor ${kelasKlik}`}
                       >
                         <td className="border border-slate-400 text-center h-[19px]">{hari}</td>
                         <td className="border border-slate-400 text-center whitespace-nowrap">
@@ -888,7 +902,7 @@ export default function DaftarHadirPegawai() {
       )}
 
       {/* ==== Modal Edit Presensi ==== */}
-      {modalEdit && (
+      {modalEdit && !hanyaLihat && (
         <div className="no-print fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5">
             <div className="flex items-center gap-2 mb-1">
