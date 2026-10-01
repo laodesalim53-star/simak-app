@@ -6,12 +6,20 @@ import { ArrowLeft, ShieldCheck } from 'lucide-react'
 // Plus Jakarta Sans. Rute disarankan: /kebijakan-privasi (tambahkan di
 // App.jsx, bisa diakses tanpa login, sama seperti /toko).
 //
-// CATATAN ISI: ganti semua teks bertanda [ ... ] sebelum dipublikasikan
-// (tanggal, e-mail kontak, kebijakan harga terkait di halaman Syarat
-// Layanan). Klaim keamanan di Bagian 5 disesuaikan lagi dengan konfigurasi
-// RLS Supabase yang sesungguhnya sudah diterapkan.
+// SEBELUM DIPUBLIKASIKAN, isi 3 konstanta di bawah ini, lalu cari teks
+// bertanda [ ... ] yang tersisa (masa proses hapus data, layanan pihak
+// ketiga) dan sesuaikan dengan kenyataan.
+//
+// PERIKSA JUGA (klaim di Bagian 6 harus benar-benar sesuai):
+//  - RLS Supabase aktif di semua tabel, terutama rekam medis & keuangan
+//  - Backup berkala memang berjalan
+//  - Lokasi GPS hanya diambil saat pengguna menekan tombol deteksi lokasi
+//    (tidak dilacak di latar belakang)
+//  - Halaman /syarat-layanan sudah ada, atau hapus tautannya di bagian bawah
 
 const TANGGAL_UPDATE = '[isi tanggal saat dipublikasikan]'
+const NAMA_PENGELOLA = '[isi nama pengelola/pengembang, sesuai akun Play Console]'
+const EMAIL_KONTAK = '[isi alamat e-mail resmi]'
 
 function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 72 }) {
   return (
@@ -44,13 +52,19 @@ const BAGIAN = [
           Kebijakan Privasi ini berlaku untuk aplikasi <strong>SIMAK</strong> ("Aplikasi",
           "Layanan"), sistem informasi terpadu yang digunakan oleh Sekolah, Kantor Urusan Agama
           (KUA), dan Puskesmas ("Instansi Mitra") untuk mengelola data akademik, administrasi,
-          pelayanan kesehatan, keuangan, dan komunikasi.
+          pelayanan kesehatan, keuangan, dan komunikasi. Aplikasi dikelola oleh{' '}
+          <strong>{NAMA_PENGELOLA}</strong> ("kami").
         </p>
         <p>
           Kebijakan ini menjelaskan data apa yang kami kumpulkan, bagaimana data itu digunakan
           dan dilindungi, serta hak-hak Anda sebagai pengguna. Kebijakan ini disusun dengan
           memperhatikan Undang-Undang Nomor 27 Tahun 2022 tentang Pelindungan Data Pribadi (UU
           PDP).
+        </p>
+        <p>
+          Aplikasi ditujukan untuk pengguna dewasa, yaitu guru, pegawai, tenaga kesehatan, dan
+          petugas Instansi Mitra. Data siswa atau pasien dimasukkan oleh petugas Instansi Mitra,
+          bukan oleh anak atau pasien itu sendiri.
         </p>
       </>
     ),
@@ -64,7 +78,7 @@ const BAGIAN = [
         <strong> penyedia sistem/pemroses data</strong> yang menyediakan infrastruktur teknis
         untuk menyimpan dan mengelola data tersebut atas instruksi Instansi Mitra. Untuk
         pertanyaan mengenai data pribadi Anda, silakan hubungi Instansi Mitra tempat data Anda
-        terdaftar terlebih dahulu, atau hubungi kami melalui kontak di Bagian 9.
+        terdaftar terlebih dahulu, atau hubungi kami melalui kontak di Bagian 10.
       </p>
     ),
   },
@@ -92,14 +106,22 @@ const BAGIAN = [
         </ul>
         <p className="kp-sub-label">e. Data keuangan</p>
         <ul>
-          <li>Transaksi kas, anggaran, kuitansi/nota operasional Instansi Mitra</li>
+          <li>Transaksi kas, anggaran, kuitansi/nota operasional Instansi Mitra, serta data rekening koran yang diunggah Instansi Mitra untuk pembukuan</li>
         </ul>
-        <p className="kp-sub-label">f. Data komunikasi</p>
+        <p className="kp-sub-label">f. Berkas yang Anda unggah</p>
+        <ul>
+          <li>Dokumen dan gambar yang diunggah pengguna, misalnya SK, ijazah/SKL, kuitansi, dan hasil pindai (scan) PDF. Berkas dapat diproses untuk keperluan fitur Aplikasi seperti konversi dan kompresi berkas.</li>
+        </ul>
+        <p className="kp-sub-label">g. Data lokasi</p>
+        <ul>
+          <li>Koordinat lokasi (lintang/bujur) dari perangkat Anda, yang hanya diambil setelah Anda memberi izin lokasi dan menggunakan fitur deteksi lokasi pada saat mengisi atau memperbarui profil. Lokasi tidak dilacak di latar belakang.</li>
+        </ul>
+        <p className="kp-sub-label">h. Data komunikasi</p>
         <ul>
           <li>Pesan Live Chat & komunikasi internal, riwayat rapat daring</li>
           <li>Untuk pengunjung belum login: nama & isi pesan Live Chat, disertai ID sesi anonim di perangkat Anda</li>
         </ul>
-        <p className="kp-sub-label">g. Data teknis</p>
+        <p className="kp-sub-label">i. Data teknis</p>
         <ul>
           <li>Alamat IP, jenis perangkat/browser, cookie/local storage untuk sesi & preferensi</li>
         </ul>
@@ -123,22 +145,49 @@ const BAGIAN = [
           persetujuan yang diperoleh melalui mekanisme pendaftaran/pendataan resmi masing-masing
           instansi.
         </p>
+        <p>
+          Kami tidak menggunakan data Anda untuk iklan dan tidak membuat profil pengguna untuk
+          keperluan pemasaran.
+        </p>
       </>
     ),
   },
   {
-    judul: '5. Bagaimana Data Disimpan & Diamankan',
+    judul: '5. Izin Perangkat yang Digunakan',
     isi: (
       <ul>
-        <li>Data disimpan di Supabase, akses dibatasi lewat Row Level Security (RLS) sesuai peran & instansi</li>
-        <li>Kata sandi disimpan terenkripsi (hash), tidak pernah sebagai teks biasa</li>
-        <li>Akses rekam medis & keuangan dibatasi hanya untuk peran berwenang</li>
-        <li>Pencadangan (backup) data dilakukan secara berkala</li>
+        <li><strong>Lokasi:</strong> hanya untuk fitur deteksi lokasi pada profil, dan hanya setelah Anda mengizinkan.</li>
+        <li><strong>Kamera/berkas:</strong> hanya bila Anda memilih mengunggah foto atau dokumen.</li>
+        <li><strong>Internet:</strong> diperlukan agar Aplikasi dapat terhubung ke server.</li>
       </ul>
     ),
   },
   {
-    judul: '6. Berapa Lama Data Disimpan',
+    judul: '6. Bagaimana Data Disimpan & Diamankan',
+    isi: (
+      <>
+        <ul>
+          <li>Data dikirim melalui koneksi terenkripsi (HTTPS)</li>
+          <li>Data disimpan di Supabase, akses dibatasi lewat Row Level Security (RLS) sesuai peran & instansi</li>
+          <li>Kata sandi disimpan terenkripsi (hash), tidak pernah sebagai teks biasa</li>
+          <li>Akses rekam medis & keuangan dibatasi hanya untuk peran berwenang</li>
+          <li>Pencadangan (backup) data dilakukan secara berkala</li>
+        </ul>
+        <p>
+          Server penyedia infrastruktur dapat berada di luar Indonesia, sehingga data Anda dapat
+          diproses dan disimpan di luar wilayah Indonesia. Kami memilih penyedia yang menerapkan
+          perlindungan data yang memadai.
+        </p>
+        <p>
+          Tidak ada sistem yang sepenuhnya bebas risiko. Jika terjadi insiden yang berdampak pada
+          data pribadi Anda, kami akan memberi tahu Instansi Mitra dan pihak terkait sesuai
+          ketentuan yang berlaku.
+        </p>
+      </>
+    ),
+  },
+  {
+    judul: '7. Berapa Lama Data Disimpan',
     isi: (
       <p>
         Data disimpan selama akun/instansi masih aktif menggunakan Layanan, atau selama
@@ -150,20 +199,27 @@ const BAGIAN = [
     ),
   },
   {
-    judul: '7. Dengan Siapa Data Dibagikan',
+    judul: '8. Dengan Siapa Data Dibagikan',
     isi: (
       <>
         <p>Kami <strong>tidak menjual</strong> data pribadi kepada pihak ketiga. Data hanya dibagikan:</p>
         <ul>
           <li>Kepada Instansi Mitra terkait, sebatas kewenangannya</li>
-          <li>Kepada penyedia infrastruktur teknis (Supabase) sebagai pemroses data teknis</li>
+          <li>Kepada penyedia infrastruktur teknis sebagai pemroses data teknis</li>
           <li>Jika diwajibkan oleh hukum atau permintaan resmi dari lembaga berwenang</li>
+        </ul>
+        <p className="kp-sub-label">Layanan pihak ketiga yang digunakan Aplikasi</p>
+        <ul>
+          <li>Supabase: penyimpanan database, autentikasi, dan berkas</li>
+          <li>Google Fonts: memuat font tampilan; alamat IP perangkat Anda ikut terkirim ke Google saat font dimuat</li>
+          <li>WhatsApp: hanya bila Anda memilih menghubungi kami melalui tombol kontak WhatsApp</li>
+          <li>[tambahkan layanan lain yang benar-benar dipakai, misalnya penyedia rapat daring, atau hapus baris ini]</li>
         </ul>
       </>
     ),
   },
   {
-    judul: '8. Hak Anda sebagai Pemilik Data',
+    judul: '9. Hak Anda sebagai Pemilik Data',
     isi: (
       <>
         <p>Sesuai UU PDP, Anda berhak untuk:</p>
@@ -173,16 +229,27 @@ const BAGIAN = [
           <li>Meminta penghapusan data pribadi Anda (dengan memperhatikan kewajiban retensi hukum)</li>
           <li>Menarik persetujuan pemrosesan data, sepanjang tidak bertentangan dengan kewajiban layanan publik</li>
         </ul>
-        <p>Permintaan dapat diajukan melalui Instansi Mitra Anda atau kontak di Bagian 9.</p>
+        <p>Permintaan dapat diajukan melalui Instansi Mitra Anda atau kontak di Bagian 10.</p>
+        <p className="kp-sub-label" id="hapus-akun">Penghapusan akun & data</p>
+        <p>
+          Untuk meminta penghapusan akun beserta data terkait, kirim e-mail ke{' '}
+          <strong>{EMAIL_KONTAK}</strong> dengan subjek "Hapus Akun SIMAK" dari alamat e-mail
+          yang terdaftar di akun Anda, dan sebutkan nama serta Instansi Mitra Anda. Permintaan
+          diproses dalam [isi jumlah] hari kerja. Data yang wajib disimpan menurut ketentuan
+          hukum (misalnya rekam medis) tetap disimpan sampai masa retensinya berakhir. Data yang
+          dimasukkan atas nama Instansi Mitra mungkin perlu persetujuan instansi tersebut sebelum
+          dihapus.
+        </p>
       </>
     ),
   },
   {
-    judul: '9. Kontak',
+    judul: '10. Kontak',
     isi: (
       <ul>
+        <li>Pengelola: {NAMA_PENGELOLA}</li>
+        <li>E-mail: {EMAIL_KONTAK}</li>
         <li>WhatsApp / Live Chat: melalui tombol kontak di Aplikasi</li>
-        <li>E-mail: [isi alamat e-mail resmi]</li>
       </ul>
     ),
   },
