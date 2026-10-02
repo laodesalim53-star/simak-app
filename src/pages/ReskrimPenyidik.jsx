@@ -21,9 +21,9 @@ import {
 //  - Panel pemantauan masa penahanan (klik kartu "Penahanan habis").
 //  - Peringatan masa penahanan langsung di baris daftar perkara.
 //  - Umur perkara (hari sejak tanggal LP).
-//
-// Catatan: `jenisOrganisasi` dan nama satuan diasumsikan tersedia dari useAuth().
-// Sesuaikan nama field-nya dengan AuthContext Anda.
+//  - Kop surat otomatis dari Profil Polres (logo, Polda, satuan, alamat, kota, Kapolres).
+//  - Tanda tangan otomatis: pilih personel aktif (penyidik / petugas register) di pratinjau.
+//  - Field Penyidik di form perkara memakai daftar personel (NRP terisi otomatis).
 
 const STATUS = [
   { k: 'lidik', l: 'Penyelidikan', warna: 'bg-slate-100 text-slate-700' },
@@ -125,21 +125,20 @@ const CETAK_DEFAULT = {
   kop_unit: 'SATUAN RESERSE KRIMINAL',
   kop_alamat: '',
   kota: '',
-  jabatan: 'KASAT RESKRIM',
+  jabatan: '',      // kosong = ikut Profil Polres
   nama: '',
   pangkat_nrp: '',
 }
 
 const kunciCetak = (sekolahId) => `reskrim_pengaturan_cetak:${sekolahId}`
+const kunciPetugas = (sekolahId) => `reskrim_petugas_register:${sekolahId}`
 
-function bacaPengaturan(sekolahId, namaSatuan) {
+function bacaPengaturan(sekolahId) {
   let tersimpan = {}
   try {
     tersimpan = JSON.parse(localStorage.getItem(kunciCetak(sekolahId)) || '{}')
   } catch { /* abaikan, pakai default */ }
-  const hasil = { ...CETAK_DEFAULT, ...tersimpan }
-  if (!hasil.kop_satuan && namaSatuan) hasil.kop_satuan = namaSatuan.toUpperCase()
-  return hasil
+  return { ...CETAK_DEFAULT, ...tersimpan }
 }
 
 function tulisPengaturan(sekolahId, nilai) {
@@ -149,6 +148,14 @@ function tulisPengaturan(sekolahId, nilai) {
   } catch {
     return false
   }
+}
+
+// Sama dengan ProfilPolres.jsx: path di bucket "profil-polres" -> URL publik.
+function urlLogo(path) {
+  if (!path) return ''
+  if (path.startsWith('http')) return path
+  const { data } = supabase.storage.from('profil-polres').getPublicUrl(path)
+  return data?.publicUrl || ''
 }
 
 /* ------------------------------------------------------------------ */
@@ -260,7 +267,9 @@ const cssCetak = (orientasi) => `
 #area-cetak .kertas{background:#fff;color:#000;margin:16px auto;padding:14mm;box-sizing:border-box;
   box-shadow:0 1px 8px rgba(0,0,0,.25);width:${orientasi === 'landscape' ? '297mm' : '210mm'};
   font-family:"Times New Roman",Times,serif;font-size:11pt;line-height:1.35}
-#area-cetak .kop{text-align:center;border-bottom:3px double #000;padding-bottom:6px;margin-bottom:10px}
+#area-cetak .kop{position:relative;text-align:center;border-bottom:3px double #000;
+  padding:0 26mm 6px;margin-bottom:10px;min-height:24mm}
+#area-cetak .kop .logo{position:absolute;left:0;top:0;width:23mm;height:23mm;object-fit:contain}
 #area-cetak .kop .k1{font-weight:700;font-size:13pt}
 #area-cetak .kop .k2{font-weight:700;font-size:12pt}
 #area-cetak .kop .alamat{font-size:9pt;margin-top:2px}
@@ -290,7 +299,7 @@ const cssCetak = (orientasi) => `
 }
 `
 
-function Pratinjau({ judul, orientasi = 'portrait', onTutup, children }) {
+function Pratinjau({ judul, orientasi = 'portrait', onTutup, aksi = null, children }) {
   // Capture + stopImmediatePropagation: Esc hanya menutup pratinjau, bukan modal di belakangnya.
   useEffect(() => {
     const h = (e) => {
@@ -309,6 +318,7 @@ function Pratinjau({ judul, orientasi = 'portrait', onTutup, children }) {
           Kertas A4 {orientasi === 'landscape' ? 'mendatar' : 'tegak'} - pilih "Simpan sebagai PDF" untuk membuat berkas PDF.
         </div>
         <div className="flex-1" />
+        {aksi}
         <button type="button" className="btn-secondary" onClick={onTutup}>Tutup</button>
         <button type="button" className="btn-primary" onClick={() => window.print()}>
           <Printer size={16} /> Cetak
@@ -321,16 +331,24 @@ function Pratinjau({ judul, orientasi = 'portrait', onTutup, children }) {
 }
 
 function Kop({ p }) {
+  const [logoRusak, setLogoRusak] = useState(false)
+  useEffect(() => { setLogoRusak(false) }, [p.logo])
   const baris = [p.kop_atas, p.kop_daerah, p.kop_satuan, p.kop_unit].filter(Boolean)
   return (
     <div className="kop">
+      {p.logo && !logoRusak && (
+        <img className="logo" src={p.logo} alt="" onError={() => setLogoRusak(true)} />
+      )}
       {baris.map((t, i) => <div key={i} className={i === 0 ? 'k1' : 'k2'}>{t}</div>)}
       {p.kop_alamat && <div className="alamat">{p.kop_alamat}</div>}
     </div>
   )
 }
 
-function TandaTangan({ p, kanan }) {
+function TandaTangan({ p, kanan: kananAwal }) {
+  // p.kananTtd diisi oleh Cetakan (pilihan personel); kananAwal hanya cadangan.
+  const k = p.kananTtd || kananAwal || {}
+  const barisKanan = [k.pangkat, k.nrp && `NRP ${k.nrp}`].filter(Boolean).join(' ')
   return (
     <div className="ttd">
       <div>
@@ -342,10 +360,10 @@ function TandaTangan({ p, kanan }) {
       </div>
       <div>
         <div>{p.kota ? `${p.kota}, ` : ''}{tglPanjang(hariIni())}</div>
-        <div>{kanan?.label || 'Petugas Register'}</div>
+        <div>{k.label || 'Petugas Register'}</div>
         <div className="ruang" />
-        <div className="nama">{kanan?.nama || '..............................'}</div>
-        {kanan?.nrp && <div>NRP {kanan.nrp}</div>}
+        <div className="nama">{k.nama || '..............................'}</div>
+        {barisKanan && <div>{barisKanan}</div>}
       </div>
     </div>
   )
@@ -608,19 +626,69 @@ function DokBarangBukti({ data, p }) {
   )
 }
 
-function Cetakan({ cetak, pengaturan, onTutup }) {
+function Cetakan({ cetak, pengaturan, personel, sekolahId, onTutup }) {
   const { jenis, data } = cetak
   const judul = {
     register: 'Register Perkara', tahanan: 'Daftar Tahanan',
     perkara: 'Lembar Perkara', bb: 'Daftar Barang Bukti',
   }[jenis]
   const orientasi = jenis === 'register' || jenis === 'tahanan' ? 'landscape' : 'portrait'
+  const dokPerkara = jenis === 'perkara' || jenis === 'bb'
+
+  // Dokumen perkara: default = personel yang namanya sama dengan penyidik perkara.
+  // Register/daftar tahanan: default = pilihan terakhir yang tersimpan.
+  const [petugasId, setPetugasId] = useState(() => {
+    if (dokPerkara) {
+      const nm = (data.perkara?.penyidik || '').trim().toLowerCase()
+      const cocok = personel.find((x) => (x.nama || '').trim().toLowerCase() === nm)
+      return cocok ? String(cocok.id) : ''
+    }
+    try { return localStorage.getItem(kunciPetugas(sekolahId)) || '' } catch { return '' }
+  })
+
+  function pilih(id) {
+    setPetugasId(id)
+    if (!dokPerkara) {
+      try { localStorage.setItem(kunciPetugas(sekolahId), id) } catch { /* abaikan */ }
+    }
+  }
+
+  const petugas = personel.find((x) => String(x.id) === petugasId) || null
+  const kanan = dokPerkara
+    ? {
+      label: 'Penyidik',
+      nama: petugas?.nama || data.perkara.penyidik,
+      pangkat: petugas?.pangkat,
+      nrp: petugas?.nrp || data.perkara.nrp_penyidik,
+    }
+    : { label: 'Petugas Register', nama: petugas?.nama, pangkat: petugas?.pangkat, nrp: petugas?.nrp }
+
+  const p = { ...pengaturan, kananTtd: kanan }
+
+  const pilihan = (
+    <label className="flex items-center gap-2 text-sm">
+      <span className="text-gray-600">{kanan.label}:</span>
+      <select
+        className="input-field !py-1 text-sm max-w-[280px]"
+        value={petugasId}
+        onChange={(e) => pilih(e.target.value)}
+      >
+        <option value="">- pilih personel -</option>
+        {personel.map((x) => (
+          <option key={x.id} value={String(x.id)}>
+            {[x.pangkat, x.nama].filter(Boolean).join(' ')}{x.nrp ? ` (${x.nrp})` : ''}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+
   return (
-    <Pratinjau judul={judul} orientasi={orientasi} onTutup={onTutup}>
-      {jenis === 'register' && <DokRegister baris={data.baris} info={data.info} p={pengaturan} />}
-      {jenis === 'tahanan' && <DokTahanan baris={data.baris} p={pengaturan} />}
-      {jenis === 'perkara' && <DokPerkara data={data} p={pengaturan} />}
-      {jenis === 'bb' && <DokBarangBukti data={data} p={pengaturan} />}
+    <Pratinjau judul={judul} orientasi={orientasi} onTutup={onTutup} aksi={pilihan}>
+      {jenis === 'register' && <DokRegister baris={data.baris} info={data.info} p={p} />}
+      {jenis === 'tahanan' && <DokTahanan baris={data.baris} p={p} />}
+      {jenis === 'perkara' && <DokPerkara data={data} p={p} />}
+      {jenis === 'bb' && <DokBarangBukti data={data} p={p} />}
     </Pratinjau>
   )
 }
@@ -642,7 +710,8 @@ function FormPengaturanCetak({ awal, onSimpan, onTutup }) {
     <Modal judul="Pengaturan Cetak" onTutup={onTutup} kotor={kotor} lebar="max-w-2xl">
       <form onSubmit={simpan} className="space-y-4">
         <p className="text-sm text-ink-700/60">
-          Data ini tampil pada kop dan tanda tangan semua dokumen cetak. Tersimpan di perangkat/browser ini.
+          Kosongkan isian untuk memakai data dari menu Profil Polres (logo, satuan, alamat, kota, dan Kapolres).
+          Isian di sini hanya menimpa untuk perangkat/browser ini.
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Kop baris 1" className="sm:col-span-2">
@@ -756,7 +825,7 @@ function ModalTahanan({ baris, onTutup, onBuka, onCetak }) {
 /* ------------------------------------------------------------------ */
 /* Form tambah / ubah perkara                                          */
 /* ------------------------------------------------------------------ */
-function FormPerkara({ awal, sekolahId, onSelesai, onTutup }) {
+function FormPerkara({ awal, sekolahId, personel = [], onSelesai, onTutup }) {
   const [form, setForm] = useState(() => {
     const dasar = { ...FORM_KOSONG }
     if (awal) for (const k of Object.keys(FORM_KOSONG)) dasar[k] = awal[k] ?? FORM_KOSONG[k]
@@ -767,6 +836,12 @@ function FormPerkara({ awal, sekolahId, onSelesai, onTutup }) {
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }))
   const edit = Boolean(awal?.id)
   const kotor = JSON.stringify(form) !== awalJson
+
+  // Pilih nama dari daftar personel -> NRP terisi otomatis.
+  function pilihPenyidik(nilai) {
+    const cocok = personel.find((x) => (x.nama || '').trim().toLowerCase() === nilai.trim().toLowerCase())
+    setForm((p) => ({ ...p, penyidik: nilai, nrp_penyidik: cocok?.nrp || p.nrp_penyidik }))
+  }
 
   async function simpan(e) {
     e.preventDefault()
@@ -845,7 +920,13 @@ function FormPerkara({ awal, sekolahId, onSelesai, onTutup }) {
           </Field>
 
           <Field label="Penyidik / Penyidik Pembantu">
-            <input className="input-field" value={form.penyidik} onChange={(e) => set('penyidik', e.target.value)} />
+            <input className="input-field" list="daftar-penyidik" value={form.penyidik}
+              onChange={(e) => pilihPenyidik(e.target.value)} />
+            <datalist id="daftar-penyidik">
+              {personel.map((x) => (
+                <option key={x.id} value={x.nama}>{[x.pangkat, x.nrp].filter(Boolean).join(' - ')}</option>
+              ))}
+            </datalist>
           </Field>
           <Field label="NRP Penyidik">
             <input className="input-field" value={form.nrp_penyidik} onChange={(e) => set('nrp_penyidik', e.target.value)} />
@@ -1350,8 +1431,7 @@ function DetailPerkara({ perkara, sekolahId, onTutup, onUbah, onHapus, onStatusB
 /* ------------------------------------------------------------------ */
 export default function ReskrimPenyidik() {
   const auth = useAuth()
-  const { sekolahId, isPolres, profil } = auth
-  const namaSatuan = profil?.nama_sekolah || ''
+  const { sekolahId, isPolres } = auth
 
   const [daftar, setDaftar] = useState([])
   const [tahanan, setTahanan] = useState([])
@@ -1366,13 +1446,56 @@ export default function ReskrimPenyidik() {
   const [tahananBuka, setTahananBuka] = useState(false)
   const [pengaturanBuka, setPengaturanBuka] = useState(false)
   const [cetak, setCetak] = useState(null) // { jenis, data }
-  const [pengaturan, setPengaturan] = useState(() => bacaPengaturan(sekolahId, namaSatuan))
+  const [pengaturan, setPengaturan] = useState(() => bacaPengaturan(sekolahId))
+  const [profilSatuan, setProfilSatuan] = useState(null)
+  const [personel, setPersonel] = useState([])
 
-    const bolehAkses = isPolres
+  const bolehAkses = isPolres
 
   useEffect(() => {
-    setPengaturan(bacaPengaturan(sekolahId, namaSatuan))
-  }, [sekolahId, namaSatuan])
+    setPengaturan(bacaPengaturan(sekolahId))
+  }, [sekolahId])
+
+  // Profil Polres (logo, kop, Kapolres) + personel aktif (penyidik / petugas).
+  useEffect(() => {
+    if (!sekolahId || !bolehAkses) return
+    let aktif = true
+    ;(async () => {
+      const [a, b] = await Promise.all([
+        supabase.from('profil_polres').select('*').eq('sekolah_id', sekolahId).maybeSingle(),
+        supabase.from('personel_polres')
+          .select('id, nama, nrp, pangkat, jabatan, satuan_unit')
+          .eq('sekolah_id', sekolahId).eq('status', 'aktif').order('nama'),
+      ])
+      if (!aktif) return
+      if (a.error) console.warn('Gagal memuat profil Polres:', a.error.message)
+      else setProfilSatuan(a.data)
+      if (b.error) console.warn('Gagal memuat personel:', b.error.message)
+      else setPersonel(b.data || [])
+    })()
+    return () => { aktif = false }
+  }, [sekolahId, bolehAkses])
+
+  // Prioritas: isian Pengaturan Cetak (lokal) > Profil Polres > bawaan.
+  const pengaturanCetak = useMemo(() => {
+    const pr = profilSatuan || {}
+    const alamat = [pr.alamat, pr.kabupaten_kota, pr.provinsi, pr.kode_pos].filter(Boolean).join(', ')
+    const kontak = [pr.telepon && `Telp. ${pr.telepon}`, pr.email && `Email: ${pr.email}`]
+      .filter(Boolean).join(' | ')
+    const namaLokal = Boolean(pengaturan.nama)
+    return {
+      ...pengaturan,
+      kop_daerah: pengaturan.kop_daerah || (pr.polda || '').toUpperCase(),
+      kop_satuan: pengaturan.kop_satuan || (pr.nama_satuan || '').toUpperCase(),
+      kop_alamat: pengaturan.kop_alamat || [alamat, kontak].filter(Boolean).join(' - '),
+      kota: pengaturan.kota || pr.tempat_ttd || '',
+      jabatan: pengaturan.jabatan || (!namaLokal && pr.kapolres ? 'KAPOLRES' : 'KASAT RESKRIM'),
+      nama: pengaturan.nama || pr.kapolres || '',
+      pangkat_nrp: pengaturan.pangkat_nrp
+        || (namaLokal ? '' : [pr.pangkat_kapolres, pr.nrp_kapolres && `NRP ${pr.nrp_kapolres}`].filter(Boolean).join(' ')),
+      logo: urlLogo(pr.logo_path),
+    }
+  }, [pengaturan, profilSatuan])
 
   async function muat() {
     if (!sekolahId) { setLoading(false); return }
@@ -1687,6 +1810,7 @@ export default function ReskrimPenyidik() {
         <FormPerkara
           awal={diedit}
           sekolahId={sekolahId}
+          personel={personel}
           onTutup={() => setFormBuka(false)}
           onSelesai={() => { setFormBuka(false); muat() }}
         />
@@ -1723,7 +1847,13 @@ export default function ReskrimPenyidik() {
       )}
 
       {cetak && (
-        <Cetakan cetak={cetak} pengaturan={pengaturan} onTutup={() => setCetak(null)} />
+        <Cetakan
+          cetak={cetak}
+          pengaturan={pengaturanCetak}
+          personel={personel}
+          sekolahId={sekolahId}
+          onTutup={() => setCetak(null)}
+        />
       )}
     </Layout>
   )
