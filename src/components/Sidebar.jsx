@@ -66,6 +66,7 @@ import {
   ChevronDown,
   Link2,
   Shield,
+  Gavel,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
@@ -405,6 +406,14 @@ function getGroupsPolresAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelum
         { to: '/daftar-hadir-kantor', label: 'Daftar Hadir', icon: FileSpreadsheet },
       ],
     },
+    // BARU: Reskrim — register perkara bagian Penyidik (ReskrimPenyidik.jsx).
+    // Grup dipisah supaya bagian Reskrim lain bisa ditambah di sini nanti.
+    {
+      label: 'Reskrim',
+      links: [
+        { to: '/reskrim-penyidik', label: 'Penyidik', icon: Gavel },
+      ],
+    },
     {
       label: 'Administrasi',
       links: [
@@ -427,6 +436,8 @@ function getLinksPolresPegawai(jumlahPesanBelumDibaca = 0) {
     { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
     { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
     { to: '/presensi', label: 'Presensi', icon: ClipboardCheck },
+    // BARU: Reskrim Penyidik — semua user dalam tenant polres bisa mengakses.
+    { to: '/reskrim-penyidik', label: 'Reskrim Penyidik', icon: Gavel },
     { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
     { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
     { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
@@ -478,9 +489,9 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   { to: '/materi-kelas', label: 'Materi Pembelajaran', icon: BookMarked },
   { to: '/buat-kuis-seru', label: 'Kuis Seru (Kls 1-3)', icon: Gamepad2 },
   { to: '/perpustakaan', label: 'Perpustakaan', icon: Library },
- { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
-// BARU: Daftar Hadir Guru & Tendik (guru hanya bisa melihat & mencetak)
-{ to: '/daftar-hadir-pegawai', label: 'Daftar Hadir Guru & Tendik', icon: ClipboardList },
+  { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
+  // BARU: Daftar Hadir Guru & Tendik (guru hanya bisa melihat & mencetak)
+  { to: '/daftar-hadir-pegawai', label: 'Daftar Hadir Guru & Tendik', icon: ClipboardList },
   { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
   { to: '/link-layanan', label: 'Link Layanan', icon: Link2 },
   { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
