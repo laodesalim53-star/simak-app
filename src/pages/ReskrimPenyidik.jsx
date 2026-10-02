@@ -1350,9 +1350,8 @@ function DetailPerkara({ perkara, sekolahId, onTutup, onUbah, onHapus, onStatusB
 /* ------------------------------------------------------------------ */
 export default function ReskrimPenyidik() {
   const auth = useAuth()
-  const { sekolahId, jenisOrganisasi } = auth
-  // Sesuaikan dengan nama field di AuthContext Anda untuk nama satuan/organisasi.
-  const namaSatuan = auth.namaOrganisasi || auth.namaSekolah || ''
+  const { sekolahId, isPolres, profil } = auth
+  const namaSatuan = profil?.nama_sekolah || ''
 
   const [daftar, setDaftar] = useState([])
   const [tahanan, setTahanan] = useState([])
@@ -1369,7 +1368,7 @@ export default function ReskrimPenyidik() {
   const [cetak, setCetak] = useState(null) // { jenis, data }
   const [pengaturan, setPengaturan] = useState(() => bacaPengaturan(sekolahId, namaSatuan))
 
-  const bolehAkses = jenisOrganisasi === 'polres'
+    const bolehAkses = isPolres
 
   useEffect(() => {
     setPengaturan(bacaPengaturan(sekolahId, namaSatuan))
