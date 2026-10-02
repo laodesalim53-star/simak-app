@@ -29,6 +29,7 @@ const Guru = lazy(() => import('./pages/Guru'))
 const PresensiKantor = lazy(() => import('./pages/PresensiKantor'))
 const DaftarHadirKantor = lazy(() => import('./pages/DaftarHadirKantor'))
 const DataPegawaiKantor = lazy(() => import('./pages/DataPegawaiKantor'))
+const ProfilPolres = lazy(() => import('./pages/ProfilPolres'))
 const DaftarHadirPegawai = lazy(() => import('./pages/DaftarHadirPegawai'))
 const ProfilKantor = lazy(() => import('./pages/ProfilKantor'))
 const ProfilPuskesmas = lazy(() => import('./pages/ProfilPuskesmas'))
@@ -339,6 +340,7 @@ export default function App() {
           kontrol edit sudah dikunci di dalam komponen lewat isAdmin dari useAuth(). */}
           <Route path="/daftar-hadir-pegawai" element={<ProtectedRoute><DaftarHadirPegawai /></ProtectedRoute>} />
           <Route path="/data-pegawai-kantor" element={<ProtectedRoute adminOnly><DataPegawaiKantor /></ProtectedRoute>} />
+          <Route path="/profil-polres" element={<ProtectedRoute adminOnly><ProfilPolres /></ProtectedRoute>} />
           <Route path="/pusat-materi-majelis" element={<ProtectedRoute><PusatMateriMajelis /></ProtectedRoute>} />
           <Route path="/materi-keluarga-sakinah" element={<ProtectedRoute><MateriKeluargaSakinah /></ProtectedRoute>} />
           <Route path="/materi-pengelolaan-zakat" element={<ProtectedRoute><MateriPengelolaanZakat /></ProtectedRoute>} />
