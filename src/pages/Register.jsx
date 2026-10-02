@@ -585,12 +585,14 @@ export default function Register() {
               label={`Nama ${Kata} Baru`}
               required
               autoComplete="off"
-              placeholder={
+               placeholder={
                 isKantor
-                isKantor ? 'Contoh: KUA Kecamatan Contoh'
-                : isPuskesmas ? 'Contoh: Puskesmas Kecamatan Contoh'
-                : isPolres ? 'Contoh: Polres Kepulauan Aru'
-                : 'Contoh: SD Negeri Contoh'
+                  ? 'Contoh: KUA Kecamatan Contoh'
+                  : isPuskesmas
+                    ? 'Contoh: Puskesmas Kecamatan Contoh'
+                    : isPolres
+                      ? 'Contoh: Polres Kepulauan Aru'
+                      : 'Contoh: SD Negeri Contoh'
               }
               value={form.namaSekolahBaru}
               onChange={(e) => ubah('namaSekolahBaru', e.target.value)}
