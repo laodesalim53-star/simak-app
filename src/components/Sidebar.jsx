@@ -401,7 +401,7 @@ function getGroupsPolresAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelum
       label: 'Kepegawaian',
       links: [
         { to: '/profil-polres', label: 'Profil Polres', icon: Shield },
-        { to: '/data-pegawai-kantor', label: 'Data Personel', icon: Briefcase },
+        { to: '/data-personel-polres', label: 'Data Personel', icon: Briefcase },
         { to: '/presensi-kantor', label: 'Presensi Personel', icon: ClipboardCheck },
         { to: '/daftar-hadir-kantor', label: 'Daftar Hadir', icon: FileSpreadsheet },
       ],
