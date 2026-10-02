@@ -18,7 +18,7 @@ import { ArrowLeft, ShieldCheck } from 'lucide-react'
 //  - Halaman /syarat-layanan sudah ada, atau hapus tautannya di bagian bawah
 
 const TANGGAL_UPDATE = '[01 Oktober 2026]'
-const NAMA_PENGELOLA = '[LA ODE SALIM,]'
+const NAMA_PENGELOLA = '[LD SALIM,]'
 const EMAIL_KONTAK = '[laodesalim53@gmail.com]'
 
 function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 72 }) {
