@@ -242,6 +242,14 @@ export function AuthProvider({ children }) {
       return { error: { message: 'NIP wajib diisi untuk akun Puskesmas.' } }
     }
   }
+     if (jenisOrganisasi === 'polres') {
+    if (!['kepala_polres', 'admin', 'pegawai'].includes(jabatan)) {
+      return { error: { message: 'Jabatan tidak valid untuk akun Polres.' } }
+    }
+    if (!nip) {
+      return { error: { message: 'NRP/NIP wajib diisi untuk akun Polres.' } }
+    }
+  }
 
   const { data, error } = await supabase.functions.invoke('daftar-akun', {
     body: {
@@ -415,19 +423,16 @@ export function AuthProvider({ children }) {
   // PERBAIKAN: 'kepala_puskesmas' ditambahkan setara, supaya akun Kepala
   // Puskesmas mendapat menu & akses admin di tenant puskesmas.
   const isAdmin = [
-    'admin',
-    'admin_utama',
-    'superadmin',
-    'kepala_sekolah',
-    'kepala_kantor',
-    'kepala_puskesmas',
+    'admin', 'admin_utama', 'superadmin', 'kepala_sekolah',
+    'kepala_kantor', 'kepala_puskesmas', 'kepala_polres',
   ].includes(profil?.role)
 
   const isAdminUtama =
     profil?.role === 'admin_utama' ||
     profil?.role === 'superadmin' ||
     profil?.role === 'kepala_kantor' ||
-    profil?.role === 'kepala_puskesmas'
+    profil?.role === 'kepala_puskesmas' ||
+    profil?.role === 'kepala_polres'
 
   const isSuperAdmin =
     profil?.role === 'superadmin'
@@ -443,6 +448,9 @@ export function AuthProvider({ children }) {
 
   const isPuskesmas =
     (profil?.jenis_organisasi ?? 'sekolah') === 'puskesmas'
+
+  const isPolres =
+    (profil?.jenis_organisasi ?? 'sekolah') === 'polres'
 
   return (
     <AuthContext.Provider
@@ -468,6 +476,7 @@ export function AuthProvider({ children }) {
         isKepalaSekolah,
         isKantor,
         isPuskesmas,
+        isPolres,
 
         tambahAnak,
         getAnakSaya,
