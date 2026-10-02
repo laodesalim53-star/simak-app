@@ -65,6 +65,7 @@ import {
   BookMarked,
   ChevronDown,
   Link2,
+  Shield,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
@@ -377,6 +378,65 @@ function getGroupsPuskesmasAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBe
     },
   ]
 }
+// Menu ADMIN untuk tenant "polres" (isPolres) — pola sama dengan kantor/puskesmas.
+// Rute kepegawaian masih memakai halaman kantor yang sudah ada.
+function getGroupsPolresAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelumDibaca = 0) {
+  return [
+    {
+      label: null,
+      links: [
+        { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
+        { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
+        { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
+        { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
+        { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
+        { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
+        { to: '/alat-pdf', label: 'Alat PDF', icon: FileType2 },
+        { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
+        { to: '/link-layanan', label: 'Link Layanan', icon: Link2 },
+      ],
+    },
+    {
+      label: 'Kepegawaian',
+      links: [
+        { to: '/profil-polres', label: 'Profil Polres', icon: Shield },
+        { to: '/data-pegawai-kantor', label: 'Data Personel', icon: Briefcase },
+        { to: '/presensi-kantor', label: 'Presensi Personel', icon: ClipboardCheck },
+        { to: '/daftar-hadir-kantor', label: 'Daftar Hadir', icon: FileSpreadsheet },
+      ],
+    },
+    {
+      label: 'Administrasi',
+      links: [
+        { to: '/agenda', label: 'Agenda Polres', icon: CalendarDays },
+        { to: '/surat', label: 'Surat Masuk/Keluar', icon: Mail },
+        { to: '/surat-pengantar', label: 'Surat Pengantar', icon: Stamp },
+        { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
+        { to: '/backup', label: 'Backup Data', icon: DatabaseBackup },
+        ...(isAdminUtama
+          ? [{ to: '/persetujuan-akun', label: 'Persetujuan Akun', icon: ShieldCheck, badge: jumlahMenunggu }]
+          : []),
+      ],
+    },
+  ]
+}
+
+// Menu PEGAWAI (non-admin) untuk tenant "polres".
+function getLinksPolresPegawai(jumlahPesanBelumDibaca = 0) {
+  return [
+    { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
+    { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
+    { to: '/presensi', label: 'Presensi', icon: ClipboardCheck },
+    { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
+    { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
+    { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
+    { to: '/alat-pdf', label: 'Alat PDF', icon: FileType2 },
+    { to: '/agenda', label: 'Agenda Polres', icon: CalendarDays },
+    { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
+    { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
+    { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
+  ]
+}
 
 // Menu GURU: tetap ringkas, tidak perlu dikelompokkan
 // Kuitansi, Kuitansi Jasa & Nota Belanja SENGAJA TIDAK ada di sini — ketiga
@@ -626,6 +686,7 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
     sekolahId,
     isKantor,
     isPuskesmas,
+    isPolres,
   } = useAuth()
   const navigate = useNavigate()
   const fotoUrl = getFotoUrl(profil?.foto_profil_path)
@@ -927,14 +988,14 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
     }
   }, [isSuperAdmin])
 
-  // Pilih set menu admin & non-admin sesuai jenis tenant (sekolah vs kantor vs puskesmas).
-  // isKantor dan isPuskesmas datang dari AuthContext (relasi profil ->
-  // sekolah.jenis_organisasi). Puskesmas dicek setelah kantor supaya kedua
-  // tenant non-sekolah tetap saling eksklusif.
+  // Pilih set menu admin & non-admin sesuai jenis tenant (sekolah, kantor,
+  // puskesmas, polres). Semua tenant non-sekolah saling eksklusif.
   const groupsAdmin = isKantor
     ? getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu, jumlahPesanBelumDibaca)
     : isPuskesmas
     ? getGroupsPuskesmasAdmin(isAdminUtama, jumlahMenunggu, jumlahPesanBelumDibaca)
+    : isPolres
+    ? getGroupsPolresAdmin(isAdminUtama, jumlahMenunggu, jumlahPesanBelumDibaca)
     : getGroupsAdmin(
         isAdminUtama,
         isSuperAdmin,
@@ -950,6 +1011,8 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
     ? getLinksKantorPegawai(jumlahPesanBelumDibaca)
     : isPuskesmas
     ? getLinksPuskesmasPegawai(jumlahPesanBelumDibaca)
+    : isPolres
+    ? getLinksPolresPegawai(jumlahPesanBelumDibaca)
     : getLinksGuru(jumlahPesanBelumDibaca, sekolahId)
   const linksOrangTua = getLinksOrangTua(jumlahPesanBelumDibaca, sekolahId)
 
