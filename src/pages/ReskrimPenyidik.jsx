@@ -17,6 +17,8 @@ import {
 // TAMBAHAN di versi ini (tanpa perubahan skema database):
 //  - Sistem cetak dengan pratinjau: Register Perkara, Daftar Tahanan,
 //    Lembar Perkara (lengkap), dan Daftar Barang Bukti.
+//  - Pencetakan lewat iframe tersembunyi (hanya berisi dokumen), sehingga
+//    tidak bergantung pada CSS @media print halaman utama.
 //  - Pengaturan kop & pejabat pengesah (disimpan di localStorage per tenant).
 //  - Panel pemantauan masa penahanan (klik kartu "Penahanan habis").
 //  - Peringatan masa penahanan langsung di baris daftar perkara.
@@ -259,11 +261,14 @@ function Modal({ judul, onTutup, lebar = 'max-w-3xl', kotor = false, children })
 
 /* ------------------------------------------------------------------ */
 /* SISTEM CETAK                                                        */
-/* Pratinjau di layar -> tombol Cetak -> window.print(). Saat mencetak, */
-/* semua elemen di body selain #area-cetak disembunyikan lewat CSS.     */
+/* Pratinjau di layar -> tombol Cetak -> dokumen disalin ke iframe     */
+/* tersembunyi lalu iframe.print(). Dialog cetak hanya melihat isi     */
+/* iframe, jadi tidak terpengaruh CSS/overlay halaman utama.           */
 /* Pilih "Simpan sebagai PDF" di dialog cetak untuk membuat berkas PDF. */
 /* ------------------------------------------------------------------ */
-const cssCetak = (orientasi) => `
+
+// CSS isi dokumen (dipakai di pratinjau layar DAN di dalam iframe cetak).
+const cssDokumen = (orientasi) => `
 #area-cetak .kertas{background:#fff;color:#000;margin:16px auto;padding:14mm;box-sizing:border-box;
   box-shadow:0 1px 8px rgba(0,0,0,.25);width:${orientasi === 'landscape' ? '297mm' : '210mm'};
   font-family:"Times New Roman",Times,serif;font-size:11pt;line-height:1.35}
@@ -289,15 +294,53 @@ const cssCetak = (orientasi) => `
 #area-cetak .ttd .ruang{height:20mm}
 #area-cetak .ttd .nama{font-weight:700;text-decoration:underline}
 #area-cetak .kaki{margin-top:14px;font-size:8.5pt;color:#444}
-@media print{
-  @page{size:A4 ${orientasi};margin:12mm}
-  html,body{background:#fff !important;height:auto !important;overflow:visible !important}
-  body > *:not(#area-cetak){display:none !important}
-  #area-cetak{position:static !important;overflow:visible !important;background:#fff !important}
-  #area-cetak .no-cetak{display:none !important}
-  #area-cetak .kertas{margin:0 !important;padding:0 !important;width:auto !important;box-shadow:none !important}
-}
 `
+
+// CSS khusus kertas di dalam iframe cetak. @page harus di level atas (bukan di dalam @media).
+const cssKertasCetak = (orientasi) => `
+@page{size:A4 ${orientasi};margin:12mm}
+html,body{margin:0;background:#fff}
+#area-cetak, #area-cetak *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+#area-cetak .kertas{margin:0;padding:0;width:auto;box-shadow:none}
+`
+
+const escHtml = (s) =>
+  String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+
+async function cetakLewatIframe(orientasi, judul) {
+  const kertas = document.querySelector('#area-cetak .kertas')
+  if (!kertas) return
+
+  const iframe = document.createElement('iframe')
+  iframe.setAttribute('aria-hidden', 'true')
+  iframe.style.cssText =
+    'position:fixed;left:-9999px;top:0;width:297mm;height:210mm;border:0;pointer-events:none'
+  document.body.appendChild(iframe)
+
+  const doc = iframe.contentDocument
+  doc.open()
+  doc.write(
+    `<!doctype html><html><head><meta charset="utf-8"><title>${escHtml(judul)}</title>` +
+    `<style>${cssDokumen(orientasi)}${cssKertasCetak(orientasi)}</style></head>` +
+    `<body><div id="area-cetak">${kertas.outerHTML}</div></body></html>`
+  )
+  doc.close()
+
+  // Tunggu logo selesai dimuat (maks. 4 detik) supaya tidak tercetak kosong.
+  const tunggu = Promise.all(
+    [...doc.images].map((img) =>
+      img.complete ? null : new Promise((r) => { img.onload = img.onerror = r })
+    )
+  )
+  await Promise.race([tunggu, new Promise((r) => setTimeout(r, 4000))])
+
+  const win = iframe.contentWindow
+  const bersihkan = () => setTimeout(() => iframe.remove(), 500)
+  win.addEventListener('afterprint', bersihkan)
+  setTimeout(() => iframe.remove(), 120000) // cadangan
+  win.focus()
+  win.print()
+}
 
 function Pratinjau({ judul, orientasi = 'portrait', onTutup, aksi = null, children }) {
   // Capture + stopImmediatePropagation: Esc hanya menutup pratinjau, bukan modal di belakangnya.
@@ -311,7 +354,7 @@ function Pratinjau({ judul, orientasi = 'portrait', onTutup, aksi = null, childr
 
   return createPortal(
     <div id="area-cetak" className="fixed inset-0 z-[60] bg-gray-300 overflow-auto">
-      <style>{cssCetak(orientasi)}</style>
+      <style>{cssDokumen(orientasi)}</style>
       <div className="no-cetak sticky top-0 z-10 flex flex-wrap items-center gap-2 bg-white border-b border-gray-300 px-4 py-2">
         <div className="font-semibold">Pratinjau: {judul}</div>
         <div className="text-xs text-gray-500 hidden sm:block">
@@ -320,7 +363,7 @@ function Pratinjau({ judul, orientasi = 'portrait', onTutup, aksi = null, childr
         <div className="flex-1" />
         {aksi}
         <button type="button" className="btn-secondary" onClick={onTutup}>Tutup</button>
-        <button type="button" className="btn-primary" onClick={() => window.print()}>
+        <button type="button" className="btn-primary" onClick={() => cetakLewatIframe(orientasi, judul)}>
           <Printer size={16} /> Cetak
         </button>
       </div>
