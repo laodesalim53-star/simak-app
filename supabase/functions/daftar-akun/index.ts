@@ -1,4 +1,4 @@
-// Edge Function pendaftaran akun (mode 'baru' & 'gabung', sekolah, kantor & puskesmas).
+// Edge Function pendaftaran akun (mode 'baru' & 'gabung', sekolah, kantor, puskesmas & polres).
 // Publik (dipanggil orang yang belum punya akun), jadi SEMUA validasi di sini.
 // Role & status ditentukan server, tidak pernah dipercaya dari request.
 
@@ -23,9 +23,18 @@ function json(body: unknown, status: number) {
 const JABATAN_SEKOLAH = ['guru', 'orang_tua', 'admin', 'kepala_sekolah']
 const JABATAN_KANTOR = ['pegawai', 'kepala_kantor', 'admin']
 const JABATAN_PUSKESMAS = ['pegawai', 'kepala_puskesmas', 'admin']
+const JABATAN_POLRES = ['pegawai', 'kepala_polres', 'admin']
 const HUBUNGAN_VALID = ['ayah', 'ibu', 'wali'] // sesuaikan dengan pilihan di form
 
-type JenisOrganisasi = 'sekolah' | 'kantor' | 'puskesmas'
+type JenisOrganisasi = 'sekolah' | 'kantor' | 'puskesmas' | 'polres'
+
+// Tenant non-sekolah memakai struktur pegawai (bukan guru).
+// Polres sementara memakai pegawai_kantor, sama dengan AuthContext.
+const TABEL_PEGAWAI: Record<string, string> = {
+  kantor: 'pegawai_kantor',
+  puskesmas: 'pegawai_puskesmas',
+  polres: 'pegawai_kantor',
+}
 
 class HttpError extends Error {
   constructor(public status: number, message: string) {
@@ -73,7 +82,9 @@ async function kirimNotifikasiSuperadmin(
         ? 'Kantor (KUA)'
         : info.jenisOrganisasi === 'puskesmas'
           ? 'Puskesmas'
-          : 'Sekolah'
+          : info.jenisOrganisasi === 'polres'
+            ? 'Polres'
+            : 'Sekolah'
     const judul =
       info.mode === 'baru'
         ? `Pendaftar baru: ${labelJenis} "${info.namaOrganisasi}" (organisasi baru)`
@@ -137,14 +148,14 @@ Deno.serve(async (req) => {
     const hubungan = body.hubungan ?? null
     const nip = String(body.nip ?? '').trim()
 
-    // Jenis organisasi yang valid: 'sekolah' | 'kantor' | 'puskesmas'.
+    // Jenis organisasi yang valid: 'sekolah' | 'kantor' | 'puskesmas' | 'polres'.
     // Default tetap 'sekolah' bila tidak dikenali.
     const jenisOrganisasi: JenisOrganisasi =
-      body.jenisOrganisasi === 'kantor'
-        ? 'kantor'
-        : body.jenisOrganisasi === 'puskesmas'
-          ? 'puskesmas'
-          : 'sekolah'
+      body.jenisOrganisasi === 'kantor' ? 'kantor'
+      : body.jenisOrganisasi === 'puskesmas' ? 'puskesmas'
+      : body.jenisOrganisasi === 'polres' ? 'polres'
+      : 'sekolah'
+    const nonSekolah = jenisOrganisasi !== 'sekolah'
 
     // ---------- Validasi dasar ----------
     if (!['baru', 'gabung'].includes(mode)) throw new HttpError(400, 'Mode pendaftaran tidak valid.')
@@ -153,25 +164,21 @@ Deno.serve(async (req) => {
     if (!namaLengkap) throw new HttpError(400, 'Nama lengkap wajib diisi.')
 
     const jabatanBoleh =
-      jenisOrganisasi === 'kantor'
-        ? JABATAN_KANTOR
-        : jenisOrganisasi === 'puskesmas'
-          ? JABATAN_PUSKESMAS
-          : JABATAN_SEKOLAH
-    const jabatan =
-      body.jabatan ||
-      (jenisOrganisasi === 'kantor' || jenisOrganisasi === 'puskesmas' ? 'pegawai' : 'guru')
+      jenisOrganisasi === 'kantor' ? JABATAN_KANTOR
+      : jenisOrganisasi === 'puskesmas' ? JABATAN_PUSKESMAS
+      : jenisOrganisasi === 'polres' ? JABATAN_POLRES
+      : JABATAN_SEKOLAH
+    const jabatan = body.jabatan || (nonSekolah ? 'pegawai' : 'guru')
     if (!jabatanBoleh.includes(jabatan)) throw new HttpError(400, 'Jabatan tidak valid.')
 
-    if (jenisOrganisasi === 'kantor' && !nip) throw new HttpError(400, 'NIP wajib diisi untuk akun Kantor.')
-    if (jenisOrganisasi === 'puskesmas' && !nip) throw new HttpError(400, 'NIP wajib diisi untuk akun Puskesmas.')
+    if (nonSekolah && !nip) throw new HttpError(400, 'NIP/NRP wajib diisi untuk akun ' + jenisOrganisasi + '.')
 
     const isOrangTua = jabatan === 'orang_tua'
     if (isOrangTua && mode !== 'gabung') {
       throw new HttpError(400, 'Akun orang tua/wali hanya dapat bergabung ke sekolah yang sudah terdaftar.')
     }
     if (mode === 'baru' && !namaSekolah) throw new HttpError(400, 'Nama organisasi wajib diisi.')
-    if (mode === 'gabung' && !sekolahId) throw new HttpError(400, 'Silakan pilih sekolah/kantor/puskesmas terlebih dahulu.')
+    if (mode === 'gabung' && !sekolahId) throw new HttpError(400, 'Silakan pilih sekolah/kantor/puskesmas/polres terlebih dahulu.')
     if (isOrangTua) {
       if (!siswaId) throw new HttpError(400, 'Silakan pilih siswa yang merupakan anak/wali Anda.')
       if (!hubungan || !HUBUNGAN_VALID.includes(hubungan)) {
@@ -189,7 +196,7 @@ Deno.serve(async (req) => {
         .eq('id', sekolahId)
         .maybeSingle()
       if (error) throw new HttpError(500, 'Gagal memeriksa organisasi: ' + error.message)
-      if (!sekolah) throw new HttpError(404, 'Sekolah/kantor/puskesmas tidak ditemukan.')
+      if (!sekolah) throw new HttpError(404, 'Sekolah/kantor/puskesmas/polres tidak ditemukan.')
       if ((sekolah.jenis_organisasi ?? 'sekolah') !== jenisOrganisasi) {
         throw new HttpError(400, 'Jenis organisasi tidak sesuai.')
       }
@@ -242,7 +249,7 @@ Deno.serve(async (req) => {
         ? 'admin_utama'
         : isOrangTua
           ? 'orang_tua'
-          : jenisOrganisasi === 'kantor' || jenisOrganisasi === 'puskesmas'
+          : nonSekolah
             ? 'pegawai'
             : 'guru'
 
@@ -252,9 +259,9 @@ Deno.serve(async (req) => {
     // ---------- 4. pegawai_kantor / pegawai_puskesmas (khusus tenant non-sekolah) ----------
     // CATATAN: tabel 'pegawai_puskesmas' diasumsikan sudah ada dengan struktur
     // yang sama seperti 'pegawai_kantor' (sekolah_id, nama_lengkap, jabatan, nip,
-    // email, status). Sesuaikan nama tabel/kolom di bawah bila berbeda.
-    if (jenisOrganisasi === 'kantor' || jenisOrganisasi === 'puskesmas') {
-      const namaTabelPegawai = jenisOrganisasi === 'kantor' ? 'pegawai_kantor' : 'pegawai_puskesmas'
+    // email, status). Polres sementara memakai 'pegawai_kantor' (lihat TABEL_PEGAWAI).
+    if (nonSekolah) {
+      const namaTabelPegawai = TABEL_PEGAWAI[jenisOrganisasi]
       const { data: pegawai, error } = await adminClient
         .from(namaTabelPegawai)
         .insert({
@@ -322,6 +329,7 @@ Deno.serve(async (req) => {
   } catch (e) {
     // Rollback urutan terbalik, supaya tidak ada data yatim.
     // Setiap langkah dibungkus try agar satu kegagalan tidak menghentikan yang lain.
+    // Polres memakai pegawai_kantor, jadi sudah tercakup di sini.
     const coba = async (fn: () => PromiseLike<unknown>) => { try { await fn() } catch (_) { /* abaikan */ } }
     if (userId) {
       await coba(() => adminClient.from('orang_tua_siswa').delete().eq('orang_tua_id', userId))
