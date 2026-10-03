@@ -30,6 +30,12 @@ const LABEL_JABATAN = {
   guru: 'Guru',
 }
 
+// PENYESUAIAN TENANT POLRES: istilah jabatan yang berbeda untuk tenant
+// jenis_organisasi === 'polres'. Sisanya memakai LABEL_JABATAN di atas.
+const LABEL_JABATAN_POLRES = {
+  kepala_sekolah: 'Kapolres',
+}
+
 // ============================================================================
 // FITUR BARU: Cetak PDF & Export Excel untuk Data Diri
 // ----------------------------------------------------------------------------
@@ -390,6 +396,12 @@ function LokasiGPSPeta({ lintang, bujur, onChange }) {
 // "NUPTK" menjadi "NIPA", karena field ini dipakai lintas tenant kantor & sekolah dan
 // tidak semua akun admin/kepsek adalah tenaga pendidik pemegang NUPTK.
 //
+// PENYESUAIAN TENANT POLRES: untuk tenant jenis_organisasi === 'polres' (dibaca dari
+// adminData.jenis_organisasi), istilah di UI disesuaikan: "NIPA" -> "NRP",
+// "Pangkat / Golongan" -> "Pangkat", "Sekolah" -> "Satuan", "Kepala Sekolah" ->
+// "Kapolres", dan contoh isian (placeholder) diganti ke contoh kepolisian. Kolom
+// database tetap sama (`nuptk` menyimpan NRP, `pangkat_golongan` menyimpan pangkat).
+//
 // LOKASI GPS & PETA: kolom `lintang` & `bujur` di tabel `profil` (lihat SQL di
 // file gps_lokasi.sql / balasan chat).
 function ProfilAdminCard({ profil, userId, adminData }) {
@@ -530,7 +542,29 @@ function ProfilAdminCard({ profil, userId, adminData }) {
     setSaving(false)
   }
 
-  const labelJabatan = LABEL_JABATAN[profil?.jabatan] || LABEL_JABATAN[profil?.role] || profil?.jabatan || 'Admin'
+  // Tenant Polres? (dibaca dari tabel sekolah.jenis_organisasi lewat komponen induk)
+  const isPolres = adminData?.jenis_organisasi === 'polres'
+
+  // Label jabatan: akun dengan role admin_utama/superadmin selalu memakai role
+  // tersebut (supaya konsisten dengan label di sidebar), selain itu pakai jabatan.
+  // Khusus Polres, istilah tertentu diganti (mis. Kepala Sekolah -> Kapolres).
+  const daftarLabelJabatan = isPolres ? { ...LABEL_JABATAN, ...LABEL_JABATAN_POLRES } : LABEL_JABATAN
+  const rolePuncak = ['admin_utama', 'superadmin'].includes(profil?.role) ? profil.role : null
+  const labelJabatan =
+    daftarLabelJabatan[rolePuncak] ||
+    daftarLabelJabatan[profil?.jabatan] ||
+    daftarLabelJabatan[profil?.role] ||
+    profil?.jabatan ||
+    'Admin'
+
+  // Istilah yang berbeda antara tenant sekolah/kantor dan tenant Polres.
+  const labelNomorPegawai = isPolres ? 'NRP' : 'NIPA'
+  const placeholderNomorPegawai = isPolres ? 'mis. 85010123' : 'mis. 765368787875555'
+  const labelPangkat = isPolres ? 'Pangkat' : 'Pangkat / Golongan'
+  const placeholderPangkat = isPolres ? 'mis. AKP / Iptu' : 'mis. Penata Muda / III-a'
+  const placeholderPendidikan = isPolres ? 'mis. S1 Hukum' : 'mis. S1 Pendidikan Guru SD'
+  const labelSatuan = isPolres ? 'Satuan' : 'Sekolah'
+  const teksSemuaSatuan = isPolres ? 'Akses Semua Satuan' : 'Akses Semua Sekolah'
 
   // Superadmin (akses semua sekolah) ditandai dengan sekolah_id kosong.
   // Admin/kepala sekolah biasa selalu terikat ke satu sekolah spesifik.
@@ -544,9 +578,9 @@ function ProfilAdminCard({ profil, userId, adminData }) {
   const dataDiriFields = [
     { label: 'Nama Lengkap', value: form.nama_lengkap_pendaftar },
     { label: 'Jabatan', value: labelJabatan },
-    { label: 'Sekolah', value: isSuperadmin ? 'Akses Semua Sekolah' : namaSekolah },
-    { label: 'NIPA', value: form.nuptk },
-    { label: 'Pangkat / Golongan', value: form.pangkat_golongan },
+    { label: labelSatuan, value: isSuperadmin ? teksSemuaSatuan : namaSekolah },
+    { label: labelNomorPegawai, value: form.nuptk },
+    { label: labelPangkat, value: form.pangkat_golongan },
     { label: 'Nomor HP', value: form.no_hp },
     { label: 'Email', value: form.email_pendaftar },
     { label: 'Tanggal Lahir', value: form.tanggal_lahir },
@@ -632,7 +666,7 @@ function ProfilAdminCard({ profil, userId, adminData }) {
               </p>
               <p className="text-sm text-blue-200/70">{labelJabatan}</p>
               <p className="text-xs text-brass-300/90 mt-0.5 truncate">
-                {isSuperadmin ? 'Akses Semua Sekolah' : namaSekolah || 'Memuat nama sekolah...'}
+                {isSuperadmin ? teksSemuaSatuan : namaSekolah || (isPolres ? 'Memuat nama satuan...' : 'Memuat nama sekolah...')}
               </p>
             </div>
           </div>
@@ -660,10 +694,10 @@ function ProfilAdminCard({ profil, userId, adminData }) {
               />
             </div>
             <div>
-              <label className="text-xs text-ink-700/60 mb-1 block">NIPA</label>
+              <label className="text-xs text-ink-700/60 mb-1 block">{labelNomorPegawai}</label>
               <input
                 className="input w-full"
-                placeholder="mis. 765368787875555"
+                placeholder={placeholderNomorPegawai}
                 inputMode="numeric"
                 pattern="[0-9]*"
                 value={form.nuptk}
@@ -671,10 +705,10 @@ function ProfilAdminCard({ profil, userId, adminData }) {
               />
             </div>
             <div>
-              <label className="text-xs text-ink-700/60 mb-1 block">Pangkat / Golongan</label>
+              <label className="text-xs text-ink-700/60 mb-1 block">{labelPangkat}</label>
               <input
                 className="input w-full"
-                placeholder="mis. Penata Muda / III-a"
+                placeholder={placeholderPangkat}
                 value={form.pangkat_golongan}
                 onChange={(e) => setForm({ ...form, pangkat_golongan: e.target.value })}
               />
@@ -709,7 +743,7 @@ function ProfilAdminCard({ profil, userId, adminData }) {
               <label className="text-xs text-ink-700/60 mb-1 block">Pendidikan Terakhir</label>
               <input
                 className="input w-full"
-                placeholder="mis. S1 Pendidikan Guru SD"
+                placeholder={placeholderPendidikan}
                 value={form.pendidikan_terakhir}
                 onChange={(e) => setForm({ ...form, pendidikan_terakhir: e.target.value })}
               />
@@ -719,10 +753,10 @@ function ProfilAdminCard({ profil, userId, adminData }) {
               <input className="input w-full" value={labelJabatan} disabled />
             </div>
             <div>
-              <label className="text-xs text-ink-700/60 mb-1 block">Sekolah</label>
+              <label className="text-xs text-ink-700/60 mb-1 block">{labelSatuan}</label>
               <input
                 className="input w-full"
-                value={isSuperadmin ? 'Akses Semua Sekolah' : namaSekolah || 'Memuat...'}
+                value={isSuperadmin ? teksSemuaSatuan : namaSekolah || 'Memuat...'}
                 disabled
               />
             </div>
@@ -1591,12 +1625,12 @@ function ProfilOrangTuaCard({ profil, userId }) {
 // ProfilSaya) sebelumnya hanya menampilkan/bisa mengedit 8 field (nama,
 // mapel, NUPTK, pangkat/golongan, no HP, email, tanggal lahir, pendidikan
 // terakhir) — padahal tabel `guru` menyimpan seluruh field Formulir
-// Dapodik yang sama seperti di form admin Guru.jsx (Data Pribadi, Riwayat
-// Pendidikan & Pelatihan, Kepegawaian, Alamat & Lokasi, Kontak, Lainnya).
-// Sekarang guru yang login bisa melihat DAN mengedit datanya sendiri
-// secara lengkap, dikelompokkan dengan struktur seksi yang sama seperti
-// form admin, supaya konsisten. SeksiForm/Field di bawah ini adalah
-// helper lokal untuk file ini (terpisah dari yang ada di Guru.jsx).
+// Dapodik yang sama seperti di form admin Guru.jsx (Data Pribadi,
+// Riwayat Pendidikan & Pelatihan, Kepegawaian, Alamat & Lokasi, Kontak,
+// Lainnya). Sekarang guru yang login bisa melihat DAN mengedit datanya
+// sendiri secara lengkap, dikelompokkan dengan struktur seksi yang sama
+// seperti form admin, supaya konsisten. SeksiForm/Field di bawah ini
+// adalah helper lokal untuk file ini (terpisah dari yang ada di Guru.jsx).
 //
 // CATATAN: field NUPTK di form guru DI BAWAH INI TETAP berlabel "NUPTK"
 // (tidak diganti "NIPA") karena field ini untuk tenaga pendidik tenant
@@ -1635,8 +1669,9 @@ export default function ProfilSaya() {
   // QR code identitas guru (dibuat dari qrcode -> data URL PNG)
   const [qrDataUrl, setQrDataUrl] = useState('')
 
-  // Data pendaftar (nama, email, foto, nama sekolah) untuk akun admin/kepala sekolah
-  // tanpa guru_id. Diambil terpisah dari AuthContext supaya AuthContext.jsx tidak perlu diubah.
+  // Data pendaftar (nama, email, foto, nama sekolah/satuan, jenis organisasi) untuk akun
+  // admin/kepala sekolah tanpa guru_id. Diambil terpisah dari AuthContext supaya
+  // AuthContext.jsx tidak perlu diubah.
   const [adminData, setAdminData] = useState(null)
   const [loadingAdminData, setLoadingAdminData] = useState(true)
 
@@ -1702,22 +1737,36 @@ export default function ProfilSaya() {
         .eq('id', userId)
         .maybeSingle()
 
-      // Nama sekolah diambil lewat query terpisah (bukan join/embed) supaya tidak
-      // tergantung ada-tidaknya foreign key profil.sekolah_id -> sekolah.id di skema
-      // Supabase. Superadmin (sekolah_id kosong) tidak perlu query ini sama sekali.
-      // ASUMSI: tabel `sekolah` punya kolom `nama_sekolah` — sesuaikan kalau nama
-      // kolomnya berbeda di skema kamu (mis. `nama`).
+      // Nama sekolah/satuan + jenis organisasi (mis. 'polres') diambil lewat query
+      // terpisah (bukan join/embed) supaya tidak tergantung ada-tidaknya foreign key
+      // profil.sekolah_id -> sekolah.id di skema Supabase. Superadmin (sekolah_id
+      // kosong) tidak perlu query ini sama sekali.
+      // ASUMSI: tabel `sekolah` punya kolom `nama_sekolah` dan `jenis_organisasi` —
+      // sesuaikan kalau nama kolomnya berbeda di skema kamu. Kalau kolom
+      // `jenis_organisasi` ternyata tidak terbaca (error), query diulang tanpa kolom
+      // itu supaya nama sekolah tetap tampil.
       let namaSekolah = null
+      let jenisOrganisasi = null
       if (profil?.sekolah_id) {
-        const { data: sekolahRow } = await supabase
+        let { data: sekolahRow, error: errSekolah } = await supabase
           .from('sekolah')
-          .select('nama_sekolah')
+          .select('nama_sekolah, jenis_organisasi')
           .eq('id', profil.sekolah_id)
           .maybeSingle()
+
+        if (errSekolah) {
+          const ulang = await supabase
+            .from('sekolah')
+            .select('nama_sekolah')
+            .eq('id', profil.sekolah_id)
+            .maybeSingle()
+          sekolahRow = ulang.data
+        }
         namaSekolah = sekolahRow?.nama_sekolah || null
+        jenisOrganisasi = sekolahRow?.jenis_organisasi || null
       }
 
-      setAdminData({ ...row, nama_sekolah: namaSekolah })
+      setAdminData({ ...row, nama_sekolah: namaSekolah, jenis_organisasi: jenisOrganisasi })
       setLoadingAdminData(false)
     }
     loadAdminData()
