@@ -1043,7 +1043,7 @@ function DashboardPolres({ sekolahId }) {
   }, [sekolahId])
 
   const cards = [
-    { { label: 'Personel Aktif', value: stats.personel, icon: Briefcase, theme: 'navy' },
+    { label: 'Personel Aktif', value: stats.personel, icon: Briefcase, theme: 'navy' },
     { label: 'Perkara Reskrim', value: stats.perkara, icon: Gavel, theme: 'slate' },
     { label: 'Surat Reskrim', value: stats.surat, icon: FileText, theme: 'gold' },
     {
