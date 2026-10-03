@@ -75,7 +75,18 @@ const PRESET_KUA = {
 }
 
 // ───────────────────────── PRESET POLRES ─────────────────────────
-// Silakan ubah klasifikasi / redaksi sesuai tata naskah Polres.
+// Setiap preset boleh memuat (opsional):
+//   tujuan(ctx), kotaTujuan(ctx), kode  → khusus Polres, tidak dipakai tenant lain.
+// ctx = { kantor, bulan, tahun, polda, kabupaten, kota }
+// Kode klasifikasi arsip sengaja dikosongkan di preset Reskrim; isi sesuai
+// tata naskah dinas / jadwal retensi arsip Polres Anda.
+// Tanda "........" adalah isian yang harus dilengkapi sebelum dicetak.
+const tujuanKapolda = ({ polda }) =>
+  polda ? `Kepala Kepolisian Daerah ${polda}` : 'Kepala Kepolisian Daerah'
+const tujuanKejari = ({ kabupaten }) =>
+  `Kepala Kejaksaan Negeri${kabupaten ? ` ${kabupaten}` : ''}`
+const diKota = ({ kota }) => (kota ? `di ${kota}` : '')
+
 const PRESET_POLRES = {
   hadir: {
     label: 'Pengantar Daftar Hadir Personel',
@@ -84,6 +95,9 @@ const PRESET_POLRES = {
     lampiran: '1 (satu) berkas',
     perihal: ({ bulan, tahun }) => `Daftar hadir personel\nBulan ${bulan} ${tahun}`,
     cq: 'Karo SDM',
+    tujuan: tujuanKapolda,
+    kotaTujuan: () => '',
+    kode: '',
     isi: ({ kantor, bulan, tahun }) =>
       `Bersama ini kami sampaikan dengan hormat **Daftar Hadir Personel** Bulan ${bulan} tahun ${tahun} pada **${kantor}** sebagaimana perihal di atas, guna menjadi bahan/data untuk diproses selanjutnya.`,
   },
@@ -94,13 +108,58 @@ const PRESET_POLRES = {
     lampiran: '1 (satu) berkas',
     perihal: ({ bulan, tahun }) => `Penyampaian dokumen arsip\nBulan ${bulan} ${tahun}`,
     cq: '',
+    tujuan: tujuanKapolda,
+    kotaTujuan: () => '',
+    kode: '',
     isi: ({ kantor, bulan, tahun }) =>
       `Bersama ini kami sampaikan dengan hormat dokumen arsip Bulan ${bulan} tahun ${tahun} pada **${kantor}** sebagaimana perihal di atas, guna menjadi bahan/data untuk diproses selanjutnya.`,
+  },
+  // ── Bagian Reskrim ──
+  reskrim_berkas: {
+    label: 'Reskrim — Pengantar Pengiriman Berkas Perkara',
+    klasifikasi: '',
+    sifat: 'Biasa',
+    lampiran: '1 (satu) berkas',
+    perihal: () => 'Pengiriman berkas perkara\na.n. tersangka ........',
+    cq: 'Kepala Seksi Tindak Pidana Umum',
+    tujuan: tujuanKejari,
+    kotaTujuan: diKota,
+    kode: 'Reskrim',
+    isi: () =>
+      `Rujukan: Laporan Polisi Nomor: ........ tanggal ........ tentang dugaan tindak pidana ........\n\nBersama ini kami kirimkan berkas perkara atas nama tersangka **........** beserta kelengkapannya, guna dilakukan penelitian dan proses selanjutnya sesuai ketentuan yang berlaku.`,
+  },
+  reskrim_spdp: {
+    label: 'Reskrim — Pengantar SPDP',
+    klasifikasi: '',
+    sifat: 'Biasa',
+    lampiran: '1 (satu) lembar',
+    perihal: () => 'Pemberitahuan dimulainya penyidikan\n(SPDP)',
+    cq: 'Kepala Seksi Tindak Pidana Umum',
+    tujuan: tujuanKejari,
+    kotaTujuan: diKota,
+    kode: 'Reskrim',
+    isi: () =>
+      `Rujukan: Laporan Polisi Nomor: ........ tanggal ........ dan Surat Perintah Penyidikan Nomor: ........ tanggal ........\n\nBersama ini kami sampaikan **Surat Pemberitahuan Dimulainya Penyidikan (SPDP)** atas dugaan tindak pidana ........ yang terjadi pada ........ di ........, dengan terlapor/tersangka ........ , untuk menjadi maklum.`,
+  },
+  reskrim_bantuan: {
+    label: 'Reskrim — Pengantar Permintaan Bantuan/Data',
+    klasifikasi: '',
+    sifat: 'Biasa',
+    lampiran: '-',
+    perihal: () => 'Permintaan bantuan ........',
+    cq: '',
+    tujuan: () => '........',
+    kotaTujuan: () => '',
+    kode: 'Reskrim',
+    isi: () =>
+      `Rujukan: Laporan Polisi Nomor: ........ tanggal ........\n\nSehubungan dengan penanganan perkara tersebut, dengan hormat kami mohon bantuan ........ untuk kepentingan penyidikan.`,
   },
   kustom: {
     label: 'Surat Pengantar Lainnya (isi sendiri)',
     klasifikasi: '', sifat: 'Biasa', lampiran: '-',
     perihal: () => '', cq: '', isi: () => '',
+    tujuan: tujuanKapolda,
+    kotaTujuan: () => '',
   },
 }
 
@@ -108,11 +167,13 @@ const inputCls =
   'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500'
 const labelCls = 'block text-xs font-medium text-slate-600 mb-1'
 
+const barisPangkatNrp = (pangkat, nrp) =>
+  `${pangkat ? pangkat + ' ' : ''}NRP ${nrp || '..............................'}`
+
 export default function SuratPengantar() {
   const navigate = useNavigate()
-  // CEK: sesuaikan nama field jenis tenant di AuthContext
-  const { sekolahId, jenisOrganisasi } = useAuth()
-  const isPolres = jenisOrganisasi === 'polres'
+  // isPolres disediakan AuthContext (dipakai juga oleh SampulLaporan.jsx).
+  const { sekolahId, isPolres } = useAuth()
   const PRESET = isPolres ? PRESET_POLRES : PRESET_KUA
 
   const [profil, setProfil] = useState(null)
@@ -121,6 +182,11 @@ export default function SuratPengantar() {
   const [jenis, setJenis] = useState('hadir')
   const [bulan, setBulan] = useState(hariIni.getMonth() + 1)
   const [tahun, setTahun] = useState(hariIni.getFullYear())
+
+  // Khusus Polres: siapa yang menandatangani
+  const [penandatangan, setPenandatangan] = useState('kapolres') // 'kapolres' | 'arsip' | 'manual'
+  const [ttdManual, setTtdManual] = useState({ jabatan: '', nama: '', pangkat: '', nrp: '' })
+  const ubahTtdManual = (key) => (e) => setTtdManual((t) => ({ ...t, [key]: e.target.value }))
 
   const [form, setForm] = useState({
     urut: '',
@@ -149,7 +215,9 @@ export default function SuratPengantar() {
     const query = isPolres
       ? supabase
           .from('profil_polres')
-          .select('nama_satuan, polda, kabupaten_kota, kapolres, pangkat_kapolres, nrp_kapolres, tempat_ttd, ttd_kapolres_path')
+          .select(
+            'nama_satuan, polda, kabupaten_kota, kapolres, pangkat_kapolres, nrp_kapolres, tempat_ttd, ttd_kapolres_path, jabatan_pejabat_arsip, pejabat_arsip, pangkat_pejabat_arsip, nrp_pejabat_arsip'
+          )
       : supabase
           .from('profil_kantor')
           .select('nama_kantor, kabupaten, kecamatan, kepala_kua, nip_kepala_kua, ttd_kepala_kua_path')
@@ -167,6 +235,7 @@ export default function SuratPengantar() {
     ? profil?.nama_satuan || 'Kepolisian Resor'
     : profil?.nama_kantor || 'Kantor Urusan Agama'
   const namaPolda = (profil?.polda || '').replace(/^polda\s+/i, '').trim()
+  const namaKabPolres = (profil?.kabupaten_kota || '').replace(/^(kabupaten|kota)\s+/i, '').trim()
   const tempatTtd = profil?.tempat_ttd || profil?.kabupaten_kota || ''
 
   // Jenis tenant berubah → reset jenis surat & kode kantor default
@@ -175,10 +244,24 @@ export default function SuratPengantar() {
     setForm((f) => ({ ...f, kodeKantor: isPolres ? '' : 'KUA.25.06.07', kotaTujuan: isPolres ? '' : 'Dobo' }))
   }, [isPolres])
 
+  // Polres: kode satuan mengikuti jenis surat bila preset menentukannya (mis. Reskrim)
+  useEffect(() => {
+    if (!isPolres) return
+    const p = PRESET_POLRES[jenis]
+    if (p && p.kode !== undefined) setForm((f) => ({ ...f, kodeKantor: p.kode }))
+  }, [jenis, isPolres])
+
   // Isi otomatis saat jenis surat / bulan / tahun / profil berubah
   useEffect(() => {
     const p = PRESET[jenis] || PRESET.kustom
-    const ctx = { kantor: namaKantor, bulan: NAMA_BULAN[bulan - 1], tahun }
+    const ctx = {
+      kantor: namaKantor,
+      bulan: NAMA_BULAN[bulan - 1],
+      tahun,
+      polda: namaPolda,
+      kabupaten: namaKabPolres,
+      kota: tempatTtd,
+    }
     setForm((f) => ({
       ...f,
       klasifikasi: p.klasifikasi,
@@ -188,21 +271,23 @@ export default function SuratPengantar() {
       cq: p.cq,
       isi: p.isi(ctx),
       tujuan: isPolres
-        ? (namaPolda ? `Kepala Kepolisian Daerah ${namaPolda}` : 'Kepala Kepolisian Daerah')
+        ? (p.tujuan ? p.tujuan(ctx) : tujuanKapolda(ctx))
         : `Kepala Kantor Kementerian Agama Kabupaten ${namaKabupaten}`,
+      ...(isPolres && p.kotaTujuan ? { kotaTujuan: p.kotaTujuan(ctx) } : {}),
       tembusan: !isPolres && namaKabupaten
         ? `Kepala Kantor Kementerian Agama\nKabupaten ${namaKabupaten}`
         : isPolres ? '' : f.tembusan,
     }))
-  }, [jenis, bulan, tahun, namaKantor, namaKabupaten, namaPolda, isPolres]) // eslint-disable-line
+  }, [jenis, bulan, tahun, namaKantor, namaKabupaten, namaPolda, namaKabPolres, tempatTtd, isPolres]) // eslint-disable-line
 
   useEffect(() => {
     setForm((f) => ({ ...f, tanggal: tanggalAkhirBulan(tahun, bulan) }))
   }, [bulan, tahun])
 
-  // URL tanda tangan: bucket dan kolom berbeda per tenant
+  // URL tanda tangan: bucket dan kolom berbeda per tenant.
+  // Polres: gambar tanda tangan hanya untuk Kapolres.
   const ttdUrl = isPolres
-    ? (profil?.ttd_kapolres_path
+    ? (penandatangan === 'kapolres' && profil?.ttd_kapolres_path
         ? supabase.storage.from(BUCKET_POLRES).getPublicUrl(profil.ttd_kapolres_path).data.publicUrl
         : null)
     : (profil?.ttd_kepala_kua_path
@@ -221,17 +306,32 @@ export default function SuratPengantar() {
   const paragrafIsi = form.isi.split(/\n\s*\n/).filter((p) => p.trim())
 
   // Blok tanda tangan per tenant
-  const ttd = isPolres
-    ? {
-        jabatan: `Kapolres ${(profil?.nama_satuan || '').replace(/^polres\s+/i, '')}`.trim(),
-        nama: profil?.kapolres || '..............................',
-        baris: `${profil?.pangkat_kapolres ? profil.pangkat_kapolres + ' ' : ''}NRP ${profil?.nrp_kapolres || '..............................'}`,
-      }
-    : {
-        jabatan: 'Kepala',
-        nama: profil?.kepala_kua || '..............................',
-        baris: `NIP. ${profil?.nip_kepala_kua || '..............................'}`,
-      }
+  let ttd
+  if (!isPolres) {
+    ttd = {
+      jabatan: 'Kepala',
+      nama: profil?.kepala_kua || '..............................',
+      baris: `NIP. ${profil?.nip_kepala_kua || '..............................'}`,
+    }
+  } else if (penandatangan === 'arsip') {
+    ttd = {
+      jabatan: profil?.jabatan_pejabat_arsip || '..............................',
+      nama: profil?.pejabat_arsip || '..............................',
+      baris: barisPangkatNrp(profil?.pangkat_pejabat_arsip, profil?.nrp_pejabat_arsip),
+    }
+  } else if (penandatangan === 'manual') {
+    ttd = {
+      jabatan: ttdManual.jabatan || '..............................',
+      nama: ttdManual.nama || '..............................',
+      baris: barisPangkatNrp(ttdManual.pangkat, ttdManual.nrp),
+    }
+  } else {
+    ttd = {
+      jabatan: `Kapolres ${(profil?.nama_satuan || '').replace(/^(polres|resor)\s+/i, '')}`.trim(),
+      nama: profil?.kapolres || '..............................',
+      baris: barisPangkatNrp(profil?.pangkat_kapolres, profil?.nrp_kapolres),
+    }
+  }
 
   return (
     <Layout
@@ -295,7 +395,7 @@ export default function SuratPengantar() {
             <input className={inputCls} placeholder="mis. 43" value={form.urut} onChange={ubah('urut')} />
           </div>
           <div>
-            <label className={labelCls}>{isPolres ? 'Kode satuan (mis. Bag Min)' : 'Kode kantor'}</label>
+            <label className={labelCls}>{isPolres ? 'Kode satuan (mis. Reskrim, Bag Min)' : 'Kode kantor'}</label>
             <input className={inputCls} value={form.kodeKantor} onChange={ubah('kodeKantor')} />
           </div>
           <div>
@@ -334,7 +434,7 @@ export default function SuratPengantar() {
           </div>
           <div className="sm:col-span-2">
             <label className={labelCls}>Isi surat (pisahkan paragraf dengan baris kosong; **teks** = tebal)</label>
-            <textarea rows={5} className={inputCls} value={form.isi} onChange={ubah('isi')} />
+            <textarea rows={6} className={inputCls} value={form.isi} onChange={ubah('isi')} />
           </div>
           <div className="sm:col-span-2">
             <label className={labelCls}>Kalimat penutup</label>
@@ -345,6 +445,50 @@ export default function SuratPengantar() {
             <textarea rows={2} className={inputCls} value={form.tembusan} onChange={ubah('tembusan')} />
           </div>
         </div>
+
+        {/* Penandatangan — khusus Polres */}
+        {isPolres && (
+          <div className="border-t border-slate-100 pt-3 mb-3">
+            <label className={labelCls}>Penandatangan</label>
+            <select
+              className={inputCls}
+              value={penandatangan}
+              onChange={(e) => setPenandatangan(e.target.value)}
+            >
+              <option value="kapolres">Kapolres (dari Profil Polres, dengan gambar tanda tangan)</option>
+              <option value="arsip">Pejabat pengesah arsip (dari Profil Polres)</option>
+              <option value="manual">Isi manual (mis. a.n. Kapolres, Kasat Reskrim)</option>
+            </select>
+
+            {penandatangan === 'manual' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                <div className="sm:col-span-2">
+                  <label className={labelCls}>Jabatan (Enter untuk baris baru)</label>
+                  <textarea
+                    rows={2}
+                    className={inputCls}
+                    placeholder={'mis.\nA.n. KEPALA KEPOLISIAN RESOR ........\nKEPALA SATUAN RESKRIM'}
+                    value={ttdManual.jabatan}
+                    onChange={ubahTtdManual('jabatan')}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Nama</label>
+                  <input className={inputCls} value={ttdManual.nama} onChange={ubahTtdManual('nama')} />
+                </div>
+                <div>
+                  <label className={labelCls}>Pangkat</label>
+                  <input className={inputCls} value={ttdManual.pangkat} onChange={ubahTtdManual('pangkat')} />
+                </div>
+                <div>
+                  <label className={labelCls}>NRP</label>
+                  <input className={inputCls} value={ttdManual.nrp} onChange={ubahTtdManual('nrp')} />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <p className="text-xs text-slate-400">
           Mengganti jenis surat, bulan, atau tahun akan mengisi ulang perihal, tujuan, isi, dan tembusan.
         </p>
@@ -411,7 +555,7 @@ export default function SuratPengantar() {
 
         {/* === TANDA TANGAN === */}
         <div className="ttd-block mt-6 ml-auto text-center" style={{ width: '70mm' }}>
-          <p className="font-bold uppercase">{ttd.jabatan}</p>
+          <p className="font-bold uppercase whitespace-pre-line">{ttd.jabatan}</p>
           <div className="h-20 flex items-center justify-center">
             {ttdUrl && (
               <img src={ttdUrl} alt="Tanda Tangan" className="max-h-20 object-contain" />
