@@ -1016,7 +1016,7 @@ function DashboardPolres({ sekolahId }) {
       const [personelCount, perkaraCount, suratCount, pengumumanRecent, akunMenungguCount] =
         await Promise.all([
           supabase.from(TABEL_PERSONEL_POLRES).select('*', { count: 'exact', head: true })
-            .eq('sekolah_id', sekolahId),
+          .eq('sekolah_id', sekolahId).eq('status', 'aktif'),
           supabase.from('perkara_reskrim').select('*', { count: 'exact', head: true }),
           supabase.from('surat_reskrim').select('*', { count: 'exact', head: true }),
           supabase.from('pengumuman').select('id, judul, kategori, dibuat_pada')
@@ -1043,7 +1043,7 @@ function DashboardPolres({ sekolahId }) {
   }, [sekolahId])
 
   const cards = [
-    { label: 'Total Personel', value: stats.personel, icon: Briefcase, theme: 'navy' },
+    { { label: 'Personel Aktif', value: stats.personel, icon: Briefcase, theme: 'navy' },
     { label: 'Perkara Reskrim', value: stats.perkara, icon: Gavel, theme: 'slate' },
     { label: 'Surat Reskrim', value: stats.surat, icon: FileText, theme: 'gold' },
     {
