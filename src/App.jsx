@@ -33,6 +33,7 @@ const ProfilPolres = lazy(() => import('./pages/ProfilPolres'))
 const ReskrimPenyidik = lazy(() => import('./pages/ReskrimPenyidik'))
 const DataPersonelPolres = lazy(() => import('./pages/DataPersonelPolres'))
 const PresensiPolres = lazy(() => import('./pages/PresensiPolres'))
+const DaftarHadirPolres = lazy(() => import('./pages/DaftarHadirPolres'))
 const DaftarHadirPegawai = lazy(() => import('./pages/DaftarHadirPegawai'))
 const ProfilKantor = lazy(() => import('./pages/ProfilKantor'))
 const ProfilPuskesmas = lazy(() => import('./pages/ProfilPuskesmas'))
@@ -347,6 +348,7 @@ export default function App() {
           <Route path="/reskrim-penyidik" element={<ProtectedRoute><ReskrimPenyidik /></ProtectedRoute>} />
           <Route path="/data-personel-polres" element={<ProtectedRoute adminOnly><DataPersonelPolres /></ProtectedRoute>} />
           <Route path="/presensi-polres" element={<ProtectedRoute adminOnly><PresensiPolres /></ProtectedRoute>} />
+          <Route path="/daftar-hadir-polres" element={<ProtectedRoute adminOnly><DaftarHadirPolres /></ProtectedRoute>} />
           <Route path="/pusat-materi-majelis" element={<ProtectedRoute><PusatMateriMajelis /></ProtectedRoute>} />
           <Route path="/materi-keluarga-sakinah" element={<ProtectedRoute><MateriKeluargaSakinah /></ProtectedRoute>} />
           <Route path="/materi-pengelolaan-zakat" element={<ProtectedRoute><MateriPengelolaanZakat /></ProtectedRoute>} />
