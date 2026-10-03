@@ -6,7 +6,7 @@ import Layout from '../components/Layout'
 import StoryBar from '../components/StoryBar'
 import StoryUploader from '../components/StoryUploader'
 import PintasanKUA from '../components/PintasanKUA'
-import { Users, GraduationCap, DoorOpen, Megaphone, LayoutDashboard, ClipboardCheck, FileClock, Briefcase, UserCheck, AlertTriangle, Link2, ArrowRight } from 'lucide-react'
+import { Users, GraduationCap, DoorOpen, Megaphone, LayoutDashboard, ClipboardCheck, FileClock, Briefcase, UserCheck, AlertTriangle, Link2, ArrowRight, Gavel, FileText } from 'lucide-react'
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -973,6 +973,191 @@ function DashboardPuskesmas({ sekolahId }) {
               </LineChart>
             </ResponsiveContainer>
           )}
+        </div>
+      </div>
+    </Layout>
+  )
+}
+/* ================================================================
+   ==================  DASBOR POLRES  =================================
+   ================================================================ */
+// TODO: ganti dengan nama tabel Data Personel yang sebenarnya
+// (kantor memakai 'pegawai_kantor', puskesmas 'pegawai_puskesmas').
+const TABEL_PERSONEL_POLRES = 'personel_polres'
+
+const PINTASAN_POLRES = [
+  { to: '/reskrim-penyidik', label: 'Register Perkara (Penyidik)', icon: Gavel },
+  { to: '/reskrim/surat', label: 'Surat Reskrim', icon: FileText },
+  { to: '/presensi-polres', label: 'Presensi Personel', icon: ClipboardCheck },
+  { to: '/data-personel-polres', label: 'Data Personel', icon: Briefcase },
+]
+
+function DashboardPolres({ sekolahId }) {
+  const [stats, setStats] = useState({ personel: 0, perkara: 0, surat: 0 })
+  const [pengumuman, setPengumuman] = useState([])
+  const [akunMenunggu, setAkunMenunggu] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [storyRefreshKey, setStoryRefreshKey] = useState(0)
+
+  const hariIni = formatTanggalHariIni()
+
+  useEffect(() => {
+    async function load() {
+      if (!sekolahId) {
+        setLoading(false)
+        return
+      }
+
+      setLoading(true)
+
+      // perkara_reskrim & surat_reskrim tidak difilter sekolah_id di sini:
+      // aksesnya sudah dibatasi oleh RLS masing-masing tabel.
+      const [personelCount, perkaraCount, suratCount, pengumumanRecent, akunMenungguCount] =
+        await Promise.all([
+          supabase.from(TABEL_PERSONEL_POLRES).select('*', { count: 'exact', head: true })
+            .eq('sekolah_id', sekolahId),
+          supabase.from('perkara_reskrim').select('*', { count: 'exact', head: true }),
+          supabase.from('surat_reskrim').select('*', { count: 'exact', head: true }),
+          supabase.from('pengumuman').select('id, judul, kategori, dibuat_pada')
+            .eq('sekolah_id', sekolahId).order('dibuat_pada', { ascending: false }).limit(5),
+          supabase.from('profil').select('*', { count: 'exact', head: true })
+            .eq('sekolah_id', sekolahId).eq('status_akun', 'menunggu'),
+        ])
+
+      const gagal = logSupabaseErrors('Polres', {
+        personelCount, perkaraCount, suratCount, pengumumanRecent, akunMenungguCount,
+      })
+      setLoadError(gagal)
+
+      setStats({
+        personel: personelCount.count || 0,
+        perkara: perkaraCount.count || 0,
+        surat: suratCount.count || 0,
+      })
+      setPengumuman(pengumumanRecent.data || [])
+      setAkunMenunggu(akunMenungguCount.count || 0)
+      setLoading(false)
+    }
+    load()
+  }, [sekolahId])
+
+  const cards = [
+    { label: 'Total Personel', value: stats.personel, icon: Briefcase, theme: 'navy' },
+    { label: 'Perkara Reskrim', value: stats.perkara, icon: Gavel, theme: 'slate' },
+    { label: 'Surat Reskrim', value: stats.surat, icon: FileText, theme: 'gold' },
+    {
+      label: 'Akun Menunggu',
+      value: akunMenunggu,
+      sublabel: akunMenunggu > 0 ? 'menunggu persetujuan Anda' : 'tidak ada yang menunggu',
+      icon: UserCheck,
+      theme: akunMenunggu > 0 ? 'rose' : 'emerald',
+    },
+  ]
+
+  return (
+    <Layout title="Dasbor" subtitle="Ringkasan data satuan Anda hari ini">
+      <style>{`
+        @keyframes dashFadeInUp {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .dash-fade-in {
+          animation: dashFadeInUp 0.5s ease-out forwards;
+        }
+      `}</style>
+
+      <div className="relative">
+        {/* Banner mengikuti tema tenant lewat variabel --sidebar-* (diatur TemaSync + tema.css) */}
+        <div
+          className="dash-fade-in opacity-0 relative overflow-hidden rounded-xl p-6 mb-6 flex items-center gap-4"
+          style={{ background: 'var(--sidebar-header-gradient)' }}
+        >
+          <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/5 pointer-events-none" />
+          <div className="absolute -bottom-14 -left-6 w-32 h-32 rounded-full bg-white/5 pointer-events-none" />
+          <BatikOverlay patternId="batikBannerPolres" strokeColor="var(--sidebar-accent)" />
+          <div className="relative w-12 h-12 rounded-full bg-white/10 ring-2 ring-white/20 text-white flex items-center justify-center shrink-0">
+            <LayoutDashboard size={22} />
+          </div>
+          <div className="relative flex-1 min-w-0">
+            <p className="font-display font-semibold text-lg text-white">Selamat datang kembali</p>
+            <p className="text-sm text-white/70">
+              {!loading && akunMenunggu > 0
+                ? `${akunMenunggu} akun menunggu persetujuan Anda.`
+                : 'Semua ringkasan data satuan ada di bawah ini.'}
+            </p>
+          </div>
+          <div className="relative hidden sm:block text-right shrink-0">
+            <p className="text-xs text-white/60 capitalize">{hariIni}</p>
+          </div>
+        </div>
+
+        {loadError && <DataErrorBanner />}
+
+        <StoryBar key={storyRefreshKey} />
+        <StoryUploader onPosted={() => setStoryRefreshKey((k) => k + 1)} />
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {cards.map(({ label, value, icon, theme, sublabel }, i) => (
+            <StatCard
+              key={label}
+              label={label}
+              value={value}
+              icon={icon}
+              theme={theme}
+              sublabel={sublabel}
+              loading={loading}
+              delay={i * 90}
+              patternId={`batikCardPolres-${theme}-${i}`}
+            />
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+          <div className="dash-fade-in opacity-0 card p-6 lg:col-span-2" style={{ animationDelay: '450ms' }}>
+            <h3 className="font-display text-lg font-semibold mb-4">Pintasan</h3>
+            <ul className="space-y-1">
+              {PINTASAN_POLRES.map(({ to, label, icon: Icon }) => (
+                <li key={to}>
+                  <Link
+                    to={to}
+                    className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm text-ink-900 active:bg-ink-900/[0.06] md:hover:bg-ink-900/[0.04] touch-manipulation"
+                  >
+                    <Icon size={18} className="text-ink-700/60 shrink-0" />
+                    <span className="flex-1">{label}</span>
+                    <ArrowRight size={14} className="text-ink-700/30 shrink-0" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="dash-fade-in opacity-0 card p-6 lg:col-span-3" style={{ animationDelay: '520ms' }}>
+            <h3 className="font-display text-lg font-semibold mb-4">Pengumuman Terbaru</h3>
+            {loading ? (
+              <ChartSkeleton height={180} />
+            ) : pengumuman.length === 0 ? (
+              <p className="text-sm text-ink-700/50">Belum ada pengumuman.</p>
+            ) : (
+              <ul className="divide-y divide-ink-900/[0.06]">
+                {pengumuman.map((p) => (
+                  <li key={p.id} className="py-3 flex items-center gap-3">
+                    <span
+                      className={`text-[11px] font-medium px-2 py-0.5 rounded-md shrink-0 ${
+                        KATEGORI_STYLE[p.kategori] || KATEGORI_STYLE.Informasi
+                      }`}
+                    >
+                      {p.kategori || 'Informasi'}
+                    </span>
+                    <span className="text-sm text-ink-900 truncate flex-1">{p.judul}</span>
+                    <span className="text-xs text-ink-700/40 shrink-0">
+                      {formatRelativeDate(p.dibuat_pada)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       </div>
     </Layout>
