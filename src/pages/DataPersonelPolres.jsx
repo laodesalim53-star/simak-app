@@ -1,182 +1,266 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import Layout from '../components/Layout'
-import {
-  Users,
-  Gavel,
-  FileText,
-  Megaphone,
-  LayoutDashboard,
-  ClipboardCheck,
-  ArrowRight,
-} from 'lucide-react'
+import { useAuth } from '../lib/AuthContext'
+import { Loader2, Plus, Search, X, Pencil, Trash2, Shield } from 'lucide-react'
 
-// Dasbor untuk tenant "polres". Dipanggil dari entry point Dashboard()
-// (lihat Dashboard.jsx: if (isPolres) return <DashboardPolres ... />).
-//
-// Warna banner mengikuti tema tenant lewat variabel --sidebar-* yang diatur
-// TemaSync + tema.css. Warna kartu dibuat tetap (biru/abu/emas) agar senada
-// dengan tema polres.
+// Laman Data Personel Polres (tenant jenis_organisasi === 'polres').
+// Tabel: personel_polres (lihat personel_polres.sql), dipisah per tenant lewat sekolah_id.
 
-// TODO: ganti dengan nama tabel Data Personel yang sebenarnya.
-const TABEL_PERSONEL = 'personel_polres'
+const STATUS = [
+  { k: 'aktif', l: 'Aktif', warna: 'bg-emerald-100 text-emerald-800' },
+  { k: 'mutasi', l: 'Mutasi', warna: 'bg-amber-100 text-amber-800' },
+  { k: 'pensiun', l: 'Pensiun', warna: 'bg-gray-200 text-gray-700' },
+]
+const infoStatus = (k) => STATUS.find((s) => s.k === k) || STATUS[0]
 
-const KARTU_TEMA = {
-  biru: 'from-blue-700 to-blue-900',
-  abu: 'from-slate-600 to-slate-800',
-  emas: 'from-amber-500 to-amber-700',
-  langit: 'from-sky-600 to-sky-800',
-}
-
-const PINTASAN = [
-  { to: '/reskrim-penyidik', label: 'Register Perkara (Penyidik)', icon: Gavel },
-  { to: '/reskrim/surat', label: 'Surat Reskrim', icon: FileText },
-  { to: '/presensi-polres', label: 'Presensi Personel', icon: ClipboardCheck },
-  { to: '/data-personel-polres', label: 'Data Personel', icon: Users },
+// Daftar saran saja; boleh diisi bebas (mis. golongan untuk PNS Polri).
+const PANGKAT = [
+  'Bharada', 'Bharatu', 'Bharaka', 'Abripda', 'Abriptu', 'Abrip', 'Bripda', 'Briptu',
+  'Brigadir', 'Bripka', 'Aipda', 'Aiptu', 'Ipda', 'Iptu', 'AKP', 'Kompol', 'AKBP',
+  'Kombes', 'Brigjen', 'Irjen', 'Komjen', 'Jenderal',
 ]
 
-const KATEGORI_STYLE = {
-  Informasi: 'bg-ink-700/10 text-ink-700',
-  Keuangan: 'bg-brass-400/15 text-brass-600',
-  Akademik: 'bg-sage-500/15 text-sage-500',
+const FORM_KOSONG = {
+  nama: '', nrp: '', pangkat: '', jabatan: '', satuan_unit: '', no_hp: '', status: 'aktif',
 }
 
-function formatRelativeDate(iso) {
-  const date = new Date(iso)
-  const today = new Date()
-  const diffDays = Math.floor((today.setHours(0, 0, 0, 0) - new Date(date).setHours(0, 0, 0, 0)) / 86400000)
-  if (diffDays === 0) return 'Hari ini'
-  if (diffDays === 1) return 'Kemarin'
-  return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+function Field({ label, children, className = '' }) {
+  return (
+    <div className={className}>
+      <label className="label-field">{label}</label>
+      {children}
+    </div>
+  )
 }
 
-export default function DashboardPolres() {
-  const [stats, setStats] = useState({ personel: 0, perkara: 0, surat: 0, pengumuman: 0 })
-  const [pengumuman, setPengumuman] = useState([])
+export default function DataPersonelPolres() {
+  const { sekolahId } = useAuth()
+  const [daftar, setDaftar] = useState([])
   const [loading, setLoading] = useState(true)
+  const [cari, setCari] = useState('')
+  const [fStatus, setFStatus] = useState('')
+  const [form, setForm] = useState(null) // null = form tertutup
+  const [editId, setEditId] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const set = (k, v) => setForm((p) => ({ ...p, [k]: v }))
 
-  useEffect(() => {
-    let aktif = true
+  async function muat() {
+    if (!sekolahId) { setLoading(false); return }
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('personel_polres')
+      .select('*')
+      .eq('sekolah_id', sekolahId)
+      .order('nama')
+    if (error) alert('Gagal memuat data personel: ' + error.message)
+    setDaftar(data || [])
+    setLoading(false)
+  }
+  useEffect(() => { muat() }, [sekolahId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-    async function load() {
-      const hitung = (tabel) => supabase.from(tabel).select('*', { count: 'exact', head: true })
+  const tersaring = useMemo(() => {
+    const q = cari.trim().toLowerCase()
+    return daftar.filter((p) => {
+      if (fStatus && p.status !== fStatus) return false
+      if (!q) return true
+      return [p.nama, p.nrp, p.pangkat, p.jabatan, p.satuan_unit]
+        .some((v) => v?.toLowerCase().includes(q))
+    })
+  }, [daftar, cari, fStatus])
 
-      const [personel, perkara, surat, pengCount, pengRecent] = await Promise.all([
-        hitung(TABEL_PERSONEL),
-        hitung('perkara_reskrim'),
-        hitung('surat_reskrim'),
-        hitung('pengumuman'),
-        supabase
-          .from('pengumuman')
-          .select('id, judul, kategori, dibuat_pada')
-          .order('dibuat_pada', { ascending: false })
-          .limit(5),
-      ])
+  function tambah() {
+    setEditId(null)
+    setForm({ ...FORM_KOSONG })
+  }
 
-      if (!aktif) return
-      setStats({
-        personel: personel.count || 0,
-        perkara: perkara.count || 0,
-        surat: surat.count || 0,
-        pengumuman: pengCount.count || 0,
-      })
-      setPengumuman(pengRecent.data || [])
-      setLoading(false)
+  function ubah(p) {
+    const baru = { ...FORM_KOSONG }
+    for (const k of Object.keys(FORM_KOSONG)) baru[k] = p[k] ?? FORM_KOSONG[k]
+    setEditId(p.id)
+    setForm(baru)
+  }
+
+  function tutup() {
+    setForm(null)
+    setEditId(null)
+  }
+
+  async function simpan(e) {
+    e.preventDefault()
+    if (saving) return
+    if (!form.nama.trim()) return alert('Nama wajib diisi.')
+    setSaving(true)
+
+    const payload = { diperbarui_pada: new Date().toISOString() }
+    for (const k of Object.keys(FORM_KOSONG)) payload[k] = form[k]?.toString().trim() || null
+    payload.status = form.status || 'aktif'
+
+    const { error } = editId
+      ? await supabase.from('personel_polres').update(payload).eq('id', editId)
+      : await supabase.from('personel_polres').insert({ sekolah_id: sekolahId, ...payload })
+
+    setSaving(false)
+    if (error) {
+      return alert('Gagal menyimpan: ' + (error.code === '23505' ? 'NRP sudah terdaftar.' : error.message))
     }
+    tutup()
+    muat()
+  }
 
-    load()
-    return () => {
-      aktif = false
-    }
-  }, [])
-
-  const kartu = [
-    { label: 'Total Personel', value: stats.personel, icon: Users, tema: 'biru' },
-    { label: 'Perkara Reskrim', value: stats.perkara, icon: Gavel, tema: 'abu' },
-    { label: 'Surat Reskrim', value: stats.surat, icon: FileText, tema: 'emas' },
-    { label: 'Pengumuman', value: stats.pengumuman, icon: Megaphone, tema: 'langit' },
-  ]
+  async function hapus(p) {
+    if (!confirm(`Hapus data personel ${p.nama}?`)) return
+    const { error } = await supabase.from('personel_polres').delete().eq('id', p.id)
+    if (error) return alert('Gagal menghapus: ' + error.message)
+    muat()
+  }
 
   return (
-    <Layout title="Dasbor" subtitle="Ringkasan data satuan Anda hari ini">
-      <div
-        className="relative overflow-hidden rounded-xl p-6 mb-6 flex items-center gap-4"
-        style={{ background: 'var(--sidebar-header-gradient)' }}
-      >
-        <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/5 pointer-events-none" />
-        <div className="absolute -bottom-14 -left-6 w-32 h-32 rounded-full bg-white/5 pointer-events-none" />
-        <div
-          className="relative w-12 h-12 rounded-full bg-white/10 ring-2 text-white flex items-center justify-center shrink-0"
-          style={{ '--tw-ring-color': 'color-mix(in srgb, var(--sidebar-accent) 50%, transparent)' }}
-        >
-          <LayoutDashboard size={22} />
-        </div>
-        <div className="relative">
-          <p className="font-display font-semibold text-lg text-white">Selamat datang kembali di SIMAK</p>
-          <p className="text-sm text-white/70">Semua ringkasan data satuan ada di bawah ini.</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-        {kartu.map(({ label, value, icon: Icon, tema }) => (
-          <div
-            key={label}
-            className={`relative overflow-hidden rounded-2xl p-5 text-white shadow-md bg-gradient-to-br ${KARTU_TEMA[tema]}`}
-          >
-            <div className="flex items-start justify-between mb-4">
-              <p className="text-sm font-medium text-white/90">{label}</p>
-              <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center shrink-0">
-                <Icon size={18} />
+    <Layout title="Data Personel" subtitle={`${daftar.length} personel terdaftar`}>
+      <div className="space-y-5">
+        <div className="card p-4">
+          <div className="flex flex-wrap gap-3 items-end">
+            <div className="flex-1 min-w-[220px]">
+              <label className="label-field">Cari</label>
+              <div className="relative">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-700/40" />
+                <input
+                  className="input-field !pl-9"
+                  placeholder="Nama, NRP, pangkat, jabatan, unit"
+                  value={cari}
+                  onChange={(e) => setCari(e.target.value)}
+                />
               </div>
             </div>
-            <p className="text-3xl font-display font-bold">{loading ? '—' : value}</p>
+            <div>
+              <label className="label-field">Status</label>
+              <select className="input-field" value={fStatus} onChange={(e) => setFStatus(e.target.value)}>
+                <option value="">Semua</option>
+                {STATUS.map((s) => <option key={s.k} value={s.k}>{s.l}</option>)}
+              </select>
+            </div>
+            <button className="btn-primary" onClick={tambah}>
+              <Plus size={16} /> Tambah Personel
+            </button>
           </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
-        <div className="card p-6 lg:col-span-2">
-          <h3 className="font-display text-lg font-semibold mb-4">Pintasan</h3>
-          <ul className="space-y-1">
-            {PINTASAN.map(({ to, label, icon: Icon }) => (
-              <li key={to}>
-                <Link
-                  to={to}
-                  className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm text-ink-900 active:bg-ink-900/[0.06] md:hover:bg-ink-900/[0.04] touch-manipulation"
-                >
-                  <Icon size={18} className="text-ink-700/60 shrink-0" />
-                  <span className="flex-1">{label}</span>
-                  <ArrowRight size={14} className="text-ink-700/30 shrink-0" />
-                </Link>
-              </li>
-            ))}
-          </ul>
         </div>
 
-        <div className="card p-6 lg:col-span-3">
-          <h3 className="font-display text-lg font-semibold mb-4">Pengumuman Terbaru</h3>
-          {pengumuman.length === 0 ? (
-            <p className="text-sm text-ink-700/50">Belum ada pengumuman.</p>
+        <div className="card p-0 overflow-hidden">
+          {loading ? (
+            <div className="p-8 text-center text-ink-700/50">
+              <Loader2 size={20} className="animate-spin inline-block mr-2" /> Memuat data...
+            </div>
+          ) : tersaring.length === 0 ? (
+            <div className="p-10 text-center text-ink-700/60">
+              <Shield size={28} className="inline-block mb-2 text-ink-700/30" />
+              <p>
+                {daftar.length === 0
+                  ? 'Belum ada personel. Klik "Tambah Personel" untuk mencatat personel pertama.'
+                  : 'Tidak ada personel yang cocok dengan filter.'}
+              </p>
+            </div>
           ) : (
-            <ul className="divide-y divide-ink-900/[0.06]">
-              {pengumuman.map((p) => (
-                <li key={p.id} className="py-3 flex items-center gap-3">
-                  <span
-                    className={`text-[11px] font-medium px-2 py-0.5 rounded-md shrink-0 ${
-                      KATEGORI_STYLE[p.kategori] || KATEGORI_STYLE.Informasi
-                    }`}
-                  >
-                    {p.kategori || 'Informasi'}
-                  </span>
-                  <span className="text-sm text-ink-900 truncate flex-1">{p.judul}</span>
-                  <span className="text-xs text-ink-700/40 shrink-0">{formatRelativeDate(p.dibuat_pada)}</span>
-                </li>
-              ))}
-            </ul>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-ink-700/60 bg-black/[0.03]">
+                    <th className="py-2.5 px-4 font-medium">Nama</th>
+                    <th className="py-2.5 px-4 font-medium">NRP</th>
+                    <th className="py-2.5 px-4 font-medium">Pangkat</th>
+                    <th className="py-2.5 px-4 font-medium">Jabatan / Unit</th>
+                    <th className="py-2.5 px-4 font-medium">No. HP</th>
+                    <th className="py-2.5 px-4 font-medium">Status</th>
+                    <th className="py-2.5 px-4" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {tersaring.map((p) => {
+                    const s = infoStatus(p.status)
+                    return (
+                      <tr key={p.id} className="border-t border-ink-700/10 align-top">
+                        <td className="py-3 px-4 font-medium">{p.nama}</td>
+                        <td className="py-3 px-4">{p.nrp || '-'}</td>
+                        <td className="py-3 px-4">{p.pangkat || '-'}</td>
+                        <td className="py-3 px-4">
+                          <div>{p.jabatan || '-'}</div>
+                          <div className="text-xs text-ink-700/60">{p.satuan_unit || ''}</div>
+                        </td>
+                        <td className="py-3 px-4">{p.no_hp || '-'}</td>
+                        <td className="py-3 px-4">
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${s.warna}`}>{s.l}</span>
+                        </td>
+                        <td className="py-3 px-4 text-right whitespace-nowrap">
+                          <button className="p-1 rounded hover:bg-black/5" onClick={() => ubah(p)} aria-label="Ubah">
+                            <Pencil size={15} />
+                          </button>
+                          <button className="p-1 rounded hover:bg-black/5" onClick={() => hapus(p)} aria-label="Hapus">
+                            <Trash2 size={15} />
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>
+
+      {form && (
+        <div className="fixed inset-0 z-50 bg-black/40 overflow-y-auto p-4" onClick={tutup}>
+          <div
+            className="card w-full max-w-2xl mx-auto my-6 p-5 bg-white"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <h2 className="font-semibold text-lg">{editId ? 'Ubah Personel' : 'Tambah Personel'}</h2>
+              <button type="button" className="p-1 rounded hover:bg-black/5" onClick={tutup} aria-label="Tutup">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={simpan} className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Nama Lengkap" className="sm:col-span-2">
+                  <input className="input-field" value={form.nama} onChange={(e) => set('nama', e.target.value)} />
+                </Field>
+                <Field label="NRP">
+                  <input className="input-field" value={form.nrp} onChange={(e) => set('nrp', e.target.value)} />
+                </Field>
+                <Field label="Pangkat">
+                  <input className="input-field" list="daftar-pangkat" value={form.pangkat}
+                    onChange={(e) => set('pangkat', e.target.value)} />
+                  <datalist id="daftar-pangkat">{PANGKAT.map((x) => <option key={x} value={x} />)}</datalist>
+                </Field>
+                <Field label="Jabatan">
+                  <input className="input-field" value={form.jabatan} onChange={(e) => set('jabatan', e.target.value)}
+                    placeholder="Contoh: Kanit Idik" />
+                </Field>
+                <Field label="Satuan / Unit">
+                  <input className="input-field" value={form.satuan_unit} onChange={(e) => set('satuan_unit', e.target.value)}
+                    placeholder="Contoh: Satreskrim" />
+                </Field>
+                <Field label="No. HP">
+                  <input className="input-field" inputMode="tel" value={form.no_hp} onChange={(e) => set('no_hp', e.target.value)} />
+                </Field>
+                <Field label="Status">
+                  <select className="input-field" value={form.status} onChange={(e) => set('status', e.target.value)}>
+                    {STATUS.map((s) => <option key={s.k} value={s.k}>{s.l}</option>)}
+                  </select>
+                </Field>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button type="button" className="btn-secondary" onClick={tutup}>Batal</button>
+                <button type="submit" className="btn-primary" disabled={saving}>
+                  {saving && <Loader2 size={16} className="animate-spin" />} Simpan Personel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </Layout>
   )
 }
