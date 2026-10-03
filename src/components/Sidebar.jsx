@@ -402,7 +402,7 @@ function getGroupsPolresAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelum
       links: [
         { to: '/profil-polres', label: 'Profil Polres', icon: Shield },
         { to: '/data-personel-polres', label: 'Data Personel', icon: Briefcase },
-        { to: '/presensi-kantor', label: 'Presensi Personel', icon: ClipboardCheck },
+        { to: '/presensi-polres', label: 'Presensi Personel', icon: ClipboardCheck },
         { to: '/daftar-hadir-kantor', label: 'Daftar Hadir', icon: FileSpreadsheet },
       ],
     },
@@ -435,7 +435,7 @@ function getLinksPolresPegawai(jumlahPesanBelumDibaca = 0) {
   return [
     { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
     { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
-    { to: '/presensi', label: 'Presensi', icon: ClipboardCheck },
+    { to: '/presensi-polres', label: 'Presensi', icon: ClipboardCheck },
     // BARU: Reskrim Penyidik — semua user dalam tenant polres bisa mengakses.
     { to: '/reskrim-penyidik', label: 'Reskrim Penyidik', icon: Gavel },
     { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
