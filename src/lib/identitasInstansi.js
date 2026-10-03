@@ -1,8 +1,8 @@
 // src/lib/identitasInstansi.js
 //
 // Satu sumber identitas instansi untuk semua tenant (sekolah, kantor/KUA,
-// puskesmas). Dipakai SampulLaporan.jsx (dan bisa dipakai halaman cetak lain)
-// supaya kop/identitas tidak lagi hard-code ke profil_sekolah.
+// puskesmas, polres). Dipakai SampulLaporan.jsx (dan bisa dipakai halaman cetak
+// lain) supaya kop/identitas tidak lagi hard-code ke profil_sekolah.
 //
 // >>> Kalau ada nama tabel / bucket / kolom yang berbeda di database Anda,
 // >>> cukup ubah bagian CONFIG di bawah — tidak perlu menyentuh komponen.
@@ -16,12 +16,14 @@ const BUCKET_LOGO = {
   profil_sekolah: 'profil-sekolah',
   profil_kantor: 'profil-kantor', // sesuaikan bila berbeda
   profil_puskesmas: 'profil-puskesmas', // sesuaikan bila berbeda
+  profil_polres: 'profil-polres', // sama dengan BUCKET di ProfilPolres.jsx
 }
 
 // Daftar kolom kandidat: dipakai yang pertama kali terisi.
 const KOLOM = {
-  nama: ['nama_sekolah', 'nama_kantor', 'nama_puskesmas', 'nama_instansi', 'nama'],
+  nama: ['nama_sekolah', 'nama_kantor', 'nama_puskesmas', 'nama_satuan', 'nama_instansi', 'nama'],
   kode: ['npsn', 'kode_puskesmas', 'nsm', 'kode'],
+  polda: ['polda'],
   alamat: ['alamat', 'alamat_jalan', 'alamat_lengkap'],
   desa: ['desa_kelurahan', 'desa', 'kelurahan'],
   kecamatan: ['kecamatan'],
@@ -29,7 +31,7 @@ const KOLOM = {
   provinsi: ['provinsi'],
   kodePos: ['kode_pos'],
   email: ['email', 'website'],
-  pimpinan: ['kepala_sekolah', 'kepala_kantor', 'kepala_puskesmas', 'pimpinan', 'nama_kepala'],
+  pimpinan: ['kepala_sekolah', 'kepala_kantor', 'kepala_puskesmas', 'kapolres', 'pimpinan', 'nama_kepala'],
   namaBank: ['nama_bank', 'bank'],
   nomorRekening: ['nomor_rekening', 'no_rekening'],
   logo: ['logo_path', 'logo'],
@@ -102,11 +104,31 @@ export const CONFIG_INSTANSI = {
       'Lainnya (isi bebas)',
     ],
   },
+  polres: {
+    tabel: ['profil_polres'], // kunci: sekolah_id (sama seperti ProfilPolres.jsx)
+    labelInstansi: 'Polres',
+    labelNama: 'Nama Satuan',
+    labelKode: null,
+    // Kop Polri: KEPOLISIAN NEGARA REPUBLIK INDONESIA / DAERAH <POLDA> / <SATUAN>
+    kopAtas: () => 'KEPOLISIAN NEGARA REPUBLIK INDONESIA',
+    namaDinas: (i) => {
+      const polda = (i.polda || '').replace(/^polda\s+/i, '').trim()
+      return polda ? `DAERAH ${polda.toUpperCase()}` : ''
+    },
+    jenisLaporan: [
+      'Laporan Bulanan',
+      'Laporan Tahunan',
+      'Laporan Keuangan',
+      'Laporan Inventaris & Aset Polres',
+      'Laporan Kegiatan Polres',
+      'Lainnya (isi bebas)',
+    ],
+  },
 }
 
 export function useIdentitasInstansi() {
-  const { sekolahId, isKantor, isPuskesmas, profilPuskesmas } = useAuth()
-  const tenant = isKantor ? 'kantor' : isPuskesmas ? 'puskesmas' : 'sekolah'
+  const { sekolahId, isKantor, isPuskesmas, isPolres, profilPuskesmas } = useAuth()
+  const tenant = isKantor ? 'kantor' : isPuskesmas ? 'puskesmas' : isPolres ? 'polres' : 'sekolah'
   const cfg = CONFIG_INSTANSI[tenant]
 
   const [state, setState] = useState({ loading: true, error: '', row: null, tabel: null })
@@ -176,6 +198,7 @@ export function useIdentitasInstansi() {
     return {
       nama: ambil(row, KOLOM.nama),
       kode: ambil(row, KOLOM.kode),
+      polda: ambil(row, KOLOM.polda),
       alamat: ambil(row, KOLOM.alamat),
       desa: ambil(row, KOLOM.desa),
       kecamatan: ambil(row, KOLOM.kecamatan),
@@ -183,12 +206,15 @@ export function useIdentitasInstansi() {
       provinsi: ambil(row, KOLOM.provinsi),
       kodePos: ambil(row, KOLOM.kodePos),
       email: ambil(row, KOLOM.email),
-      pimpinan: ambil(row, KOLOM.pimpinan),
+      pimpinan:
+        tenant === 'polres' && ambil(row, ['kapolres'])
+          ? [ambil(row, ['pangkat_kapolres']), ambil(row, ['kapolres'])].filter(Boolean).join(' ')
+          : ambil(row, KOLOM.pimpinan),
       namaBank: ambil(row, KOLOM.namaBank),
       nomorRekening: ambil(row, KOLOM.nomorRekening),
       logoUrl,
     }
-  }, [state.row, state.tabel])
+  }, [state.row, state.tabel, tenant])
 
   return { tenant, cfg, identitas, loading: state.loading, error: state.error }
 }
