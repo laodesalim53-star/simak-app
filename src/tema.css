@@ -63,6 +63,14 @@
   --sidebar-active-gradient: linear-gradient(90deg, #0ea5e9, #22d3ee);
   --sidebar-accent: #fbbf24;
 }
+:root[data-tema="polres"] {
+  --sidebar-solid: #0b1f3a;
+  --sidebar-border: rgba(212, 175, 55, 0.2);
+  --sidebar-header-gradient: linear-gradient(135deg, #0b1f3a 0%, #14325c 100%);
+  --sidebar-body-gradient: linear-gradient(180deg, #0e2747 0%, #08182e 100%);
+  --sidebar-active-gradient: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  --sidebar-accent: #d4af37;
+}
 
 /* ------------------------------------------------------------
    Contoh pemakaian di komponen (Sidebar/Header/tombol dsb):
