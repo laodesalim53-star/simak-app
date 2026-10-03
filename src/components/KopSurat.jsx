@@ -2,39 +2,58 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 
-// Ganti 'logo' di bawah ini kalau nama bucket storage-mu berbeda
+// Ganti nama bucket di bawah ini kalau nama bucket storage-mu berbeda
 const LOGO_BUCKET_KANTOR = 'profil-kantor'
 const LOGO_BUCKET_PUSKESMAS = 'profil-puskesmas'
 const LOGO_BUCKET_SEKOLAH = 'profil-sekolah'
+const LOGO_BUCKET_POLRES = 'profil-polres'
 
 // Komponen kop surat resmi, dipakai di halaman cetak manapun cukup dengan
 // <KopSurat />. Sumber datanya menyesuaikan jenis tenant yang sedang login:
+//  - isPolres    -> tabel profil_polres, bucket 'profil-polres',
+//                   format 3 tingkat ala Polri
 //  - isPuskesmas -> tabel profil_puskesmas, bucket 'profil-puskesmas'
 //  - isKantor    -> tabel profil_kantor, format 3 tingkat ala Kementerian
 //                   Agama, bucket 'profil-kantor'
 //  - selain itu (sekolah) -> tabel profil_sekolah, bucket 'profil-sekolah'
 //
-// PERBAIKAN: sebelumnya semua tenant selain puskesmas dianggap kantor,
-// sehingga halaman yang memakai <KopSurat /> di tenant SEKOLAH menampilkan
-// "KEMENTERIAN AGAMA REPUBLIK INDONESIA / Nama Kantor Belum Diatur".
-// Sekarang ada cabang sekolah sendiri.
+// Pastikan AuthContext menyediakan flag isPolres
+// (isPolres = jenis_organisasi === 'polres').
 export default function KopSurat() {
-  const { sekolahId, isPuskesmas, isKantor } = useAuth()
-  const jenis = isPuskesmas ? 'puskesmas' : isKantor ? 'kantor' : 'sekolah'
+  const { sekolahId, isPuskesmas, isKantor, isPolres } = useAuth()
+  const jenis = isPolres
+    ? 'polres'
+    : isPuskesmas
+    ? 'puskesmas'
+    : isKantor
+    ? 'kantor'
+    : 'sekolah'
 
   const [profilKantor, setProfilKantor] = useState(null)
   const [profilPuskesmas, setProfilPuskesmas] = useState(null)
   const [profilSekolah, setProfilSekolah] = useState(null)
+  const [profilPolres, setProfilPolres] = useState(null)
 
   useEffect(() => {
     if (!sekolahId) {
       setProfilKantor(null)
       setProfilPuskesmas(null)
       setProfilSekolah(null)
+      setProfilPolres(null)
       return
     }
 
-    if (jenis === 'puskesmas') {
+    if (jenis === 'polres') {
+      supabase
+        .from('profil_polres')
+        .select('nama_satuan, polda, alamat, kabupaten_kota, provinsi, kode_pos, telepon, email, logo_path')
+        .eq('sekolah_id', sekolahId)
+        .maybeSingle()
+        .then(({ data, error }) => {
+          if (error) console.error('KopSurat: gagal memuat profil_polres:', error)
+          setProfilPolres(data)
+        })
+    } else if (jenis === 'puskesmas') {
       supabase
         .from('profil_puskesmas')
         .select('nama_puskesmas, kode_puskesmas, alamat, kabupaten, kecamatan, provinsi, telepon, email, logo_path')
@@ -60,6 +79,74 @@ export default function KopSurat() {
         })
     }
   }, [sekolahId, jenis])
+
+  // ==== Cabang POLRES: 3 tingkat ala Polri ====
+  // KEPOLISIAN NEGARA REPUBLIK INDONESIA / DAERAH <POLDA> / RESOR <SATUAN>
+  if (jenis === 'polres') {
+    const logoUrl = profilPolres?.logo_path
+      ? profilPolres.logo_path.startsWith('http')
+        ? profilPolres.logo_path
+        : supabase.storage.from(LOGO_BUCKET_POLRES).getPublicUrl(profilPolres.logo_path).data.publicUrl
+      : null
+
+    const namaPolda = (profilPolres?.polda || '').replace(/^polda\s+/i, '').trim()
+    const namaResor = (profilPolres?.nama_satuan || '').replace(/^polres\s+/i, '').trim()
+
+    const baris1 = 'KEPOLISIAN NEGARA REPUBLIK INDONESIA'
+    const baris2 = namaPolda ? `DAERAH ${namaPolda}` : ''
+    const baris3 = namaResor ? `RESOR ${namaResor}` : 'Nama Satuan Belum Diatur'
+
+    const alamatLengkap = [
+      profilPolres?.alamat,
+      profilPolres?.kabupaten_kota,
+      profilPolres?.kode_pos,
+    ]
+      .filter(Boolean)
+      .join(', ')
+    const kontak = [
+      profilPolres?.email && `Email: ${profilPolres.email}`,
+      profilPolres?.telepon && `Telp: ${profilPolres.telepon}`,
+    ]
+      .filter(Boolean)
+      .join('  |  ')
+    const barisAlamat = [alamatLengkap, kontak].filter(Boolean).join('  —  ')
+
+    return (
+      <div className="kop-surat-resmi mb-6">
+        <div className="grid grid-cols-[80px_1fr_80px] items-center gap-4 pb-1">
+          <div className="flex justify-start">
+            {logoUrl && (
+              <img src={logoUrl} alt="Logo Polres" className="w-20 h-20 object-contain shrink-0" />
+            )}
+          </div>
+
+          <div className="text-center">
+            <p className="font-display text-[15px] font-bold uppercase text-slate-900 leading-tight">
+              {baris1}
+            </p>
+            {baris2 && (
+              <p className="font-display text-[13px] font-bold uppercase text-slate-900 leading-tight">
+                {baris2}
+              </p>
+            )}
+            <p className="font-display text-[13px] font-bold uppercase text-slate-900 leading-tight">
+              {baris3}
+            </p>
+            {barisAlamat && (
+              <p className="text-[10.5px] font-normal text-slate-600 leading-snug mt-1">
+                {barisAlamat}
+              </p>
+            )}
+          </div>
+
+          <div aria-hidden="true" />
+        </div>
+
+        <div className="border-t border-slate-900" />
+        <div className="border-t-4 border-slate-900 mt-0.5" />
+      </div>
+    )
+  }
 
   // ==== Cabang SEKOLAH: format sama dengan kop di LaporanDaftarHadirGuru ====
   if (jenis === 'sekolah') {
