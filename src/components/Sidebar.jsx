@@ -405,6 +405,7 @@ links: [
   { to: '/presensi-polres', label: 'Presensi Personel', icon: ClipboardCheck },
   { to: '/daftar-hadir-polres', label: 'Daftar Hadir', icon: FileSpreadsheet },
 ],
+},
     // BARU: Reskrim — register perkara bagian Penyidik (ReskrimPenyidik.jsx).
     // Grup dipisah supaya bagian Reskrim lain bisa ditambah di sini nanti.
     {
