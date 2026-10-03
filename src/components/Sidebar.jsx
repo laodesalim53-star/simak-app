@@ -67,6 +67,7 @@ import {
   Link2,
   Shield,
   Gavel,
+  FileText,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
@@ -412,6 +413,7 @@ links: [
       label: 'Reskrim',
       links: [
         { to: '/reskrim-penyidik', label: 'Penyidik', icon: Gavel },
+        { to: '/reskrim/surat', label: 'Surat Reskrim', icon: FileText },
       ],
     },
     {
@@ -438,6 +440,7 @@ function getLinksPolresPegawai(jumlahPesanBelumDibaca = 0) {
     { to: '/presensi-polres', label: 'Presensi', icon: ClipboardCheck },
     // BARU: Reskrim Penyidik — semua user dalam tenant polres bisa mengakses.
     { to: '/reskrim-penyidik', label: 'Reskrim Penyidik', icon: Gavel },
+    { to: '/reskrim/surat', label: 'Surat Reskrim', icon: FileText },
     { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
     { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
     { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
