@@ -643,6 +643,7 @@ function getLabelPeran(profil, isSuperAdmin, isAdminUtama, isAdmin, isOrangTua, 
   if (profil?.jabatan === 'kepala_sekolah') return 'Kepala Sekolah'
   if (profil?.jabatan === 'kepala_kantor') return 'Kepala Kantor'
   if (profil?.jabatan === 'kepala_puskesmas') return 'Kepala Puskesmas'
+  if (profil?.jabatan === 'kepala_polres') return 'Kepala Polres'
   if (isAdminUtama) return 'Admin Utama'
   if (isAdmin) return 'Admin'
   if (isOrangTua) return 'Orang Tua/Wali'
