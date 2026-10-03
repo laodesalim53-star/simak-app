@@ -7,14 +7,15 @@ const PETA_TEMA = {
   sekolah: 'sekolah',
   kantor: 'kua',
   puskesmas: 'puskesmas',
+  polres: 'polres',
 }
 
 const TEMA_DEFAULT = 'sekolah'
 
 /**
  * Komponen tanpa tampilan (render null) yang bertugas menempelkan
- * atribut data-tema="sekolah" | "kua" | "puskesmas" ke elemen <html>
- * setiap kali profil user (jenis_organisasi) berubah.
+ * atribut data-tema="sekolah" | "kua" | "puskesmas" | "polres" ke
+ * elemen <html> setiap kali profil user (jenis_organisasi) berubah.
  *
  * CSS variables warna per tema didefinisikan di tema.css lewat
  * selector :root[data-tema="..."], jadi begitu atribut ini berubah,
@@ -39,13 +40,15 @@ const TEMA_DEFAULT = 'sekolah'
  *   </CartProvider>
  */
 export default function TemaSync() {
-  const { profil } = useAuth()
+  const { profil, isPolres } = useAuth()
 
   useEffect(() => {
-    const jenis = profil?.jenis_organisasi ?? TEMA_DEFAULT
+    // isPolres dipakai sebagai cadangan: kalau nilai jenis_organisasi untuk
+    // polres di database berbeda dari 'polres', tema tetap benar.
+    const jenis = isPolres ? 'polres' : profil?.jenis_organisasi ?? TEMA_DEFAULT
     const namaTema = PETA_TEMA[jenis] || TEMA_DEFAULT
     document.documentElement.setAttribute('data-tema', namaTema)
-  }, [profil?.jenis_organisasi])
+  }, [profil?.jenis_organisasi, isPolres])
 
   return null
 }
