@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import Layout from '../components/Layout'
+import { useAuth } from '../lib/AuthContext'
 import {
   ArrowLeft,
   ExternalLink,
@@ -16,18 +17,21 @@ import {
   Hospital,
   Users,
   FileText,
+  Shield,
+  Gavel,
+  Siren,
 } from 'lucide-react'
 
 // Halaman ini level ATAS (route: /link-layanan) — bisa diakses semua peran
 // (admin, guru, orang tua) lewat menu sidebar, BUKAN bagian dari Gudang SK
 // yang admin-only.
 //
-// Halaman dibagi menjadi 3 bagian (tab): "Link Sekolah", "Link KUA", dan
-// "Link Kesehatan". Untuk menambah/mengubah link, cukup edit array
-// KELOMPOK_LINK_SEKOLAH / KELOMPOK_LINK_KUA / KELOMPOK_LINK_KESEHATAN di
-// bawah ini — tidak perlu menyentuh bagian tampilan. Untuk menambah
-// kelompok baru, tambahkan juga temanya di TEMA_KELOMPOK (kalau lupa,
-// otomatis memakai tema 'kepegawaian').
+// Halaman dibagi menjadi 4 bagian (tab): "Link Sekolah", "Link KUA",
+// "Link Kesehatan", dan "Link Polri". Untuk menambah/mengubah link, cukup
+// edit array KELOMPOK_LINK_SEKOLAH / KELOMPOK_LINK_KUA /
+// KELOMPOK_LINK_KESEHATAN / KELOMPOK_LINK_POLRI di bawah ini — tidak perlu
+// menyentuh bagian tampilan. Untuk menambah kelompok baru, tambahkan juga
+// temanya di TEMA_KELOMPOK (kalau lupa, otomatis memakai tema 'kepegawaian').
 //
 // CATATAN TEKNIS soal deteksi "diblokir iframe":
 // Browser TIDAK mengizinkan JavaScript membaca isi iframe lintas-domain
@@ -260,11 +264,52 @@ const KELOMPOK_LINK_KESEHATAN = [
   },
 ]
 
+// ─────────────────────────── BAGIAN 4: LINK POLRI/POLRES ───────────────────────────
+// Portal resmi Polri & instansi penegak hukum terkait. Semua ditandai
+// bukaTabBaru karena portal pemerintah umumnya menolak ditampilkan di iframe.
+// CATATAN: alamat portal pemerintah sering berpindah subdomain — cek ulang
+// secara berkala dan perbaiki bila ada yang sudah tidak aktif.
+const KELOMPOK_LINK_POLRI = [
+  {
+    id: 'polri-portal',
+    judul: 'Portal Polri',
+    tautan: [
+      { id: 'polri-pusat', nama: 'Polri (Portal Resmi)', url: 'https://polri.go.id', bukaTabBaru: true },
+      { id: 'divhumas-polri', nama: 'Divisi Humas Polri', url: 'https://humas.polri.go.id', bukaTabBaru: true },
+      { id: 'pusiknas', nama: 'Pusiknas (Pusat Informasi Kriminal Nasional)', url: 'https://pusiknas.polri.go.id', bukaTabBaru: true },
+      { id: 'jdih-polri', nama: 'JDIH Polri (Regulasi)', url: 'https://jdih.polri.go.id', bukaTabBaru: true },
+    ],
+  },
+  {
+    id: 'polri-pelayanan',
+    judul: 'Pelayanan & Pengaduan',
+    tautan: [
+      { id: 'skck-online', nama: 'SKCK Online', url: 'https://skck.polri.go.id', bukaTabBaru: true },
+      { id: 'korlantas', nama: 'Korlantas Polri (SIM & Lalu Lintas)', url: 'https://korlantas.polri.go.id', bukaTabBaru: true },
+      { id: 'propam', nama: 'Divisi Propam Polri', url: 'https://propam.polri.go.id', bukaTabBaru: true },
+      { id: 'patroli-siber', nama: 'Patroli Siber (Laporan Kejahatan Siber)', url: 'https://patrolisiber.id', bukaTabBaru: true },
+      { id: 'lapor-go-id', nama: 'LAPOR! (Pengaduan Layanan Publik)', url: 'https://lapor.go.id', bukaTabBaru: true },
+    ],
+  },
+  {
+    id: 'polri-hukum',
+    judul: 'Hukum & Peradilan',
+    tautan: [
+      { id: 'bareskrim', nama: 'Bareskrim Polri', url: 'https://bareskrim.polri.go.id', bukaTabBaru: true },
+      { id: 'kejaksaan-ri', nama: 'Kejaksaan RI', url: 'https://kejaksaan.go.id', bukaTabBaru: true },
+      { id: 'sipp-ma', nama: 'SIPP (Sistem Informasi Penelusuran Perkara)', url: 'https://sipp.mahkamahagung.go.id', bukaTabBaru: true },
+      { id: 'direktori-putusan', nama: 'Direktori Putusan Mahkamah Agung', url: 'https://putusan3.mahkamahagung.go.id', bukaTabBaru: true },
+      { id: 'peraturan-go-id', nama: 'Peraturan.go.id (Database Peraturan)', url: 'https://peraturan.go.id', bukaTabBaru: true },
+    ],
+  },
+]
+
 // Daftar tab di bagian atas halaman. Urutan di sini = urutan tab.
 const BAGIAN_LINK = [
   { id: 'sekolah', judul: 'Link Sekolah', ikon: GraduationCap, kelompok: KELOMPOK_LINK_SEKOLAH },
   { id: 'kua', judul: 'Link KUA', ikon: Building2, kelompok: KELOMPOK_LINK_KUA },
   { id: 'kesehatan', judul: 'Link Kesehatan', ikon: Stethoscope, kelompok: KELOMPOK_LINK_KESEHATAN },
+  { id: 'polri', judul: 'Link Polri', ikon: Shield, kelompok: KELOMPOK_LINK_POLRI },
 ]
 
 // Tema per grup: dipetakan ke kelas Tailwind statis (bukan digabung secara
@@ -340,6 +385,27 @@ const TEMA_KELOMPOK = {
     tekanAktif: 'active:bg-lime-50 active:border-lime-300',
     hover: 'hover:border-lime-300 hover:bg-lime-50/40 hover:text-lime-700',
   },
+  'polri-portal': {
+    ikon: Shield,
+    chip: 'bg-blue-50 text-blue-600',
+    aksen: 'border-l-blue-400',
+    tekanAktif: 'active:bg-blue-50 active:border-blue-300',
+    hover: 'hover:border-blue-300 hover:bg-blue-50/40 hover:text-blue-700',
+  },
+  'polri-pelayanan': {
+    ikon: Siren,
+    chip: 'bg-orange-50 text-orange-600',
+    aksen: 'border-l-orange-400',
+    tekanAktif: 'active:bg-orange-50 active:border-orange-300',
+    hover: 'hover:border-orange-300 hover:bg-orange-50/40 hover:text-orange-700',
+  },
+  'polri-hukum': {
+    ikon: Gavel,
+    chip: 'bg-stone-100 text-stone-600',
+    aksen: 'border-l-stone-400',
+    tekanAktif: 'active:bg-stone-100 active:border-stone-300',
+    hover: 'hover:border-stone-300 hover:bg-stone-100/60 hover:text-stone-700',
+  },
 }
 
 // Berapa lama menunggu iframe memuat sebelum dianggap gagal & auto-fallback
@@ -382,7 +448,13 @@ function pastiDiblokirMixedContent(url) {
 }
 
 export default function LinkLayanan() {
-  const [bagianAktif, setBagianAktif] = useState('sekolah') // tab: 'sekolah' | 'kua' | 'kesehatan'
+  // Tab awal mengikuti jenis tenant: polres → Link Polri, puskesmas → Link
+  // Kesehatan, kantor (KUA) → Link KUA, selain itu → Link Sekolah. Pengguna
+  // tetap bisa berpindah tab secara manual.
+  const { isKantor, isPuskesmas, isPolres } = useAuth()
+  const tabAwal = isPolres ? 'polri' : isPuskesmas ? 'kesehatan' : isKantor ? 'kua' : 'sekolah'
+
+  const [bagianAktif, setBagianAktif] = useState(tabAwal) // tab: 'sekolah' | 'kua' | 'kesehatan' | 'polri'
   const [aktif, setAktif] = useState(null) // { id, nama, url } atau null saat di daftar
   const [kunciIframe, setKunciIframe] = useState(0) // ganti key untuk memuat ulang iframe
   const [sedangMemuat, setSedangMemuat] = useState(false)
@@ -469,7 +541,7 @@ export default function LinkLayanan() {
   return (
     <Layout
       title="Link Layanan & Kepegawaian"
-      subtitle="Akses cepat ke portal layanan sekolah, KUA & kesehatan — dibuka langsung di dalam aplikasi bila memungkinkan, atau otomatis di tab baru bila situs menolak."
+      subtitle="Akses cepat ke portal layanan sekolah, KUA, kesehatan & kepolisian — dibuka langsung di dalam aplikasi bila memungkinkan, atau otomatis di tab baru bila situs menolak."
     >
       {aktif ? (
         <div className="flex flex-col h-[calc(100vh-220px)] min-h-[420px] rounded-2xl border border-slate-200 bg-white overflow-hidden">
@@ -533,8 +605,10 @@ export default function LinkLayanan() {
         </div>
       ) : (
         <div className="space-y-6 sm:space-y-8">
-          {/* Tab pemilih bagian: Link Sekolah / Link KUA / Link Kesehatan */}
-          <div role="tablist" className="flex gap-1 rounded-xl bg-slate-100 p-1 w-full sm:w-fit">
+          {/* Tab pemilih bagian: Link Sekolah / KUA / Kesehatan / Polri.
+              overflow-x-auto + whitespace-nowrap supaya empat tab tetap muat
+              di layar HP yang sempit (bisa digeser bila perlu). */}
+          <div role="tablist" className="flex gap-1 rounded-xl bg-slate-100 p-1 w-full sm:w-fit overflow-x-auto">
             {BAGIAN_LINK.map((b) => {
               const IkonBagian = b.ikon
               const dipilih = b.id === bagianAktif
@@ -546,7 +620,7 @@ export default function LinkLayanan() {
                   aria-selected={dipilih}
                   onClick={() => setBagianAktif(b.id)}
                   style={{ WebkitTapHighlightColor: 'transparent' }}
-                  className={`flex flex-1 sm:flex-none items-center justify-center gap-2 min-h-[44px] px-4 rounded-lg text-sm font-medium touch-manipulation transition-colors ${
+                  className={`flex flex-1 sm:flex-none items-center justify-center gap-1.5 sm:gap-2 min-h-[44px] px-3 sm:px-4 whitespace-nowrap rounded-lg text-xs sm:text-sm font-medium touch-manipulation transition-colors ${
                     dipilih
                       ? 'bg-white text-slate-900 shadow-sm'
                       : 'text-slate-500 active:bg-white/60'
