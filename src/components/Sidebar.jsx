@@ -447,6 +447,7 @@ function getLinksPolresPegawai(jumlahPesanBelumDibaca = 0) {
     { to: '/alat-pdf', label: 'Alat PDF', icon: FileType2 },
     { to: '/agenda', label: 'Agenda Polres', icon: CalendarDays },
     { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
+    { to: '/link-layanan', label: 'Link Layanan', icon: Link2 },
     { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
     { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
   ]
@@ -1105,16 +1106,20 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
 
         <div className="relative flex items-center gap-3 pr-11 md:pr-0">
           {fotoUrl ? (
-            <img
-              src={fotoUrl}
-              alt={namaTampil}
-              className="w-11 h-11 rounded-full object-cover shrink-0 border-2 border-amber-400/60 ring-2 ring-amber-400/15"
-            />
+<img
+  src={fotoUrl}
+  alt={namaTampil}
+  style={{ borderColor: 'color-mix(in srgb, var(--sidebar-accent) 60%, transparent)' }}
+  className="w-11 h-11 rounded-full object-cover shrink-0 border-2"
+/>
           ) : (
-            <div
-              className="w-11 h-11 rounded-full flex items-center justify-center font-display font-bold text-white text-sm shrink-0 border-2 border-amber-400/60 ring-2 ring-amber-400/15"
-              style={{ background: 'var(--sidebar-active-gradient)' }}
-            >
+<div
+  className="w-11 h-11 rounded-full flex items-center justify-center font-display font-bold text-white text-sm shrink-0 border-2"
+  style={{
+    background: 'var(--sidebar-active-gradient)',
+    borderColor: 'color-mix(in srgb, var(--sidebar-accent) 60%, transparent)',
+  }}
+>
               {getInisial(namaTampil)}
             </div>
           )}
