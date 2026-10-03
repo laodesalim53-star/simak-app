@@ -160,7 +160,7 @@ const KONFIG = {
     namaHariSabtu: 'SABTU',
     tandaTanganTunggal: false, // Mengetahui (Kapolres) + Dibuat oleh
 
-        profil: {
+    profil: {
       tabel: 'profil_polres',
       select:
         'nama_satuan, polda, alamat, kabupaten_kota, kapolres, pangkat_kapolres, nrp_kapolres, tempat_ttd, ttd_kapolres_path',
@@ -172,7 +172,7 @@ const KONFIG = {
       tempatTtd: d.tempat_ttd,
       kepala: d.kapolres,
       barisNomorKepala: `${d.pangkat_kapolres ? d.pangkat_kapolres + ' ' : ''}NRP ${d.nrp_kapolres || '..............................'}`,
-      ttdPath: null, // profil_polres belum punya kolom tanda tangan gambar
+      ttdPath: d.ttd_kapolres_path || null,
       jabatanKepala: 'Kapolres',
       barisJabatanPerorangan: [
         'Kepala Kepolisian Resor',
