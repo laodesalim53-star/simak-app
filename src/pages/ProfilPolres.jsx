@@ -6,13 +6,18 @@ import { Loader2, Save, Upload, Building2, Shield } from 'lucide-react'
 
 // Laman Profil Polres (tenant jenis_organisasi === 'polres').
 // Satu baris per tenant di tabel profil_polres (kunci: sekolah_id),
-// disimpan dengan upsert onConflict 'sekolah_id'. Logo diunggah ke bucket
-// storage "profil-polres". Data ini dipakai untuk kop & tanda tangan
-// dokumen arsip yang dicetak.
+// disimpan dengan upsert onConflict 'sekolah_id'. Logo & tanda tangan
+// Kapolres diunggah ke bucket storage "profil-polres". Data ini dipakai
+// untuk kop & tanda tangan dokumen arsip yang dicetak.
+//
+// Butuh kolom: alter table profil_polres add column if not exists ttd_kapolres_path text;
 
 const BUCKET = 'profil-polres'
 
 const KOSONG = {
+  tempat_ttd: '',
+  logo_path: '',
+  ttd_kapolres_path: '',
   nama_satuan: '',
   polda: '',
   alamat: '',
@@ -28,8 +33,6 @@ const KOSONG = {
   pejabat_arsip: '',
   pangkat_pejabat_arsip: '',
   nrp_pejabat_arsip: '',
-  tempat_ttd: '',
-  logo_path: '',
 }
 
 function urlLogo(path) {
@@ -37,6 +40,10 @@ function urlLogo(path) {
   if (path.startsWith('http')) return path
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(path)
   return data?.publicUrl || null
+}
+
+function kapital(teks) {
+  return teks ? teks.charAt(0).toUpperCase() + teks.slice(1) : ''
 }
 
 function Isian({ label, nama, form, ubah, placeholder, className = '' }) {
@@ -118,23 +125,24 @@ export default function ProfilPolres() {
     }
   }
 
-  async function handleUnggahLogo(e) {
+  // Unggah gambar umum (logo / tanda tangan Kapolres) ke bucket profil-polres
+  async function unggahGambar(e, { kolom, awalan, label, maksMB }) {
     const berkas = e.target.files?.[0]
     e.target.value = ''
     if (!berkas || !sekolahId) return
 
     if (!berkas.type.startsWith('image/')) {
-      alert('File logo harus berupa gambar (PNG atau JPG).')
+      alert(`File ${label} harus berupa gambar (PNG atau JPG).`)
       return
     }
-    if (berkas.size > 2 * 1024 * 1024) {
-      alert('Ukuran logo maksimal 2 MB.')
+    if (berkas.size > maksMB * 1024 * 1024) {
+      alert(`Ukuran ${label} maksimal ${maksMB} MB.`)
       return
     }
 
     setUploading(true)
     const ekstensi = (berkas.name.split('.').pop() || 'png').toLowerCase()
-    const path = `${sekolahId}/logo-${Date.now()}.${ekstensi}`
+    const path = `${sekolahId}/${awalan}-${Date.now()}.${ekstensi}`
 
     const { error: errUnggah } = await supabase.storage
       .from(BUCKET)
@@ -142,28 +150,50 @@ export default function ProfilPolres() {
 
     if (errUnggah) {
       setUploading(false)
-      alert('Gagal mengunggah logo: ' + errUnggah.message)
+      alert(`Gagal mengunggah ${label}: ` + errUnggah.message)
       return
     }
 
-    // Simpan path langsung supaya logo tidak hilang kalau halaman ditutup
+    // Simpan path langsung supaya gambar tidak hilang kalau halaman ditutup
     // sebelum tombol Simpan ditekan.
     const { error: errSimpan } = await supabase
       .from('profil_polres')
       .upsert(
-        { sekolah_id: sekolahId, logo_path: path, diperbarui_pada: new Date().toISOString() },
+        { sekolah_id: sekolahId, [kolom]: path, diperbarui_pada: new Date().toISOString() },
         { onConflict: 'sekolah_id' }
       )
 
     setUploading(false)
     if (errSimpan) {
-      alert('Logo terunggah, tetapi gagal disimpan ke profil: ' + errSimpan.message)
+      alert(`${kapital(label)} terunggah, tetapi gagal disimpan ke profil: ` + errSimpan.message)
       return
     }
-    ubah('logo_path', path)
+    ubah(kolom, path)
+  }
+
+  async function hapusTtd() {
+    if (!form.ttd_kapolres_path || !sekolahId) return
+    if (!confirm('Hapus tanda tangan Kapolres?')) return
+    const lama = form.ttd_kapolres_path
+
+    const { error } = await supabase
+      .from('profil_polres')
+      .upsert(
+        { sekolah_id: sekolahId, ttd_kapolres_path: null, diperbarui_pada: new Date().toISOString() },
+        { onConflict: 'sekolah_id' }
+      )
+    if (error) {
+      alert('Gagal menghapus tanda tangan: ' + error.message)
+      return
+    }
+
+    ubah('ttd_kapolres_path', '')
+    // Hapus berkasnya juga; kalau gagal tidak masalah (hanya sisa file)
+    if (!lama.startsWith('http')) await supabase.storage.from(BUCKET).remove([lama])
   }
 
   const logo = urlLogo(form.logo_path)
+  const ttd = urlLogo(form.ttd_kapolres_path)
 
   return (
     <Layout title="Profil Polres" subtitle="Identitas satuan dan pejabat penandatangan dokumen arsip">
@@ -196,7 +226,9 @@ export default function ProfilPolres() {
                     type="file"
                     accept="image/*"
                     className="hidden"
-                    onChange={handleUnggahLogo}
+                    onChange={(e) =>
+                      unggahGambar(e, { kolom: 'logo_path', awalan: 'logo', label: 'logo', maksMB: 2 })
+                    }
                     disabled={uploading}
                   />
                 </label>
@@ -239,10 +271,47 @@ export default function ProfilPolres() {
             </h2>
 
             <p className="text-sm font-medium mb-2">Kapolres</p>
-            <div className="grid gap-3 sm:grid-cols-3 mb-5">
+            <div className="grid gap-3 sm:grid-cols-3 mb-4">
               <Isian label="Nama" nama="kapolres" form={form} ubah={ubah} />
               <Isian label="Pangkat" nama="pangkat_kapolres" form={form} ubah={ubah} placeholder="Contoh: AKBP" />
               <Isian label="NRP" nama="nrp_kapolres" form={form} ubah={ubah} />
+            </div>
+
+            {/* Tanda tangan Kapolres (gambar) */}
+            <div className="flex flex-wrap items-center gap-4 mb-5">
+              <div className="w-40 h-20 rounded-lg border border-ink-700/15 bg-white flex items-center justify-center overflow-hidden">
+                {ttd ? (
+                  <img src={ttd} alt="Tanda tangan Kapolres" className="max-w-full max-h-full object-contain" />
+                ) : (
+                  <span className="text-xs text-ink-700/40">Belum ada</span>
+                )}
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="btn-secondary cursor-pointer text-xs">
+                  {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                  {ttd ? 'Ganti Tanda Tangan' : 'Unggah Tanda Tangan'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) =>
+                      unggahGambar(e, {
+                        kolom: 'ttd_kapolres_path',
+                        awalan: 'ttd',
+                        label: 'tanda tangan',
+                        maksMB: 1,
+                      })
+                    }
+                    disabled={uploading}
+                  />
+                </label>
+                {ttd && (
+                  <button type="button" className="text-xs text-red-600 text-left" onClick={hapusTtd}>
+                    Hapus tanda tangan
+                  </button>
+                )}
+                <p className="text-xs text-ink-700/50">PNG berlatar transparan, maks 1 MB.</p>
+              </div>
             </div>
 
             <p className="text-sm font-medium mb-2">Pejabat Pengesah Arsip</p>
