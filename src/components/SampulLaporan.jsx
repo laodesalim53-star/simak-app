@@ -5,7 +5,7 @@ import { useIdentitasInstansi } from '../lib/identitasInstansi'
 import { useAuth } from '../lib/AuthContext'
 
 // Daftar jenis laporan untuk tenant SEKOLAH. Dipakai CetakSampulHub.jsx lewat
-// indeks. Untuk kantor/puskesmas, daftar jenis laporan ada di
+// indeks. Untuk kantor/puskesmas/polres, daftar jenis laporan ada di
 // CONFIG_INSTANSI (src/lib/identitasInstansi.js). Jaga agar daftar sekolah di
 // sana tetap sama dengan yang ini.
 export const JENIS_LAPORAN_PRESET = [
@@ -37,18 +37,20 @@ export const TEMA_SAMPUL = [
   { id: 'floral-hijau', label: 'Tema 14 — Hijau Floral Elegan (Landscape)' },
   { id: 'kotak-emas-hijau', label: 'Tema 15 — Kotak Emas & Pita Hijau (Landscape)' },
   { id: 'ombak-hijau', label: 'Tema 16 — Hijau Ombak Mengalir (Landscape)' },
-  // Tema 17-19: sampul per jenis instansi (logo mengikuti tenant yang login).
+  // Tema 17-20: sampul per jenis instansi (logo mengikuti tenant yang login).
   { id: 'kesehatan-hijau', label: 'Tema 17 — Kesehatan Hijau (Puskesmas)' },
   { id: 'pendidikan-biru', label: 'Tema 18 — Pendidikan Biru Emas (Sekolah)' },
   { id: 'kua-hijau-emas', label: 'Tema 19 — Mihrab Hijau Emas (KUA)' },
+  { id: 'polres-tribrata', label: 'Tema 20 — Tribrata Biru Emas (Polres)' },
 ]
 
-// Tema 17-19 dikaitkan ke jenis bingkainya. Dipakai untuk menentukan tema
+// Tema 17-20 dikaitkan ke jenis bingkainya. Dipakai untuk menentukan tema
 // awal per tenant dan untuk menggambar bingkai di pola Kop Resmi.
 const JENIS_BINGKAI_TENANT = {
   'kesehatan-hijau': 'kesehatan',
   'pendidikan-biru': 'pendidikan',
   'kua-hijau-emas': 'kua',
+  'polres-tribrata': 'polres',
 }
 
 // Dua pola tata letak sampul yang tersedia. Pola tema warna (TEMA_SAMPUL) tetap
@@ -1122,16 +1124,18 @@ function SampulBingkaiHijau({ tema, logoUrl, judulTampil, subJudul, labelTahun, 
 }
 
 // ---------------------------------------------------------------------------
-// TEMA 17–19 — Sampul per jenis instansi (desain dari gambar referensi):
+// TEMA 17–20 — Sampul per jenis instansi (desain dari gambar referensi):
 //   17 Kesehatan Hijau  -> Puskesmas : segitiga sudut hijau, gelombang hijau,
 //                          hati berdenyut EKG di kiri bawah
 //   18 Pendidikan Biru  -> Sekolah   : lengkung atas biru-emas, gelombang biru
 //                          di bawah, tumpukan buku + gelas pensil
 //   19 Mihrab Hijau Emas-> KUA       : lengkung mihrab putih di bingkai hijau,
 //                          bintang segi delapan emas di sudut, siluet masjid
+//   20 Tribrata Biru Emas-> Polres   : pita navy atas & bawah dengan bintang
+//                          lima emas (lambang Tribrata), bintang kecil di sudut
 // Emblem/logo pada gambar referensi SENGAJA tidak dibawa — tempatnya diisi
 // logoUrl milik tenant yang sedang login (identitas.logoUrl), jadi logo
-// Puskesmas / Sekolah / Kemenag otomatis sesuai instansinya masing-masing.
+// Puskesmas / Sekolah / Kemenag / Polri otomatis sesuai instansinya masing-masing.
 // Semua digambar dengan SVG berukuran mm (viewBox = ukuran kertas), sehingga
 // berlaku untuk portrait maupun landscape tanpa gambar melar.
 // ---------------------------------------------------------------------------
@@ -1141,6 +1145,17 @@ function bintang8(cx, cy, r, ri = r * 0.62) {
   const titik = []
   for (let i = 0; i < 16; i++) {
     const sudut = ((i * 22.5 - 90) * Math.PI) / 180
+    const rad = i % 2 === 0 ? r : ri
+    titik.push(`${(cx + rad * Math.cos(sudut)).toFixed(2)} ${(cy + rad * Math.sin(sudut)).toFixed(2)}`)
+  }
+  return `M${titik.join(' L')} Z`
+}
+
+// Path bintang lima (lambang bintang Polri).
+function bintang5(cx, cy, r, ri = r * 0.4) {
+  const titik = []
+  for (let i = 0; i < 10; i++) {
+    const sudut = ((i * 36 - 90) * Math.PI) / 180
     const rad = i % 2 === 0 ? r : ri
     titik.push(`${(cx + rad * Math.cos(sudut)).toFixed(2)} ${(cy + rad * Math.sin(sudut)).toFixed(2)}`)
   }
@@ -1269,7 +1284,31 @@ function BingkaiKUA({ w, h }) {
   )
 }
 
-// Lapisan latar bingkai sesuai jenis (kesehatan / pendidikan / kua).
+function BingkaiPolres({ w, h }) {
+  const navy = '#0b1f4b'
+  const emas = '#d4af37'
+  const cx = w / 2
+  return (
+    <>
+      <rect x="3" y="3" width={w - 6} height={h - 6} fill="none" stroke={navy} strokeWidth="1.8" />
+      <rect x="6" y="6" width={w - 12} height={h - 12} fill="none" stroke={emas} strokeWidth="0.7" />
+      {/* pita navy di atas, dengan takik di tengah */}
+      <path d={`M3 3 H${w - 3} V20 H${cx + 30} L${cx + 24} 26 H${cx - 24} L${cx - 30} 20 H3 Z`} fill={navy} />
+      <path d={`M3 23 H${cx - 32} L${cx - 26} 29 H${cx + 26} L${cx + 32} 23 H${w - 3}`} fill="none" stroke={emas} strokeWidth="1.2" />
+      <path d={bintang5(cx, 15, 5.5)} fill={emas} />
+      {/* pita navy di bawah (cermin) */}
+      <path d={`M3 ${h - 3} H${w - 3} V${h - 20} H${cx + 30} L${cx + 24} ${h - 26} H${cx - 24} L${cx - 30} ${h - 20} H3 Z`} fill={navy} />
+      <path d={`M3 ${h - 23} H${cx - 32} L${cx - 26} ${h - 29} H${cx + 26} L${cx + 32} ${h - 23} H${w - 3}`} fill="none" stroke={emas} strokeWidth="1.2" />
+      <path d={bintang5(cx, h - 15, 5.5)} fill={emas} />
+      {/* bintang kecil di empat sudut */}
+      <EmpatSudutSvg w={w} h={h} inset={11}>
+        <path d={bintang5(0, 0, 3.2)} fill={emas} />
+      </EmpatSudutSvg>
+    </>
+  )
+}
+
+// Lapisan latar bingkai sesuai jenis (kesehatan / pendidikan / kua / polres).
 function LatarBingkaiTenant({ jenis, orientasi }) {
   const landscape = orientasi === 'landscape'
   const w = landscape ? 297 : 210
@@ -1284,16 +1323,18 @@ function LatarBingkaiTenant({ jenis, orientasi }) {
       {jenis === 'kesehatan' && <BingkaiKesehatan w={w} h={h} />}
       {jenis === 'pendidikan' && <BingkaiPendidikan w={w} h={h} />}
       {jenis === 'kua' && <BingkaiKUA w={w} h={h} />}
+      {jenis === 'polres' && <BingkaiPolres w={w} h={h} />}
     </svg>
   )
 }
 
 // Padding isi (atas, kiri-kanan, bawah) supaya teks tidak menabrak hiasan
-// bingkai: lengkung di atas (pendidikan, KUA) dan gelombang/masjid di bawah.
+// bingkai: lengkung di atas (pendidikan, KUA), pita di atas-bawah (polres)
+// dan gelombang/masjid di bawah.
 function paddingBingkaiTenant(jenis, orientasi) {
   const tabel = {
-    portrait: { kesehatan: '26mm 22mm 58mm', pendidikan: '38mm 22mm 60mm', kua: '36mm 26mm 60mm' },
-    landscape: { kesehatan: '20mm 30mm 42mm', pendidikan: '32mm 30mm 46mm', kua: '30mm 34mm 42mm' },
+    portrait: { kesehatan: '26mm 22mm 58mm', pendidikan: '38mm 22mm 60mm', kua: '36mm 26mm 60mm', polres: '38mm 22mm 40mm' },
+    landscape: { kesehatan: '20mm 30mm 42mm', pendidikan: '32mm 30mm 46mm', kua: '30mm 34mm 42mm', polres: '36mm 30mm 38mm' },
   }
   return tabel[orientasi === 'landscape' ? 'landscape' : 'portrait'][jenis]
 }
@@ -1302,6 +1343,7 @@ const PALET_TENANT = {
   kesehatan: { judul: '#166534', kop: '#14532d', aksen: '#16a34a', tahun: '#15803d' },
   pendidikan: { judul: '#1d4ed8', kop: '#1e3a8a', aksen: '#eab308', tahun: '#b45309' },
   kua: { judul: '#14532d', kop: '#14532d', aksen: '#b8860b', tahun: '#b8860b' },
+  polres: { judul: '#0b1f4b', kop: '#0b1f4b', aksen: '#b8860b', tahun: '#8a6d1a' },
 }
 
 // Garis pemisah dengan ornamen kecil di tengah (daun / belah ketupat / bintang).
@@ -1312,6 +1354,8 @@ function PemisahOrnamen({ jenis, warna }) {
       <svg width="14" height="14" viewBox="-7 -7 14 14">
         {jenis === 'kua' ? (
           <path d={bintang8(0, 0, 6)} fill={warna} />
+        ) : jenis === 'polres' ? (
+          <path d={bintang5(0, 0, 6.5)} fill={warna} />
         ) : jenis === 'pendidikan' ? (
           <path d="M0 -5 L5 0 L0 5 L-5 0 Z" fill={warna} />
         ) : (
@@ -1394,10 +1438,11 @@ const KOMPONEN_TEMA = {
   'kesehatan-hijau': (props) => <SampulTenant jenis="kesehatan" {...props} />,
   'pendidikan-biru': (props) => <SampulTenant jenis="pendidikan" {...props} />,
   'kua-hijau-emas': (props) => <SampulTenant jenis="kua" {...props} />,
+  'polres-tribrata': (props) => <SampulTenant jenis="polres" {...props} />,
 }
 
 // ---------------------------------------------------------------------------
-// POLA KOP RESMI — satu komponen yang dipakai bersama oleh ke-19 tema warna.
+// POLA KOP RESMI — satu komponen yang dipakai bersama oleh ke-20 tema warna.
 // Susunannya meniru kop dinas resmi (3 baris kop rata tengah → judul laporan
 // → logo besar di tengah → "TAHUN PELAJARAN/ANGGARAN ..." di bawah), persis
 // pola pada dokumen contoh yang diunggah. Warna & bingkai tiap baris ikut
@@ -1420,10 +1465,11 @@ const GAYA_KOP_RESMI = {
   'floral-hijau': { background: '#ffffff', border: '1.5px solid #166534', border2: '1px solid #86efac', kopColor: '#14532d', judulColor: '#166534', aksenColor: '#166534' },
   'kotak-emas-hijau': { background: '#ffffff', border: '2px solid #d4af37', kopColor: '#14532d', judulColor: '#166534', aksenColor: '#d4af37' },
   'ombak-hijau': { background: '#ffffff', border: '2px solid #166534', kopColor: '#14532d', judulColor: '#166534', aksenColor: '#4ade80' },
-  // Tema 17-19: bingkainya digambar oleh LatarBingkaiTenant, jadi tidak ada border CSS.
+  // Tema 17-20: bingkainya digambar oleh LatarBingkaiTenant, jadi tidak ada border CSS.
   'kesehatan-hijau': { background: '#ffffff', border: 'none', kopColor: '#14532d', judulColor: '#166534', aksenColor: '#16a34a' },
   'pendidikan-biru': { background: '#ffffff', border: 'none', kopColor: '#1e3a8a', judulColor: '#1d4ed8', aksenColor: '#eab308' },
   'kua-hijau-emas': { background: '#ffffff', border: 'none', kopColor: '#14532d', judulColor: '#14532d', aksenColor: '#b8860b' },
+  'polres-tribrata': { background: '#ffffff', border: 'none', kopColor: '#0b1f4b', judulColor: '#0b1f4b', aksenColor: '#b8860b' },
 }
 
 function SampulKopResmi({ tema, logoUrl, kopBaris1, kopBaris2, kopBaris3, judulUtama, kodeLaporan, subJudulEkstra, labelTahun, tahunAnggaran, orientasi }) {
@@ -1498,12 +1544,16 @@ const SKALA_PRATINJAU = 0.62
 
 /**
  * Komponen sampul laporan yang reusable untuk SEMUA tenant (sekolah, kantor,
- * puskesmas). Identitas instansi (nama, logo, alamat, pimpinan) diambil
- * otomatis lewat useIdentitasInstansi() sesuai tenant akun yang login.
+ * puskesmas, polres). Identitas instansi (nama, logo, alamat, pimpinan)
+ * diambil otomatis lewat useIdentitasInstansi() sesuai tenant akun yang login.
  *
  * Tema awal mengikuti tenant: kantor -> Tema 19 (KUA), puskesmas -> Tema 17
- * (Kesehatan), selain itu -> Tema 18 (Pendidikan). Pengguna tetap bebas
- * memilih tema lain lewat dropdown.
+ * (Kesehatan), polres -> Tema 20 (Tribrata), selain itu -> Tema 18
+ * (Pendidikan). Pengguna tetap bebas memilih tema lain lewat dropdown.
+ *
+ * Khusus tenant Polres: baris Desa/Kelurahan, Kecamatan, Nama Bank dan Nomor
+ * Rekening disembunyikan, diganti baris Polda. Pilihan Kabupaten/Kota di
+ * Kop Resmi juga disembunyikan (kop Polres mengikuti struktur Polri).
  *
  * Props:
  * - jenisLaporanAwal   : jenis laporan default saat halaman dibuka. Kalau tidak ada
@@ -1515,7 +1565,7 @@ const SKALA_PRATINJAU = 0.62
  *                        (mis. 'Tahun Ajaran' untuk laporan semester/8355). Pengguna tetap bisa
  *                        mengganti pilihan ini sendiri lewat dropdown "Label Tahun" di form.
  * - tampilkanBank      : true/false — tampilkan baris Nama Bank & Nomor Rekening di identitas
- *                        (hanya berlaku untuk Pola Sampul Dekoratif)
+ *                        (hanya berlaku untuk Pola Sampul Dekoratif; selalu false untuk Polres)
  * - tampilkanKelas     : true/false — tampilkan field & baris "Kelas" (dipakai untuk sampul 8355 Kelas 6)
  * - kelasAwal          : isi awal field Kelas (mis. 'VI')
  * - labelHalaman       : judul kecil di toolbar (opsional, untuk membedakan halaman di UI)
@@ -1526,7 +1576,7 @@ export default function SampulLaporan({
   kunciJenisLaporan = false,
   subJudulAwal = '',
   labelTahun = 'Tahun Anggaran',
-  tampilkanBank = true,
+  tampilkanBank: tampilkanBankProp = true,
   tampilkanKelas = false,
   kelasAwal = '',
   labelHalaman = 'Cetak Sampul Laporan',
@@ -1534,15 +1584,24 @@ export default function SampulLaporan({
 }) {
   const navigate = useNavigate()
   const { cfg, identitas, loading, error: errorMuat } = useIdentitasInstansi()
-  const { isKantor, isPuskesmas } = useAuth()
+  const { isKantor, isPuskesmas, isPolres } = useAuth()
 
-  // Jenis laporan yang tersedia mengikuti tipe tenant (sekolah/kantor/puskesmas)
+  // Polres tidak memakai baris rekening bank di sampul
+  const tampilkanBank = tampilkanBankProp && !isPolres
+
+  // Jenis laporan yang tersedia mengikuti tipe tenant (sekolah/kantor/puskesmas/polres)
   const opsiJenis = cfg.jenisLaporan
   const jenisAwalValid = opsiJenis.includes(jenisLaporanAwal) ? jenisLaporanAwal : opsiJenis[0]
 
   // Tema bawaan sesuai jenis tenant. Kalau pengguna belum memilih tema sendiri,
   // tema ikut berubah begitu status tenant selesai dimuat dari AuthContext.
-  const temaTenant = isKantor ? 'kua-hijau-emas' : isPuskesmas ? 'kesehatan-hijau' : 'pendidikan-biru'
+  const temaTenant = isKantor
+    ? 'kua-hijau-emas'
+    : isPuskesmas
+    ? 'kesehatan-hijau'
+    : isPolres
+    ? 'polres-tribrata'
+    : 'pendidikan-biru'
 
   const [polaSampul, setPolaSampul] = useState(polaSampulAwal)
   const [tema, setTema] = useState(temaTenant)
@@ -1596,9 +1655,14 @@ export default function SampulLaporan({
   const barisIdentitas = [
     { label: cfg.labelNama, nilai: identitas.nama },
     ...(cfg.labelKode ? [{ label: cfg.labelKode, nilai: identitas.kode }] : []),
+    ...(isPolres ? [{ label: 'Polda', nilai: identitas.polda }] : []),
     { label: 'Alamat', nilai: identitas.alamat },
-    { label: 'Desa/Kelurahan', nilai: desaKelurahan },
-    { label: 'Kecamatan', nilai: bersihkanWilayah(identitas.kecamatan, 'kecamatan') },
+    ...(!isPolres
+      ? [
+          { label: 'Desa/Kelurahan', nilai: desaKelurahan },
+          { label: 'Kecamatan', nilai: bersihkanWilayah(identitas.kecamatan, 'kecamatan') },
+        ]
+      : []),
     { label: 'Kab/Kota', nilai: kabupatenBersih },
     { label: 'Provinsi', nilai: identitas.provinsi },
     { label: 'Kode Pos', nilai: identitas.kodePos },
@@ -1692,7 +1756,7 @@ export default function SampulLaporan({
               </div>
               {orientasi === 'landscape' && (
                 <p className="mt-1 text-[11px] text-slate-400">
-                  Tema 11–16 (Bingkai Hijau) dan Tema 17–19 (per instansi) tabel identitasnya otomatis jadi 2 kolom di landscape, jadi lebih pas dibanding tema lain.
+                  Tema 11–16 (Bingkai Hijau) dan Tema 17–20 (per instansi) tabel identitasnya otomatis jadi 2 kolom di landscape, jadi lebih pas dibanding tema lain.
                 </p>
               )}
             </div>
@@ -1777,24 +1841,26 @@ export default function SampulLaporan({
 
             {polaSampul === 'kop-resmi' && (
               <div className="grid grid-cols-2 gap-2">
-                <label className="text-xs text-slate-500">
-                  Jenis Wilayah
-                  <select
-                    value={jenisWilayah}
-                    onChange={(e) => setJenisWilayah(e.target.value)}
-                    className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
-                  >
-                    <option value="Kabupaten">Kabupaten</option>
-                    <option value="Kota">Kota</option>
-                  </select>
-                </label>
-                <label className="text-xs text-slate-500">
+                {!isPolres && (
+                  <label className="text-xs text-slate-500">
+                    Jenis Wilayah
+                    <select
+                      value={jenisWilayah}
+                      onChange={(e) => setJenisWilayah(e.target.value)}
+                      className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
+                    >
+                      <option value="Kabupaten">Kabupaten</option>
+                      <option value="Kota">Kota</option>
+                    </select>
+                  </label>
+                )}
+                <label className={`text-xs text-slate-500 ${isPolres ? 'col-span-2' : ''}`}>
                   Nama Dinas / Kantor
                   <input
                     type="text"
                     value={namaDinas}
                     onChange={(e) => setNamaDinas(e.target.value)}
-                    placeholder="mis. DINAS PENDIDIKAN DAN KEBUDAYAAN"
+                    placeholder={isPolres ? 'mis. DAERAH MALUKU' : 'mis. DINAS PENDIDIKAN DAN KEBUDAYAAN'}
                     className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
                   />
                 </label>
@@ -1807,7 +1873,7 @@ export default function SampulLaporan({
                 type="text"
                 value={subJudul}
                 onChange={(e) => setSubJudul(e.target.value)}
-                placeholder="mis. BANTUAN OPERASIONAL SEKOLAH (BOS)"
+                placeholder={isPolres ? 'mis. BAGIAN PERENCANAAN' : 'mis. BANTUAN OPERASIONAL SEKOLAH (BOS)'}
                 className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
               />
             </label>
@@ -1852,16 +1918,18 @@ export default function SampulLaporan({
 
             {polaSampul === 'dekoratif' && (
               <>
-                <label className="text-xs text-slate-500">
-                  Desa/Kelurahan <span className="text-slate-400">(bisa diisi manual bila belum ada di profil)</span>
-                  <input
-                    type="text"
-                    value={desaKelurahan}
-                    onChange={(e) => setDesaKelurahan(e.target.value)}
-                    placeholder="mis. Waria"
-                    className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
-                  />
-                </label>
+                {!isPolres && (
+                  <label className="text-xs text-slate-500">
+                    Desa/Kelurahan <span className="text-slate-400">(bisa diisi manual bila belum ada di profil)</span>
+                    <input
+                      type="text"
+                      value={desaKelurahan}
+                      onChange={(e) => setDesaKelurahan(e.target.value)}
+                      placeholder="mis. Waria"
+                      className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
+                    />
+                  </label>
+                )}
 
                 {tampilkanBank && (
                   <div className="grid grid-cols-2 gap-2">
@@ -1905,7 +1973,7 @@ export default function SampulLaporan({
                     type="text"
                     value={dibuatOleh}
                     onChange={(e) => setDibuatOleh(e.target.value)}
-                    placeholder="mis. LD.SALIM, S.Pd"
+                    placeholder={isPolres ? 'mis. AKP Budi Santoso' : 'mis. LD.SALIM, S.Pd'}
                     className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
                   />
                 </label>
