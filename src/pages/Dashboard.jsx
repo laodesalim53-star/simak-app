@@ -983,7 +983,8 @@ function DashboardPuskesmas({ sekolahId }) {
 // Entry point: pilih tampilan berdasarkan jenis_organisasi.
 // ============================================================
 export default function Dashboard() {
-  const { sekolahId, isKantor, isPuskesmas } = useAuth()
+  const { sekolahId, isKantor, isPuskesmas, isPolres } = useAuth()
+  if (isPolres) return <DashboardPolres sekolahId={sekolahId} />
   if (isKantor) return <DashboardKantor sekolahId={sekolahId} />
   if (isPuskesmas) return <DashboardPuskesmas sekolahId={sekolahId} />
   return <DashboardSekolah sekolahId={sekolahId} />
