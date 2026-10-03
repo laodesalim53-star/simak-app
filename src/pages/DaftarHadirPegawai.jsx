@@ -13,19 +13,20 @@ const NAMA_BULAN = [
 
 // =====================================================================
 // KONFIGURASI PER TENANT
-// Halaman ini dipakai bersama oleh tenant KANTOR (KUA) dan SEKOLAH.
-// Semua yang berbeda antar tenant dikumpulkan di sini. Kalau nama
+// Halaman ini dipakai bersama oleh tenant KANTOR (KUA), SEKOLAH, dan
+// POLRES. Semua yang berbeda antar tenant dikumpulkan di sini. Kalau nama
 // tabel/kolom di database-mu berbeda, cukup ubah di blok ini saja.
 //
 // Setiap `petakanProfil` mengubah baris profil mentah menjadi bentuk
 // seragam: { namaUnit, kecamatan, kabupaten, tempatTtd, kepala,
-// nipKepala, ttdPath, jabatanKepala, barisJabatanPerorangan }
+// barisNomorKepala, ttdPath, jabatanKepala, barisJabatanPerorangan }
 // =====================================================================
 const KONFIG = {
   kantor: {
     judulHalaman: 'Daftar Hadir Pegawai',
     subjudul: 'Rekap kehadiran pegawai per bulan, otomatis dari data pegawai, siap cetak.',
     istilahPegawai: 'Pegawai',
+    labelNomorInduk: 'NIP',
     bucket: 'profil-kantor',
 
     tabelPegawai: 'pegawai_kantor',
@@ -57,7 +58,7 @@ const KONFIG = {
       kabupaten: d.kabupaten,
       tempatTtd: d.tempat_ttd,
       kepala: d.kepala_kua,
-      nipKepala: d.nip_kepala_kua,
+      barisNomorKepala: `NIP. ${d.nip_kepala_kua || '..............................'}`,
       ttdPath: d.ttd_kepala_kua_path,
       jabatanKepala: 'Kepala KUA',
       barisJabatanPerorangan: [
@@ -75,6 +76,7 @@ const KONFIG = {
     judulHalaman: 'Daftar Hadir Guru & Tenaga Kependidikan',
     subjudul: 'Rekap kehadiran guru dan tenaga kependidikan per bulan, siap cetak.',
     istilahPegawai: 'Guru & Tenaga Kependidikan',
+    labelNomorInduk: 'NIP',
     bucket: 'profil-sekolah',
 
     tabelPegawai: 'guru',
@@ -114,12 +116,67 @@ const KONFIG = {
       kabupaten: d.kabupaten,
       tempatTtd: d.tempat_ttd,
       kepala: d.kepala_sekolah,
-      nipKepala: d.nip_kepala_sekolah,
+      barisNomorKepala: `NIP. ${d.nip_kepala_sekolah || '..............................'}`,
       ttdPath: d.ttd_kepala_sekolah_path,
       jabatanKepala: 'Kepala Sekolah',
       barisJabatanPerorangan: [
         'Kepala Sekolah',
         d.nama_sekolah || '..............................',
+      ],
+    }),
+  },
+
+  // ------------------------------------------------------------------
+  // POLRES — personel_polres, presensi_personel_polres, profil_polres.
+  // Tabel presensi_personel_polres harus dibuat dulu (lihat SQL terpisah).
+  // ------------------------------------------------------------------
+  polres: {
+    judulHalaman: 'Daftar Hadir Personel',
+    subjudul: 'Rekap kehadiran personel per bulan, otomatis dari data personel, siap cetak.',
+    istilahPegawai: 'Personel',
+    labelNomorInduk: 'NRP',
+    bucket: 'profil-polres',
+
+    tabelPegawai: 'personel_polres',
+    selectPegawai: 'id, nama, nrp, pangkat, jabatan',
+    urutPegawai: 'nama',
+    filterAktif: { kolom: 'status', nilai: 'aktif' },
+    filterSekolahPegawai: true,
+    // Diseragamkan ke bentuk yang dipakai halaman: nama_lengkap, nip, jabatan
+    petakanPegawai: (p) => ({
+      id: p.id,
+      nama_lengkap: p.pangkat ? `${p.pangkat} ${p.nama}` : p.nama,
+      nip: p.nrp,
+      jabatan: p.jabatan || '',
+    }),
+
+    tabelPresensi: 'presensi_personel_polres',
+    kolomRelasi: 'personel_polres_id', // FK ke personel_polres.id
+    filterSekolahPresensi: true,
+
+    // Sabtu ikut libur; ubah ke false kalau Polres masuk Senin–Sabtu
+    sabtuLibur: true,
+    namaHariMinggu: 'MINGGU',
+    namaHariSabtu: 'SABTU',
+    tandaTanganTunggal: false, // Mengetahui (Kapolres) + Dibuat oleh
+
+    profil: {
+      tabel: 'profil_polres',
+      select:
+        'nama_satuan, polda, alamat, kabupaten_kota, kapolres, pangkat_kapolres, nrp_kapolres, tempat_ttd',
+    },
+    petakanProfil: (d) => ({
+      namaUnit: d.nama_satuan || '-',
+      kecamatan: null,
+      kabupaten: d.kabupaten_kota,
+      tempatTtd: d.tempat_ttd,
+      kepala: d.kapolres,
+      barisNomorKepala: `${d.pangkat_kapolres ? d.pangkat_kapolres + ' ' : ''}NRP ${d.nrp_kapolres || '..............................'}`,
+      ttdPath: null, // profil_polres belum punya kolom tanda tangan gambar
+      jabatanKepala: 'Kapolres',
+      barisJabatanPerorangan: [
+        'Kepala Kepolisian Resor',
+        (d.nama_satuan || '').replace(/^polres\s+/i, '') || '..............................',
       ],
     }),
   },
@@ -183,10 +240,10 @@ function normalisasiJabatan(jabatan) {
 }
 
 export default function DaftarHadirPegawai() {
-  const { profil, sekolahId, isKantor, isAdmin } = useAuth()
+  const { profil, sekolahId, isKantor, isPolres, isAdmin } = useAuth()
 
-  // Pilih konfigurasi sesuai jenis tenant (kantor / sekolah)
-  const jenis = isKantor ? 'kantor' : 'sekolah'
+  // Pilih konfigurasi sesuai jenis tenant (polres / kantor / sekolah)
+  const jenis = isPolres ? 'polres' : isKantor ? 'kantor' : 'sekolah'
   const K = KONFIG[jenis]
 
   // Hanya admin (admin, admin_utama, superadmin, kepala_*) yang boleh mengedit
@@ -235,7 +292,7 @@ export default function DaftarHadirPegawai() {
   }
 
   // Dipakai mode Perorangan (Sabtu ikut libur hanya jika K.sabtuLibur = true).
-  // Nama hari mengikuti istilah tiap tenant (KUA: AHAD, sekolah: MINGGU).
+  // Nama hari mengikuti istilah tiap tenant (KUA: AHAD, sekolah/polres: MINGGU).
   function labelLibur(hari) {
     const h = hariKe(hari)
     if (h === 0) return K.namaHariMinggu || 'MINGGU'
@@ -244,7 +301,7 @@ export default function DaftarHadirPegawai() {
     return null
   }
 
-  // Profil unit (kantor/sekolah), di-scope per tenant lewat sekolah_id
+  // Profil unit (kantor/sekolah/polres), di-scope per tenant lewat sekolah_id
   useEffect(() => {
     if (!sekolahId) {
       setProfilMentah(null)
@@ -400,7 +457,7 @@ export default function DaftarHadirPegawai() {
     }
   }, [pegawaiList, pegawaiTerpilihId])
 
-  // Profil yang sudah diseragamkan (sama bentuknya untuk kantor & sekolah)
+  // Profil yang sudah diseragamkan (sama bentuknya untuk semua tenant)
   const P = useMemo(() => (profilMentah ? K.petakanProfil(profilMentah) : null), [profilMentah, K])
 
   const ttdKepalaUrl = P?.ttdPath
@@ -408,6 +465,7 @@ export default function DaftarHadirPegawai() {
     : null
 
   const jabatanKepala = P?.jabatanKepala || K.petakanProfil({}).jabatanKepala
+  const barisNomorKepala = P?.barisNomorKepala ?? K.petakanProfil({}).barisNomorKepala
   const tempatTtd = P?.tempatTtd || P?.kabupaten || ''
   const tanggalCetak = formatTanggalIndonesia(new Date())
   // Daftar hadir manual ditandatangani per akhir bulan berjalan
@@ -656,7 +714,7 @@ export default function DaftarHadirPegawai() {
             <thead>
               <tr className="bg-slate-100">
                 <th className="border border-slate-400 px-1 py-1 w-6">No</th>
-                <th className="border border-slate-400 px-2 py-1 text-left w-40">Nama / NIP</th>
+                <th className="border border-slate-400 px-2 py-1 text-left w-40">Nama / {K.labelNomorInduk}</th>
                 <th className="border border-slate-400 px-2 py-1 text-left w-32">Jabatan</th>
                 {daftarHari.map((hari) => (
                   <th
@@ -723,7 +781,7 @@ export default function DaftarHadirPegawai() {
                   ({P?.kepala || '..............................'})
                 </p>
                 <p className="text-[10px] text-slate-500">
-                  NIP. {P?.nipKepala || '..............................'}
+                  {barisNomorKepala}
                 </p>
               </div>
             </div>
@@ -747,7 +805,7 @@ export default function DaftarHadirPegawai() {
                     ({P?.kepala || '..............................'})
                   </p>
                   <p className="text-xs text-slate-500">
-                    NIP. {P?.nipKepala || '..............................'}
+                    {barisNomorKepala}
                   </p>
                 </div>
                 <div className="text-center w-48">
@@ -758,7 +816,7 @@ export default function DaftarHadirPegawai() {
                     ({profil?.nama_lengkap || '..............................'})
                   </p>
                   <p className="text-xs text-slate-500">
-                    NIP. {profil?.nip || '..............................'}
+                    {K.labelNomorInduk}. {profil?.nip || '..............................'}
                   </p>
                 </div>
               </div>
@@ -789,7 +847,7 @@ export default function DaftarHadirPegawai() {
                     <td className="align-top py-[1px] font-medium">{pegawaiTerpilih.nama_lengkap}</td>
                   </tr>
                   <tr>
-                    <td className="align-top py-[1px] uppercase">NIP</td>
+                    <td className="align-top py-[1px] uppercase">{K.labelNomorInduk}</td>
                     <td className="align-top pr-2 py-[1px]">:</td>
                     <td className="align-top py-[1px]">{pegawaiTerpilih.nip || '-'}</td>
                   </tr>
@@ -890,13 +948,15 @@ export default function DaftarHadirPegawai() {
                     {P?.kepala || '..............................'}
                   </p>
                   <p className="text-[10px] text-slate-600">
-                    NIP. {P?.nipKepala || '..............................'}
+                    {barisNomorKepala}
                   </p>
                 </div>
               </div>
             </>
           ) : (
-            <p className="no-print text-sm text-slate-500">Belum ada pegawai untuk dipilih.</p>
+            <p className="no-print text-sm text-slate-500">
+              Belum ada {K.istilahPegawai.toLowerCase()} untuk dipilih.
+            </p>
           )}
         </div>
       )}
