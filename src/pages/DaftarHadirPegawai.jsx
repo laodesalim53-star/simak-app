@@ -160,10 +160,10 @@ const KONFIG = {
     namaHariSabtu: 'SABTU',
     tandaTanganTunggal: false, // Mengetahui (Kapolres) + Dibuat oleh
 
-    profil: {
+        profil: {
       tabel: 'profil_polres',
       select:
-        'nama_satuan, polda, alamat, kabupaten_kota, kapolres, pangkat_kapolres, nrp_kapolres, tempat_ttd',
+        'nama_satuan, polda, alamat, kabupaten_kota, kapolres, pangkat_kapolres, nrp_kapolres, tempat_ttd, ttd_kapolres_path',
     },
     petakanProfil: (d) => ({
       namaUnit: d.nama_satuan || '-',
