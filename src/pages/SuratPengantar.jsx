@@ -7,6 +7,7 @@ import Layout from '../components/Layout'
 import KopSurat from '../components/KopSurat'
 
 const LOGO_BUCKET = 'profil-kantor'
+const BUCKET_POLRES = 'profil-polres'
 
 const NAMA_BULAN = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -148,7 +149,7 @@ export default function SuratPengantar() {
     const query = isPolres
       ? supabase
           .from('profil_polres')
-          .select('nama_satuan, polda, kabupaten_kota, kapolres, pangkat_kapolres, nrp_kapolres, tempat_ttd')
+          .select('nama_satuan, polda, kabupaten_kota, kapolres, pangkat_kapolres, nrp_kapolres, tempat_ttd, ttd_kapolres_path')
       : supabase
           .from('profil_kantor')
           .select('nama_kantor, kabupaten, kecamatan, kepala_kua, nip_kepala_kua, ttd_kepala_kua_path')
@@ -199,9 +200,14 @@ export default function SuratPengantar() {
     setForm((f) => ({ ...f, tanggal: tanggalAkhirBulan(tahun, bulan) }))
   }, [bulan, tahun])
 
-  const ttdUrl = !isPolres && profil?.ttd_kepala_kua_path
-    ? supabase.storage.from(LOGO_BUCKET).getPublicUrl(profil.ttd_kepala_kua_path).data.publicUrl
-    : null
+  // URL tanda tangan: bucket dan kolom berbeda per tenant
+  const ttdUrl = isPolres
+    ? (profil?.ttd_kapolres_path
+        ? supabase.storage.from(BUCKET_POLRES).getPublicUrl(profil.ttd_kapolres_path).data.publicUrl
+        : null)
+    : (profil?.ttd_kepala_kua_path
+        ? supabase.storage.from(LOGO_BUCKET).getPublicUrl(profil.ttd_kepala_kua_path).data.publicUrl
+        : null)
 
   // Nomor surat per tenant
   const nomorSurat = isPolres
