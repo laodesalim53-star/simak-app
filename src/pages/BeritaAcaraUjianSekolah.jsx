@@ -3,13 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
+import { muatJadwalPengawas, ratakanSesiJadwal } from '../lib/jadwalPengawasStore'
 import {
   AreaLembar,
   BagianSK as Bagian,
   BarAtasCetak,
   FieldSK as Field,
   GayaCetakSK,
-  KopSK,
   LembarSK,
   SEKOLAH_KOSONG,
   ambilGuruDanKelas,
@@ -48,14 +48,51 @@ function urutkanNoPeserta(a, b) {
   return String(a.noPeserta).localeCompare(String(b.noPeserta), undefined, { numeric: true })
 }
 
+// Path file di bucket 'profil-sekolah' -> URL publik (kosong kalau tidak ada).
+function urlLogo(path) {
+  if (!path) return ''
+  const { data } = supabase.storage.from('profil-sekolah').getPublicUrl(path)
+  return data?.publicUrl || ''
+}
+
+// "08.00 – 10.00" -> ['08:00', '10:00'] (format input type="time"); kosong kalau tak terbaca.
+function pecahWaktu(w) {
+  const m = (w || '').match(/(\d{1,2})[.:](\d{2})\s*[–—-]\s*(\d{1,2})[.:](\d{2})/)
+  if (!m) return ['', '']
+  const p = (j, mnt) => `${String(j).padStart(2, '0')}:${mnt}`
+  return [p(m[1], m[2]), p(m[3], m[4])]
+}
+
+// "Senin, 05 Okt 2026" untuk label dropdown jadwal.
+function labelTanggal(iso) {
+  if (!iso) return '…'
+  return new Date(`${iso}T00:00:00`).toLocaleDateString('id-ID', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  })
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // BeritaAcaraUjianSekolah — lembar Berita Acara Penyelenggara Ujian Sekolah,
 // dibuat mengikuti format contoh (Berita Acara Penyelenggara Ujian Sekolah
-// Tahun Pelajaran 2025/2026) dan pola tampilan/kop yang sama dengan halaman SK
+// Tahun Pelajaran 2025/2026) dan pola tampilan yang sama dengan halaman SK
 // lain (lihat PaktaIntegritas.jsx / CetakSK.jsx). Berbeda dari SK: tidak ada
 // Menimbang/Mengingat/Memutuskan — hanya judul, tiga butir berlabel huruf
 // (a, b, c), dan tanda tangan DUA Pengawas berdampingan (bukan Kepala Sekolah
 // seorang diri, jadi tidak memakai BlokTTD bawaan).
+//
+// Sinkron dengan halaman lain:
+// - KOP SURAT: pola resmi yang sama dengan Daftar Hadir / Jadwal Pengawas
+//   (Pemerintah Kabupaten > Dinas > Nama Sekolah > Kecamatan) dengan logo
+//   kabupaten (kiri) & logo sekolah (kanan) dari profil_sekolah. Field kop bisa
+//   diubah manual; isian yang sudah diketik tidak ditimpa.
+// - JADWAL PENGAWAS: tanggal, mata pelajaran, pukul, ruang (kalau namanya sama
+//   dengan ruang di data siswa), Pengawas I & II terisi otomatis dari Jadwal
+//   Pengawas Ruang (lib/jadwalPengawasStore). Sesi hari ini (atau terdekat
+//   berikutnya) dipilih otomatis; sesi lain lewat dropdown. Semua tetap bisa
+//   diubah manual.
 //
 // Route: /gudang-sk/portal-ujian/berita-acara — dipakai untuk kartu
 // "Berita Acara Ujian" (id: 'berita-acara') di PortalUjian.jsx.
@@ -108,10 +145,48 @@ function GayaPadatSatuHalaman() {
         font-size: 11pt;
         line-height: 1.4;
       }
-      .ba-print-compact .sk-kop {
-        padding-bottom: 4px;
-        margin-bottom: 10px;
+
+      /* === Kop resmi (pola sama dengan Daftar Hadir / Jadwal Pengawas) === */
+      .ba-print-compact .ba-kop {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border-bottom: 2px solid #000;
+        padding-bottom: 6px;
+        margin-bottom: 12px;
       }
+      .ba-print-compact .ba-kop-logo {
+        width: 70px;
+        height: 70px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      /* Kunci gambar kop supaya tidak kebawa aturan CSS global (position:fixed dll). */
+      .ba-print-compact .ba-kop-logo img {
+        position: static !important;
+        float: none !important;
+        display: block;
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+      }
+      .ba-print-compact .ba-kop-teks {
+        flex: 1;
+        text-align: center;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        line-height: 1.3;
+      }
+      .ba-print-compact .ba-kop-teks p {
+        margin: 0;
+      }
+      .ba-print-compact .ba-kop-teks .nama {
+        font-size: 13pt;
+      }
+
       .ba-print-compact .ba-judul {
         text-align: center;
         font-weight: bold;
@@ -189,6 +264,40 @@ function GayaPadatSatuHalaman() {
   )
 }
 
+// Kop resmi: Pemerintah Kabupaten > Dinas > Nama Sekolah > Kecamatan, logo
+// kabupaten (kiri) & logo sekolah (kanan). Kotak logo tetap ada walau kosong
+// supaya teks kop tetap di tengah.
+function KopResmi({ kop, namaSekolah, logoKabupatenUrl, logoSekolahUrl }) {
+  return (
+    <div className="ba-kop">
+      <div className="ba-kop-logo">
+        {logoKabupatenUrl && (
+          <img
+            src={logoKabupatenUrl}
+            alt="Logo kabupaten"
+            onError={(e) => { e.currentTarget.style.display = 'none' }}
+          />
+        )}
+      </div>
+      <div className="ba-kop-teks">
+        {kop.kabupaten && <p>{kop.kabupaten}</p>}
+        {kop.dinas && <p>{kop.dinas}</p>}
+        <p className="nama">{namaSekolah}</p>
+        {kop.kecamatan && <p>{kop.kecamatan}</p>}
+      </div>
+      <div className="ba-kop-logo">
+        {logoSekolahUrl && (
+          <img
+            src={logoSekolahUrl}
+            alt="Logo sekolah"
+            onError={(e) => { e.currentTarget.style.display = 'none' }}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
 // Satu baris "Label : nilai....." memakai garis titik-titik seperti formulir
 // aslinya (dipakai di bagian a dan b).
 function BarisRincian({ label, nilai, satuan }) {
@@ -214,6 +323,15 @@ export default function BeritaAcaraUjianSekolah() {
 
   const [sekolah, setSekolah] = useState(SEKOLAH_KOSONG)
 
+  // --- Kop surat (otomatis dari profil_sekolah, tetap bisa diubah manual) ---
+  const [kop, setKop] = useState({
+    kabupaten: '',
+    dinas: 'DINAS PENDIDIKAN DAN KEBUDAYAAN',
+    kecamatan: '',
+  })
+  const [logoSekolahUrl, setLogoSekolahUrl] = useState('')
+  const [logoKabupatenUrl, setLogoKabupatenUrl] = useState('')
+
   // --- Guru (untuk dipilih sebagai Pengawas I & II) ---
   const [guru, setGuru] = useState([])
 
@@ -225,6 +343,11 @@ export default function BeritaAcaraUjianSekolah() {
   // Kehadiran per siswa (id -> true/false). Default semua hadir; dicentang-
   // hilangkan satu per satu kalau ada yang tidak hadir saat pelaksanaan.
   const [kehadiran, setKehadiran] = useState({})
+
+  // --- Jadwal pengawas (dari halaman Jadwal Pengawas Ruang) ---
+  const [sesiJadwal, setSesiJadwal] = useState([])
+  const [sesiTerpilih, setSesiTerpilih] = useState('')
+  const sudahOtomatis = useRef(false)
 
   const [sk, setSk] = useState({
     tanggalPelaksanaan: isoHariIni(),
@@ -263,12 +386,27 @@ export default function BeritaAcaraUjianSekolah() {
     setMemuat(true)
     setGalat('')
     try {
-      const [ps, gk] = await Promise.all([
+      const [ps, gk, profRes] = await Promise.all([
         ambilProfilSekolah(sekolahId),
         ambilGuruDanKelas(sekolahId),
+        supabase
+          .from('profil_sekolah')
+          .select('kabupaten, dinas_pendidikan, kecamatan, logo_path, logo_kabupaten_path')
+          .eq('sekolah_id', sekolahId)
+          .maybeSingle(),
       ])
+      const prof = profRes?.data || {}
       setSekolah(ps.sekolah)
       setGuru(urutkanGuru(gk.guru))
+      setLogoSekolahUrl(urlLogo(prof.logo_path))
+      setLogoKabupatenUrl(urlLogo(prof.logo_kabupaten_path))
+      // Isian kop yang sudah diketik manual TIDAK ditimpa saat data dimuat ulang.
+      setKop((k) => ({
+        ...k,
+        kabupaten: k.kabupaten || prof.kabupaten || '',
+        dinas: prof.dinas_pendidikan || k.dinas,
+        kecamatan: k.kecamatan || prof.kecamatan || '',
+      }))
       sudahMuat.current = true
     } catch (e) {
       console.error('Gagal memuat data Berita Acara Ujian Sekolah:', e)
@@ -323,7 +461,20 @@ export default function BeritaAcaraUjianSekolah() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sekolahId])
 
+  // Baca jadwal pengawas yang tersimpan dari halaman Jadwal Pengawas Ruang.
+  useEffect(() => {
+    let batal = false
+    sudahOtomatis.current = false
+    if (!sekolahId) return undefined
+    ;(async () => {
+      const t = await muatJadwalPengawas(sekolahId)
+      if (!batal) setSesiJadwal(ratakanSesiJadwal(t))
+    })()
+    return () => { batal = true }
+  }, [sekolahId])
+
   const ubahSk = (k) => (e) => setSk((s) => ({ ...s, [k]: e.target.value }))
+  const ubahKop = (k) => (e) => setKop((s) => ({ ...s, [k]: e.target.value }))
 
   // ── Guru / Pengawas ──
   const guruPerId = useMemo(() => {
@@ -359,6 +510,47 @@ export default function BeritaAcaraUjianSekolah() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [daftarRuang])
+
+  // ── Sinkron dengan Jadwal Pengawas Ruang ──
+  // Pasang data satu sesi jadwal ke form.
+  // timpa=false (otomatis saat dibuka): hanya mengisi kolom yang masih kosong.
+  // timpa=true (pilihan manual di dropdown): menggantikan isian sebelumnya.
+  function terapkanSesi(s, { timpa }) {
+    const [mulai, selesai] = pecahWaktu(s.waktu)
+    const pakai = (lama, baru) => (timpa ? baru : lama || baru)
+    setSk((f) => ({
+      ...f,
+      tanggalPelaksanaan: s.tanggal || f.tanggalPelaksanaan,
+      mapel: pakai(f.mapel, s.mapel),
+      pukulMulai: pakai(f.pukulMulai, mulai),
+      pukulSelesai: pakai(f.pukulSelesai, selesai),
+      pengawas1Id: pakai(f.pengawas1Id, guruPerId[s.guru1Id] ? s.guru1Id : ''),
+      pengawas2Id: pakai(f.pengawas2Id, guruPerId[s.guru2Id] ? s.guru2Id : ''),
+      ruang: daftarRuang.includes(s.ruang) ? s.ruang : f.ruang,
+    }))
+  }
+
+  // Otomatis: setelah jadwal, data guru, dan data peserta termuat, pilih sesi hari
+  // ini (atau sesi terdekat berikutnya, atau yang pertama) dan isikan sekali saja.
+  useEffect(() => {
+    if (sudahOtomatis.current || sesiJadwal.length === 0 || guru.length === 0 || memuatSiswa) return
+    sudahOtomatis.current = true
+    const hariIni = isoHariIni()
+    const pilih =
+      sesiJadwal.find((s) => s.tanggal === hariIni) ||
+      sesiJadwal.find((s) => s.tanggal >= hariIni) ||
+      sesiJadwal[0]
+    setSesiTerpilih(pilih.key)
+    terapkanSesi(pilih, { timpa: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sesiJadwal, guru, memuatSiswa])
+
+  const pilihSesi = (e) => {
+    const key = e.target.value
+    setSesiTerpilih(key)
+    const s = sesiJadwal.find((x) => x.key === key)
+    if (s) terapkanSesi(s, { timpa: true })
+  }
 
   // Peserta pada ruang yang sedang dipilih, terurut sesuai No. Peserta.
   const siswaRuang = useMemo(
@@ -427,6 +619,23 @@ export default function BeritaAcaraUjianSekolah() {
           </div>
         )}
 
+        <Bagian judul="Kop surat" keterangan="Terisi otomatis dari Profil Sekolah (beserta logo); bisa diubah di sini, kosongkan yang tidak perlu ditampilkan.">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="Pemerintah Kabupaten/Kota">
+              <input className={inputCls} value={kop.kabupaten} onChange={ubahKop('kabupaten')} placeholder="PEMERINTAH KABUPATEN …" />
+            </Field>
+            <Field label="Dinas">
+              <input className={inputCls} value={kop.dinas} onChange={ubahKop('dinas')} />
+            </Field>
+            <Field label="Kecamatan">
+              <input className={inputCls} value={kop.kecamatan} onChange={ubahKop('kecamatan')} placeholder="KECAMATAN …" />
+            </Field>
+            <Field label="Nama sekolah">
+              <input className={inputCls} value={sekolah.nama} readOnly />
+            </Field>
+          </div>
+        </Bagian>
+
         <Bagian judul="Tahun pelajaran" keterangan="Tercetak di judul lembar.">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Tahun pelajaran">
@@ -444,6 +653,25 @@ export default function BeritaAcaraUjianSekolah() {
           }
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="sm:col-span-2">
+              <Field label="Ambil dari jadwal pengawas">
+                {sesiJadwal.length === 0 ? (
+                  <p className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500">
+                    Belum ada jadwal pengawas tersimpan. Isi dulu di halaman Jadwal Pengawas Ruang, lalu buka
+                    halaman ini lagi.
+                  </p>
+                ) : (
+                  <select className={inputCls} value={sesiTerpilih} onChange={pilihSesi}>
+                    <option value="">— pilih sesi —</option>
+                    {sesiJadwal.map((s) => (
+                      <option key={s.key} value={s.key}>
+                        {labelTanggal(s.tanggal)} • {s.waktu || '…'} • {s.mapel || '(mapel belum diisi)'}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </Field>
+            </div>
             <Field label="Tanggal pelaksanaan">
               <input type="date" className={inputCls} value={sk.tanggalPelaksanaan} onChange={ubahSk('tanggalPelaksanaan')} />
             </Field>
@@ -508,7 +736,7 @@ export default function BeritaAcaraUjianSekolah() {
           )}
         </Bagian>
 
-        <Bagian judul="b. Pembukaan sampul ujian" keterangan="Mata pelajaran, kode soal, dan jumlah eksemplar.">
+        <Bagian judul="b. Pembukaan sampul ujian" keterangan="Mata pelajaran terisi dari jadwal pengawas; kode soal dan jumlah eksemplar diisi manual.">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Mata pelajaran">
               <input className={inputCls} value={sk.mapel} onChange={ubahSk('mapel')} placeholder="mis. PKN" />
@@ -537,7 +765,7 @@ export default function BeritaAcaraUjianSekolah() {
           </Field>
         </Bagian>
 
-        <Bagian judul="Pengawas" keterangan="Dipilih dari data guru; nama dan NIP di lembar cetak terisi otomatis.">
+        <Bagian judul="Pengawas" keterangan="Terisi otomatis sesuai sesi jadwal yang dipilih; bisa diganti. Nama dan NIP di lembar cetak terisi otomatis.">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Pengawas I">
               <select className={inputCls} value={sk.pengawas1Id} onChange={ubahSk('pengawas1Id')}>
@@ -558,14 +786,6 @@ export default function BeritaAcaraUjianSekolah() {
           </div>
         </Bagian>
 
-        <Bagian judul="Kop sekolah" keterangan="Kop diambil dari Profil Sekolah.">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Nama sekolah" className="sm:col-span-2">
-              <input className={inputCls} value={sekolah.nama} readOnly />
-            </Field>
-          </div>
-        </Bagian>
-
         <p className="text-xs text-slate-500 mb-2">
           Pratinjau di bawah. Saat mencetak, matikan opsi "Header dan footer" di dialog cetak agar bersih.
         </p>
@@ -575,7 +795,12 @@ export default function BeritaAcaraUjianSekolah() {
       <AreaLembar>
         <div className="ba-print-compact">
           <LembarSK>
-            <KopSK sekolah={sekolah} />
+            <KopResmi
+              kop={kop}
+              namaSekolah={namaSekolah}
+              logoKabupatenUrl={logoKabupatenUrl}
+              logoSekolahUrl={logoSekolahUrl}
+            />
 
             <p className="ba-judul">BERITA ACARA</p>
             <p className="ba-judul">PENYELENGGARA UJIAN SEKOLAH TAHUN PELAJARAN {isi(sk.tahunPelajaran, '…')}</p>
