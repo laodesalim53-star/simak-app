@@ -88,16 +88,22 @@ const kodeUrut = (i) => (i < 26 ? String.fromCharCode(65 + i) : String(i + 1))
 
 const WAKTU_DEFAULT = ['08.00 – 10.00', '10.30 – 12.00']
 
-// Daftar mapel bawaan, diisi berurutan ke sesi yang masih kosong.
-// Ubah sesuai jadwal asesmen sekolah.
+// Mata pelajaran bawaan, diisi berurutan ke sesi (mengikuti dokumen jadwal sekolah).
+// Ubah sesuai jadwal asesmen. Jumlah sesi awal = jumlah mapel di sini.
 const MAPEL_DEFAULT = [
-  'Pendidikan Agama dan Budi Pekerti',
-  'Pendidikan Pancasila',
   'Bahasa Indonesia',
+  'Pendidikan Agama dan Budi Pekerti',
   'Matematika',
-  'IPAS',
-  'Bahasa Inggris',
+  'PKn',
+  'Ilmu Pengetahuan Alam',
+  'Ilmu Pengetahuan Sosial',
+  'Pendidikan Jasmani Olahraga dan Kesehatan',
+  'Seni Budaya dan Prakarya',
+  'Muatan Lokal',
 ]
+
+// Jumlah baris pengawas yang langsung terisi otomatis dari data guru.
+const JUMLAH_PENGAWAS_DEFAULT = 5
 
 // "KECAMATAN WARIA" -> "Waria"
 const bersihkanKecamatan = (s) =>
@@ -116,6 +122,43 @@ const hariBaru = (tanggal, ruang = 'I') => ({
   ruang,
   sesi: [sesiBaru(0), sesiBaru(1)],
 })
+
+// Hari kerja pertama pada/setelah tanggal ini (lewati Sabtu/Minggu).
+function mulaiHariKerja(iso) {
+  const d = new Date(`${iso}T00:00:00`)
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1)
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+// Jadwal awal: tanggal berurutan (hari kerja), 2 sesi per hari sampai semua
+// mata pelajaran tertampung (hari terakhir bisa 1 sesi).
+function jadwalAwal() {
+  const hasil = []
+  let tanggal = mulaiHariKerja(isoHariIni())
+  for (let sisa = MAPEL_DEFAULT.length; sisa > 0; sisa -= 2) {
+    const h = hariBaru(tanggal)
+    h.sesi = h.sesi.slice(0, Math.min(2, sisa))
+    hasil.push(h)
+    tanggal = hariKerjaBerikutnya(tanggal)
+  }
+  return hasil
+}
+
+// Isi baris pengawas yang masih kosong dengan guru yang belum terpakai,
+// berurutan sesuai daftar guru. Baris yang sudah dipilih tidak diubah.
+function isiPengawasDariGuru(baris, daftarGuru) {
+  if (!daftarGuru.length) return baris
+  let hasil = baris
+  if (hasil.every((p) => !p.guruId) && hasil.length < JUMLAH_PENGAWAS_DEFAULT) {
+    const target = Math.min(JUMLAH_PENGAWAS_DEFAULT, daftarGuru.length)
+    hasil = [...hasil, ...Array.from({ length: target - hasil.length }, pengawasBaru)]
+  }
+  const terpakai = new Set(hasil.map((p) => p.guruId).filter(Boolean))
+  const sisa = daftarGuru.filter((g) => !terpakai.has(g.id))
+  let i = 0
+  return hasil.map((p) => (p.guruId || i >= sisa.length ? p : { ...p, guruId: sisa[i++].id }))
+}
 
 // Isi HANYA kolom yang masih kosong; yang sudah terisi tidak disentuh.
 // - Pengawas dirotasi berpasangan per sesi (A-B, C-D, ...), kembali ke awal
@@ -163,8 +206,8 @@ export default function JadwalPengawasRuangUjian() {
   })
 
   const [pengawas, setPengawas] = useState([pengawasBaru(), pengawasBaru()])
-  // Mata pelajaran langsung terisi di awal; pengawas menyusul setelah guru dipilih.
-  const [hari, setHari] = useState(() => isiKosong([hariBaru(isoHariIni())], [], { mapel: true }))
+  // Jadwal awal sudah berisi hari, sesi, dan mata pelajaran; pengawas terisi setelah data guru dimuat.
+  const [hari, setHari] = useState(() => isiKosong(jadwalAwal(), [], { mapel: true }))
 
   async function muat() {
     if (!sekolahId) {
@@ -187,7 +230,10 @@ export default function JadwalPengawasRuangUjian() {
       setLogoSekolahUrl(urlLogo(prof.logo_path))
       setLogoKabupatenUrl(urlLogo(prof.logo_kabupaten_path))
       setSekolah(ps.sekolah)
-      setGuru(urutkanGuru(gk.guru))
+      const guruUrut = urutkanGuru(gk.guru)
+      setGuru(guruUrut)
+      // Pengawas A, B, C, … langsung terisi dari data guru (tetap bisa diganti).
+      setPengawas((prev) => isiPengawasDariGuru(prev, guruUrut))
       setForm((f) => ({
         ...f,
         kabupaten: f.kabupaten || prof.kabupaten || '',
@@ -243,7 +289,8 @@ export default function JadwalPengawasRuangUjian() {
   const isiOtomatis = () => setHari((d) => isiKosong(d, idsTerpilih, { mapel: true }))
 
   // --- Kelola pengawas ---
-  const tambahPengawas = () => setPengawas((d) => [...d, pengawasBaru()])
+  const tambahPengawas = () =>
+    setPengawas((d) => isiPengawasDariGuru([...d, pengawasBaru()], guru))
   const ubahPengawas = (id, guruId) => setPengawas((d) => d.map((p) => (p.id === id ? { ...p, guruId } : p)))
   const hapusPengawas = (id) => {
     setPengawas((d) => d.filter((p) => p.id !== id))
@@ -361,7 +408,7 @@ export default function JadwalPengawasRuangUjian() {
 
         <Bagian
           judul="Pengawas ruang"
-          keterangan="Pilih guru; kode (A, B, C, …) dibuat otomatis sesuai urutan dan dipakai di tabel jadwal."
+          keterangan="Terisi otomatis dari data guru; bisa diganti. Kode (A, B, C, …) mengikuti urutan dan dipakai di tabel jadwal."
           aksi={
             <button
               type="button"
