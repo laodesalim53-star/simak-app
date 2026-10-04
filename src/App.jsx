@@ -95,6 +95,7 @@ const BeritaAcaraSerahTerimaAS = lazy(() => import('./pages/BeritaAcaraSerahTeri
 const PaktaIntegritas = lazy(() => import('./pages/PaktaIntegritas'))
 const BeritaAcaraUjianSekolah = lazy(() => import('./pages/BeritaAcaraUjianSekolah'))
 const PaktaIntegritasPengawas = lazy(() => import('./pages/PaktaIntegritasPengawas'))
+const LaporanAsesmenSekolah = lazy(() => import('./pages/LaporanAsesmenSekolah'))
 // Cetak Sampul Laporan (generik untuk semua tenant: sekolah, kantor, puskesmas —
 // kop & identitas otomatis dari profil instansi masing-masing lewat
 // useIdentitasInstansi). Satu halaman dengan sidebar menu, menggantikan file
@@ -449,6 +450,7 @@ export default function App() {
           <Route path="/gudang-sk/portal-ujian/pakta-integritas" element={<ProtectedRoute adminOnly><PaktaIntegritas /></ProtectedRoute>} />
           <Route path="/gudang-sk/portal-ujian/berita-acara-ujian-sekolah" element={<ProtectedRoute adminOnly><BeritaAcaraUjianSekolah /></ProtectedRoute>} />
           <Route path="/gudang-sk/portal-ujian/pakta-integritas-pengawas" element={<ProtectedRoute adminOnly><PaktaIntegritasPengawas /></ProtectedRoute>} />
+<Route path="/gudang-sk/portal-ujian/laporan-asesmen" element={<ProtectedRoute adminOnly><LaporanAsesmenSekolah /></ProtectedRoute>} />
 {/* Cetak Sampul Laporan — satu halaman dengan sidebar menu berisi jenis
     laporan sesuai tipe tenant (sekolah: Bulanan, Semester, 8355, LPJ BOS, dst;
     kantor & puskesmas: Bulanan, Tahunan, Keuangan, Inventaris, Kegiatan).
