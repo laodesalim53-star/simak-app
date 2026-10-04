@@ -1539,8 +1539,35 @@ function SampulKopResmi({ tema, logoUrl, kopBaris1, kopBaris2, kopBaris3, judulU
   )
 }
 
-// Skala tampilan pratinjau di layar (bukan ukuran cetak — cetak tetap A4 penuh).
-const SKALA_PRATINJAU = 0.62
+// ---------------------------------------------------------------------------
+// SKALA PRATINJAU RESPONSIF (desktop & HP/Android)
+// Pratinjau di layar bukan ukuran cetak — cetak tetap A4 penuh. Skala dihitung
+// dari lebar wadah supaya halaman A4 selalu muat di layar HP. Di desktop
+// skalanya dibatasi maksimal 0.62 seperti sebelumnya.
+// ---------------------------------------------------------------------------
+const MM_KE_PX = 3.7795 // 1mm = 3.7795px (CSS)
+const SKALA_MAKS_DESKTOP = 0.62
+
+function useSkalaPratinjau(lebarMm, aktif) {
+  const [wadah, setWadah] = useState(null) // elemen wadah (callback ref)
+  const [skala, setSkala] = useState(SKALA_MAKS_DESKTOP)
+
+  useEffect(() => {
+    if (!wadah) return
+    const hitung = () => {
+      const lebarWadah = wadah.clientWidth
+      const lebarHalamanPx = lebarMm * MM_KE_PX
+      const maks = window.matchMedia('(min-width: 768px)').matches ? SKALA_MAKS_DESKTOP : 1
+      setSkala(Math.max(0.2, Math.min(maks, lebarWadah / lebarHalamanPx)))
+    }
+    hitung()
+    const ro = new ResizeObserver(hitung)
+    ro.observe(wadah)
+    return () => ro.disconnect()
+  }, [wadah, lebarMm, aktif])
+
+  return [skala, setWadah]
+}
 
 /**
  * Komponen sampul laporan yang reusable untuk SEMUA tenant (sekolah, kantor,
@@ -1627,6 +1654,14 @@ export default function SampulLaporan({
     if (!temaDipilihManual) setTema(temaTenant)
   }, [temaTenant, temaDipilihManual])
 
+  // Skala pratinjau dinamis (harus dipanggil SEBELUM return awal `if (loading)`)
+  const lebarMm = orientasi === 'landscape' ? 297 : 210
+  const [skalaPratinjau, setWadahPratinjau] = useSkalaPratinjau(lebarMm, loading)
+
+  function kePratinjau() {
+    document.getElementById('area-pratinjau')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   const judulTampil = jenisLaporan === 'Lainnya (isi bebas)' ? judulBebas : jenisLaporan
 
   // Isi form dari profil instansi begitu selesai dimuat
@@ -1644,7 +1679,7 @@ export default function SampulLaporan({
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-[100dvh] flex items-center justify-center">
         <Loader2 className="animate-spin text-slate-400" size={28} />
       </div>
     )
@@ -1706,10 +1741,11 @@ export default function SampulLaporan({
   const dimensi = dimensiHalaman(orientasi)
 
   return (
-    <div className="min-h-screen bg-slate-100 md:grid md:grid-cols-[380px_1fr] tata-letak-sampul">
+    <div className="min-h-[100dvh] bg-slate-100 md:grid md:grid-cols-[380px_1fr] tata-letak-sampul">
       {/* ======================= PANEL FORM — KIRI ======================= */}
-      <div className="no-print bg-white border-r border-slate-200 md:h-screen md:overflow-y-auto">
-        <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+      <div className="no-print bg-white border-r border-slate-200 md:h-[100dvh] md:overflow-y-auto">
+        {/* sticky hanya di desktop; di HP bar atas milik CetakSampulHub sudah sticky */}
+        <div className="md:sticky md:top-0 z-10 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
           <button
             onClick={() => navigate(-1)}
             className="flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-800"
@@ -1725,6 +1761,14 @@ export default function SampulLaporan({
             className="w-full flex items-center justify-center gap-1.5 bg-blue-600 text-white text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-blue-700 mb-4"
           >
             <Printer size={16} /> Cetak Sampul
+          </button>
+
+          <button
+            type="button"
+            onClick={kePratinjau}
+            className="md:hidden w-full -mt-2 mb-4 text-sm font-medium text-blue-700 border border-blue-200 bg-blue-50 rounded-lg px-4 py-2.5 active:bg-blue-100"
+          >
+            Lihat Pratinjau ↓
           </button>
 
           <div className="grid grid-cols-1 gap-3">
@@ -1840,7 +1884,7 @@ export default function SampulLaporan({
             )}
 
             {polaSampul === 'kop-resmi' && (
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {!isPolres && (
                   <label className="text-xs text-slate-500">
                     Jenis Wilayah
@@ -1854,7 +1898,7 @@ export default function SampulLaporan({
                     </select>
                   </label>
                 )}
-                <label className={`text-xs text-slate-500 ${isPolres ? 'col-span-2' : ''}`}>
+                <label className={`text-xs text-slate-500 ${isPolres ? 'sm:col-span-2' : ''}`}>
                   Nama Dinas / Kantor
                   <input
                     type="text"
@@ -1932,7 +1976,7 @@ export default function SampulLaporan({
                 )}
 
                 {tampilkanBank && (
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <label className="text-xs text-slate-500">
                       Nama Bank
                       <input
@@ -1997,29 +2041,39 @@ export default function SampulLaporan({
       </div>
 
       {/* ===================== AREA PRATINJAU — KANAN ===================== */}
-      <div className="area-pratinjau no-print md:h-screen md:overflow-y-auto bg-slate-200 flex items-start justify-center p-6 md:p-10">
-        <div
-          className="pratinjau-bungkus shadow-lg"
-          style={{
-            width: `calc(${dimensi.width} * ${SKALA_PRATINJAU})`,
-            height: `calc(${dimensi.height} * ${SKALA_PRATINJAU})`,
-            overflow: 'hidden',
-          }}
-        >
+      <div
+        id="area-pratinjau"
+        className="area-pratinjau no-print md:h-[100dvh] md:overflow-y-auto bg-slate-200 p-3 md:p-10 scroll-mt-14"
+      >
+        <p className="md:hidden text-xs font-semibold text-slate-500 mb-2">
+          Pratinjau ({orientasi === 'landscape' ? 'Landscape' : 'Portrait'}) — tampilan diperkecil, hasil cetak tetap A4
+        </p>
+
+        {/* wadah pengukur lebar */}
+        <div ref={setWadahPratinjau} className="w-full flex justify-center">
           <div
-            className="pratinjau-skala"
+            className="pratinjau-bungkus shadow-lg bg-white"
             style={{
-              width: dimensi.width,
-              height: dimensi.height,
-              transform: `scale(${SKALA_PRATINJAU})`,
-              transformOrigin: 'top left',
+              width: `calc(${dimensi.width} * ${skalaPratinjau})`,
+              height: `calc(${dimensi.height} * ${skalaPratinjau})`,
+              overflow: 'hidden',
             }}
           >
-            {polaSampul === 'kop-resmi' ? (
-              <SampulKopResmi {...propsKopResmi} />
-            ) : (
-              <KomponenAktif {...propsSampul} />
-            )}
+            <div
+              className="pratinjau-skala"
+              style={{
+                width: dimensi.width,
+                height: dimensi.height,
+                transform: `scale(${skalaPratinjau})`,
+                transformOrigin: 'top left',
+              }}
+            >
+              {polaSampul === 'kop-resmi' ? (
+                <SampulKopResmi {...propsKopResmi} />
+              ) : (
+                <KomponenAktif {...propsSampul} />
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -2030,6 +2084,21 @@ export default function SampulLaporan({
         html, body {
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
+        }
+
+        /* Android/iOS: input < 16px memicu auto-zoom saat fokus. Area sentuh min. 44px. */
+        @media (max-width: 767px) {
+          .tata-letak-sampul input,
+          .tata-letak-sampul select {
+            font-size: 16px !important;
+            min-height: 44px;
+          }
+          .tata-letak-sampul button { min-height: 44px; }
+        }
+
+        /* Margin atas-bawah lembar (my-6) ikut terskala di pratinjau; hilangkan agar tidak ada ruang kosong. */
+        @media screen {
+          .pratinjau-skala .lembar-cetak.print-only { margin-top: 0 !important; margin-bottom: 0 !important; }
         }
 
         @media print {
