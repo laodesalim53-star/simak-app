@@ -31,6 +31,7 @@ import { Loader2, Plus, Printer, Trash2, Wand2 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
+import { muatJadwalPengawas, simpanJadwalPengawas } from '../lib/jadwalPengawasStore'
 import {
   BagianSK as Bagian,
   FieldSK as Field,
@@ -208,6 +209,46 @@ export default function JadwalPengawasRuangUjian() {
   const [pengawas, setPengawas] = useState([pengawasBaru(), pengawasBaru()])
   // Jadwal awal sudah berisi hari, sesi, dan mata pelajaran; pengawas terisi setelah data guru dimuat.
   const [hari, setHari] = useState(() => isiKosong(jadwalAwal(), [], { mapel: true }))
+  // Penyimpanan baru aktif setelah jadwal tersimpan (kalau ada) selesai dipulihkan.
+  const [siapSimpan, setSiapSimpan] = useState(false)
+
+  // Pulihkan jadwal yang pernah disimpan (Supabase, cadangan browser) supaya
+  // tidak tertimpa jadwal awal. Penyimpanan baru aktif setelah ini selesai.
+  useEffect(() => {
+    let batal = false
+    setSiapSimpan(false)
+    if (!sekolahId) return undefined
+    ;(async () => {
+      const t = await muatJadwalPengawas(sekolahId)
+      if (batal) return
+      if (t) {
+        if (Array.isArray(t.pengawas) && t.pengawas.length) setPengawas(t.pengawas)
+        if (Array.isArray(t.hari) && t.hari.length) setHari(t.hari)
+        setForm((f) => ({
+          ...f,
+          tapel: t.tapel || f.tapel,
+          jenisUjian: t.jenisUjian || f.jenisUjian,
+          tempat: t.tempat || f.tempat,
+          tanggalSurat: t.tanggalSurat || f.tanggalSurat,
+        }))
+      }
+      setSiapSimpan(true)
+    })()
+    return () => { batal = true }
+  }, [sekolahId])
+
+  // Simpan otomatis tiap ada perubahan (ke Supabase), dibaca halaman Daftar Hadir Peserta Ujian.
+  useEffect(() => {
+    if (!sekolahId || !siapSimpan) return
+    simpanJadwalPengawas(sekolahId, {
+      tapel: form.tapel,
+      jenisUjian: form.jenisUjian,
+      tempat: form.tempat,
+      tanggalSurat: form.tanggalSurat,
+      pengawas,
+      hari,
+    })
+  }, [sekolahId, siapSimpan, form.tapel, form.jenisUjian, form.tempat, form.tanggalSurat, pengawas, hari])
 
   async function muat() {
     if (!sekolahId) {
