@@ -1,7 +1,8 @@
 // src/pages/LaporanAsesmenSekolah.jsx
 //
-// Laporan Asesmen Sekolah (Kelas 6) dalam SATU halaman dengan 4 tab, satu tab
-// per lembar sesuai file LAPORAN_ASESMEN_KELAS_6_2025:
+// Laporan Asesmen Sekolah (Kelas 6) dalam SATU halaman dengan 5 tab, satu tab
+// per bagian sesuai file LAPORAN_ASESMEN_KELAS_6_2025 dan KATA_PENGANTAR_Asesmen:
+//   Laporan  - Kata Pengantar, Daftar Isi, Bab I-VI, Lampiran (teks bawaan, bisa diedit di form)
 //   Lembar 1 - Statistik nilai (tertinggi / terendah / rata-rata, tulis & praktik)
 //   Lembar 2 - Klasifikasi nilai (jumlah peserta per rentang nilai)
 //   Lembar 3 - Peserta terdaftar, hadir, lulus & tidak lulus (L / P / Jml)
@@ -176,6 +177,7 @@ const MAPEL = [
 const KLASIFIKASI = ['0 – 49,99', '50,00 – 59,99', '60,00 – 69,99', '70,00 – 79,99', '80,00 – 89,99', '90,00 – 100']
 
 const TAB = [
+  { id: 'laporan', label: 'Laporan', sub: 'Kata Pengantar – Bab VI' },
   { id: 'nilai', label: 'Lembar 1', sub: 'Statistik Nilai' },
   { id: 'klasifikasi', label: 'Lembar 2', sub: 'Klasifikasi Nilai' },
   { id: 'kelulusan', label: 'Lembar 3', sub: 'Kelulusan' },
@@ -197,11 +199,258 @@ const barisPenyelenggara = () => ({
   ],
 })
 
+// --- Tab "Laporan": teks bawaan (bisa diedit di form) & pembantu ---
+
+// Kata kunci otomatis dalam teks: {sekolah} {desa} {kecamatan} {kabupaten} {provinsi}
+// {tapel} {tahun} {kepsek} {us} {praktik} {sk} {rakor}. Diisi saat tampil, jadi
+// ikut berubah kalau datanya diubah. Kalau datanya kosong tampil "…………".
+function isiTemplate(str, v) {
+  return String(str || '').replace(/\{(\w+)\}/g, (_, k) =>
+    v[k] !== undefined && String(v[k]).trim() !== '' ? v[k] : '…………'
+  )
+}
+
+function judulKata(s) {
+  return String(s || '')
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ')
+}
+
+function judulSekolah(s) {
+  return String(s || '')
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) =>
+      /^(sd|smp|sma|smk|mi|mts|ma|tk|paud|sdn|sdi|slb)$/.test(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)
+    )
+    .join(' ')
+}
+
+// "2026-05-05","2026-05-09" -> "05 – 09 Mei 2026"
+function rentangTanggal(a, b) {
+  if (!a && !b) return ''
+  if (!b || a === b) return tanggalPanjang(a || b)
+  if (!a) return tanggalPanjang(b)
+  const da = new Date(`${a}T00:00:00`)
+  const db = new Date(`${b}T00:00:00`)
+  const dd = (d) => String(d.getDate()).padStart(2, '0')
+  const bulan = (d) => d.toLocaleDateString('id-ID', { month: 'long' })
+  if (da.getFullYear() === db.getFullYear()) {
+    if (da.getMonth() === db.getMonth()) return `${dd(da)} – ${tanggalPanjang(b)}`
+    return `${dd(da)} ${bulan(da)} – ${tanggalPanjang(b)}`
+  }
+  return `${tanggalPanjang(a)} – ${tanggalPanjang(b)}`
+}
+
+const PANITIA_AWAL = `Penanggung Jawab | {kepsek}
+Ketua | Jamina Sarloy, A.Ma
+Sekretaris | Irna Wati, S.Pd.
+Bendahara | Steny Huliselan, S.Pd
+Anggota | Selvia Putri Hardifid, S.Pd.I
+Anggota | Sawiyah Sarloy, S.Pd`
+
+const TEKS_AWAL = {
+  pengantar: `Puji dan syukur dipersembahkan ke hadirat Tuhan Yang Maha Kuasa, atas rahmat dan karunia-Nya kami dapat menyelesaikan Laporan Pelaksanaan Kegiatan Ujian Sekolah Tahun Pelajaran {tapel}.
+
+Pelaksanaan Ujian Sekolah (US) di {sekolah}, Kecamatan {kecamatan}, Kabupaten {kabupaten}, berdasarkan peraturan Badan Standar Nasional Pendidikan tentang Prosedur Operasional Standar Penyelenggaraan Ujian Sekolah Berstandar Nasional Tahun {tapel}. Seluruh rangkaian kegiatan mengacu kepada peraturan tersebut agar dalam pelaksanaannya optimal dan hasilnya maksimal.
+
+Harapan kami semoga laporan kegiatan Ujian Sekolah bermanfaat bagi peningkatan kualitas pembelajaran di {sekolah}, Kecamatan {kecamatan}, Kabupaten {kabupaten}, khususnya dan dunia pendidikan pada umumnya.
+
+Terima kasih kepada semua pihak yang telah membantu dalam pelaksanaan kegiatan ini sehingga seluruh program dapat terlaksana dengan baik.`,
+
+  pendahuluan: `Hasil PISA membuktikan kemampuan belajar siswa pada pendidikan dasar dan menengah kurang memadai. Pada tahun 2018, sekitar 70% siswa memiliki kompetensi literasi membaca di bawah minimum. Sama halnya dengan keterampilan matematika dan sains, 71% siswa berada di bawah kompetensi minimum untuk matematika dan 60% siswa di bawah kompetensi minimum untuk keterampilan sains. Skor PISA Indonesia stagnan dalam 10-15 tahun terakhir. Kondisi ini menyebabkan Indonesia menjadi salah satu negara yang konsisten dengan peringkat hasil PISA yang terendah.
+
+Menanggapi kondisi tersebut, reformasi asesmen diperlukan guna mendorong peningkatan kualitas pembelajaran. Pemetaan mutu pendidikan secara menyeluruh dibutuhkan. Untuk itu, Asesmen Nasional (AN) diterapkan oleh Kementerian Pendidikan dan Kebudayaan dan Ujian Nasional (UN) tidak lagi diberlakukan. Kebijakan ini ditetapkan berdasarkan hasil koordinasi Kementerian Pendidikan dan Kebudayaan dengan sejumlah dinas dan lembaga terkait.
+
+Dalam hal ini, Asesmen Sekolah diterapkan untuk mengevaluasi kinerja dan mutu sistem pendidikan. Hasil Asesmen Nasional tidak memiliki konsekuensi apa pun pada pencapaian proses belajar siswa, namun memberikan umpan balik untuk tindak lanjut pembelajaran dan kompetensi siswa.
+
+Sekolah merupakan bagian dari lembaga pendidikan yang secara teknis diatur oleh Departemen Pendidikan dan Kebudayaan; dalam hal ini sekolah berperan penting sebagai pelaksana kegiatan pembelajaran yang secara keseluruhan melibatkan para guru dan siswanya. Pada setiap kegiatan akhir belajar mengajar harus diadakan evaluasi untuk mengukur keberhasilan siswa, melalui ulangan harian, ulangan umum, juga melalui ujian akhir masa belajar sekolah, sedangkan evaluasi yang bahan naskah soalnya ditentukan oleh Departemen Pendidikan disebut Ujian Sekolah. Begitu pula di {sekolah}, pada akhir tahun pelajaran {tapel} bagi siswa dan siswi kelas VI dilakukan Ujian Akhir yang disebut Ujian Sekolah sebagai persyaratan untuk memasuki jenjang pendidikan berikutnya.
+
+Dalam rangka melaksanakan Peraturan Kepala Badan Standar, Kurikulum, dan Asesmen Pendidikan Nomor: 013/H/PG.00/2022 tentang Prosedur Operasional Standar Penyelenggaraan Asesmen Nasional pada tahun 2022 dan Surat Keputusan Kepala Dinas Pendidikan Kabupaten {kabupaten} di satuan pendidikan, maka demi kelancaran pelaksanaan ujian, {sekolah} melaksanakan persiapan-persiapan menjelang pelaksanaan Asesmen Sekolah tersebut.
+
+Pelaksanaan kegiatan telah diatur sedemikian rupa agar pelaksanaan Asesmen yang diputuskan di {sekolah}, di mana sistem pelaksanaan Asesmen melibatkan Guru/Wali Kelas, Panitia dan Orang Tua demi menjaga netralitas selama kegiatan Asesmen berlangsung, sesuai dengan kesepakatan Kepala Sekolah, Panitia, dan orang tua wali murid kelas VI.`,
+
+  dasar: `Undang-Undang Nomor 20 Tahun 2003 tentang Sistem Pendidikan Nasional
+Peraturan Pemerintah Nomor 19 Tahun 2005 sebagaimana telah diubah dengan Peraturan Pemerintah Nomor 32 Tahun 2013 tentang Perubahan Atas Peraturan Pemerintah Nomor 19 Tahun 2005 tentang Standar Nasional Pendidikan
+Permendikbud Nomor 21 Tahun 2016 tentang Standar Isi Pendidikan Dasar dan Menengah
+Permendikbud Nomor 22 Tahun 2016 tentang Standar Proses Pendidikan Dasar dan Menengah
+Peraturan Menteri Pendidikan, Kebudayaan, Riset, dan Teknologi Nomor 17 Tahun 2021 tentang Asesmen Nasional (Berita Negara Republik Indonesia Tahun 2021 Nomor 832)
+Peraturan Kepala Badan Standar, Kurikulum, dan Asesmen Pendidikan Kementerian Pendidikan, Kebudayaan, Riset, dan Teknologi Nomor 030/H/PG.00/2021 tentang Prosedur Operasional Standar Penyelenggaraan Asesmen Nasional Tahun 2021
+Surat Keputusan Kepala Dinas Pendidikan dan Kebudayaan Kabupaten {kabupaten} {sk}
+Rapat Koordinasi Staf bersama Kepala Sekolah pada hari {rakor}`,
+
+  maksud: `Agar pelaksanaan ujian sekolah berstandar nasional dapat dilaksanakan secara terarah dan efektif sesuai dengan ketentuan yang ditetapkan
+Untuk dijadikan sebagai pedoman bagi para pelaksana di dalam melaksanakan tugas masing-masing
+Untuk dijadikan sebagai tolok ukur keberhasilan panitia di dalam pelaksanaan tugasnya
+Memudahkan monitoring bagi yang berkepentingan
+Sebagai bahan pertimbangan untuk kegiatan Ujian Sekolah di tahun-tahun yang akan datang`,
+
+  sasaranUmum: `Terlaksananya penyelenggaraan Ujian Sekolah Berstandar Nasional tahun pelajaran {tapel} di {sekolah} dengan aman, tertib, lancar dan tepat waktu penyelesaiannya.`,
+
+  sasaranKhusus: `Panitia Ujian Sekolah dapat melaksanakan tugas sesuai program dari mulai tahap persiapan sampai tahap pelaporan
+Peserta Ujian Sekolah dapat mengerjakan tugas praktik dan soal-soal ujian dengan baik, dan dapat meningkatkan sikap disiplin yang tinggi
+Para penguji praktik, pengawas silang dan pemeriksa lembar jawaban ujian dapat melaksanakan tugasnya dengan baik sesuai ketentuan yang diharapkan
+Dalam pelaporan dan pengolahan nilai, hasil kerja panitia dapat diselesaikan dengan cermat dan tepat waktu sesuai ketentuan yang berlaku`,
+
+  tugas: `## Kepala Sekolah
+Bertanggung jawab atas penyelenggaraan kegiatan Ujian Sekolah
+Merencanakan, melaksanakan, memeriksa, dan melaporkan pelaksanaan Ujian Sekolah
+Menetapkan dan mengangkat petugas-petugas yang membantu penyelenggaraan Ujian Sekolah
+Mengoordinasi dan mengatur segala kegiatan yang dilakukan oleh panitia sesuai dengan ketentuan yang telah diprogramkan
+Mengawasi dan mengendalikan pelaksanaannya
+Melaporkan segala kegiatan pelaksanaan Ujian Sekolah dari perencanaan sampai kepada pelaporan
+## Sekretaris
+### a. Tahap Persiapan
+Penyusunan program kerja
+Pendataan peserta ujian
+Penyusunan peserta setiap ruangan
+Penyiapan kartu peserta
+Pembuatan blangko instrumen ujian
+Mempersiapkan penataan ruang ujian dan ruang panitia
+Pengetikan perangkat instrumen yang dibutuhkan dalam kegiatan ujian, sampai kepada instrumen peserta
+### b. Tahap Ujian Praktik
+Melaksanakan ujian praktik mata pelajaran Pendidikan Agama, Bahasa Indonesia, IPA, Seni Budaya dan Keterampilan, PJOK, Pendidikan Budi Pekerti, dan Bahasa Inggris
+Menyusun dan merekap nilai hasil ujian praktik untuk dijadikan bahan pertimbangan nilai akhir hasil ujian
+### c. Tahap Pelaksanaan
+Pelaksanaan Ujian Sekolah
+Menyimpan lembar jawaban Ujian Sekolah sementara untuk diperiksa oleh para pemeriksa
+Mengambil naskah soal ujian ke panitia ujian tingkat kecamatan
+Menyerahkan naskah soal bekas pakai dan lembar jawaban hasil ujian dari pengawas ruangan
+Menyerahkan lembar jawaban ujian kepada Sub Rayon
+### d. Tahap Pemeriksaan
+Mengawasi kegiatan pemeriksaan hasil Ujian Sekolah
+Memeriksa hasil pelaksanaan tugas para pemeriksa ujian
+Memandu penulisan nilai hasil ujian tulis dan ujian praktik ke dalam format daftar pengolahan nilai untuk diproses kelulusannya
+Memandu penganalisaan hasil ujian
+Memandu perhitungan daya serap hasil Ujian Sekolah
+### e. Tahap Pelaporan
+Mempersiapkan bahan-bahan untuk pelaporan
+Menyusun pelaporan kegiatan Ujian Sekolah
+## Bendahara
+Mempelajari anggaran kegiatan ujian
+Mengkalkulasikan segala pembiayaan yang telah dianggarkan`,
+
+  pengawas: `Tiga puluh menit sebelum ujian dimulai, Pengawas Ruang telah hadir di lokasi sekolah/madrasah penyelenggara
+Pengawas Ruang menerima penjelasan dan pengarahan dari Ketua Penyelenggara
+Pengawas Ruang menerima bahan Ujian Sekolah (US) yang berupa amplop naskah soal, amplop lembar jawaban, dan daftar hadir
+Pengawas Ruang masuk ke dalam ruang dua puluh (20) menit sebelum waktu pelaksanaan dan memeriksa kesiapan ruang ujian
+Pengawas Ruang mempersilakan peserta untuk memasuki ruang dan menempati tempat duduk sesuai nomor yang telah ditentukan
+Pengawas Ruang memeriksa setiap peserta agar tidak membawa tas, buku atau catatan lain, alat komunikasi elektronik, kalkulator dan sebagainya ke dalam ruang ujian kecuali alat tulis yang akan dipergunakan
+Pengawas Ruang membacakan Tata Tertib Ujian Sekolah (US)
+Pengawas Ruang meminta peserta ujian menandatangani daftar hadir Ujian Sekolah (US)
+Pengawas Ruang membagikan lembar jawaban kepada peserta, serta memandu dan memeriksa pengisian identitas peserta (nomor ujian, nama, tanggal lahir, dan tanda tangan) sebelum waktu Ujian Sekolah (US) dimulai
+Setelah seluruh peserta selesai mengisi identitas, Pengawas Ruang membuka amplop soal, memeriksa kelengkapan bahan ujian, dan meyakinkan bahwa amplop tersebut dalam keadaan baik dan tertutup rapat, disaksikan oleh peserta ujian
+Pengawas Ruang membagikan naskah soal dengan cara meletakkan di atas meja peserta dalam posisi tertutup (terbalik). Peserta tidak diperkenankan menyentuhnya sampai tanda waktu ujian dimulai
+Pengawas Ruang mengecek kelengkapan soal Ujian Sekolah (US)
+Setelah tanda waktu mengerjakan dimulai, Pengawas Ruang mempersilakan peserta untuk mulai mengerjakan soal dan mengingatkan peserta agar terlebih dahulu membaca petunjuk cara menjawab soal
+Kelebihan naskah soal US selama ujian berlangsung tetap disimpan di ruang ujian
+Selama Ujian Sekolah (US) berlangsung, Pengawas Ruang wajib menjaga ketertiban dan ketenangan suasana sekitar ruang ujian, memberi peringatan dan sanksi kepada peserta yang melakukan kecurangan, serta melarang orang lain yang tidak berkepentingan memasuki ruang ujian
+Pengawas Ruang dilarang memberi isyarat, petunjuk dan bantuan apa pun kepada peserta berkaitan dengan jawaban dari soal Ujian Sekolah (US) yang diujikan
+Lima menit sebelum waktu Ujian Sekolah (US) selesai, Pengawas Ruang memberi peringatan kepada peserta bahwa waktu tinggal lima menit
+Setelah waktu Ujian Sekolah (US) selesai, Pengawas Ruang mempersilakan peserta untuk berhenti mengerjakan soal, mengumpulkan lembar jawaban dan naskah soal. Peserta dipersilakan meninggalkan ruang ujian setelah pengawas menghitung jumlah lembar jawaban sama dengan jumlah peserta ujian
+Pengawas Ruang menyusun secara urut lembar jawaban dari nomor peserta terkecil dan memasukkannya ke dalam amplop semula
+Pengawas Ruang menyerahkan amplop lembar jawaban dan naskah soal Ujian Sekolah (US) beserta kelengkapan lainnya kepada Penyelenggara`,
+
+  us: `Ujian sekolah dilaksanakan pada tanggal {us} dengan pengawasan masing-masing oleh 2 orang pengawas (bukan guru kelas VI), dengan naskah soal yang telah disiapkan penyusunannya mulai dari kisi-kisi, kartu soal, dan penggandaan oleh sekolah.`,
+
+  praktik: `Ujian sekolah praktik dilaksanakan pada tanggal {praktik} mulai pukul 07.30 sampai selesai, dengan teknik pengujian masing-masing mata pelajaran diuji oleh 2 orang penguji tiap ruang ujian. Penilaian dilakukan dengan angka dua digit di belakang koma. Setiap hari masing-masing penguji melaporkan hasil penilaiannya kepada panitia. Selanjutnya panitia menggabungkan nilai dari masing-masing penguji dengan dua pembagian yang langsung dimasukkan ke dalam format daftar nilai. Setiap hari penguji praktik harus membuat berita acara penyelenggaraan ujian praktik dengan melampirkan daftar hadir peserta dan naskah materi ujian.`,
+
+  hasil: `Pelaksanaan Ujian Sekolah berlangsung dengan tertib, aman dan lancar serta tidak ditemukan hal-hal yang dapat mengganggu terselenggaranya ujian dimaksud.`,
+
+  kelulusan: ``,
+
+  pembiayaan: `Pembiayaan penyelenggaraan Ujian Sekolah di {sekolah}, Desa {desa}, Kecamatan {kecamatan}, Kabupaten {kabupaten}, Provinsi {provinsi}, bersumber dari Bantuan Operasional Satuan Pendidikan (BOSP) Semester 2 Tahun {tahun} dan dibantu oleh orang tua murid secara sukarela.`,
+
+  hambatan: `Dalam pelaksanaan kegiatan Asesmen Sekolah pada siswa kelas VI Tahun Pelajaran {tapel} di {sekolah}, Desa {desa}, Kecamatan {kecamatan}, Kabupaten {kabupaten}, tidak terdapat kendala dalam proses Asesmen berlangsung, sehingga pelaksanaan Asesmen Sekolah pada tanggal {us} berjalan dengan baik dan lancar tanpa ada hambatan apa pun.`,
+
+  kesimpulan: `Program kerja ini dibuat untuk dipergunakan sebagai pedoman kerja bagi panitia dan pelaksana kegiatan ujian sekolah sesuai aturan yang berlaku. Berhasil tidaknya pencapaian sasaran dan tujuan sebagaimana yang telah diprogramkan tergantung pada peran seluruh pelaksana yang terlibat dengan sikap, tekad, kemauan, kemampuan, dan tanggung jawab untuk melaksanakan tugas dengan sebaik-baiknya. Keberhasilan pelaksanaan ujian dengan aman, nyaman, lancar, tertib dan terkendali bergantung pada sejauh mana pelaksanaan program yang telah direncanakan dan dilaksanakan. Menyadari hal itu semua, program kerja ini dapat berdaya guna dan berhasil secara efektif dan efisien bergantung pada koordinasi dan sinkronisasi berbagai pihak yang bertanggung jawab tentang pelaksanaan ujian sekolah.`,
+
+  saran: `Kami sangat mengharapkan adanya kerja sama yang sinergis dari berbagai pihak yang berkepentingan demi suksesnya pelaksanaan ujian sekolah di tingkat sekolah dasar. Oleh karena itu, kritik dan saran yang membangun akan kami terima dengan lapang dada demi program kegiatan ujian selanjutnya yang lebih baik.`,
+
+  lampiran: `SK Ujian Sekolah
+Jadwal US
+Tata Tertib Peserta US
+Tata Tertib Pengawas Ruang US
+Daftar Hadir Siswa
+Daftar Hadir Pengawas
+Denah Tempat Duduk Siswa
+Berita Acara Kegiatan US
+Pakta Integritas Pengawas US
+Foto Kegiatan US
+Undangan Rapat Kelulusan Satuan Pendidikan
+Daftar Hadir Rapat Kelulusan Satuan Pendidikan
+Notulen Rapat Kelulusan Satuan Pendidikan
+Berita Acara Rapat Kelulusan Satuan Pendidikan
+SK Kelulusan dari Satuan Pendidikan
+Undangan Pengumuman Kelulusan Peserta Didik
+Daftar Hadir Pengumuman Kelulusan
+Surat Keterangan Lulus Satuan Pendidikan
+Laporan Kelulusan Kilat
+Daftar Nilai Akhir Kelas 6
+SKHUS`,
+}
+
+// Bentuk & jumlah butir soal per mapel (indeks sama dengan MAPEL).
+const BUTIR_AWAL = () =>
+  MAPEL.map((_, i) => {
+    const awal = [[40, 5], [40, 5], [35, 5], [30, 5], [40, 5], [40, 5]][i]
+    return awal
+      ? { pg: String(awal[0]), uraian: String(awal[1]), waktu: '120 Menit' }
+      : { pg: '', uraian: '', waktu: '' }
+  })
+
+const DAFTAR_ISI = [
+  ['KATA PENGANTAR', 0],
+  ['DAFTAR ISI', 0],
+  ['BAB I PENDAHULUAN', 0],
+  ['- Dasar', 1],
+  ['- Maksud dan Tujuan', 1],
+  ['- Sasaran', 1],
+  ['BAB II PERSIAPAN PENYELENGGARAAN UJIAN SEKOLAH', 0],
+  ['- Organisasi Penyelenggaraan', 1],
+  ['- Tugas Panitia', 1],
+  ['- Pengawas Ruang', 1],
+  ['BAB III PENYELENGGARAAN UJIAN SEKOLAH', 0],
+  ['- Penyelenggaraan', 1],
+  ['- Hasil Pelaksanaan dan Evaluasi', 1],
+  ['- Kelulusan Hasil', 1],
+  ['BAB IV PEMBIAYAAN', 0],
+  ['BAB V HAMBATAN DAN USAHA PENANGGULANGAN', 0],
+  ['BAB VI PENUTUP', 0],
+  ['- Kesimpulan', 1],
+  ['- Saran', 1],
+  ['LAMPIRAN-LAMPIRAN', 0],
+]
+
+const BLOK_EDIT = [
+  ['pengantar', 'Kata Pengantar', 10],
+  ['pendahuluan', 'Bab I — Pendahuluan (baris kosong = paragraf baru)', 14],
+  ['dasar', 'Bab I — Dasar (satu baris = satu butir)', 10],
+  ['maksud', 'Bab I — Maksud dan Tujuan', 6],
+  ['sasaranUmum', 'Bab I — Sasaran Umum', 3],
+  ['sasaranKhusus', 'Bab I — Sasaran Khusus', 6],
+  ['tugas', 'Bab II — Tugas Panitia (## = judul, ### = sub-judul)', 16],
+  ['pengawas', 'Bab II — Tugas Pengawas Ruang', 16],
+  ['us', 'Bab III — Pelaksanaan Ujian Sekolah', 4],
+  ['praktik', 'Bab III — Pelaksanaan Ujian Praktik', 6],
+  ['hasil', 'Bab III — Hasil Pelaksanaan dan Evaluasi', 3],
+  ['kelulusan', 'Bab III — Kelulusan Hasil (catatan tambahan; ringkasan angka otomatis dari Lembar 3)', 3],
+  ['pembiayaan', 'Bab IV — Pembiayaan', 3],
+  ['hambatan', 'Bab V — Hambatan dan Usaha Penanggulangan', 4],
+  ['kesimpulan', 'Bab VI — Kesimpulan', 6],
+  ['saran', 'Bab VI — Saran', 3],
+  ['lampiran', 'Lampiran-lampiran', 12],
+]
+
 export default function LaporanAsesmenSekolah() {
   const { sekolahId: sekolahIdCtx, profil } = useAuth()
   const sekolahId = sekolahIdCtx || profil?.sekolah_id
 
-  const [tabAktif, setTabAktif] = useState('nilai')
+  const [tabAktif, setTabAktif] = useState('laporan')
   const [cetakSemua, setCetakSemua] = useState(false)
 
   const [sekolah, setSekolah] = useState(SEKOLAH_KOSONG)
@@ -249,6 +498,22 @@ export default function LaporanAsesmenSekolah() {
   const [lulus, setLulus] = useState(barisKelulusan)
   const [pen, setPen] = useState(barisPenyelenggara)
 
+  // Tab Laporan: isian & teks laporan lengkap (Kata Pengantar s.d. Lampiran).
+  const [lap, setLap] = useState(() => ({
+    desa: '',
+    provinsi: '',
+    skNomor: '',
+    skTanggal: '',
+    rakorTanggal: '',
+    usMulai: '',
+    usSelesai: '',
+    prMulai: '',
+    prSelesai: '',
+    panitia: PANITIA_AWAL,
+    teks: { ...TEKS_AWAL },
+    butir: BUTIR_AWAL(),
+  }))
+
   async function muat() {
     if (!sekolahId) {
       setMemuat(false)
@@ -270,6 +535,11 @@ export default function LaporanAsesmenSekolah() {
       setLogoSekolahUrl(urlLogo(prof.logo_path))
       setLogoKabupatenUrl(urlLogo(prof.logo_kabupaten_path))
       setSekolah(s)
+      setLap((l) => ({
+        ...l,
+        provinsi: l.provinsi || prof.provinsi || '',
+        desa: l.desa || ((prof.alamat || '').match(/desa\s+([^,.\n]+)/i)?.[1] || '').trim(),
+      }))
       setForm((f) => ({
         ...f,
         kabupaten: f.kabupaten || prof.kabupaten || '',
@@ -382,6 +652,15 @@ export default function LaporanAsesmenSekolah() {
       sesiJadwal[0]
     setSesiTerpilih(pilih.key)
     terapkanSesi(pilih, { timpa: false })
+  }, [sesiJadwal])
+
+  // Rentang tanggal Ujian Sekolah (tab Laporan) diambil dari jadwal pengawas
+  // kalau belum diisi: tanggal paling awal s.d. paling akhir.
+  useEffect(() => {
+    if (sesiJadwal.length === 0) return
+    const tgl = sesiJadwal.map((s) => s.tanggal).filter(Boolean).sort()
+    if (tgl.length === 0) return
+    setLap((l) => ({ ...l, usMulai: l.usMulai || tgl[0], usSelesai: l.usSelesai || tgl[tgl.length - 1] }))
   }, [sesiJadwal])
 
   const pilihSesi = (e) => {
@@ -556,6 +835,56 @@ export default function LaporanAsesmenSekolah() {
   const namaSekolah = isi(sekolah.nama, 'NAMA SEKOLAH')
   const tglTtd = `${isi(form.tempat, '…………')}, ${isi(tanggalPanjang(form.tanggalLaporan), '…………')}`
 
+  // --- Data untuk tab Laporan (Kata Pengantar s.d. Lampiran) ---
+  const bersihkan = (s, awalan) => String(s || '').replace(awalan, '').trim()
+  const tokens = {
+    sekolah: judulSekolah(sekolah.nama),
+    kecamatan: judulKata(bersihkan(form.kecamatan, /^(kecamatan\s+)+/i)),
+    kabupaten: judulKata(bersihkan(form.kabupaten, /^(pemerintah\s+)?(kabupaten\s+)+/i)),
+    provinsi: judulKata(bersihkan(lap.provinsi, /^provinsi\s+/i)),
+    desa: judulKata(bersihkan(lap.desa, /^desa\s+/i)),
+    tapel: form.tapel,
+    tahun: form.tanggalLaporan ? form.tanggalLaporan.slice(0, 4) : '',
+    kepsek: form.kepalaNama,
+    us: rentangTanggal(lap.usMulai, lap.usSelesai),
+    praktik: rentangTanggal(lap.prMulai, lap.prSelesai),
+    sk:
+      lap.skNomor || lap.skTanggal
+        ? `Nomor ${lap.skNomor || '…………'} tanggal ${tanggalPanjang(lap.skTanggal) || '…………'}`
+        : '',
+    rakor: hariTanggalPanjang(lap.rakorTanggal),
+  }
+  const T = (s) => isiTemplate(s, tokens)
+  const panitiaBaris = lap.panitia
+    .split('\n')
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .map((x) => {
+      const [j, ...n] = x.split('|')
+      return { jabatan: (j || '').trim(), nama: T(n.join('|').trim()) }
+    })
+  const ketuaPanitia = panitiaBaris.find((p) => /^ketua/i.test(p.jabatan))?.nama || ''
+
+  // Ringkasan kelulusan per mapel, otomatis dari Lembar 3 (kalau sudah terisi).
+  const ringkasKelulusan = MAPEL.map((m, i) => {
+    const r = lulus[i]
+    const hadir = num(r.hdL) + num(r.hdP)
+    const l = num(r.lL) + num(r.lP)
+    const tl = num(r.tlL) + num(r.tlP)
+    if (hadir === 0 && l === 0 && tl === 0) return null
+    return `${m.replace('*)', '')}: ${hadir} peserta hadir, ${l} lulus, ${tl} tidak lulus`
+  }).filter(Boolean)
+
+  const ubahLap = (k) => (e) => setLap((l) => ({ ...l, [k]: e.target.value }))
+  const ubahTeks = (k) => (e) => {
+    const v = e.target.value
+    setLap((l) => ({ ...l, teks: { ...l.teks, [k]: v } }))
+  }
+  const ubahButir = (i, k) => (e) => {
+    const v = e.target.value
+    setLap((l) => ({ ...l, butir: l.butir.map((b, j) => (j === i ? { ...b, [k]: v } : b)) }))
+  }
+
   // --- Potongan tampilan yang dipakai berulang di tiap lembar ---
   const kop = (
     <div className="kop-surat flex items-center gap-3 border-b-2 border-slate-800 pb-3 mb-4">
@@ -629,6 +958,10 @@ export default function LaporanAsesmenSekolah() {
         #area-cetak-laporan .sel-input:hover { background: #f8fafc; }
         #area-cetak-laporan .sel-input:focus { background: #eff6ff; }
         #area-cetak-laporan .sel-kiri { text-align: left; }
+        #area-cetak-laporan .teks-laporan { text-align: justify; }
+        #area-cetak-laporan .halaman + .halaman {
+          margin-top: 2rem; padding-top: 1.5rem; border-top: 1px dashed #cbd5e1;
+        }
         #area-cetak-laporan .kop-logo img {
           position: static !important; float: none !important;
           display: block; max-width: 100%; max-height: 100%; object-fit: contain;
@@ -660,6 +993,11 @@ export default function LaporanAsesmenSekolah() {
           #area-cetak-laporan .judul-blok { margin-bottom: 8px !important; }
           #area-cetak-laporan .info-blok { margin-bottom: 6px !important; }
           #area-cetak-laporan td, #area-cetak-laporan th { padding: 1px 3px !important; }
+          #area-cetak-laporan .lembar.laporan .halaman { font-size: 11.5pt !important; line-height: 1.45 !important; }
+          #area-cetak-laporan .halaman + .halaman {
+            margin-top: 0 !important; padding-top: 0 !important; border-top: 0 !important;
+            break-before: page; page-break-before: always;
+          }
         }
       `}</style>
 
@@ -764,6 +1102,74 @@ export default function LaporanAsesmenSekolah() {
           {infoIsi && <p className="mt-2 text-sm text-slate-600">{infoIsi}</p>}
         </Bagian>
 
+        {tabAktif === 'laporan' && (
+          <Bagian
+            judul="Isi laporan lengkap (Kata Pengantar – Bab VI)"
+            keterangan="Nama sekolah, kecamatan, kabupaten, tahun pelajaran, dan Kepala Sekolah terisi otomatis. Lengkapi data di bawah; teks bisa diubah dan ikut tampil di pratinjau."
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Desa">
+                <input className={inputCls} value={lap.desa} onChange={ubahLap('desa')} placeholder="mis. Waria" />
+              </Field>
+              <Field label="Provinsi">
+                <input className={inputCls} value={lap.provinsi} onChange={ubahLap('provinsi')} placeholder="mis. Maluku" />
+              </Field>
+              <Field label="Nomor SK Dinas Pendidikan">
+                <input className={inputCls} value={lap.skNomor} onChange={ubahLap('skNomor')} />
+              </Field>
+              <Field label="Tanggal SK">
+                <input type="date" className={inputCls} value={lap.skTanggal} onChange={ubahLap('skTanggal')} />
+              </Field>
+              <Field label="Tanggal rapat koordinasi staf">
+                <input type="date" className={inputCls} value={lap.rakorTanggal} onChange={ubahLap('rakorTanggal')} />
+              </Field>
+              <div />
+              <Field label="Ujian Sekolah (tulis) — mulai" keterangan="Terisi otomatis dari Jadwal Pengawas Ruang.">
+                <input type="date" className={inputCls} value={lap.usMulai} onChange={ubahLap('usMulai')} />
+              </Field>
+              <Field label="Ujian Sekolah (tulis) — selesai">
+                <input type="date" className={inputCls} value={lap.usSelesai} onChange={ubahLap('usSelesai')} />
+              </Field>
+              <Field label="Ujian praktik — mulai">
+                <input type="date" className={inputCls} value={lap.prMulai} onChange={ubahLap('prMulai')} />
+              </Field>
+              <Field label="Ujian praktik — selesai">
+                <input type="date" className={inputCls} value={lap.prSelesai} onChange={ubahLap('prSelesai')} />
+              </Field>
+              <div className="sm:col-span-2">
+                <Field label="Susunan panitia" keterangan="Satu baris per orang, format: Jabatan | Nama">
+                  <textarea className={inputCls} rows={6} value={lap.panitia} onChange={ubahLap('panitia')} />
+                </Field>
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium text-slate-700">Teks laporan (klik untuk membuka & mengubah)</p>
+                <button
+                  type="button"
+                  onClick={() => setLap((l) => ({ ...l, teks: { ...TEKS_AWAL } }))}
+                  className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  Kembalikan semua teks ke bawaan
+                </button>
+              </div>
+              <p className="mb-2 text-xs text-slate-500">
+                Kata kunci otomatis: {'{sekolah} {desa} {kecamatan} {kabupaten} {provinsi} {tapel} {tahun} {kepsek} {us} {praktik} {sk} {rakor}'}
+                . Di kolom yang berbentuk daftar, satu baris = satu butir.
+              </p>
+              {BLOK_EDIT.map(([k, label, baris]) => (
+                <details key={k} className="mb-2 rounded-lg border border-slate-200">
+                  <summary className="cursor-pointer px-3 py-2 text-sm text-slate-700">{label}</summary>
+                  <div className="px-3 pb-3">
+                    <textarea className={inputCls} rows={baris} value={lap.teks[k]} onChange={ubahTeks(k)} />
+                  </div>
+                </details>
+              ))}
+            </div>
+          </Bagian>
+        )}
+
         {tabAktif === 'penyelenggara' && (
           <Bagian
             judul="Pelaksanaan (Lembar 4)"
@@ -802,7 +1208,7 @@ export default function LaporanAsesmenSekolah() {
         )}
 
         {/* Tab per lembar */}
-        <div role="tablist" className="mt-2 mb-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div role="tablist" className="mt-2 mb-3 grid grid-cols-2 sm:grid-cols-5 gap-2">
           {TAB.map((t) => {
             const aktif = tabAktif === t.id
             return (
@@ -835,7 +1241,7 @@ export default function LaporanAsesmenSekolah() {
             onClick={() => window.print()}
             className="inline-flex items-center gap-2 rounded-lg bg-blue-900 px-4 py-2 text-sm font-medium text-white hover:bg-blue-950"
           >
-            <Printer size={16} /> {cetakSemua ? 'Cetak 4 lembar' : `Cetak ${TAB.find((t) => t.id === tabAktif)?.label}`}
+            <Printer size={16} /> {cetakSemua ? 'Cetak semua tab' : `Cetak ${TAB.find((t) => t.id === tabAktif)?.label}`}
           </button>
         </div>
       </div>
@@ -846,6 +1252,178 @@ export default function LaporanAsesmenSekolah() {
           cetakSemua ? 'cetak-semua' : ''
         }`}
       >
+        {/* ===================== TAB LAPORAN: KATA PENGANTAR S.D. LAMPIRAN ===================== */}
+        <section className={`${kelasLembar('laporan')} laporan`}>
+          {/* Kata Pengantar */}
+          <div className="halaman">
+            <p className="text-center font-bold text-base mb-4">KATA PENGANTAR</p>
+            <Paragraf teks={lap.teks.pengantar} v={tokens} />
+            <div className="ttd-blok mt-6 flex justify-end">
+              <div className="w-64 text-center">
+                <p>{tglTtd}</p>
+                <p className="mb-14">Panitia</p>
+                <p className="garis-nama font-semibold underline decoration-slate-400 underline-offset-4">
+                  {isi(ketuaPanitia, '…………')}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Daftar Isi */}
+          <div className="halaman">
+            <p className="text-center font-bold text-base mb-4">DAFTAR ISI</p>
+            <p className="text-center font-bold">LAPORAN LENGKAP ASESMEN TAHUN PELAJARAN {isi(form.tapel, '…………')}</p>
+            <p className="text-center font-bold mb-6">PENYELENGGARA UJIAN SEKOLAH</p>
+            <ul className="space-y-1.5">
+              {DAFTAR_ISI.map(([teks, tingkat], i) => (
+                <li key={i} className={tingkat === 0 ? 'font-semibold' : 'ml-8'}>
+                  {teks}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* BAB I */}
+          <div className="halaman">
+            <JudulBab no="I" judul="Pendahuluan" />
+            <Paragraf teks={lap.teks.pendahuluan} v={tokens} />
+
+            <SubJudul>A. Dasar</SubJudul>
+            <p className="teks-laporan mb-1">
+              Adapun dasar pelaksanaan Asesmen Nasional (AN) diatur sesuai Undang-undang dan Permendikbud sebagai berikut:
+            </p>
+            <Butir teks={lap.teks.dasar} v={tokens} />
+
+            <SubJudul>B. Maksud dan Tujuan</SubJudul>
+            <p className="teks-laporan mb-1">
+              {T('Program kerja panitia Ujian Sekolah {sekolah} tahun pelajaran {tapel} ini disusun untuk mencapai tujuan sebagai berikut:')}
+            </p>
+            <Butir teks={lap.teks.maksud} v={tokens} />
+
+            <SubJudul>C. Sasaran</SubJudul>
+            <p className="teks-laporan mb-1">
+              Berdasarkan hal-hal tersebut di atas, maka sasaran yang ingin dicapai adalah:
+            </p>
+            <p className="font-semibold">1. Sasaran Umum</p>
+            <div className="ml-5"><Paragraf teks={lap.teks.sasaranUmum} v={tokens} /></div>
+            <p className="font-semibold">2. Sasaran Khusus</p>
+            <Butir teks={lap.teks.sasaranKhusus} v={tokens} />
+          </div>
+
+          {/* BAB II */}
+          <div className="halaman">
+            <JudulBab no="II" judul="Persiapan Penyelenggaraan Ujian Sekolah" />
+
+            <SubJudul>A. Organisasi Penyelenggaraan</SubJudul>
+            <p className="mb-1">Susunan Panitia</p>
+            <table className="mb-2 ml-4">
+              <tbody>
+                {panitiaBaris.map((p, i) => (
+                  <tr key={i}>
+                    <td className="pr-4 whitespace-nowrap">{p.jabatan}</td>
+                    <td className="pr-2">:</td>
+                    <td>{p.nama}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <SubJudul>B. Tugas Panitia</SubJudul>
+            <p className="teks-laporan mb-1">
+              {T('Adapun rincian tugas kepanitiaan Ujian Sekolah {sekolah} adalah sebagai berikut:')}
+            </p>
+            <Butir teks={lap.teks.tugas} v={tokens} />
+
+            <SubJudul>C. Pengawas Ruang</SubJudul>
+            <p className="teks-laporan mb-1">
+              Pengawas ujian adalah seorang yang ditugaskan untuk mengawasi para siswa yang sedang mengerjakan soal-soal
+              ujian pada bidang studi tertentu. Adapun tugas pengawas ruang adalah sebagai berikut:
+            </p>
+            <Butir teks={lap.teks.pengawas} v={tokens} nomor />
+          </div>
+
+          {/* BAB III */}
+          <div className="halaman">
+            <JudulBab no="III" judul="Penyelenggaraan Ujian Sekolah" />
+
+            <SubJudul>A. Penyelenggaraan</SubJudul>
+            <p className="font-semibold">1. Pelaksanaan Ujian Sekolah</p>
+            <div className="ml-5"><Paragraf teks={lap.teks.us} v={tokens} /></div>
+
+            <p className="font-semibold text-center mt-3 mb-1">Tabel Jumlah Butir Soal Ujian Sekolah</p>
+            <table className="w-full border-collapse text-[12px] mb-3">
+              <thead>
+                <tr>
+                  <Th rowSpan={2} className="w-8">No</Th>
+                  <Th rowSpan={2}>Mata Pelajaran</Th>
+                  <Th colSpan={2}>Bentuk dan Jumlah Butir Soal</Th>
+                  <Th rowSpan={2} className="w-28">Alokasi Waktu</Th>
+                </tr>
+                <tr>
+                  <Th className="w-16">PG</Th>
+                  <Th className="w-16">Uraian</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {MAPEL.map((m, i) => (
+                  <tr key={m}>
+                    <Td className="text-center">{i + 1}</Td>
+                    <Td>{m}</Td>
+                    <Td className="p-0"><input className="sel-input" value={lap.butir[i].pg} onChange={ubahButir(i, 'pg')} /></Td>
+                    <Td className="p-0"><input className="sel-input" value={lap.butir[i].uraian} onChange={ubahButir(i, 'uraian')} /></Td>
+                    <Td className="p-0"><input className="sel-input" value={lap.butir[i].waktu} onChange={ubahButir(i, 'waktu')} /></Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <p className="font-semibold">2. Pelaksanaan Ujian Praktik</p>
+            <div className="ml-5"><Paragraf teks={lap.teks.praktik} v={tokens} /></div>
+
+            <SubJudul>B. Hasil Pelaksanaan dan Evaluasi</SubJudul>
+            <Paragraf teks={lap.teks.hasil} v={tokens} />
+
+            <SubJudul>C. Kelulusan Hasil</SubJudul>
+            {ringkasKelulusan.length > 0 && (
+              <>
+                <p className="teks-laporan mb-1">Rincian kehadiran dan kelulusan peserta per mata pelajaran adalah sebagai berikut:</p>
+                <ul className="list-disc ml-8 mb-2 space-y-0.5">
+                  {ringkasKelulusan.map((r) => <li key={r}>{r}</li>)}
+                </ul>
+              </>
+            )}
+            <Paragraf teks={lap.teks.kelulusan} v={tokens} />
+            {ringkasKelulusan.length === 0 && !lap.teks.kelulusan.trim() && <p>…………</p>}
+          </div>
+
+          {/* BAB IV */}
+          <div className="halaman">
+            <JudulBab no="IV" judul="Pembiayaan" />
+            <Paragraf teks={lap.teks.pembiayaan} v={tokens} />
+          </div>
+
+          {/* BAB V */}
+          <div className="halaman">
+            <JudulBab no="V" judul="Hambatan dan Usaha Penanggulangan" />
+            <Paragraf teks={lap.teks.hambatan} v={tokens} />
+          </div>
+
+          {/* BAB VI */}
+          <div className="halaman">
+            <JudulBab no="VI" judul="Penutup" />
+            <SubJudul>A. Kesimpulan</SubJudul>
+            <Paragraf teks={lap.teks.kesimpulan} v={tokens} />
+            <SubJudul>B. Saran</SubJudul>
+            <Paragraf teks={lap.teks.saran} v={tokens} />
+          </div>
+
+          {/* Lampiran */}
+          <div className="halaman">
+            <p className="text-center font-bold text-base mb-4">LAMPIRAN-LAMPIRAN</p>
+            <Butir teks={lap.teks.lampiran} v={tokens} nomor />
+          </div>
+        </section>
+
         {/* ===================== LEMBAR 1: STATISTIK NILAI ===================== */}
         <section className={kelasLembar('nilai')}>
           {kop}
@@ -1115,4 +1693,63 @@ function Td({ children, className = '', ...rest }) {
       {children}
     </td>
   )
+}
+
+// --- Pembantu tampilan tab Laporan ---
+
+// Teks biasa: baris kosong = paragraf baru. Kata kunci {…} diisi otomatis.
+function Paragraf({ teks, v }) {
+  return isiTemplate(teks, v)
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p, i) => (
+      <p key={i} className="teks-laporan indent-8 mb-2">
+        {p}
+      </p>
+    ))
+}
+
+// Daftar butir: satu baris = satu butir. Baris "## Judul" / "### Sub-judul" memulai kelompok baru.
+function Butir({ teks, v, nomor = false }) {
+  const baris = isiTemplate(teks, v)
+    .split('\n')
+    .map((x) => x.trim())
+    .filter(Boolean)
+  const grup = []
+  baris.forEach((b) => {
+    if (b.startsWith('#')) {
+      const tingkat = (b.match(/^#+/) || [''])[0].length
+      grup.push({ judul: b.replace(/^#+\s*/, ''), tingkat, item: [] })
+    } else {
+      if (grup.length === 0) grup.push({ judul: '', tingkat: 0, item: [] })
+      grup[grup.length - 1].item.push(b)
+    }
+  })
+  const Daftar = nomor ? 'ol' : 'ul'
+  return grup.map((g, i) => (
+    <div key={i} className="mb-2">
+      {g.judul && <p className={g.tingkat >= 3 ? 'font-medium italic ml-4 mt-1' : 'font-semibold'}>{g.judul}</p>}
+      {g.item.length > 0 && (
+        <Daftar className={`teks-laporan ${nomor ? 'list-decimal' : 'list-disc'} ml-8 space-y-0.5`}>
+          {g.item.map((it, j) => (
+            <li key={j}>{it}</li>
+          ))}
+        </Daftar>
+      )}
+    </div>
+  ))
+}
+
+function JudulBab({ no, judul }) {
+  return (
+    <div className="text-center font-bold mb-4">
+      <p className="text-base">BAB {no}</p>
+      <p className="text-base uppercase">{judul}</p>
+    </div>
+  )
+}
+
+function SubJudul({ children }) {
+  return <p className="font-bold mt-3 mb-1">{children}</p>
 }
