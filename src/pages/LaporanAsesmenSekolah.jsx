@@ -13,8 +13,15 @@
 // - Jumlah peserta (dan L/P) bisa diisi otomatis dari tabel `siswa` Kelas 6
 //   yang sudah punya no_peserta_ujian (tombol "Isi dari data siswa").
 // - Tanggal & mata pelajaran Lembar 4 bisa diambil dari Jadwal Pengawas Ruang.
-// - Nilai (tertinggi/terendah/rata-rata, klasifikasi, lulus) diketik langsung
-//   di tabel pratinjau; kolom jumlah/total dihitung otomatis.
+// - NILAI TERHUBUNG ke halaman Nilai Asesmen: tabel `nilai_ijazah` (tahun
+//   pelajaran sama dengan isian di form) dibaca otomatis begitu halaman dibuka,
+//   lalu Lembar 1 (tertinggi/terendah/rata-rata), Lembar 2 (klasifikasi) dan
+//   Lembar 3 (terdaftar/hadir/lulus/tidak lulus) terisi sendiri. Mapel
+//   PJOK, Seni Budaya & Prakarya masuk kolom Nilai Praktik (seperti di docx),
+//   mapel lainnya ke Nilai Tertulis. Lulus = nilai >= KKM (isian di form).
+//   Setiap kali nilai di Nilai Asesmen diubah, tekan "Tarik ulang nilai"
+//   (atau buka ulang halaman ini). Kolom Ket dan mapel yang tidak ada di
+//   nilai_ijazah tetap bisa diketik manual di tabel.
 //
 // CATATAN:
 // - Kolom `jenis_kelamin` di tabel siswa dicoba dibaca terpisah. Kalau nama
@@ -26,11 +33,12 @@
 //   lembar" untuk mencetak keempatnya (satu lembar per halaman).
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Loader2, Printer, Wand2 } from 'lucide-react'
+import { Loader2, Printer, RefreshCw, Wand2 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { muatJadwalPengawas, ratakanSesiJadwal } from '../lib/jadwalPengawasStore'
 import Layout from '../components/Layout'
+import { MAPEL_IJAZAH } from '../components/IjazahPrintTemplate'
 import {
   BagianSK as Bagian,
   FieldSK as Field,
@@ -103,6 +111,46 @@ function jumlah(...vals) {
   return String(vals.reduce((a, v) => a + num(v), 0))
 }
 
+// Format angka hasil hitung: maksimal 2 desimal, koma sebagai pemisah.
+function fmt(x) {
+  return String(Math.round(x * 100) / 100).replace('.', ',')
+}
+
+// Indeks klasifikasi (sesuai KLASIFIKASI di bawah) untuk satu nilai.
+function indeksKlasifikasi(v) {
+  if (v < 50) return 0
+  if (v < 60) return 1
+  if (v < 70) return 2
+  if (v < 80) return 3
+  if (v < 90) return 4
+  return 5
+}
+
+// Pengenal mapel di laporan -> kolom di nilai_ijazah (dicocokkan dari key/label/singkatan
+// MAPEL_IJAZAH, jadi tidak bergantung pada nama kolom persisnya).
+const POLA_MAPEL = [
+  /agama|budi pekerti/,
+  /pancasila|pkn|ppkn|kewarganegaraan/,
+  /indonesia|indo/,
+  /matematika|mtk/,
+  /\bipa\b|pengetahuan alam/,
+  /\bips\b|pengetahuan sosial/,
+  /inggris|english/,
+  /jasmani|pjok|olahraga/,
+  /seni|sbk|sbdp/,
+  /prakarya/,
+]
+// Indeks mapel (di MAPEL) yang nilainya masuk kolom Nilai Praktik.
+const MAPEL_PRAKTIK = [7, 8, 9]
+
+function kunciPerMapel() {
+  const daftar = (MAPEL_IJAZAH || []).map((m) => ({
+    key: m.key,
+    teks: `${m.key} ${m.label || ''} ${m.singkatan || ''}`.toLowerCase().replace(/[_-]/g, ' '),
+  }))
+  return POLA_MAPEL.map((re) => daftar.find((d) => re.test(d.teks))?.key || null)
+}
+
 // --- Data bawaan ---
 
 const MAPEL = [
@@ -161,6 +209,11 @@ export default function LaporanAsesmenSekolah() {
   const [galatSiswa, setGalatSiswa] = useState('')
   const [infoIsi, setInfoIsi] = useState('')
 
+  // Siswa Kelas 6 aktif (dasar penghitungan nilai) & status penarikan nilai.
+  const [siswaK6, setSiswaK6] = useState([])
+  const [memuatNilai, setMemuatNilai] = useState(false)
+  const [infoNilai, setInfoNilai] = useState('')
+
   // Jadwal pengawas (hanya untuk mengambil tanggal & mapel Lembar 4).
   const [sesiJadwal, setSesiJadwal] = useState([])
   const [sesiTerpilih, setSesiTerpilih] = useState('')
@@ -174,6 +227,7 @@ export default function LaporanAsesmenSekolah() {
     rayon: '',
     subRayon: '',
     tapel: tahunPelajaranSekarang(),
+    kkm: '70',
     tempat: '',
     tanggalLaporan: isoHariIni(),
     kepalaNama: '',
@@ -238,7 +292,7 @@ export default function LaporanAsesmenSekolah() {
     try {
       const { data, error } = await supabase
         .from('siswa')
-        .select('id, no_peserta_ujian, kelas(nama_kelas)')
+        .select('id, no_peserta_ujian, status, kelas(nama_kelas)')
         .eq('sekolah_id', sekolahId)
 
       if (error) throw error
@@ -255,18 +309,23 @@ export default function LaporanAsesmenSekolah() {
         jkPerId = {}
       }
 
-      const hasil = (data || [])
-        .filter((s) => isKelas6(s.kelas?.nama_kelas))
-        .filter(sudahTerdaftarPeserta)
-        .map((s) => {
-          const j = jkPerId[s.id] || ''
-          return { id: s.id, jk: j.startsWith('L') ? 'L' : j.startsWith('P') ? 'P' : '' }
-        })
-      setPeserta(hasil)
+      const jkDari = (id) => {
+        const j = jkPerId[id] || ''
+        return j.startsWith('L') ? 'L' : j.startsWith('P') ? 'P' : ''
+      }
+      const kelas6 = (data || []).filter((s) => isKelas6(s.kelas?.nama_kelas))
+      setPeserta(kelas6.filter(sudahTerdaftarPeserta).map((s) => ({ id: s.id, jk: jkDari(s.id) })))
+      // Dasar nilai asesmen: semua siswa Kelas 6 yang aktif (sama dengan halaman Nilai Asesmen).
+      setSiswaK6(
+        kelas6
+          .filter((s) => !s.status || String(s.status).toLowerCase() === 'aktif')
+          .map((s) => ({ id: s.id, jk: jkDari(s.id) }))
+      )
     } catch (e) {
       console.error('Gagal memuat peserta untuk Laporan Asesmen:', e)
       setGalatSiswa(e?.message || 'Data siswa tidak dapat dibaca.')
       setPeserta([])
+      setSiswaK6([])
     } finally {
       setMemuatSiswa(false)
     }
@@ -316,6 +375,98 @@ export default function LaporanAsesmenSekolah() {
     const s = sesiJadwal.find((x) => x.key === key)
     if (s) terapkanSesi(s, { timpa: true })
   }
+
+  // --- Tarik nilai dari Nilai Asesmen (tabel nilai_ijazah) ---
+  async function tarikNilai() {
+    setMemuatNilai(true)
+    setInfoNilai('')
+    try {
+      const tp = String(form.tapel || '').trim()
+      const { data, error } = await supabase.from('nilai_ijazah').select('*').eq('tahun_pelajaran', tp)
+      if (error) throw error
+
+      const siswaPerId = new Map(siswaK6.map((s) => [s.id, s]))
+      const baris = (data || []).filter((r) => siswaPerId.has(r.siswa_id))
+      if (baris.length === 0) {
+        setInfoNilai(`Belum ada nilai Kelas 6 untuk tahun pelajaran ${tp || '…'} di halaman Nilai Asesmen.`)
+        return
+      }
+
+      const kkm = num(form.kkm) || 70
+      const totL = siswaK6.filter((s) => s.jk === 'L').length
+      const totP = siswaK6.filter((s) => s.jk === 'P').length
+      const adaJk = totL + totP > 0
+      const kunci = kunciPerMapel()
+
+      const updNilai = {}
+      const updKlas = {}
+      const updLulus = {}
+      const cocok = []
+      const belum = []
+
+      MAPEL.forEach((nama, i) => {
+        const k = kunci[i]
+        if (!k) { belum.push(nama.replace('*)', '')); return }
+        const vals = baris
+          .map((r) => ({ v: r[k] === '' ? null : Number(r[k]), jk: siswaPerId.get(r.siswa_id).jk }))
+          .filter((x) => x.v !== null && !Number.isNaN(x.v))
+        if (vals.length === 0) { belum.push(nama.replace('*)', '')); return }
+        cocok.push(nama.replace('*)', ''))
+
+        const semua = vals.map((x) => x.v)
+        const rata = semua.reduce((a, b) => a + b, 0) / semua.length
+        const praktik = MAPEL_PRAKTIK.includes(i)
+        const pre = praktik ? 'p' : 't'
+        updNilai[i] = {
+          jml: String(vals.length),
+          [`${pre}Tinggi`]: fmt(Math.max(...semua)),
+          [`${pre}Rendah`]: fmt(Math.min(...semua)),
+          [`${pre}Rata`]: fmt(rata),
+        }
+
+        const bucket = KLASIFIKASI.map(() => 0)
+        vals.forEach((x) => { bucket[indeksKlasifikasi(x.v)] += 1 })
+        updKlas[i] = bucket.map((b) => (b > 0 ? String(b) : ''))
+
+        const hadL = vals.filter((x) => x.jk === 'L').length
+        const hadP = vals.filter((x) => x.jk === 'P').length
+        const lulusL = vals.filter((x) => x.jk === 'L' && x.v >= kkm).length
+        const lulusP = vals.filter((x) => x.jk === 'P' && x.v >= kkm).length
+        updLulus[i] = adaJk
+          ? {
+              tdL: String(totL), tdP: String(totP),
+              hdL: String(hadL), hdP: String(hadP),
+              lL: String(lulusL), lP: String(lulusP),
+              tlL: String(hadL - lulusL), tlP: String(hadP - lulusP),
+            }
+          : {}
+      })
+
+      setNilai((arr) => arr.map((r, i) => (updNilai[i] ? { ...r, ...updNilai[i] } : r)))
+      setKlas((arr) => arr.map((r, i) => (updKlas[i] ? { ...r, k: updKlas[i] } : r)))
+      setLulus((arr) => arr.map((r, i) => (updLulus[i] ? { ...r, ...updLulus[i] } : r)))
+
+      setInfoNilai(
+        `Tertarik dari Nilai Asesmen: ${baris.length} siswa, ${cocok.length} mapel terisi.` +
+          (belum.length ? ` Belum ada nilainya (isi manual bila perlu): ${belum.join(', ')}.` : '') +
+          (adaJk ? '' : ' Jumlah L/P belum terbaca dari data siswa, jadi Lembar 3 isi manual.')
+      )
+    } catch (e) {
+      console.error('Gagal menarik nilai asesmen:', e)
+      setInfoNilai(`Nilai belum bisa dibaca (${e?.message || 'galat tidak diketahui'}).`)
+    } finally {
+      setMemuatNilai(false)
+    }
+  }
+
+  // Otomatis: begitu data siswa termuat (dan tiap kali tahun pelajaran / KKM
+  // berubah), tarik nilai terbaru. Ditunda sebentar supaya tidak jalan per ketikan.
+  useEffect(() => {
+    if (memuatSiswa || siswaK6.length === 0) return undefined
+    const t = setTimeout(() => { tarikNilai() }, 600)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memuatSiswa, siswaK6, form.tapel, form.kkm])
 
   const ubah = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
@@ -555,6 +706,28 @@ export default function LaporanAsesmenSekolah() {
               <input className={inputCls} value={form.kepalaNip} onChange={ubah('kepalaNip')} />
             </Field>
           </div>
+        </Bagian>
+
+        <Bagian
+          judul="Nilai dari halaman Nilai Asesmen"
+          keterangan="Lembar 1–3 terisi otomatis dari nilai siswa Kelas 6 (tahun pelajaran sesuai isian di atas). Isian manual di tabel akan tertimpa saat nilai ditarik ulang."
+        >
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="w-32">
+              <Field label="KKM (batas lulus)">
+                <input className={inputCls} value={form.kkm} onChange={ubah('kkm')} inputMode="decimal" />
+              </Field>
+            </div>
+            <button
+              type="button"
+              onClick={tarikNilai}
+              disabled={memuatNilai || memuatSiswa}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              {memuatNilai ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Tarik ulang nilai
+            </button>
+          </div>
+          {infoNilai && <p className="mt-2 text-sm text-slate-600">{infoNilai}</p>}
         </Bagian>
 
         <Bagian
