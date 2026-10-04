@@ -1,23 +1,30 @@
 // src/pages/BeritaAcaraUjian.jsx
 //
-// Berita acara pelaksanaan ujian per ruang, otomatis sinkron dengan halaman lain:
-// - Kop surat (Pemerintah Kabupaten > Dinas Pendidikan > Nama Sekolah > Kecamatan,
-//   logo kabupaten di kiri dan logo sekolah di kanan): sama dengan
-//   DaftarHadirSiswaUjian.jsx, diambil otomatis dari tabel `profil_sekolah`
-//   (kolom kabupaten, dinas_pendidikan, kecamatan, logo_path, logo_kabupaten_path;
-//   bucket storage 'profil-sekolah'). Semua field kop bisa diubah manual.
-// - Ruang ujian & jumlah peserta terdaftar: dari tabel `siswa` (Kelas 6, sudah
-//   punya no_peserta_ujian, dikelompokkan per `ruang_ujian`) — logika sama
-//   dengan DaftarHadirSiswaUjian.jsx / KartuPesertaUjian.jsx.
-// - Tanggal, mata pelajaran, Pengawas I & II: dari Jadwal Pengawas Ruang
-//   (lib/jadwalPengawasStore, tersimpan di Supabase). Saat dibuka, sesi hari ini
-//   (atau sesi terdekat berikutnya) dipilih otomatis; sesi lain bisa dipilih di
-//   dropdown "Ambil dari jadwal pengawas".
-// - Nama sekolah, tempat, Kepala Sekolah & NIP: ambilProfilSekolah.
+// Berita acara pelaksanaan ujian per ruang, otomatis sinkron dengan halaman lain
+// dan bisa tercetak BEBERAPA HALAMAN sekaligus (model Pakta Integritas Pengawas):
 //
-// Semua kolom tetap bisa diubah manual. Jumlah terdaftar dan hadir terisi otomatis
-// (hadir dianggap = terdaftar); ketik angka lain bila ada yang tidak hadir,
-// kosongkan lagi untuk kembali ke otomatis. Catatan kejadian tetap manual.
+// - SATU SESI PADA JADWAL = SATU LEMBAR. Tanggal, ruang, mata pelajaran, Pengawas I
+//   & II (lengkap dengan NIP) diambil dari Jadwal Pengawas Ruang
+//   (lib/jadwalPengawasStore, tersimpan di Supabase). Pilihan "Cetak untuk":
+//   * satu tanggal (mis. Senin, 05 Okt 2026) -> semua ruang & sesi hari itu,
+//   * semua sesi pada jadwal,
+//   * satu lembar manual (isi sendiri).
+//   Saat dibuka, tanggal yang dipilih adalah hari ini (atau tanggal jadwal
+//   terdekat berikutnya, atau yang pertama).
+// - Jumlah terdaftar per lembar: dari tabel `siswa` (Kelas 6, sudah punya
+//   no_peserta_ujian, dikelompokkan per `ruang_ujian`) — logika sama dengan
+//   DaftarHadirSiswaUjian.jsx. Hadir dianggap = terdaftar. Di mode lembar manual,
+//   angka hadir bisa diketik bila ada yang tidak hadir.
+// - Kop surat: sama dengan DaftarHadirSiswaUjian.jsx (Pemerintah Kabupaten > Dinas >
+//   Nama Sekolah > Kecamatan, logo kabupaten kiri & logo sekolah kanan) dari
+//   `profil_sekolah`. Tampil di setiap lembar.
+// - Tempat & tanggal surat (kolom tanda tangan): tempat ikut Jadwal Pengawas Ruang
+//   (cadangan: profil sekolah); tanggal surat = tanggal ujian lembar itu, ditulis
+//   tanpa nama hari, mis. "Waria, 05 Oktober 2026". Tanggal surat bisa diganti
+//   lewat isian "Tanggal surat" (kosong = ikut tanggal ujian tiap lembar).
+// - Nama sekolah, Kepala Sekolah & NIP: ambilProfilSekolah.
+//
+// Catatan kejadian satu isian untuk semua lembar.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, Printer } from 'lucide-react'
@@ -63,12 +70,22 @@ function urlLogo(path) {
   return data?.publicUrl || ''
 }
 
-// Format lengkap dengan nama hari: "Rabu, 23 September 2026".
+// Format lengkap dengan nama hari: "Senin, 5 Oktober 2026" (untuk kalimat pembuka).
 function formatHariTanggal(iso) {
   if (!iso) return '…………'
   return new Date(`${iso}T00:00:00`).toLocaleDateString('id-ID', {
     weekday: 'long',
     day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+}
+
+// Tanggal surat tanpa nama hari: "05 Oktober 2026".
+function formatTanggalSurat(iso) {
+  if (!iso) return '…………'
+  return new Date(`${iso}T00:00:00`).toLocaleDateString('id-ID', {
+    day: '2-digit',
     month: 'long',
     year: 'numeric',
   })
@@ -105,8 +122,17 @@ export default function BeritaAcaraUjian() {
 
   // --- Jadwal pengawas (dari halaman Jadwal Pengawas Ruang) ---
   const [sesiJadwal, setSesiJadwal] = useState([])
+  const [jadwalTempat, setJadwalTempat] = useState('')
   const [sesiTerpilih, setSesiTerpilih] = useState('')
   const sudahOtomatis = useRef(false)
+
+  // 'manual' = satu lembar dari isian form; 'semua' = semua sesi jadwal;
+  // 'tgl:YYYY-MM-DD' = semua sesi pada satu tanggal.
+  const [cetak, setCetak] = useState('manual')
+
+  // Kosong = ikut jadwal pengawas / profil sekolah (untuk tempat) dan tanggal ujian (untuk tanggal).
+  const [tempatManual, setTempatManual] = useState('')
+  const [tanggalSuratManual, setTanggalSuratManual] = useState('')
 
   const [form, setForm] = useState({
     // Kop surat (terisi otomatis dari profil_sekolah).
@@ -202,7 +228,9 @@ export default function BeritaAcaraUjian() {
     if (!sekolahId) return undefined
     ;(async () => {
       const t = await muatJadwalPengawas(sekolahId)
-      if (!batal) setSesiJadwal(ratakanSesiJadwal(t))
+      if (batal) return
+      setSesiJadwal(ratakanSesiJadwal(t))
+      setJadwalTempat(t?.tempat || '')
     })()
     return () => { batal = true }
   }, [sekolahId])
@@ -230,6 +258,12 @@ export default function BeritaAcaraUjian() {
     [siswaSemua]
   )
 
+  // Tanggal unik yang punya jadwal, untuk pilihan "Cetak untuk".
+  const tanggalJadwal = useMemo(
+    () => [...new Set(sesiJadwal.map((s) => s.tanggal).filter(Boolean))].sort(),
+    [sesiJadwal]
+  )
+
   // Otomatis pilih ruang pertama kalau belum ada pilihan (atau pilihan lama sudah hilang).
   useEffect(() => {
     if (daftarRuang.length === 0) return
@@ -239,7 +273,7 @@ export default function BeritaAcaraUjian() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [daftarRuang])
 
-  // Pasang data satu sesi jadwal ke form.
+  // Pasang data satu sesi jadwal ke form manual.
   // timpa=false (otomatis saat dibuka): hanya mengisi kolom yang masih kosong.
   // timpa=true (pilihan manual di dropdown): menggantikan isian sebelumnya.
   function terapkanSesi(s, { timpa }) {
@@ -257,12 +291,18 @@ export default function BeritaAcaraUjian() {
     }))
   }
 
-  // Otomatis: setelah jadwal, data guru, dan data peserta termuat, pilih sesi hari
-  // ini (atau sesi terdekat berikutnya, atau yang pertama) dan isikan sekali saja.
+  // Otomatis: setelah jadwal, data guru, dan data peserta termuat, pilih tanggal
+  // hari ini (atau tanggal jadwal terdekat berikutnya, atau yang pertama): semua
+  // lembar tanggal itu langsung tampil, dan form manual ikut terisi sesi pertamanya.
   useEffect(() => {
     if (sudahOtomatis.current || sesiJadwal.length === 0 || guru.length === 0 || memuatSiswa) return
     sudahOtomatis.current = true
     const hariIni = isoHariIni()
+    const tanggalPilih =
+      tanggalJadwal.find((t) => t === hariIni) ||
+      tanggalJadwal.find((t) => t >= hariIni) ||
+      tanggalJadwal[0]
+    if (tanggalPilih) setCetak(`tgl:${tanggalPilih}`)
     const pilih =
       sesiJadwal.find((s) => s.tanggal === hariIni) ||
       sesiJadwal.find((s) => s.tanggal >= hariIni) ||
@@ -279,7 +319,7 @@ export default function BeritaAcaraUjian() {
     if (s) terapkanSesi(s, { timpa: true })
   }
 
-  // Terdaftar otomatis = jumlah peserta di ruang terpilih; hadir otomatis = terdaftar.
+  // Terdaftar otomatis (mode manual) = jumlah peserta di ruang terpilih; hadir otomatis = terdaftar.
   const terdaftarOtomatis = useMemo(
     () => (form.ruang ? siswaSemua.filter((s) => s.ruangUjian === form.ruang).length : 0),
     [siswaSemua, form.ruang]
@@ -299,13 +339,62 @@ export default function BeritaAcaraUjian() {
   const pilihanPengawas1 = useMemo(() => guru.filter((g) => g.id !== form.pengawas2Id), [guru, form.pengawas2Id])
   const pilihanPengawas2 = useMemo(() => guru.filter((g) => g.id !== form.pengawas1Id), [guru, form.pengawas1Id])
 
+  // ── Daftar lembar yang dicetak ──
+  // Mode jadwal: satu lembar per sesi (urut tanggal, jam, ruang). Mode manual
+  // (atau belum ada jadwal): satu lembar dari isian form.
+  const daftarLembar = useMemo(() => {
+    let sesi = []
+    if (cetak === 'semua') sesi = sesiJadwal
+    else if (cetak.startsWith('tgl:')) sesi = sesiJadwal.filter((s) => s.tanggal === cetak.slice(4))
+
+    if (sesi.length > 0) {
+      return [...sesi]
+        .sort(
+          (a, b) =>
+            String(a.tanggal).localeCompare(String(b.tanggal)) ||
+            String(a.waktu).localeCompare(String(b.waktu), undefined, { numeric: true }) ||
+            String(a.ruang).localeCompare(String(b.ruang), undefined, { numeric: true })
+        )
+        .map((s) => {
+          const terdaftar = s.ruang ? siswaSemua.filter((x) => x.ruangUjian === s.ruang).length : 0
+          return {
+            key: s.key,
+            tanggal: s.tanggal,
+            ruang: s.ruang,
+            mapel: s.mapel || form.mataPelajaran,
+            g1: guruPerId[s.guru1Id] || null,
+            g2: guruPerId[s.guru2Id] || null,
+            terdaftar: String(terdaftar),
+            hadir: String(terdaftar),
+            tidak: '0',
+          }
+        })
+    }
+
+    return [
+      {
+        key: 'manual',
+        tanggal: form.tanggal,
+        ruang: form.ruang,
+        mapel: form.mataPelajaran,
+        g1: guruPerId[form.pengawas1Id] || null,
+        g2: guruPerId[form.pengawas2Id] || null,
+        terdaftar: jumlahPeserta,
+        hadir: jumlahHadir,
+        tidak: tidakHadir,
+      },
+    ]
+  }, [
+    cetak, sesiJadwal, siswaSemua, guruPerId, form.mataPelajaran, form.tanggal, form.ruang,
+    form.pengawas1Id, form.pengawas2Id, jumlahPeserta, jumlahHadir, tidakHadir,
+  ])
+
+  const modeJadwal = daftarLembar[0]?.key !== 'manual'
+
   const namaSekolah = isi(sekolah.nama, 'NAMA SEKOLAH')
   const tapel = tahunPelajaranSekarang()
-  const namaRuang = isi(form.ruang, '…………')
-  const pengawas1 = guruPerId[form.pengawas1Id]?.nama_lengkap || '…………'
-  const pengawas2 = guruPerId[form.pengawas2Id]?.nama_lengkap || '…………'
-  const hariTanggal = formatHariTanggal(form.tanggal)
-  const tempatTanggal = `${isi(tempatSekolah, '…………')}, ${hariTanggal}`
+  // Tempat surat: isian manual, lalu jadwal pengawas, lalu profil sekolah.
+  const tempatSurat = tempatManual || jadwalTempat || tempatSekolah
 
   return (
     <Layout title="Berita Acara Ujian" subtitle="Berita acara pelaksanaan ujian per ruang, siap cetak.">
@@ -316,17 +405,22 @@ export default function BeritaAcaraUjian() {
           #area-cetak-ba, #area-cetak-ba * { visibility: visible; }
           #area-cetak-ba {
             position: absolute; left: 0; top: 0; width: 100%;
-            border: 0 !important; border-radius: 0 !important; padding: 0 !important;
-            max-width: none !important; margin: 0 !important;
+            max-width: none !important; margin: 0 !important; padding: 0 !important;
             font-family: 'Times New Roman', Times, serif;
             color: #000 !important;
           }
-          #area-cetak-ba .kop-surat { border-bottom-color: #000 !important; }
+          /* Satu lembar = satu halaman. */
+          #area-cetak-ba .ba-lembar {
+            border: 0 !important; border-radius: 0 !important; padding: 0 !important;
+            margin: 0 !important; max-width: none !important;
+            page-break-after: always; break-after: page;
+          }
+          #area-cetak-ba .ba-lembar:last-child { page-break-after: auto; break-after: auto; }
+          #area-cetak-ba .kop-surat { border-bottom-color: #000 !important; padding-bottom: 6px !important; margin-bottom: 14px !important; }
+          #area-cetak-ba .kop-logo { width: 64px !important; height: 64px !important; }
           #area-cetak-ba .catatan-kejadian { background: #fff !important; border-color: #000 !important; }
           #area-cetak-ba .garis-nama { text-decoration-color: #000 !important; }
           #area-cetak-ba .ttd-blok { page-break-inside: avoid; }
-          #area-cetak-ba .kop-surat { padding-bottom: 6px !important; margin-bottom: 14px !important; }
-          #area-cetak-ba .kop-logo { width: 64px !important; height: 64px !important; }
         }
         /* Kunci gambar kop supaya tidak kebawa aturan CSS global (position:fixed dll). */
         #area-cetak-ba .kop-logo img {
@@ -353,6 +447,32 @@ export default function BeritaAcaraUjian() {
         )}
 
         <Bagian
+          judul="Berita acara yang dicetak"
+          keterangan={
+            sesiJadwal.length > 0
+              ? `Diambil dari Jadwal Pengawas Ruang (${sesiJadwal.length} sesi). Satu sesi = satu lembar, lengkap dengan ruang, pengawas, dan NIP.`
+              : 'Belum ada jadwal pengawas tersimpan. Isi dulu di halaman Jadwal Pengawas Ruang, lalu buka halaman ini lagi, atau isi lembar manual di bawah.'
+          }
+        >
+          <Field label="Cetak untuk">
+            <select className={inputCls} value={cetak} onChange={(e) => setCetak(e.target.value)}>
+              <option value="manual">Satu lembar manual (isi sendiri)</option>
+              {sesiJadwal.length > 0 && (
+                <option value="semua">Semua sesi pada jadwal ({sesiJadwal.length} lembar)</option>
+              )}
+              {tanggalJadwal.map((t) => {
+                const n = sesiJadwal.filter((s) => s.tanggal === t).length
+                return (
+                  <option key={t} value={`tgl:${t}`}>
+                    {labelTanggal(t)} ({n} lembar)
+                  </option>
+                )
+              })}
+            </select>
+          </Field>
+        </Bagian>
+
+        <Bagian
           judul="Kop surat"
           keterangan="Terisi otomatis dari Profil Sekolah; bisa diubah di sini, kosongkan yang tidak perlu ditampilkan."
         >
@@ -370,110 +490,155 @@ export default function BeritaAcaraUjian() {
         </Bagian>
 
         <Bagian
-          judul="Ruang & mata pelajaran"
-          keterangan="Terisi otomatis dari Jadwal Pengawas Ruang; pilih sesi lain di dropdown atau ubah manual."
+          judul="Tempat & tanggal surat"
+          keterangan="Tempat ikut Jadwal Pengawas Ruang; tanggal surat ikut tanggal ujian tiap lembar. Isi kolom di bawah hanya bila ingin mengganti."
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="sm:col-span-2">
-              <Field label="Ambil dari jadwal pengawas">
-                {sesiJadwal.length === 0 ? (
-                  <p className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500">
-                    Belum ada jadwal pengawas tersimpan. Isi dulu di halaman Jadwal Pengawas Ruang, lalu buka
-                    halaman ini lagi.
-                  </p>
-                ) : (
-                  <select className={inputCls} value={sesiTerpilih} onChange={pilihSesi}>
-                    <option value="">— pilih sesi —</option>
-                    {sesiJadwal.map((s) => (
-                      <option key={s.key} value={s.key}>
-                        {labelTanggal(s.tanggal)} • {s.waktu || '…'} • {s.mapel || '(mapel belum diisi)'}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </Field>
-            </div>
-            <Field label="Ruang ujian" keterangan="Daftar diambil dari ruang yang sudah diisi lewat Pengaturan Ruang.">
-              {daftarRuang.length > 0 ? (
-                <select className={inputCls} value={form.ruang} onChange={ubahRuang}>
-                  {daftarRuang.map((r) => (
-                    <option key={r} value={r}>Ruang {r}</option>
-                  ))}
-                </select>
-              ) : (
-                <input className={inputCls} value={form.ruang} onChange={ubahRuang} placeholder="mis. 1" />
+            <Field label="Tempat">
+              <input
+                className={inputCls}
+                value={tempatManual}
+                onChange={(e) => setTempatManual(e.target.value)}
+                placeholder={tempatSurat ? `otomatis: ${tempatSurat}` : 'Nama kota/kabupaten'}
+              />
+            </Field>
+            <Field label="Tanggal surat">
+              <input
+                type="date"
+                className={inputCls}
+                value={tanggalSuratManual}
+                onChange={(e) => setTanggalSuratManual(e.target.value)}
+              />
+              {tanggalSuratManual && (
+                <button
+                  type="button"
+                  onClick={() => setTanggalSuratManual('')}
+                  className="mt-1 text-xs text-blue-700 hover:underline"
+                >
+                  Kembali ikut tanggal ujian
+                </button>
               )}
             </Field>
-            <Field label="Mata pelajaran / kegiatan">
-              <input className={inputCls} value={form.mataPelajaran} onChange={ubah('mataPelajaran')} />
-            </Field>
-            <Field label="Tanggal">
-              <input type="date" className={inputCls} value={form.tanggal} onChange={ubah('tanggal')} />
-            </Field>
           </div>
         </Bagian>
+
+        {!modeJadwal && (
+          <>
+            <Bagian
+              judul="Ruang & mata pelajaran"
+              keterangan="Terisi otomatis dari Jadwal Pengawas Ruang; pilih sesi lain di dropdown atau ubah manual."
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="sm:col-span-2">
+                  <Field label="Ambil dari jadwal pengawas">
+                    {sesiJadwal.length === 0 ? (
+                      <p className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500">
+                        Belum ada jadwal pengawas tersimpan. Isi dulu di halaman Jadwal Pengawas Ruang, lalu buka
+                        halaman ini lagi.
+                      </p>
+                    ) : (
+                      <select className={inputCls} value={sesiTerpilih} onChange={pilihSesi}>
+                        <option value="">— pilih sesi —</option>
+                        {sesiJadwal.map((s) => (
+                          <option key={s.key} value={s.key}>
+                            {labelTanggal(s.tanggal)} • {s.waktu || '…'} • {s.mapel || '(mapel belum diisi)'}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </Field>
+                </div>
+                <Field label="Ruang ujian" keterangan="Daftar diambil dari ruang yang sudah diisi lewat Pengaturan Ruang.">
+                  {daftarRuang.length > 0 ? (
+                    <select className={inputCls} value={form.ruang} onChange={ubahRuang}>
+                      {daftarRuang.map((r) => (
+                        <option key={r} value={r}>Ruang {r}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input className={inputCls} value={form.ruang} onChange={ubahRuang} placeholder="mis. 1" />
+                  )}
+                </Field>
+                <Field label="Mata pelajaran / kegiatan">
+                  <input className={inputCls} value={form.mataPelajaran} onChange={ubah('mataPelajaran')} />
+                </Field>
+                <Field label="Tanggal">
+                  <input type="date" className={inputCls} value={form.tanggal} onChange={ubah('tanggal')} />
+                </Field>
+              </div>
+            </Bagian>
+
+            <Bagian
+              judul="Jumlah peserta"
+              keterangan="Terdaftar diambil dari data siswa ruang ini; hadir dianggap sama dengan terdaftar. Ketik angka lain bila ada yang tidak hadir, kosongkan untuk kembali otomatis."
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <Field label="Terdaftar">
+                  <input
+                    className={inputCls}
+                    inputMode="numeric"
+                    value={form.jumlahPesertaManual}
+                    onChange={ubah('jumlahPesertaManual')}
+                    placeholder={`otomatis: ${terdaftarOtomatis}`}
+                  />
+                </Field>
+                <Field label="Hadir">
+                  <input
+                    className={inputCls}
+                    inputMode="numeric"
+                    value={form.jumlahHadirManual}
+                    onChange={ubah('jumlahHadirManual')}
+                    placeholder={`otomatis: ${jumlahPeserta}`}
+                  />
+                </Field>
+                <Field label="Tidak hadir (otomatis)">
+                  <input className={`${inputCls} bg-slate-50`} value={tidakHadir} readOnly tabIndex={-1} />
+                </Field>
+              </div>
+              {hadirMelebihi && (
+                <p className="mt-2 text-xs text-amber-700">Jumlah hadir melebihi jumlah terdaftar, mohon dicek.</p>
+              )}
+            </Bagian>
+
+            <Bagian
+              judul="Pengawas ruang"
+              keterangan="Terisi otomatis sesuai sesi jadwal yang dipilih; bisa diganti atau dikosongkan."
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Field label="Pengawas I">
+                  <select className={inputCls} value={form.pengawas1Id} onChange={ubah('pengawas1Id')}>
+                    <option value="">— pilih guru —</option>
+                    {pilihanPengawas1.map((g) => (
+                      <option key={g.id} value={g.id}>{g.nama_lengkap}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Pengawas II">
+                  <select className={inputCls} value={form.pengawas2Id} onChange={ubah('pengawas2Id')}>
+                    <option value="">— pilih guru —</option>
+                    {pilihanPengawas2.map((g) => (
+                      <option key={g.id} value={g.id}>{g.nama_lengkap}</option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+            </Bagian>
+          </>
+        )}
 
         <Bagian
-          judul="Jumlah peserta"
-          keterangan="Terdaftar diambil dari data siswa ruang ini; hadir dianggap sama dengan terdaftar. Ketik angka lain bila ada yang tidak hadir, kosongkan untuk kembali otomatis."
+          judul="Catatan kejadian"
+          keterangan={modeJadwal ? 'Berlaku untuk semua lembar yang dicetak.' : undefined}
         >
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Field label="Terdaftar">
-              <input
-                className={inputCls}
-                inputMode="numeric"
-                value={form.jumlahPesertaManual}
-                onChange={ubah('jumlahPesertaManual')}
-                placeholder={`otomatis: ${terdaftarOtomatis}`}
-              />
-            </Field>
-            <Field label="Hadir">
-              <input
-                className={inputCls}
-                inputMode="numeric"
-                value={form.jumlahHadirManual}
-                onChange={ubah('jumlahHadirManual')}
-                placeholder={`otomatis: ${jumlahPeserta}`}
-              />
-            </Field>
-            <Field label="Tidak hadir (otomatis)">
-              <input className={`${inputCls} bg-slate-50`} value={tidakHadir} readOnly tabIndex={-1} />
-            </Field>
-          </div>
-          {hadirMelebihi && (
-            <p className="mt-2 text-xs text-amber-700">Jumlah hadir melebihi jumlah terdaftar, mohon dicek.</p>
-          )}
-        </Bagian>
-
-        <Bagian
-          judul="Pengawas ruang"
-          keterangan="Terisi otomatis sesuai sesi jadwal yang dipilih; bisa diganti atau dikosongkan."
-        >
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Pengawas I">
-              <select className={inputCls} value={form.pengawas1Id} onChange={ubah('pengawas1Id')}>
-                <option value="">— pilih guru —</option>
-                {pilihanPengawas1.map((g) => (
-                  <option key={g.id} value={g.id}>{g.nama_lengkap}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Pengawas II">
-              <select className={inputCls} value={form.pengawas2Id} onChange={ubah('pengawas2Id')}>
-                <option value="">— pilih guru —</option>
-                {pilihanPengawas2.map((g) => (
-                  <option key={g.id} value={g.id}>{g.nama_lengkap}</option>
-                ))}
-              </select>
-            </Field>
-          </div>
-        </Bagian>
-
-        <Bagian judul="Catatan kejadian">
           <Field label="Catatan selama ujian">
             <textarea className={inputCls} rows={3} value={form.catatanKejadian} onChange={ubah('catatanKejadian')} />
           </Field>
         </Bagian>
+
+        <p className="text-xs text-slate-500 mb-3">
+          Pratinjau di bawah ({daftarLembar.length} lembar). Saat mencetak, matikan opsi "Header dan footer" di
+          dialog cetak agar bersih.
+        </p>
 
         <div className="flex justify-end">
           <button
@@ -486,87 +651,107 @@ export default function BeritaAcaraUjian() {
         </div>
       </div>
 
-      <div id="area-cetak-ba" className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-8 text-[13.5px] leading-relaxed text-slate-800">
-        {/* Kop surat: logo kabupaten (kiri), teks di tengah, logo sekolah (kanan). */}
-        <div className="kop-surat flex items-center gap-3 border-b-2 border-slate-800 pb-3 mb-6">
-          {/* Kotak tetap ada walau logo kosong supaya teks tetap di tengah. */}
-          <div className="kop-logo w-[76px] h-[76px] shrink-0 flex items-center justify-center">
-            {logoKabupatenUrl && (
-              <img
-                src={logoKabupatenUrl}
-                alt="Logo kabupaten"
-                onError={(e) => { e.currentTarget.style.display = 'none' }}
-              />
-            )}
-          </div>
-          <div className="flex-1 text-center">
-            {form.kabupaten && <p className="font-bold uppercase tracking-wide">{form.kabupaten}</p>}
-            {form.dinas && <p className="font-bold uppercase tracking-wide">{form.dinas}</p>}
-            <p className="font-bold uppercase tracking-wide text-base">{namaSekolah}</p>
-            {form.kecamatan && <p className="font-bold uppercase tracking-wide">{form.kecamatan}</p>}
-          </div>
-          <div className="kop-logo w-[76px] h-[76px] shrink-0 flex items-center justify-center">
-            {logoSekolahUrl && (
-              <img
-                src={logoSekolahUrl}
-                alt="Logo sekolah"
-                onError={(e) => { e.currentTarget.style.display = 'none' }}
-              />
-            )}
-          </div>
-        </div>
+      {/* ── Lembar cetak: satu halaman per sesi ── */}
+      <div id="area-cetak-ba" className="mx-auto max-w-3xl space-y-4">
+        {daftarLembar.map((l) => {
+          const pengawas1 = l.g1?.nama_lengkap || '…………'
+          const pengawas2 = l.g2?.nama_lengkap || '…………'
+          const nip1 = l.g1?.nip || '…………'
+          const nip2 = l.g2?.nip || '…………'
+          const hariTanggal = formatHariTanggal(l.tanggal)
+          const namaRuang = isi(l.ruang, '…………')
+          const tempatTanggal = `${isi(tempatSurat, '…………')}, ${formatTanggalSurat(tanggalSuratManual || l.tanggal)}`
 
-        <div className="text-center mb-6">
-          <p className="font-display text-base font-bold uppercase">Berita Acara Pelaksanaan Ujian</p>
-          <p>Tahun Pelajaran {tapel}</p>
-        </div>
+          return (
+            <div
+              key={l.key}
+              className="ba-lembar rounded-2xl border border-slate-200 bg-white p-8 text-[13.5px] leading-relaxed text-slate-800"
+            >
+              {/* Kop surat: logo kabupaten (kiri), teks di tengah, logo sekolah (kanan). */}
+              <div className="kop-surat flex items-center gap-3 border-b-2 border-slate-800 pb-3 mb-6">
+                {/* Kotak tetap ada walau logo kosong supaya teks tetap di tengah. */}
+                <div className="kop-logo w-[76px] h-[76px] shrink-0 flex items-center justify-center">
+                  {logoKabupatenUrl && (
+                    <img
+                      src={logoKabupatenUrl}
+                      alt="Logo kabupaten"
+                      onError={(e) => { e.currentTarget.style.display = 'none' }}
+                    />
+                  )}
+                </div>
+                <div className="flex-1 text-center">
+                  {form.kabupaten && <p className="font-bold uppercase tracking-wide">{form.kabupaten}</p>}
+                  {form.dinas && <p className="font-bold uppercase tracking-wide">{form.dinas}</p>}
+                  <p className="font-bold uppercase tracking-wide text-base">{namaSekolah}</p>
+                  {form.kecamatan && <p className="font-bold uppercase tracking-wide">{form.kecamatan}</p>}
+                </div>
+                <div className="kop-logo w-[76px] h-[76px] shrink-0 flex items-center justify-center">
+                  {logoSekolahUrl && (
+                    <img
+                      src={logoSekolahUrl}
+                      alt="Logo sekolah"
+                      onError={(e) => { e.currentTarget.style.display = 'none' }}
+                    />
+                  )}
+                </div>
+              </div>
 
-        <p className="mb-4">
-          Pada hari ini, <strong>{hariTanggal}</strong>, telah dilaksanakan {isi(form.mataPelajaran)} di{' '}
-          <strong>Ruang {namaRuang}</strong>, {namaSekolah}, dengan rincian sebagai berikut:
-        </p>
+              <div className="text-center mb-6">
+                <p className="font-display text-base font-bold uppercase">Berita Acara Pelaksanaan Ujian</p>
+                <p>Tahun Pelajaran {tapel}</p>
+              </div>
 
-        <table className="w-full mb-4">
-          <tbody>
-            <Baris label="Jumlah peserta terdaftar" nilai={isi(jumlahPeserta)} />
-            <Baris label="Jumlah peserta hadir" nilai={isi(jumlahHadir)} />
-            <Baris label="Jumlah peserta tidak hadir" nilai={isi(tidakHadir)} />
-            <Baris label="Pengawas ruang" nilai={`${pengawas1} & ${pengawas2}`} />
-          </tbody>
-        </table>
+              <p className="mb-4">
+                Pada hari ini, <strong>{hariTanggal}</strong>, telah dilaksanakan {isi(l.mapel)} di{' '}
+                <strong>Ruang {namaRuang}</strong>, {namaSekolah}, dengan rincian sebagai berikut:
+              </p>
 
-        <p className="mb-1 font-medium">Catatan kejadian selama ujian:</p>
-        <p className="catatan-kejadian mb-6 rounded-lg border border-slate-200 bg-slate-50 p-3">
-          {isi(form.catatanKejadian)}
-        </p>
+              <table className="w-full mb-4">
+                <tbody>
+                  <Baris label="Jumlah peserta terdaftar" nilai={isi(l.terdaftar)} />
+                  <Baris label="Jumlah peserta hadir" nilai={isi(l.hadir)} />
+                  <Baris label="Jumlah peserta tidak hadir" nilai={isi(l.tidak)} />
+                  <Baris label="Pengawas ruang" nilai={`${pengawas1} & ${pengawas2}`} />
+                </tbody>
+              </table>
 
-        <p className="mb-6">
-          Demikian berita acara ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.
-        </p>
+              <p className="mb-1 font-medium">Catatan kejadian selama ujian:</p>
+              <p className="catatan-kejadian mb-6 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                {isi(form.catatanKejadian)}
+              </p>
 
-        <div className="ttd-blok">
-          <p className="text-right mb-4">{tempatTanggal}</p>
+              <p className="mb-6">
+                Demikian berita acara ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.
+              </p>
 
-          <div className="grid grid-cols-2 gap-6 text-center">
-            <div>
-              <p className="mb-16">Pengawas Ruang I</p>
-              <p className="garis-nama font-semibold underline decoration-slate-400 underline-offset-4">{pengawas1}</p>
+              <div className="ttd-blok">
+                <p className="text-right mb-4">{tempatTanggal}</p>
+
+                <div className="grid grid-cols-2 gap-6 text-center">
+                  <div>
+                    <p className="mb-16">Pengawas Ruang I</p>
+                    <p className="garis-nama font-semibold underline decoration-slate-400 underline-offset-4">{pengawas1}</p>
+                    <p>NIP. {nip1}</p>
+                  </div>
+                  <div>
+                    <p className="mb-16">Pengawas Ruang II</p>
+                    <p className="garis-nama font-semibold underline decoration-slate-400 underline-offset-4">{pengawas2}</p>
+                    <p>NIP. {nip2}</p>
+                  </div>
+                </div>
+
+                <div className="mt-8 text-center">
+                  <p>Mengetahui,</p>
+                  <p className="mb-16">Kepala {namaSekolah}</p>
+                  <p className="garis-nama font-semibold underline decoration-slate-400 underline-offset-4">
+                    {isi(sekolah.kepala, 'Nama Kepala Sekolah')}
+                  </p>
+                  {sekolah.nipKepala && <p>NIP. {sekolah.nipKepala}</p>}
+                </div>
+              </div>
             </div>
-            <div>
-              <p className="mb-16">Pengawas Ruang II</p>
-              <p className="garis-nama font-semibold underline decoration-slate-400 underline-offset-4">{pengawas2}</p>
-            </div>
-          </div>
-
-          <div className="mt-8 text-center">
-            <p>Mengetahui,</p>
-            <p className="mb-16">Kepala {namaSekolah}</p>
-            <p className="garis-nama font-semibold underline decoration-slate-400 underline-offset-4">
-              {isi(sekolah.kepala, 'Nama Kepala Sekolah')}
-            </p>
-            {sekolah.nipKepala && <p>NIP. {sekolah.nipKepala}</p>}
-          </div>
-        </div>
+          )
+        })}
       </div>
     </Layout>
   )
