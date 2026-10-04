@@ -28,10 +28,10 @@ import {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SKPenugasanTunggal — komponen bersama untuk SK penetapan/pengangkatan SATU
-// ORANG, dengan data (Nama/NIP/Pangkat-Golongan) langsung tertulis di diktum
-// "Pertama" — TANPA lampiran, TANPA honor. Formatnya mengikuti contoh SK
-// Bendahara Sekolah yang dipakai sekolah (Menimbang satu paragraf, ada
-// Memperhatikan, diktum berlabel Pertama/Kedua/Ketiga/… bukan KESATU/KEDUA).
+// ORANG, dengan data langsung tertulis di diktum "Pertama" — TANPA lampiran.
+// Formatnya mengikuti contoh SK Bendahara Sekolah yang dipakai sekolah
+// (Menimbang satu paragraf, ada Memperhatikan, diktum berlabel
+// Pertama/Kedua/Ketiga/… bukan KESATU/KEDUA).
 //
 // Dipakai oleh:
 //   • SK Bendahara BOS        (pages/SKBendaharaBOS.jsx)
@@ -61,27 +61,31 @@ import {
 //                           //   (Honor Guru/Kebersihan/Dapodik — field "Tahun pelajaran"
 //                           //   otomatis format 2026/2027, label "TAHUN PELAJARAN {tp}").
 //                           //   Penanda {tahun} dan {tp} sama-sama tersedia apa pun mode-nya.
-//     objek,                // opsional, isi penanda {objek} (mis. dipakai di kalimat
-//                           //   "…Penetapan {objek} Tahun Pelajaran {tp}.")
-//     menimbang,            // string, SATU alinea (boleh lebih dari satu baris kalau perlu, tanpa huruf a/b/c)
+//     objek,                // opsional, isi penanda {objek}
+//     menimbang,            // string, SATU alinea (boleh lebih dari satu baris)
 //     mengingat,            // string, satu butir per baris → tercetak bernomor 1. 2. 3.
-//     memperhatikan,        // string, satu baris
+//     memperhatikan,        // string, satu baris. Kosong ('') → baris Memperhatikan tidak tercetak
 //     tampilHonor,          // boolean, opsional. Kalau true, menampilkan 2 field tambahan
-//                           //   ("Honorarium per bulan", "Sumber dana") yang isinya masuk
-//                           //   ke penanda {honor} dan {sumber} di teks.
-//     sumberAwal,           // opsional, nilai awal field "Sumber dana" (hanya dipakai kalau tampilHonor)
-//     masaAwal,             // string, opsional. Kalau diisi (boleh string kosong ''),
-//                           //   menampilkan field "Masa berlaku" yang isinya masuk ke
-//                           //   penanda {masa} di teks (mis. "berlaku {masa}, dengan…").
-//     tugas,                // string, opsional, satu butir per baris. Kalau diisi, jadi
-//                           //   SATU diktum tersendiri berisi sub-poin huruf a. b. c. …
-//     tugasSetelahBaris,    // angka, opsional (default 1) — diktum "tugas" disisipkan
-//                           //   setelah baris ke-berapa dari diktumLain (0 = paling awal).
-//     diktumLain,           // string, satu butir per baris → jadi diktum Kedua, Ketiga, dst.
-//                           //   (diktum "Pertama" dibuat otomatis dari data Personel di bawah;
-//                           //   penomoran menyesuaikan otomatis kalau ada diktum "tugas" di atas)
+//                           //   ("Honorarium per bulan", "Sumber dana") → penanda {honor}, {sumber}.
+//     sumberAwal,           // opsional, nilai awal field "Sumber dana"
+//     masaAwal,             // string, opsional. Kalau diisi (boleh ''), menampilkan field
+//                           //   "Masa berlaku" yang isinya masuk ke penanda {masa}.
+//     tugas,                // string, opsional, satu butir per baris → SATU diktum a. b. c. …
+//     tugasSetelahBaris,    // angka, opsional (default 1)
+//     diktumLain,           // string, satu butir per baris → diktum Kedua, Ketiga, dst.
+//
+//     // ── BARU (opsional; tanpa ini tampilan SK lain tidak berubah) ──
+//     identitas,            // 'guru-honor' → diktum Pertama memakai format model SK Pengangkatan
+//                           //   Guru Honor: "Mengangkat dan menugaskan saudara/i … sebagai
+//                           //   {jabatan} pada {sekolah}:" + Nama, Tempat/Tanggal Lahir,
+//                           //   Pendidikan Terakhir, Jabatan/Tugas, Unit Kerja (tanpa NIP &
+//                           //   Pangkat/Golongan). Default: format lama (Nama/NIP/Pangkat-Gol).
+//     tugasAwal,            // opsional, nilai awal "Jabatan/Tugas" (mode guru-honor), mis. 'Guru Kelas'
+//     tembusan,             // string, satu butir per baris. Kalau diisi → blok "Tembusan
+//                           //   disampaikan kepada Yth.:" bernomor di bawah tanda tangan.
 //   }
-// Penanda di teks: {sekolah}, {tahun}, {tp}, {objek}, {jabatan}, {honor}, {sumber}, {masa}.
+// Penanda di teks: {sekolah}, {tahun}, {tp}, {objek}, {jabatan}, {honor}, {sumber}, {masa},
+// {tanggal} (tanggal penetapan, mis. "01 Juli 2026").
 // ─────────────────────────────────────────────────────────────────────────────
 
 const URUTAN_DIKTUM = [
@@ -109,7 +113,7 @@ function DaftarPolos({ items }) {
   ))
 }
 
-// Daftar bernomor angka (1. 2. 3.) — dipakai untuk Mengingat.
+// Daftar bernomor angka (1. 2. 3.) — dipakai untuk Mengingat & Tembusan.
 function DaftarAngka({ items }) {
   return items.map((teks, i) => (
     <div key={i} className="sk-item">
@@ -133,21 +137,15 @@ function DaftarHuruf({ items }) {
 // ".sk-print-compact" (dibungkus hanya di sekitar <LembarSK>) supaya panel
 // isian (no-print) dan komponen SK lain yang memakai CetakSK.jsx tidak
 // ikut berubah. Tujuannya: kurangi jarak antar-paragraf/baris secukupnya
-// agar BlokTTD tidak terdorong ke halaman 2.
+// agar BlokTTD (dan Tembusan) tidak terdorong ke halaman 2.
 function GayaPadatSatuHalaman() {
   return (
     <style>{`
-      /* Ukuran & jarak dasar lembar — ini yang paling besar pengaruhnya:
-         line-height 1.45 di CetakSK.jsx cukup lega untuk SK pendek dua
-         halaman (Keputusan + Lampiran), tapi kepanjangan untuk SK satu
-         halaman yang semua isinya (Menimbang…Keempat + TTD) harus muat
-         di satu lembar bersama blok tanda tangan. */
       .sk-print-compact .lembar-sk {
         font-size: 11pt;
         line-height: 1.22;
       }
 
-      /* Kop sekolah: logo dan jarak bawah dipadatkan */
       .sk-print-compact .sk-kop {
         padding-bottom: 4px;
         margin-bottom: 8px;
@@ -167,7 +165,6 @@ function GayaPadatSatuHalaman() {
         font-size: 9.5pt;
       }
 
-      /* Judul SK (Surat Keputusan…/Nomor/Tentang/…) */
       .sk-print-compact .sk-judul {
         margin-bottom: 6px;
       }
@@ -178,12 +175,10 @@ function GayaPadatSatuHalaman() {
         margin: 2px 0;
       }
 
-      /* "Kepala …," dan "M E M U T U S K A N" */
       .sk-print-compact .sk-tengah {
         margin: 4px 0;
       }
 
-      /* Tabel Menimbang/Mengingat/Memperhatikan dan Menetapkan/Pertama…Keempat */
       .sk-print-compact table.sk-def {
         margin-top: 3px;
         margin-bottom: 3px;
@@ -199,7 +194,6 @@ function GayaPadatSatuHalaman() {
         margin: 0;
       }
 
-      /* Tabel Nama/NIP/Pangkat-Golongan di dalam diktum Pertama (TabelData) */
       .sk-print-compact .sk-data {
         margin: 2px 0 4px 8mm;
       }
@@ -207,8 +201,6 @@ function GayaPadatSatuHalaman() {
         padding: 0;
       }
 
-      /* Blok tanda tangan — ruang kosong untuk ttd fisik dipangkas secukupnya,
-         masih cukup untuk tanda tangan tapi tidak makan banyak halaman */
       .sk-print-compact .sk-ttd {
         margin-top: 8px;
       }
@@ -217,6 +209,16 @@ function GayaPadatSatuHalaman() {
       }
       .sk-print-compact .sk-ttd .ruang {
         height: 14mm;
+      }
+
+      /* Tembusan (opsional) — lebih kecil & rapat supaya tetap satu halaman */
+      .sk-print-compact .sk-tembusan {
+        margin-top: 6px;
+        font-size: 9.5pt;
+        line-height: 1.15;
+      }
+      .sk-print-compact .sk-tembusan p {
+        margin: 0;
       }
     `}</style>
   )
@@ -228,6 +230,7 @@ export default function SKPenugasanTunggal({ konfig }) {
   const sudahMuat = useRef(false)
 
   const periodePelajaran = konfig.tipePeriode === 'pelajaran'
+  const modeGuruHonor = konfig.identitas === 'guru-honor'
 
   const [sekolah, setSekolah] = useState(SEKOLAH_KOSONG)
   const [sk, setSk] = useState({
@@ -244,10 +247,20 @@ export default function SKPenugasanTunggal({ konfig }) {
   const [honor, setHonor] = useState('')
   const [sumber, setSumber] = useState(konfig.sumberAwal || '')
   const [masa, setMasa] = useState(konfig.masaAwal || '')
+  const [tembusan, setTembusan] = useState(konfig.tembusan || '')
 
   const [guru, setGuru] = useState([])
-  const [orang, setOrang] = useState({ guruId: '', nama: '', nip: '', pangkatGol: '' })
+  const [orang, setOrang] = useState({
+    guruId: '',
+    nama: '',
+    nip: '',
+    pangkatGol: '',
+    ttl: '', // khusus mode guru-honor: "Tempat, Tanggal Lahir"
+    pendidikan: '', // khusus mode guru-honor
+  })
   const [jabatanTugas, setJabatanTugas] = useState(konfig.jabatan || '')
+  const [tugasGuru, setTugasGuru] = useState(konfig.tugasAwal || '') // "Jabatan/Tugas" mode guru-honor
+  const [unitKerja, setUnitKerja] = useState('') // kosong → otomatis nama sekolah
 
   const [memuat, setMemuat] = useState(true)
   const [galat, setGalat] = useState('')
@@ -291,17 +304,34 @@ export default function SKPenugasanTunggal({ konfig }) {
 
   function pilihGuru(guruId) {
     const g = guru.find((x) => x.id === guruId)
+    // Tempat/tanggal lahir & pendidikan: nama kolom di tabel guru belum dipastikan,
+    // jadi dicoba beberapa kemungkinan; kalau kosong tinggal diketik manual.
+    let tglLahir = ''
+    try {
+      tglLahir = g?.tanggal_lahir ? formatTanggalSK(g.tanggal_lahir) : ''
+    } catch {
+      tglLahir = g?.tanggal_lahir || ''
+    }
     setOrang({
       guruId,
       nama: g?.nama_lengkap || '',
       nip: g?.nip || '',
       pangkatGol: g?.pangkat_golongan || '',
+      ttl: [g?.tempat_lahir, tglLahir].filter(Boolean).join(', '),
+      pendidikan: g?.pendidikan_terakhir || g?.pendidikan || '',
     })
   }
 
   // ── Susun isi dokumen ──
   const namaSekolah = isi(sekolah.nama, 'NAMA SEKOLAH')
   const tahun = isi(sk.tahun)
+
+  let tanggalTeks = ''
+  try {
+    tanggalTeks = formatTanggalSK(sk.tanggal)
+  } catch {
+    tanggalTeks = sk.tanggal || ''
+  }
 
   const nilaiDasar = {
     sekolah: namaSekolah,
@@ -311,10 +341,10 @@ export default function SKPenugasanTunggal({ konfig }) {
     jabatan: isi(jabatanTugas),
     honor: isi(honor),
     sumber: isi(sumber, konfig.sumberAwal || '…………'),
+    tanggal: tanggalTeks,
   }
-  // {masa} boleh berisi penanda lain (mis. "selama Tahun Pelajaran {tp}"), jadi
-  // diproses dulu dengan nilaiDasar sebelum dipakai untuk menggantikan {masa}
-  // di teks menimbang/mengingat/diktum.
+  // {masa} boleh berisi penanda lain (mis. "untuk Tahun Pelajaran {tp}"), jadi
+  // diproses dulu dengan nilaiDasar sebelum dipakai untuk menggantikan {masa}.
   const nilai = { ...nilaiDasar, masa: isiTemplate(masa, nilaiDasar) }
 
   const labelPeriode = periodePelajaran ? 'TAHUN PELAJARAN' : 'TAHUN ANGGARAN'
@@ -322,6 +352,7 @@ export default function SKPenugasanTunggal({ konfig }) {
   const daftarMenimbang = pecahBaris(menimbang).map((t) => isiTemplate(t, nilai))
   const daftarMengingat = pecahBaris(mengingat).map((t) => isiTemplate(t, nilai))
   const teksMemperhatikan = isiTemplate(memperhatikan, nilai)
+  const daftarTembusan = pecahBaris(tembusan).map((t) => isiTemplate(t, nilai))
 
   // Gabungkan diktumLain (teks biasa) dengan diktum "tugas" (sub-list huruf a/b/c),
   // disisipkan pada posisi konfig.tugasSetelahBaris (default: setelah baris pertama).
@@ -399,21 +430,41 @@ export default function SKPenugasanTunggal({ konfig }) {
             <Field label="Nama">
               <input className={inputCls} value={orang.nama} onChange={ubahOrang('nama')} />
             </Field>
-            <Field label="NIP (kosongkan kalau tidak ada)">
-              <input className={inputCls} value={orang.nip} onChange={ubahOrang('nip')} inputMode="numeric" />
-            </Field>
-            <Field label="Pangkat/Golongan">
-              <input className={inputCls} value={orang.pangkatGol} onChange={ubahOrang('pangkatGol')} placeholder="mis. Pengatur Tingkat I, II/c" />
-            </Field>
-            <Field label="Ditunjuk menjadi (jabatan/tugas)">
-              <input className={inputCls} value={jabatanTugas} onChange={(e) => setJabatanTugas(e.target.value)} placeholder={konfig.jabatan} />
-            </Field>
+
+            {modeGuruHonor ? (
+              <>
+                <Field label="Tempat, tanggal lahir">
+                  <input className={inputCls} value={orang.ttl} onChange={ubahOrang('ttl')} placeholder="mis. Lor-Lor, 23 April 1986" />
+                </Field>
+                <Field label="Pendidikan terakhir">
+                  <input className={inputCls} value={orang.pendidikan} onChange={ubahOrang('pendidikan')} placeholder="mis. S1 - PGSD" />
+                </Field>
+                <Field label="Jabatan/Tugas">
+                  <input className={inputCls} value={tugasGuru} onChange={(e) => setTugasGuru(e.target.value)} placeholder="mis. Guru Kelas 1" />
+                </Field>
+                <Field label="Unit kerja (kosong = nama sekolah)" className="sm:col-span-2">
+                  <input className={inputCls} value={unitKerja} onChange={(e) => setUnitKerja(e.target.value)} placeholder={sekolah.nama || 'Nama sekolah, kabupaten'} />
+                </Field>
+              </>
+            ) : (
+              <>
+                <Field label="NIP (kosongkan kalau tidak ada)">
+                  <input className={inputCls} value={orang.nip} onChange={ubahOrang('nip')} inputMode="numeric" />
+                </Field>
+                <Field label="Pangkat/Golongan">
+                  <input className={inputCls} value={orang.pangkatGol} onChange={ubahOrang('pangkatGol')} placeholder="mis. Pengatur Tingkat I, II/c" />
+                </Field>
+                <Field label="Ditunjuk menjadi (jabatan/tugas)">
+                  <input className={inputCls} value={jabatanTugas} onChange={(e) => setJabatanTugas(e.target.value)} placeholder={konfig.jabatan} />
+                </Field>
+              </>
+            )}
           </div>
         </Bagian>
 
         <Bagian
           judul="Isi keputusan"
-          keterangan="Menimbang: satu alinea (tanpa huruf a/b/c). Mengingat & diktum lain: satu baris = satu butir. Penanda otomatis: {sekolah}, {tahun}/{tp}, {objek}, {jabatan}, {honor}, {sumber}, {masa}."
+          keterangan="Menimbang: satu alinea (tanpa huruf a/b/c). Mengingat & diktum lain: satu baris = satu butir. Penanda otomatis: {sekolah}, {tahun}/{tp}, {objek}, {jabatan}, {honor}, {sumber}, {masa}, {tanggal}."
         >
           <div className="grid grid-cols-1 gap-3">
             <Field label="Menimbang">
@@ -422,7 +473,7 @@ export default function SKPenugasanTunggal({ konfig }) {
             <Field label="Mengingat">
               <textarea className={inputCls} rows={6} value={mengingat} onChange={(e) => setMengingat(e.target.value)} />
             </Field>
-            <Field label="Memperhatikan">
+            <Field label="Memperhatikan (kosongkan kalau tidak dipakai)">
               <input className={inputCls} value={memperhatikan} onChange={(e) => setMemperhatikan(e.target.value)} />
             </Field>
 
@@ -457,6 +508,12 @@ export default function SKPenugasanTunggal({ konfig }) {
             <Field label="Diktum Kedua dan seterusnya (diktum Pertama dibuat otomatis dari data Personel; penomoran menyesuaikan otomatis kalau ada Uraian tugas di atas)">
               <textarea className={inputCls} rows={6} value={diktumLain} onChange={(e) => setDiktumLain(e.target.value)} />
             </Field>
+
+            {konfig.tembusan !== undefined && (
+              <Field label="Tembusan (satu baris = satu butir; kosongkan kalau tidak dipakai)">
+                <textarea className={inputCls} rows={4} value={tembusan} onChange={(e) => setTembusan(e.target.value)} />
+              </Field>
+            )}
           </div>
         </Bagian>
 
@@ -546,17 +603,36 @@ export default function SKPenugasanTunggal({ konfig }) {
                   <td className="k">Pertama</td>
                   <td className="t">:</td>
                   <td className="sk-justify">
-                    <p style={{ margin: 0 }}>Mengangkat Saudara :</p>
-                    <TabelData
-                      baris={[
-                        ['Nama', namaOrang],
-                        ['NIP', nipOrang],
-                        ['Pangkat/Golongan', pangkatGolOrang],
-                      ]}
-                    />
-                    <p style={{ margin: 0 }}>
-                      Untuk menjadi {isi(jabatanTugas)} pada {namaSekolah}.
-                    </p>
+                    {modeGuruHonor ? (
+                      <>
+                        <p style={{ margin: 0 }}>
+                          Mengangkat dan menugaskan saudara/i yang namanya tersebut di bawah ini sebagai {isi(jabatanTugas)} pada {namaSekolah}:
+                        </p>
+                        <TabelData
+                          baris={[
+                            ['Nama', namaOrang],
+                            ['Tempat, Tanggal Lahir', isi(orang.ttl)],
+                            ['Pendidikan Terakhir', isi(orang.pendidikan)],
+                            ['Jabatan/Tugas', isi(tugasGuru)],
+                            ['Unit Kerja', unitKerja || namaSekolah],
+                          ]}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <p style={{ margin: 0 }}>Mengangkat Saudara :</p>
+                        <TabelData
+                          baris={[
+                            ['Nama', namaOrang],
+                            ['NIP', nipOrang],
+                            ['Pangkat/Golongan', pangkatGolOrang],
+                          ]}
+                        />
+                        <p style={{ margin: 0 }}>
+                          Untuk menjadi {isi(jabatanTugas)} pada {namaSekolah}.
+                        </p>
+                      </>
+                    )}
                   </td>
                 </tr>
                 {entriesDiktum.map((entri, i) => (
@@ -572,6 +648,13 @@ export default function SKPenugasanTunggal({ konfig }) {
             </table>
 
             <BlokTTD sk={skCetak} sekolah={sekolah} />
+
+            {daftarTembusan.length > 0 && (
+              <div className="sk-tembusan">
+                <p>Tembusan disampaikan kepada Yth.:</p>
+                <DaftarAngka items={daftarTembusan} />
+              </div>
+            )}
           </LembarSK>
         </div>
       </AreaLembar>
