@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, FileText, Menu, X } from 'lucide-react'
 import SampulLaporan, { JENIS_LAPORAN_PRESET } from '../components/SampulLaporan'
@@ -6,11 +6,7 @@ import { CONFIG_INSTANSI } from '../lib/identitasInstansi'
 import { useAuth } from '../lib/AuthContext'
 
 // --- Daftar menu jenis laporan PER TIPE TENANT ------------------------------
-// Sekolah  : menu lengkap seperti sebelumnya (BOS, 8355, semester, dst).
-// Kantor / Puskesmas : menu umum yang relevan untuk instansi non-sekolah.
-// Cukup tambah entri di sini untuk varian baru — tidak perlu file/route baru.
-// Teks jenisLaporanAwal HARUS sama persis dengan salah satu isi
-// CONFIG_INSTANSI[tenant].jenisLaporan (src/lib/identitasInstansi.js).
+// (Isi menu tidak berubah dari versi sebelumnya.)
 
 const MENU_SEKOLAH = [
   {
@@ -90,8 +86,6 @@ const MENU_SEKOLAH = [
   },
 ]
 
-// Menu umum untuk tenant non-sekolah — dibangun dari daftar jenis laporan di
-// CONFIG_INSTANSI supaya teks selalu sinkron.
 function buatMenuUmum(tenant) {
   const daftar = CONFIG_INSTANSI[tenant].jenisLaporan
   const [bulanan, tahunan, keuangan, inventaris, kegiatan] = daftar
@@ -121,9 +115,6 @@ const MENU_PER_TENANT = {
   puskesmas: buatMenuUmum('puskesmas'),
 }
 
-// Alias supaya link lama (?jenis=semester, ?jenis=8355 dari redirect route
-// /cetak-sampul-semester dan /cetak-sampul-8355) tetap mengarah ke menu yang
-// benar. Hanya berlaku untuk tenant sekolah; tenant lain jatuh ke menu pertama.
 const ALIAS_JENIS = {
   semester: 'semester',
   8355: '8355',
@@ -149,31 +140,54 @@ export default function CetakSampulHub() {
     [activeKey, MENU_SAMPUL]
   )
 
+  // Saat drawer terbuka di HP: kunci scroll halaman di belakangnya
+  // dan izinkan tombol Back/Escape untuk menutup.
+  useEffect(() => {
+    if (!sidebarTerbuka) return
+    const overflowLama = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const onKey = (e) => e.key === 'Escape' && setSidebarTerbuka(false)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = overflowLama
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [sidebarTerbuka])
+
   function pilihMenu(key) {
     setActiveKey(key)
     setSidebarTerbuka(false)
+    window.scrollTo({ top: 0 }) // form baru mulai dari atas
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 flex">
-      {/* Sidebar menu — hilang saat dicetak */}
+    // dvh = tinggi layar yang sebenarnya di Chrome Android (address bar turun/naik)
+    <div className="min-h-[100dvh] bg-slate-100 flex">
+      {/* Sidebar / drawer */}
       <aside
-        className={`no-print fixed inset-y-0 left-0 z-30 w-72 bg-white border-r border-slate-200 flex flex-col transform transition-transform duration-200
-          ${sidebarTerbuka ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:static md:z-auto`}
+        className={`no-print print:hidden fixed inset-y-0 left-0 z-30 h-[100dvh] w-72 max-w-[85vw]
+          bg-white border-r border-slate-200 flex flex-col shadow-xl md:shadow-none
+          transform transition-transform duration-200 ease-out
+          ${sidebarTerbuka ? 'translate-x-0' : '-translate-x-full'}
+          md:translate-x-0 md:static md:z-auto md:h-auto md:min-h-[100dvh] md:shrink-0`}
+        aria-hidden={!sidebarTerbuka ? undefined : false}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+        <div
+          className="flex items-center justify-between px-4 py-3 border-b border-slate-200"
+          style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
+        >
           <button
             onClick={() => navigate(-1)}
-            className="flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-800"
+            className="flex items-center gap-1.5 min-h-[44px] pr-3 text-sm font-medium text-slate-600 hover:text-slate-800 active:text-slate-900"
           >
-            <ArrowLeft size={16} /> Kembali
+            <ArrowLeft size={18} /> Kembali
           </button>
           <button
-            className="md:hidden text-slate-500"
+            className="md:hidden flex items-center justify-center w-11 h-11 -mr-2 rounded-full text-slate-500 active:bg-slate-100"
             onClick={() => setSidebarTerbuka(false)}
             aria-label="Tutup menu"
           >
-            <X size={18} />
+            <X size={20} />
           </button>
         </div>
 
@@ -181,20 +195,24 @@ export default function CetakSampulHub() {
           Jenis Sampul Laporan
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-2 pb-4">
+        <nav
+          className="flex-1 overflow-y-auto overscroll-contain px-2 pb-4"
+          style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+        >
           {MENU_SAMPUL.map((menu) => (
             <button
               key={menu.key}
               onClick={() => pilihMenu(menu.key)}
-              className={`w-full text-left flex items-start gap-2 px-3 py-2.5 rounded-lg text-sm mb-0.5 transition-colors
+              aria-current={menu.key === activeKey ? 'page' : undefined}
+              className={`w-full text-left flex items-start gap-2.5 px-3 py-3 min-h-[44px] rounded-lg text-sm mb-0.5 transition-colors
                 ${
                   menu.key === activeKey
                     ? 'bg-blue-50 text-blue-700 font-semibold'
-                    : 'text-slate-600 hover:bg-slate-50'
+                    : 'text-slate-600 hover:bg-slate-50 active:bg-slate-100'
                 }`}
             >
               <FileText size={16} className="shrink-0 mt-0.5" />
-              <span>
+              <span className="min-w-0 break-words">
                 {menu.label}
                 {menu.keterangan && (
                   <span className="block text-xs font-normal text-slate-400 mt-0.5">
@@ -207,28 +225,32 @@ export default function CetakSampulHub() {
         </nav>
       </aside>
 
-      {/* Overlay saat sidebar terbuka di mobile */}
-      {sidebarTerbuka && (
-        <div
-          className="no-print fixed inset-0 z-20 bg-black/30 md:hidden"
-          onClick={() => setSidebarTerbuka(false)}
-        />
-      )}
+      {/* Overlay di belakang drawer (mobile) */}
+      <div
+        className={`no-print print:hidden fixed inset-0 z-20 bg-black/40 md:hidden transition-opacity duration-200
+          ${sidebarTerbuka ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        onClick={() => setSidebarTerbuka(false)}
+        aria-hidden="true"
+      />
 
-      {/* Konten — tombol buka menu (mobile) + form & pratinjau sampul */}
+      {/* Konten */}
       <div className="flex-1 min-w-0">
-        <div className="no-print md:hidden sticky top-0 z-10 bg-white border-b border-slate-200 px-4 py-2.5">
+        {/* Bar atas mobile: tombol menu + nama jenis laporan yang aktif */}
+        <div
+          className="no-print print:hidden md:hidden sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-slate-200 px-3 pb-2"
+          style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}
+        >
           <button
             onClick={() => setSidebarTerbuka(true)}
-            className="flex items-center gap-1.5 text-sm font-medium text-slate-600"
+            className="flex items-center gap-2 w-full min-h-[44px] text-left text-sm font-medium text-slate-700 active:text-slate-900"
+            aria-label="Buka menu jenis laporan"
           >
-            <Menu size={18} /> Pilih Jenis Laporan
+            <Menu size={20} className="shrink-0" />
+            <span className="truncate">{menuAktif.label}</span>
           </button>
         </div>
 
-        {/* key memastikan semua state form di SampulLaporan direset bersih
-            setiap kali pindah menu (dan tenant), bukan tercampur dari menu
-            sebelumnya. */}
+        {/* key: reset state form setiap pindah menu/tenant */}
         <SampulLaporan key={`${tenant}-${activeKey}`} {...menuAktif.props} />
       </div>
     </div>
