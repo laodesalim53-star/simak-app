@@ -16,6 +16,7 @@ import {
   FileSignature,
   FileCheck2,
   UserCheck,
+  BarChart3,
 } from 'lucide-react'
 import Layout from '../components/Layout'
 import { PALET_WARNA, BatikOverlay, IsiKartuHub } from '../components/hub'
@@ -102,6 +103,15 @@ const daftarDokumen = [
     warna: 'purple',
     siap: true,
   },
+  {
+  id: 'laporan-asesmen',
+  judul: 'Laporan Asesmen Sekolah',
+  deskripsi: 'Laporan asesmen Kelas 6 dalam empat lembar: statistik nilai, klasifikasi, kelulusan, dan laporan penyelenggara.',
+  icon: BarChart3,
+  path: '/gudang-sk/portal-ujian/laporan-asesmen',
+  warna: 'teal',
+  siap: true,
+},
 ]
 
 export default function PortalUjian() {
