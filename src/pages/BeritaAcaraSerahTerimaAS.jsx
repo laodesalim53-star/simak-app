@@ -14,15 +14,22 @@
 // - Logo kop: logo kabupaten (kiri) dan logo sekolah (kanan) diambil otomatis
 //   dari profil_sekolah (kolom logo_kabupaten_path & logo_path, bucket storage
 //   'profil-sekolah'). Kalau belum diunggah di Profil Sekolah, sisi itu kosong.
+// - JADWAL PENGAWAS (BARU): Tanggal, Pihak Pertama (= Pengawas I) dan Pihak
+//   Kedua (= Pengawas II) diisi otomatis dari halaman "Jadwal Pengawas Ruang"
+//   (lib/jadwalPengawasStore, tersimpan di Supabase). Saat dibuka, sesi hari
+//   ini (atau sesi terdekat berikutnya) dipilih otomatis; sesi lain lewat
+//   dropdown "Ambil dari jadwal pengawas". Semua tetap bisa diganti manual,
+//   termasuk menukar pihak pertama/kedua.
 // - Bagian saksi-saksi pada dokumen contoh dibiarkan kosong (diisi tangan),
 //   jadi di sini saksi boleh dipilih dari data guru ATAU dibiarkan kosong.
 // - sekolahId diambil dari useAuth().sekolahId, dan kalau tidak tersedia
 //   memakai useAuth().profil.sekolah_id (dua-duanya dicoba supaya aman).
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, Printer } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
+import { muatJadwalPengawas, ratakanSesiJadwal } from '../lib/jadwalPengawasStore'
 import Layout from '../components/Layout'
 import {
   BagianSK as Bagian,
@@ -71,6 +78,17 @@ function urlLogo(path) {
   return data?.publicUrl || ''
 }
 
+// "Senin, 05 Okt 2026" untuk label dropdown jadwal.
+function labelTanggal(iso) {
+  if (!iso) return '…'
+  return new Date(`${iso}T00:00:00`).toLocaleDateString('id-ID', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  })
+}
+
 export default function BeritaAcaraSerahTerimaAS() {
   // Aman untuk dua bentuk AuthContext: ada `sekolahId` langsung, atau hanya
   // lewat profil.sekolah_id (seperti di ProfilSekolah.jsx).
@@ -84,6 +102,11 @@ export default function BeritaAcaraSerahTerimaAS() {
   const [galat, setGalat] = useState('')
   const [logoSekolahUrl, setLogoSekolahUrl] = useState('')
   const [logoKabupatenUrl, setLogoKabupatenUrl] = useState('')
+
+  // --- Jadwal pengawas (dari halaman Jadwal Pengawas Ruang) ---
+  const [sesiJadwal, setSesiJadwal] = useState([])
+  const [sesiTerpilih, setSesiTerpilih] = useState('')
+  const sudahOtomatis = useRef(false)
 
   const [form, setForm] = useState({
     namaPekerjaan: 'Asesmen Sumatif',
@@ -146,6 +169,18 @@ export default function BeritaAcaraSerahTerimaAS() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sekolahId])
 
+  // Baca jadwal pengawas yang tersimpan dari halaman Jadwal Pengawas Ruang.
+  useEffect(() => {
+    let batal = false
+    sudahOtomatis.current = false
+    if (!sekolahId) return undefined
+    ;(async () => {
+      const t = await muatJadwalPengawas(sekolahId)
+      if (!batal) setSesiJadwal(ratakanSesiJadwal(t))
+    })()
+    return () => { batal = true }
+  }, [sekolahId])
+
   const ubah = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
   const guruPerId = useMemo(() => {
@@ -153,6 +188,42 @@ export default function BeritaAcaraSerahTerimaAS() {
     guru.forEach((g) => { m[g.id] = g })
     return m
   }, [guru])
+
+  // Pasang data satu sesi jadwal ke form (tanggal, pihak pertama = Pengawas I,
+  // pihak kedua = Pengawas II).
+  // timpa=false (otomatis saat dibuka): hanya mengisi kolom yang masih kosong.
+  // timpa=true (pilihan manual di dropdown): menggantikan isian sebelumnya.
+  function terapkanSesi(s, { timpa }) {
+    const pakai = (lama, baru) => (timpa ? baru : lama || baru)
+    setForm((f) => ({
+      ...f,
+      tanggal: s.tanggal || f.tanggal,
+      pihak1Id: pakai(f.pihak1Id, guruPerId[s.guru1Id] ? s.guru1Id : ''),
+      pihak2Id: pakai(f.pihak2Id, guruPerId[s.guru2Id] ? s.guru2Id : ''),
+    }))
+  }
+
+  // Otomatis: setelah jadwal & data guru termuat, pilih sesi hari ini (atau sesi
+  // terdekat berikutnya, atau yang pertama) dan isikan ke form sekali saja.
+  useEffect(() => {
+    if (sudahOtomatis.current || sesiJadwal.length === 0 || guru.length === 0) return
+    sudahOtomatis.current = true
+    const hariIni = isoHariIni()
+    const pilih =
+      sesiJadwal.find((s) => s.tanggal === hariIni) ||
+      sesiJadwal.find((s) => s.tanggal >= hariIni) ||
+      sesiJadwal[0]
+    setSesiTerpilih(pilih.key)
+    terapkanSesi(pilih, { timpa: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sesiJadwal, guru])
+
+  const pilihSesi = (e) => {
+    const key = e.target.value
+    setSesiTerpilih(key)
+    const s = sesiJadwal.find((x) => x.key === key)
+    if (s) terapkanSesi(s, { timpa: true })
+  }
 
   // Pihak 2 tidak boleh sama dengan pihak 1, begitu juga saksi 1 & 2.
   const pilihanPihak2 = useMemo(() => guru.filter((g) => g.id !== form.pihak1Id), [guru, form.pihak1Id])
@@ -235,8 +306,30 @@ export default function BeritaAcaraSerahTerimaAS() {
           </div>
         </Bagian>
 
-        <Bagian judul="Waktu & tempat">
+        <Bagian
+          judul="Waktu & tempat"
+          keterangan="Tanggal terisi dari Jadwal Pengawas Ruang; pilih sesi lain di dropdown atau ubah manual."
+        >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="sm:col-span-2">
+              <Field label="Ambil dari jadwal pengawas">
+                {sesiJadwal.length === 0 ? (
+                  <p className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500">
+                    Belum ada jadwal pengawas tersimpan. Isi dulu di halaman Jadwal Pengawas Ruang, lalu buka
+                    halaman ini lagi.
+                  </p>
+                ) : (
+                  <select className={inputCls} value={sesiTerpilih} onChange={pilihSesi}>
+                    <option value="">— pilih sesi —</option>
+                    {sesiJadwal.map((s) => (
+                      <option key={s.key} value={s.key}>
+                        {labelTanggal(s.tanggal)} • {s.waktu || '…'} • {s.mapel || '(mapel belum diisi)'}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </Field>
+            </div>
             <Field label="Tanggal">
               <input type="date" className={inputCls} value={form.tanggal} onChange={ubah('tanggal')} />
             </Field>
@@ -249,7 +342,7 @@ export default function BeritaAcaraSerahTerimaAS() {
           </div>
         </Bagian>
 
-        <Bagian judul="Pihak pertama (menyerahkan)">
+        <Bagian judul="Pihak pertama (menyerahkan)" keterangan="Terisi otomatis dari Pengawas I pada sesi jadwal yang dipilih; bisa diganti.">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Nama">
               <select className={inputCls} value={form.pihak1Id} onChange={ubah('pihak1Id')}>
@@ -265,7 +358,7 @@ export default function BeritaAcaraSerahTerimaAS() {
           </div>
         </Bagian>
 
-        <Bagian judul="Pihak kedua (menerima)">
+        <Bagian judul="Pihak kedua (menerima)" keterangan="Terisi otomatis dari Pengawas II pada sesi jadwal yang dipilih; bisa diganti.">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Nama">
               <select className={inputCls} value={form.pihak2Id} onChange={ubah('pihak2Id')}>
