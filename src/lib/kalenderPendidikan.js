@@ -55,20 +55,25 @@ export const JML_HBE = {
   juni_2027: 16,
 }
 
-// Kode keterangan (sesuai legenda "KETERANGAN" di dokumen) + warna badge Tailwind
+// Kode keterangan (sesuai legenda "KETERANGAN" di dokumen) + warna badge Tailwind.
+// Setiap kode punya warna SENDIRI supaya tidak membingungkan:
+//   merah    = M (Minggu)            merah tua  = LU (Libur Umum)    pink = CB (Cuti Bersama)
+//   hijau    = M+ (masuk sekolah)    ungu       = ATS                biru = ASAS · indigo = ASKK
+//   oranye   = R (Remedial)          cokelat    = TKA1/TKA2          teal = AS-SD
+//   biru muda = LP (Laporan)         kuning     = LS (Libur Semester) — hanya satu yang kuning
 export const KETERANGAN = {
   M: { label: 'Hari Minggu', dot: 'bg-red-500', badge: 'bg-red-500 text-white' },
   'M+': { label: 'Hari Pertama Masuk Sekolah / MPLS', dot: 'bg-emerald-500', badge: 'bg-emerald-500 text-white' },
-  LU: { label: 'Libur Umum', dot: 'bg-red-500', badge: 'bg-red-500 text-white' },
+  LU: { label: 'Libur Umum', dot: 'bg-red-800', badge: 'bg-red-800 text-white' },
+  CB: { label: 'Cuti Bersama', dot: 'bg-pink-500', badge: 'bg-pink-500 text-white' },
   ATS: { label: 'Asesmen Tengah Semester', dot: 'bg-purple-500', badge: 'bg-purple-500 text-white' },
-  ASAS: { label: 'Asesmen Sumatif Akhir Semester', dot: 'bg-blue-500', badge: 'bg-blue-500 text-white' },
-  ASKK: { label: 'Asesmen Sumatif Kenaikan Kelas', dot: 'bg-blue-500', badge: 'bg-blue-500 text-white' },
+  ASAS: { label: 'Asesmen Sumatif Akhir Semester', dot: 'bg-blue-600', badge: 'bg-blue-600 text-white' },
+  ASKK: { label: 'Asesmen Sumatif Kenaikan Kelas', dot: 'bg-indigo-700', badge: 'bg-indigo-700 text-white' },
   R: { label: 'Remedial', dot: 'bg-orange-500', badge: 'bg-orange-500 text-white' },
   TKA1: { label: 'TKA Tahap 1', dot: 'bg-amber-800', badge: 'bg-amber-800 text-white' },
   TKA2: { label: 'TKA Tahap 2', dot: 'bg-amber-800', badge: 'bg-amber-800 text-white' },
   'AS-SD': { label: 'Asesmen Sekolah (AS-SD)', dot: 'bg-teal-600', badge: 'bg-teal-600 text-white' },
-  LP: { label: 'Pembagian Laporan Pendidikan', dot: 'bg-yellow-400', badge: 'bg-yellow-400 text-slate-900' },
-  CB: { label: 'Cuti Bersama', dot: 'bg-red-500', badge: 'bg-red-500 text-white' },
+  LP: { label: 'Pembagian Laporan Pendidikan', dot: 'bg-sky-400', badge: 'bg-sky-400 text-slate-900' },
   LS: { label: 'Libur Semester', dot: 'bg-yellow-400', badge: 'bg-yellow-400 text-slate-900' },
 }
 
