@@ -1,13 +1,24 @@
 // src/pages/BeritaAcaraUjian.jsx
 //
-// Berita acara pelaksanaan ujian per ruang. Ruang ujian = kelas VI (dari
-// ambilGuruDanKelas), pengawas = guru aktif (dari ambilGuruDanKelas), nama
-// sekolah & tempat = ambilProfilSekolah. Jumlah peserta & catatan kejadian
-// tetap manual karena aplikasi belum punya tabel peserta/siswa.
+// Berita acara pelaksanaan ujian per ruang, otomatis sinkron dengan halaman lain:
+// - Ruang ujian & jumlah peserta terdaftar: dari tabel `siswa` (Kelas 6, sudah
+//   punya no_peserta_ujian, dikelompokkan per `ruang_ujian`) — logika sama
+//   dengan DaftarHadirSiswaUjian.jsx / KartuPesertaUjian.jsx.
+// - Tanggal, mata pelajaran, Pengawas I & II: dari Jadwal Pengawas Ruang
+//   (lib/jadwalPengawasStore, tersimpan di Supabase). Saat dibuka, sesi hari ini
+//   (atau sesi terdekat berikutnya) dipilih otomatis; sesi lain bisa dipilih di
+//   dropdown "Ambil dari jadwal pengawas".
+// - Nama sekolah, tempat, Kepala Sekolah & NIP: ambilProfilSekolah.
+//
+// Semua kolom tetap bisa diubah manual. Jumlah terdaftar dan hadir terisi otomatis
+// (hadir dianggap = terdaftar); ketik angka lain bila ada yang tidak hadir,
+// kosongkan lagi untuk kembali ke otomatis. Catatan kejadian tetap manual.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, Printer } from 'lucide-react'
+import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
+import { muatJadwalPengawas, ratakanSesiJadwal } from '../lib/jadwalPengawasStore'
 import Layout from '../components/Layout'
 import {
   BagianSK as Bagian,
@@ -22,10 +33,22 @@ import {
   urutkanGuru,
 } from '../components/CetakSK'
 
-// Sesuaikan kalau format `tingkat` di tabel kelas Anda berbeda (mis. "Kelas 6").
-function isKelasEnam(k) {
-  const t = String(k?.tingkat ?? '').trim().toUpperCase()
-  return t === '6' || t === 'VI'
+// Kelas 6 bisa ditulis dengan angka ("6A", "Kelas 6") atau angka Romawi
+// ("VIA", "Kelas VI"), jadi kecocokan dicek dari kedua kemungkinan itu.
+function isKelas6(namaKelas) {
+  const nama = (namaKelas || '').trim().toUpperCase()
+  if (!nama) return false
+  if (/^6\b/.test(nama)) return true
+  if (/KELAS\s*6\b/.test(nama)) return true
+  if (/^VI([^I]|$)/.test(nama)) return true
+  if (/KELAS\s*VI([^I]|$)/.test(nama)) return true
+  return false
+}
+
+// Hanya siswa yang No. Peserta Ujian-nya sudah terisi yang dianggap peserta resmi.
+function sudahTerdaftarPeserta(siswa) {
+  const nilai = siswa?.no_peserta_ujian
+  return nilai !== null && nilai !== undefined && String(nilai).trim() !== ''
 }
 
 // Format lengkap dengan nama hari: "Rabu, 23 September 2026".
@@ -39,22 +62,45 @@ function formatHariTanggal(iso) {
   })
 }
 
+// "Senin, 05 Okt 2026" untuk label dropdown jadwal.
+function labelTanggal(iso) {
+  if (!iso) return '…'
+  return new Date(`${iso}T00:00:00`).toLocaleDateString('id-ID', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  })
+}
+
 export default function BeritaAcaraUjian() {
-  const { sekolahId } = useAuth()
+  // Aman untuk dua bentuk AuthContext: `sekolahId` langsung, atau lewat profil.sekolah_id.
+  const { sekolahId: sekolahIdCtx, profil } = useAuth()
+  const sekolahId = sekolahIdCtx || profil?.sekolah_id
 
   const [sekolah, setSekolah] = useState(SEKOLAH_KOSONG)
   const [tempatSekolah, setTempatSekolah] = useState('')
   const [guru, setGuru] = useState([])
-  const [kelasEnam, setKelasEnam] = useState([])
   const [memuat, setMemuat] = useState(true)
   const [galat, setGalat] = useState('')
+
+  // --- Peserta (dari tabel siswa) ---
+  const [siswaSemua, setSiswaSemua] = useState([])
+  const [memuatSiswa, setMemuatSiswa] = useState(true)
+  const [galatSiswa, setGalatSiswa] = useState('')
+
+  // --- Jadwal pengawas (dari halaman Jadwal Pengawas Ruang) ---
+  const [sesiJadwal, setSesiJadwal] = useState([])
+  const [sesiTerpilih, setSesiTerpilih] = useState('')
+  const sudahOtomatis = useRef(false)
 
   const [form, setForm] = useState({
     mataPelajaran: 'Asesmen Sumatif',
     tanggal: isoHariIni(),
-    ruangId: '',
-    jumlahPeserta: '',
-    jumlahHadir: '',
+    ruang: '',
+    // Kosong = ikut angka otomatis dari data siswa; diisi = angka manual.
+    jumlahPesertaManual: '',
+    jumlahHadirManual: '',
     pengawas1Id: '',
     pengawas2Id: '',
     catatanKejadian: 'Ujian berlangsung tertib, tidak ada kejadian khusus.',
@@ -72,9 +118,6 @@ export default function BeritaAcaraUjian() {
       setSekolah(ps.sekolah)
       setTempatSekolah(ps.tempat)
       setGuru(urutkanGuru(gk.guru))
-      const enam = gk.kelas.filter(isKelasEnam)
-      setKelasEnam(enam)
-      setForm((f) => ({ ...f, ruangId: f.ruangId || enam[0]?.id || '' }))
     } catch (e) {
       console.error('Gagal memuat data Berita Acara Ujian:', e)
       setGalat(e?.message || 'Data tidak dapat dibaca.')
@@ -83,23 +126,57 @@ export default function BeritaAcaraUjian() {
     }
   }
 
+  async function muatSiswa() {
+    if (!sekolahId) {
+      setMemuatSiswa(false)
+      return
+    }
+    setMemuatSiswa(true)
+    setGalatSiswa('')
+    try {
+      const { data, error } = await supabase
+        .from('siswa')
+        .select('id, no_peserta_ujian, ruang_ujian, kelas(nama_kelas)')
+        .eq('sekolah_id', sekolahId)
+      if (error) throw error
+      const peserta = (data || [])
+        .filter((s) => isKelas6(s.kelas?.nama_kelas))
+        .filter(sudahTerdaftarPeserta)
+        .map((s) => ({ id: s.id, ruangUjian: s.ruang_ujian || '' }))
+      setSiswaSemua(peserta)
+    } catch (e) {
+      console.error('Gagal memuat data peserta untuk Berita Acara:', e)
+      setGalatSiswa(e?.message || 'Data peserta tidak dapat dibaca.')
+      setSiswaSemua([])
+    } finally {
+      setMemuatSiswa(false)
+    }
+  }
+
   useEffect(() => {
     muat()
+    muatSiswa()
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sekolahId])
+
+  // Baca jadwal pengawas yang tersimpan dari halaman Jadwal Pengawas Ruang.
+  useEffect(() => {
+    let batal = false
+    sudahOtomatis.current = false
+    if (!sekolahId) return undefined
+    ;(async () => {
+      const t = await muatJadwalPengawas(sekolahId)
+      if (!batal) setSesiJadwal(ratakanSesiJadwal(t))
+    })()
+    return () => { batal = true }
   }, [sekolahId])
 
   const ubah = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
-  // Ganti ruang: kalau guru yang sudah dipilih ternyata wali kelas ruang baru, kosongkan.
+  // Ganti ruang: angka manual dikosongkan supaya kembali mengikuti data ruang baru.
   const ubahRuang = (e) => {
-    const ruangId = e.target.value
-    const wali = kelasEnam.find((k) => k.id === ruangId)?.wali_kelas_id
-    setForm((f) => ({
-      ...f,
-      ruangId,
-      pengawas1Id: wali && f.pengawas1Id === wali ? '' : f.pengawas1Id,
-      pengawas2Id: wali && f.pengawas2Id === wali ? '' : f.pengawas2Id,
-    }))
+    const ruang = e.target.value
+    setForm((f) => ({ ...f, ruang, jumlahPesertaManual: '', jumlahHadirManual: '' }))
   }
 
   const guruPerId = useMemo(() => {
@@ -108,26 +185,87 @@ export default function BeritaAcaraUjian() {
     return m
   }, [guru])
 
-  const ruang = useMemo(() => kelasEnam.find((k) => k.id === form.ruangId), [kelasEnam, form.ruangId])
-
-  // Guru wali kelas ruang ini tidak ditampilkan sebagai pengawas ruang itu sendiri.
-  const pilihanPengawas = useMemo(
-    () => guru.filter((g) => !ruang || g.id !== ruang.wali_kelas_id),
-    [guru, ruang]
+  // Daftar ruang = nilai ruang_ujian unik yang sudah diisi lewat Pengaturan Ruang.
+  const daftarRuang = useMemo(
+    () =>
+      [...new Set(siswaSemua.map((s) => s.ruangUjian).filter(Boolean))].sort((a, b) =>
+        String(a).localeCompare(String(b), undefined, { numeric: true })
+      ),
+    [siswaSemua]
   )
+
+  // Otomatis pilih ruang pertama kalau belum ada pilihan (atau pilihan lama sudah hilang).
+  useEffect(() => {
+    if (daftarRuang.length === 0) return
+    if (!form.ruang || !daftarRuang.includes(form.ruang)) {
+      setForm((f) => ({ ...f, ruang: daftarRuang[0] }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [daftarRuang])
+
+  // Pasang data satu sesi jadwal ke form.
+  // timpa=false (otomatis saat dibuka): hanya mengisi kolom yang masih kosong.
+  // timpa=true (pilihan manual di dropdown): menggantikan isian sebelumnya.
+  function terapkanSesi(s, { timpa }) {
+    const pakai = (lama, baru) => (timpa ? baru : lama || baru)
+    setForm((f) => ({
+      ...f,
+      tanggal: s.tanggal || f.tanggal,
+      mataPelajaran: pakai(f.mataPelajaran === 'Asesmen Sumatif' ? '' : f.mataPelajaran, s.mapel) || f.mataPelajaran,
+      pengawas1Id: pakai(f.pengawas1Id, guruPerId[s.guru1Id] ? s.guru1Id : ''),
+      pengawas2Id: pakai(f.pengawas2Id, guruPerId[s.guru2Id] ? s.guru2Id : ''),
+      ruang: daftarRuang.includes(s.ruang) ? s.ruang : f.ruang,
+      ...(timpa && daftarRuang.includes(s.ruang) && s.ruang !== f.ruang
+        ? { jumlahPesertaManual: '', jumlahHadirManual: '' }
+        : {}),
+    }))
+  }
+
+  // Otomatis: setelah jadwal, data guru, dan data peserta termuat, pilih sesi hari
+  // ini (atau sesi terdekat berikutnya, atau yang pertama) dan isikan sekali saja.
+  useEffect(() => {
+    if (sudahOtomatis.current || sesiJadwal.length === 0 || guru.length === 0 || memuatSiswa) return
+    sudahOtomatis.current = true
+    const hariIni = isoHariIni()
+    const pilih =
+      sesiJadwal.find((s) => s.tanggal === hariIni) ||
+      sesiJadwal.find((s) => s.tanggal >= hariIni) ||
+      sesiJadwal[0]
+    setSesiTerpilih(pilih.key)
+    terapkanSesi(pilih, { timpa: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sesiJadwal, guru, memuatSiswa])
+
+  const pilihSesi = (e) => {
+    const key = e.target.value
+    setSesiTerpilih(key)
+    const s = sesiJadwal.find((x) => x.key === key)
+    if (s) terapkanSesi(s, { timpa: true })
+  }
+
+  // Terdaftar otomatis = jumlah peserta di ruang terpilih; hadir otomatis = terdaftar.
+  const terdaftarOtomatis = useMemo(
+    () => (form.ruang ? siswaSemua.filter((s) => s.ruangUjian === form.ruang).length : 0),
+    [siswaSemua, form.ruang]
+  )
+  const jumlahPeserta = form.jumlahPesertaManual !== '' ? form.jumlahPesertaManual : String(terdaftarOtomatis)
+  const jumlahHadir = form.jumlahHadirManual !== '' ? form.jumlahHadirManual : jumlahPeserta
 
   // Tidak hadir dihitung otomatis dari terdaftar - hadir.
   const tidakHadir = useMemo(() => {
-    if (form.jumlahPeserta === '' || form.jumlahHadir === '') return ''
-    return String(Math.max(0, Number(form.jumlahPeserta) - Number(form.jumlahHadir)))
-  }, [form.jumlahPeserta, form.jumlahHadir])
+    if (jumlahPeserta === '' || jumlahHadir === '') return ''
+    return String(Math.max(0, Number(jumlahPeserta) - Number(jumlahHadir)))
+  }, [jumlahPeserta, jumlahHadir])
 
-  const hadirMelebihi =
-    form.jumlahPeserta !== '' && form.jumlahHadir !== '' && Number(form.jumlahHadir) > Number(form.jumlahPeserta)
+  const hadirMelebihi = jumlahPeserta !== '' && jumlahHadir !== '' && Number(jumlahHadir) > Number(jumlahPeserta)
+
+  // Pengawas II tidak boleh sama dengan Pengawas I, dan sebaliknya.
+  const pilihanPengawas1 = useMemo(() => guru.filter((g) => g.id !== form.pengawas2Id), [guru, form.pengawas2Id])
+  const pilihanPengawas2 = useMemo(() => guru.filter((g) => g.id !== form.pengawas1Id), [guru, form.pengawas1Id])
 
   const namaSekolah = isi(sekolah.nama, 'NAMA SEKOLAH')
   const tapel = tahunPelajaranSekarang()
-  const namaRuang = ruang?.nama_kelas || '…………'
+  const namaRuang = isi(form.ruang, '…………')
   const pengawas1 = guruPerId[form.pengawas1Id]?.nama_lengkap || '…………'
   const pengawas2 = guruPerId[form.pengawas2Id]?.nama_lengkap || '…………'
   const hariTanggal = formatHariTanggal(form.tanggal)
@@ -164,16 +302,46 @@ export default function BeritaAcaraUjian() {
             Data belum bisa dibaca ({galat}).
           </div>
         )}
+        {!memuatSiswa && galatSiswa && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 mb-4">
+            Data peserta belum bisa dibaca ({galatSiswa}). Jumlah peserta bisa diisi manual.
+          </div>
+        )}
 
-        <Bagian judul="Ruang & mata pelajaran">
+        <Bagian
+          judul="Ruang & mata pelajaran"
+          keterangan="Terisi otomatis dari Jadwal Pengawas Ruang; pilih sesi lain di dropdown atau ubah manual."
+        >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Ruang ujian (kelas VI)">
-              <select className={inputCls} value={form.ruangId} onChange={ubahRuang}>
-                {kelasEnam.length === 0 && <option value="">— tidak ada kelas VI —</option>}
-                {kelasEnam.map((k) => (
-                  <option key={k.id} value={k.id}>{k.nama_kelas}</option>
-                ))}
-              </select>
+            <div className="sm:col-span-2">
+              <Field label="Ambil dari jadwal pengawas">
+                {sesiJadwal.length === 0 ? (
+                  <p className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500">
+                    Belum ada jadwal pengawas tersimpan. Isi dulu di halaman Jadwal Pengawas Ruang, lalu buka
+                    halaman ini lagi.
+                  </p>
+                ) : (
+                  <select className={inputCls} value={sesiTerpilih} onChange={pilihSesi}>
+                    <option value="">— pilih sesi —</option>
+                    {sesiJadwal.map((s) => (
+                      <option key={s.key} value={s.key}>
+                        {labelTanggal(s.tanggal)} • {s.waktu || '…'} • {s.mapel || '(mapel belum diisi)'}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </Field>
+            </div>
+            <Field label="Ruang ujian" keterangan="Daftar diambil dari ruang yang sudah diisi lewat Pengaturan Ruang.">
+              {daftarRuang.length > 0 ? (
+                <select className={inputCls} value={form.ruang} onChange={ubahRuang}>
+                  {daftarRuang.map((r) => (
+                    <option key={r} value={r}>Ruang {r}</option>
+                  ))}
+                </select>
+              ) : (
+                <input className={inputCls} value={form.ruang} onChange={ubahRuang} placeholder="mis. 1" />
+              )}
             </Field>
             <Field label="Mata pelajaran / kegiatan">
               <input className={inputCls} value={form.mataPelajaran} onChange={ubah('mataPelajaran')} />
@@ -184,13 +352,28 @@ export default function BeritaAcaraUjian() {
           </div>
         </Bagian>
 
-        <Bagian judul="Jumlah peserta" keterangan="Jumlah tidak hadir dihitung otomatis dari terdaftar dikurangi hadir.">
+        <Bagian
+          judul="Jumlah peserta"
+          keterangan="Terdaftar diambil dari data siswa ruang ini; hadir dianggap sama dengan terdaftar. Ketik angka lain bila ada yang tidak hadir, kosongkan untuk kembali otomatis."
+        >
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Field label="Terdaftar">
-              <input className={inputCls} inputMode="numeric" value={form.jumlahPeserta} onChange={ubah('jumlahPeserta')} />
+              <input
+                className={inputCls}
+                inputMode="numeric"
+                value={form.jumlahPesertaManual}
+                onChange={ubah('jumlahPesertaManual')}
+                placeholder={`otomatis: ${terdaftarOtomatis}`}
+              />
             </Field>
             <Field label="Hadir">
-              <input className={inputCls} inputMode="numeric" value={form.jumlahHadir} onChange={ubah('jumlahHadir')} />
+              <input
+                className={inputCls}
+                inputMode="numeric"
+                value={form.jumlahHadirManual}
+                onChange={ubah('jumlahHadirManual')}
+                placeholder={`otomatis: ${jumlahPeserta}`}
+              />
             </Field>
             <Field label="Tidak hadir (otomatis)">
               <input className={`${inputCls} bg-slate-50`} value={tidakHadir} readOnly tabIndex={-1} />
@@ -201,26 +384,25 @@ export default function BeritaAcaraUjian() {
           )}
         </Bagian>
 
-        <Bagian judul="Pengawas ruang" keterangan="Guru wali kelas ruang ini tidak ditampilkan (pengawasan silang).">
+        <Bagian
+          judul="Pengawas ruang"
+          keterangan="Terisi otomatis sesuai sesi jadwal yang dipilih; bisa diganti atau dikosongkan."
+        >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Pengawas I">
               <select className={inputCls} value={form.pengawas1Id} onChange={ubah('pengawas1Id')}>
                 <option value="">— pilih guru —</option>
-                {pilihanPengawas
-                  .filter((g) => g.id !== form.pengawas2Id)
-                  .map((g) => (
-                    <option key={g.id} value={g.id}>{g.nama_lengkap}</option>
-                  ))}
+                {pilihanPengawas1.map((g) => (
+                  <option key={g.id} value={g.id}>{g.nama_lengkap}</option>
+                ))}
               </select>
             </Field>
             <Field label="Pengawas II">
               <select className={inputCls} value={form.pengawas2Id} onChange={ubah('pengawas2Id')}>
                 <option value="">— pilih guru —</option>
-                {pilihanPengawas
-                  .filter((g) => g.id !== form.pengawas1Id)
-                  .map((g) => (
-                    <option key={g.id} value={g.id}>{g.nama_lengkap}</option>
-                  ))}
+                {pilihanPengawas2.map((g) => (
+                  <option key={g.id} value={g.id}>{g.nama_lengkap}</option>
+                ))}
               </select>
             </Field>
           </div>
@@ -256,8 +438,8 @@ export default function BeritaAcaraUjian() {
 
         <table className="w-full mb-4">
           <tbody>
-            <Baris label="Jumlah peserta terdaftar" nilai={isi(form.jumlahPeserta)} />
-            <Baris label="Jumlah peserta hadir" nilai={isi(form.jumlahHadir)} />
+            <Baris label="Jumlah peserta terdaftar" nilai={isi(jumlahPeserta)} />
+            <Baris label="Jumlah peserta hadir" nilai={isi(jumlahHadir)} />
             <Baris label="Jumlah peserta tidak hadir" nilai={isi(tidakHadir)} />
             <Baris label="Pengawas ruang" nilai={`${pengawas1} & ${pengawas2}`} />
           </tbody>
