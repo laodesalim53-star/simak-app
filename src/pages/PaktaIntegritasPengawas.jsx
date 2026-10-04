@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
-import { ambilPengawasJadwal, muatJadwalPengawas } from '../lib/jadwalPengawasStore'
+import { ambilPengawasJadwal, muatJadwalPengawas, ratakanSesiJadwal } from '../lib/jadwalPengawasStore'
 import {
   AreaLembar,
   BagianSK as Bagian,
@@ -36,6 +36,10 @@ import {
 //   ada tanda tangan Kepala Sekolah, dan kalau Kepala Sekolah ikut tercatat
 //   sebagai pengawas di jadwal, lembarnya dilewati (dikenali dari NIP atau
 //   nama yang sama dengan Kepala Sekolah di Profil Sekolah).
+// - JADWAL MENGAWAS: di identitas tiap lembar tercetak baris "Jadwal Mengawas"
+//   berisi semua sesi pengawas itu (hari/tanggal, ruang, jam, mata pelajaran),
+//   diambil otomatis dari Jadwal Pengawas Ruang sebagai Pengawas I maupun II.
+//   Bisa dimatikan lewat centang "Tampilkan jadwal mengawas".
 // - Tempat, tanggal surat, dan tahun pelajaran ikut jadwal pengawas (bisa diubah).
 // - Tanda tangan: hanya pengawas (kanan).
 //
@@ -77,6 +81,17 @@ function urlLogo(path) {
 function formatTanggalSurat(iso) {
   if (!iso) return '…………'
   return new Date(`${iso}T00:00:00`).toLocaleDateString('id-ID', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  })
+}
+
+// "Senin, 05 Oktober 2026" untuk baris jadwal mengawas.
+function formatHariTanggal(iso) {
+  if (!iso) return '…'
+  return new Date(`${iso}T00:00:00`).toLocaleDateString('id-ID', {
+    weekday: 'long',
     day: '2-digit',
     month: 'long',
     year: 'numeric',
@@ -160,6 +175,7 @@ function GayaPadatSatuHalaman() {
         padding: 1px 6px 1px 0;
       }
       .pip-compact table.pip-identitas td.label { width: 110px; white-space: nowrap; }
+      .pip-compact table.pip-identitas .jadwal-baris { margin: 0; line-height: 1.3; }
       .pip-compact table.pip-identitas td.titik { width: 10px; }
       .pip-compact .pip-pembuka {
         margin: 6px 0 8px;
@@ -250,6 +266,9 @@ export default function PaktaIntegritasPengawas() {
 
   // Pengawas pada Jadwal Pengawas Ruang: [{ kode, guruId }]
   const [pengawasJadwal, setPengawasJadwal] = useState([])
+  // Semua sesi jadwal (tanggal, ruang, jam, mapel, guru1Id, guru2Id)
+  const [sesiJadwal, setSesiJadwal] = useState([])
+  const [tampilJadwal, setTampilJadwal] = useState(true)
   // 'semua' = satu lembar per pengawas pada jadwal; selain itu id satu guru; '' = lembar kosong.
   const [cetak, setCetak] = useState('')
 
@@ -315,6 +334,7 @@ export default function PaktaIntegritasPengawas() {
 
       const daftar = ambilPengawasJadwal(jadwal)
       setPengawasJadwal(daftar)
+      setSesiJadwal(ratakanSesiJadwal(jadwal))
       if (daftar.length > 0 && !sudahPilihOtomatis.current) {
         sudahPilihOtomatis.current = true
         setCetak('semua')
@@ -362,6 +382,30 @@ export default function PaktaIntegritasPengawas() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [guru, sekolah]
   )
+
+  // Jadwal mengawas per guru: semua sesi tempat guru itu menjadi Pengawas I atau II,
+  // urut tanggal, jam, lalu ruang.
+  const jadwalPerGuru = useMemo(() => {
+    const m = {}
+    const tambah = (idGuru, s) => {
+      if (!idGuru) return
+      if (!m[idGuru]) m[idGuru] = []
+      m[idGuru].push(s)
+    }
+    sesiJadwal.forEach((s) => {
+      tambah(s.guru1Id, s)
+      if (s.guru2Id !== s.guru1Id) tambah(s.guru2Id, s)
+    })
+    Object.values(m).forEach((arr) =>
+      arr.sort(
+        (a, b) =>
+          String(a.tanggal).localeCompare(String(b.tanggal)) ||
+          String(a.waktu).localeCompare(String(b.waktu), undefined, { numeric: true }) ||
+          String(a.ruang).localeCompare(String(b.ruang), undefined, { numeric: true })
+      )
+    )
+    return m
+  }, [sesiJadwal])
 
   const kodePerGuru = useMemo(() => {
     const m = {}
@@ -438,6 +482,15 @@ export default function PaktaIntegritasPengawas() {
               <input className={inputCls} value={jabatan} onChange={(e) => setJabatan(e.target.value)} />
             </Field>
           </div>
+          <label className="mt-3 inline-flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={tampilJadwal}
+              onChange={(e) => setTampilJadwal(e.target.checked)}
+              className="rounded"
+            />
+            Tampilkan jadwal mengawas (hari/tanggal, ruang, jam) di identitas, diambil dari Jadwal Pengawas Ruang
+          </label>
         </Bagian>
 
         <Bagian judul="Kop surat" keterangan="Terisi otomatis dari Profil Sekolah (beserta logo); bisa diubah di sini, kosongkan yang tidak perlu ditampilkan.">
@@ -547,6 +600,22 @@ export default function PaktaIntegritasPengawas() {
                       <td className="titik">:</td>
                       <td>{namaSekolah}</td>
                     </tr>
+                    {tampilJadwal && g && (jadwalPerGuru[g.id] || []).length > 0 && (
+                      <tr>
+                        <td className="label">Jadwal Mengawas</td>
+                        <td className="titik">:</td>
+                        <td>
+                          {jadwalPerGuru[g.id].map((s) => (
+                            <div key={s.key} className="jadwal-baris">
+                              {formatHariTanggal(s.tanggal)}
+                              {s.waktu ? `, pukul ${s.waktu}` : ''}
+                              {s.ruang ? `, Ruang ${s.ruang}` : ''}
+                              {s.mapel ? ` (${s.mapel})` : ''}
+                            </div>
+                          ))}
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
 
