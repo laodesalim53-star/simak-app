@@ -111,6 +111,13 @@ function jumlah(...vals) {
   return String(vals.reduce((a, v) => a + num(v), 0))
 }
 
+// Ambil nilai pertama yang terisi dari objek profil, berdasarkan pola nama kolom.
+// Dipakai supaya tidak bergantung pada nama kolom persis di profil_sekolah.
+function cariKolom(obj, pola) {
+  const hit = Object.entries(obj || {}).find(([k, v]) => pola.test(k) && v !== null && String(v).trim() !== '')
+  return hit ? String(hit[1]).trim() : ''
+}
+
 // Format angka hasil hitung: maksimal 2 desimal, koma sebagai pemisah.
 function fmt(x) {
   return String(Math.round(x * 100) / 100).replace('.', ',')
@@ -254,7 +261,7 @@ export default function LaporanAsesmenSekolah() {
         ambilProfilSekolah(sekolahId),
         supabase
           .from('profil_sekolah')
-          .select('kabupaten, dinas_pendidikan, kecamatan, alamat, logo_path, logo_kabupaten_path')
+          .select('*')
           .eq('sekolah_id', sekolahId)
           .maybeSingle(),
       ])
@@ -269,10 +276,18 @@ export default function LaporanAsesmenSekolah() {
         dinas: prof.dinas_pendidikan || f.dinas,
         kecamatan: f.kecamatan || prof.kecamatan || '',
         alamat: f.alamat || prof.alamat || '',
-        // Nama properti kepala sekolah belum pasti; beberapa kemungkinan dicoba.
+        // Kepala sekolah, NIP, telepon & tempat TTD diambil dari profil_sekolah
+        // (kolom kepala_sekolah, nip_kepala_sekolah, tempat_ttd; telepon dicari dari
+        // kolom yang namanya memuat telp/telepon/hp/phone).
         kepalaNama:
-          f.kepalaNama || s.kepala_sekolah || s.nama_kepala_sekolah || s.kepala || s.nama_kepsek || '',
-        kepalaNip: f.kepalaNip || s.nip_kepala_sekolah || s.nip_kepala || s.nip_kepsek || s.nip_kepala_sekolah || '',
+          f.kepalaNama || prof.kepala_sekolah || s.kepala_sekolah || s.nama_kepala_sekolah || s.kepala || '',
+        kepalaNip:
+          f.kepalaNip ||
+          prof.nip_kepala_sekolah ||
+          cariKolom(prof, /nip.*(kepala|kepsek)|(kepala|kepsek).*nip/i) ||
+          s.nip_kepala_sekolah || s.nip_kepala || s.nip_kepsek || '',
+        telepon: f.telepon || cariKolom(prof, /telp|telepon|(^|_)hp($|_)|phone/i) || cariKolom(s, /telp|telepon|(^|_)hp($|_)|phone/i),
+        tempat: f.tempat || prof.tempat_ttd || '',
       }))
     } catch (e) {
       console.error('Gagal memuat data Laporan Asesmen:', e)
@@ -553,7 +568,7 @@ export default function LaporanAsesmenSekolah() {
         {form.kabupaten && <p className="font-bold uppercase tracking-wide">{form.kabupaten}</p>}
         {form.dinas && <p className="font-bold uppercase tracking-wide">{form.dinas}</p>}
         <p className="font-bold uppercase tracking-wide text-base">{namaSekolah}</p>
-        {form.kecamatan && <p className="font-bold uppercase tracking-wide">Kecamatan {form.kecamatan.replace(/^kecamatan\s+/i, '')}</p>}
+        {form.kecamatan && <p className="font-bold uppercase tracking-wide">Kecamatan {form.kecamatan.replace(/^(kecamatan\s+)+/i, '')}</p>}
         {form.alamat && <p className="italic text-[12px]">{form.alamat}</p>}
       </div>
       <div className="kop-logo w-[76px] h-[76px] shrink-0 flex items-center justify-center">
