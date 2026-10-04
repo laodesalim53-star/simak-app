@@ -22,9 +22,12 @@
 //   otomatis memperbarui kode di tabel jadwal.
 // - Nomor, Hari/Tanggal, dan Ruang digabung (rowSpan) per hari, seperti di
 //   dokumen aslinya.
+// - ISIAN OTOMATIS: kolom yang masih KOSONG (Pengawas 1 & 2, Mata Pelajaran,
+//   Tempat) terisi otomatis, tetapi tetap bisa diedit. Isian yang sudah
+//   diketik/dipilih tidak pernah ditimpa. Lihat isiKosong() dan MAPEL_DEFAULT.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Loader2, Plus, Printer, Trash2 } from 'lucide-react'
+import { Loader2, Plus, Printer, Trash2, Wand2 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
@@ -85,6 +88,25 @@ const kodeUrut = (i) => (i < 26 ? String.fromCharCode(65 + i) : String(i + 1))
 
 const WAKTU_DEFAULT = ['08.00 – 10.00', '10.30 – 12.00']
 
+// Daftar mapel bawaan, diisi berurutan ke sesi yang masih kosong.
+// Ubah sesuai jadwal asesmen sekolah.
+const MAPEL_DEFAULT = [
+  'Pendidikan Agama dan Budi Pekerti',
+  'Pendidikan Pancasila',
+  'Bahasa Indonesia',
+  'Matematika',
+  'IPAS',
+  'Bahasa Inggris',
+]
+
+// "KECAMATAN WARIA" -> "Waria"
+const bersihkanKecamatan = (s) =>
+  (s || '')
+    .replace(/^\s*kecamatan\s+/i, '')
+    .trim()
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+
 const idBaru = () => Math.random().toString(36).slice(2, 9)
 const pengawasBaru = () => ({ id: idBaru(), guruId: '' })
 const sesiBaru = (i = 0) => ({ id: idBaru(), waktu: WAKTU_DEFAULT[i] || '', mapel: '', p1: '', p2: '' })
@@ -94,6 +116,29 @@ const hariBaru = (tanggal, ruang = 'I') => ({
   ruang,
   sesi: [sesiBaru(0), sesiBaru(1)],
 })
+
+// Isi HANYA kolom yang masih kosong; yang sudah terisi tidak disentuh.
+// - Pengawas dirotasi berpasangan per sesi (A-B, C-D, ...), kembali ke awal
+//   kalau daftar habis.
+// - Mata pelajaran diisi dari MAPEL_DEFAULT (hanya kalau opsi mapel = true).
+function isiKosong(hariList, ids, { mapel = false } = {}) {
+  let n = 0
+  return hariList.map((h) => ({
+    ...h,
+    sesi: h.sesi.map((s) => {
+      const idx = n++
+      const baru = { ...s }
+      if (mapel && !baru.mapel) baru.mapel = MAPEL_DEFAULT[idx] || ''
+      if (ids.length >= 2) {
+        const a = ids[(idx * 2) % ids.length]
+        const b = ids[(idx * 2 + 1) % ids.length]
+        if (!baru.p1 && a !== baru.p2) baru.p1 = a
+        if (!baru.p2 && b !== baru.p1) baru.p2 = b
+      }
+      return baru
+    }),
+  }))
+}
 
 export default function JadwalPengawasRuangUjian() {
   // Aman untuk dua bentuk AuthContext: `sekolahId` langsung, atau lewat profil.sekolah_id.
@@ -118,7 +163,8 @@ export default function JadwalPengawasRuangUjian() {
   })
 
   const [pengawas, setPengawas] = useState([pengawasBaru(), pengawasBaru()])
-  const [hari, setHari] = useState(() => [hariBaru(isoHariIni())])
+  // Mata pelajaran langsung terisi di awal; pengawas menyusul setelah guru dipilih.
+  const [hari, setHari] = useState(() => isiKosong([hariBaru(isoHariIni())], [], { mapel: true }))
 
   async function muat() {
     if (!sekolahId) {
@@ -147,6 +193,8 @@ export default function JadwalPengawasRuangUjian() {
         kabupaten: f.kabupaten || prof.kabupaten || '',
         dinas: prof.dinas_pendidikan || f.dinas,
         kecamatan: f.kecamatan || prof.kecamatan || '',
+        // Tempat penandatanganan: otomatis dari kecamatan, tetap bisa diketik ulang.
+        tempat: f.tempat || bersihkanKecamatan(prof.kecamatan),
       }))
     } catch (e) {
       console.error('Gagal memuat data Jadwal Pengawas Ruang:', e)
@@ -182,6 +230,18 @@ export default function JadwalPengawasRuangUjian() {
     [pengawas, guruPerId]
   )
 
+  const idsTerpilih = useMemo(() => pengawasTerpilih.map((p) => p.id), [pengawasTerpilih])
+  const kunciPengawas = idsTerpilih.join(',')
+
+  // Setiap daftar pengawas berubah, kolom Pengawas 1/2 yang masih kosong terisi otomatis.
+  useEffect(() => {
+    setHari((d) => isiKosong(d, idsTerpilih, { mapel: false }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kunciPengawas])
+
+  // Tombol manual: isi ulang semua kolom kosong (pengawas + mata pelajaran).
+  const isiOtomatis = () => setHari((d) => isiKosong(d, idsTerpilih, { mapel: true }))
+
   // --- Kelola pengawas ---
   const tambahPengawas = () => setPengawas((d) => [...d, pengawasBaru()])
   const ubahPengawas = (id, guruId) => setPengawas((d) => d.map((p) => (p.id === id ? { ...p, guruId } : p)))
@@ -200,13 +260,23 @@ export default function JadwalPengawasRuangUjian() {
   const tambahHari = () =>
     setHari((d) => {
       const terakhir = d[d.length - 1]
-      return [...d, hariBaru(hariKerjaBerikutnya(terakhir?.tanggal), terakhir?.ruang || 'I')]
+      return isiKosong(
+        [...d, hariBaru(hariKerjaBerikutnya(terakhir?.tanggal), terakhir?.ruang || 'I')],
+        idsTerpilih,
+        { mapel: true }
+      )
     })
   const hapusHari = (hid) => setHari((d) => d.filter((h) => h.id !== hid))
   const ubahHari = (hid, k, v) => setHari((d) => d.map((h) => (h.id === hid ? { ...h, [k]: v } : h)))
 
   const tambahSesi = (hid) =>
-    setHari((d) => d.map((h) => (h.id === hid ? { ...h, sesi: [...h.sesi, sesiBaru(h.sesi.length)] } : h)))
+    setHari((d) =>
+      isiKosong(
+        d.map((h) => (h.id === hid ? { ...h, sesi: [...h.sesi, sesiBaru(h.sesi.length)] } : h)),
+        idsTerpilih,
+        { mapel: true }
+      )
+    )
   const hapusSesi = (hid, sid) =>
     setHari((d) =>
       d.map((h) => (h.id === hid && h.sesi.length > 1 ? { ...h, sesi: h.sesi.filter((s) => s.id !== sid) } : h))
@@ -335,15 +405,24 @@ export default function JadwalPengawasRuangUjian() {
 
         <Bagian
           judul="Jadwal per hari"
-          keterangan="Satu hari bisa punya beberapa sesi; pilih dua pengawas (kode) untuk tiap sesi."
+          keterangan="Kolom kosong terisi otomatis (pengawas bergantian, mata pelajaran berurutan) dan tetap bisa diubah."
           aksi={
-            <button
-              type="button"
-              onClick={tambahHari}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-blue-400 hover:text-blue-700"
-            >
-              <Plus size={13} /> Tambah hari
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={isiOtomatis}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-blue-400 hover:text-blue-700"
+              >
+                <Wand2 size={13} /> Isi otomatis kolom kosong
+              </button>
+              <button
+                type="button"
+                onClick={tambahHari}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-blue-400 hover:text-blue-700"
+              >
+                <Plus size={13} /> Tambah hari
+              </button>
+            </div>
           }
         >
           <div className="space-y-3">
@@ -425,7 +504,7 @@ export default function JadwalPengawasRuangUjian() {
           </div>
         </Bagian>
 
-        <Bagian judul="Penandatangan" keterangan="Kepala Sekolah diambil otomatis dari Profil Sekolah.">
+        <Bagian judul="Penandatangan" keterangan="Kepala Sekolah diambil otomatis dari Profil Sekolah; tempat terisi dari kecamatan dan bisa diubah.">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Tempat">
               <input className={inputCls} value={form.tempat} onChange={ubah('tempat')} placeholder="mis. Waria" />
