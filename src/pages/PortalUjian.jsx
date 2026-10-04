@@ -15,6 +15,7 @@ import {
   CalendarDays,
   FileSignature,
   FileCheck2,
+  UserCheck,
 } from 'lucide-react'
 import Layout from '../components/Layout'
 import { PALET_WARNA, BatikOverlay, IsiKartuHub } from '../components/hub'
@@ -92,6 +93,15 @@ const daftarDokumen = [
   warna: 'blue',
   siap: true,
 },
+    {
+    id: 'pakta-integritas-pengawas',
+    judul: 'Pakta Integritas Pengawas Ruang',
+    deskripsi: 'Pakta integritas untuk guru pengawas ruang, satu lembar per pengawas otomatis dari Jadwal Pengawas Ruang.',
+    icon: UserCheck,
+    path: '/gudang-sk/portal-ujian/pakta-integritas-pengawas',
+    warna: 'purple',
+    siap: true,
+  },
 ]
 
 export default function PortalUjian() {
