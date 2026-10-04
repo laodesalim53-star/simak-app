@@ -94,3 +94,15 @@ export function ratakanSesiJadwal(data) {
   })
   return hasil
 }
+
+// Daftar pengawas pada jadwal, berurutan sesuai kode (A, B, C, …), hanya yang
+// sudah memilih guru. Dipakai halaman yang mencetak satu lembar per pengawas.
+export function ambilPengawasJadwal(data) {
+  if (!data || !Array.isArray(data.pengawas)) return []
+  return data.pengawas
+    .map((p, i) => ({
+      kode: i < 26 ? String.fromCharCode(65 + i) : String(i + 1),
+      guruId: p.guruId || '',
+    }))
+    .filter((p) => p.guruId)
+}
