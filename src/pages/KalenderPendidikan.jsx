@@ -26,9 +26,20 @@ import {
 
 const NAMA_HARI = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab']
 
+// Indeks bulan yang sedang berjalan di dalam daftar BULAN.
+// Kalau hari ini di luar rentang tahun pelajaran, pakai bulan terdekat
+// (sebelum Juli 2026 → bulan pertama, sesudah Juni 2027 → bulan terakhir).
+function indeksBulanSekarang() {
+  const now = new Date()
+  const idx = BULAN.findIndex((b) => b.tahun === now.getFullYear() && b.bulan === now.getMonth() + 1)
+  if (idx !== -1) return idx
+  const awal = new Date(BULAN[0].tahun, BULAN[0].bulan - 1, 1)
+  return now < awal ? 0 : BULAN.length - 1
+}
+
 export default function KalenderPendidikan() {
   const { isAdmin } = useAuth()
-  const [bulanIndex, setBulanIndex] = useState(0)
+  const [bulanIndex, setBulanIndex] = useState(indeksBulanSekarang)
   const [overrides, setOverrides] = useState({})
   const [loading, setLoading] = useState(true)
   const [supabaseReady, setSupabaseReady] = useState(true)
@@ -36,6 +47,15 @@ export default function KalenderPendidikan() {
   const [saving, setSaving] = useState(false)
 
   const bulanAktif = BULAN[bulanIndex]
+
+  const sekarang = new Date()
+  const hariIniISO = toISODate(sekarang.getFullYear(), sekarang.getMonth() + 1, sekarang.getDate())
+  const teksHariIni = sekarang.toLocaleDateString('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
 
   useEffect(() => {
     let mounted = true
@@ -120,7 +140,9 @@ export default function KalenderPendidikan() {
           </div>
           <div>
             <h1 className="font-display font-bold text-xl text-slate-800">Kalender Pendidikan</h1>
-            <p className="text-sm text-slate-500">Tahun Pelajaran {TAHUN_AJARAN}</p>
+            <p className="text-sm text-slate-500">
+              Tahun Pelajaran {TAHUN_AJARAN} &middot; Hari ini: <span className="font-medium text-slate-700">{teksHariIni}</span>
+            </p>
           </div>
         </div>
 
@@ -160,6 +182,13 @@ export default function KalenderPendidikan() {
               </select>
 
               <button
+                onClick={() => setBulanIndex(indeksBulanSekarang())}
+                className="px-3 h-9 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Hari ini
+              </button>
+
+              <button
                 onClick={() => setBulanIndex((i) => Math.min(BULAN.length - 1, i + 1))}
                 disabled={bulanIndex === BULAN.length - 1}
                 className="w-9 h-9 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed"
@@ -193,7 +222,9 @@ export default function KalenderPendidikan() {
                       cell.status
                         ? `${KETERANGAN[cell.status.kode]?.badge || 'bg-slate-200 text-slate-700'} border-transparent`
                         : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                    } ${isAdmin ? 'cursor-pointer' : 'cursor-default'}`}
+                    } ${cell.iso === hariIniISO ? 'ring-2 ring-offset-1 ring-blue-600' : ''} ${
+                      isAdmin ? 'cursor-pointer' : 'cursor-default'
+                    }`}
                   >
                     <span className="font-display font-extrabold text-2xl leading-none tracking-tight">
                       {cell.tanggal}
@@ -220,6 +251,12 @@ export default function KalenderPendidikan() {
                     </span>
                   </div>
                 ))}
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-sm shrink-0 border-2 border-blue-600" />
+                  <span>
+                    <strong className="text-slate-800">Lingkaran biru</strong> — Hari ini
+                  </span>
+                </div>
               </div>
             </div>
 
