@@ -32,9 +32,12 @@ import {
 // - PENGAWAS: diambil otomatis dari Jadwal Pengawas Ruang (lib/jadwalPengawasStore).
 //   Default mencetak SATU LEMBAR PER PENGAWAS (A, B, C, …), nama & NIP dari data
 //   guru. Bisa juga memilih satu guru saja lewat dropdown.
+// - KEPALA SEKOLAH TIDAK DICETAK: lembar ini khusus pengawas ruang, jadi tidak
+//   ada tanda tangan Kepala Sekolah, dan kalau Kepala Sekolah ikut tercatat
+//   sebagai pengawas di jadwal, lembarnya dilewati (dikenali dari NIP atau
+//   nama yang sama dengan Kepala Sekolah di Profil Sekolah).
 // - Tempat, tanggal surat, dan tahun pelajaran ikut jadwal pengawas (bisa diubah).
-// - Tanda tangan: pengawas (kanan) dan Kepala Sekolah "Mengetahui" (kiri, bisa
-//   dimatikan).
+// - Tanda tangan: hanya pengawas (kanan).
 //
 // Semua teks (judul, alinea pembuka, poin, penutup) bisa diedit lewat panel isian.
 // Penanda di teks: {sekolah}, {tahun}/{tp}, {kegiatan}.
@@ -79,6 +82,10 @@ function formatTanggalSurat(iso) {
     year: 'numeric',
   })
 }
+
+// Normalisasi untuk perbandingan: huruf kecil, buang spasi & tanda baca,
+// supaya "LA ODE SALIM, S.Pd" dan "LA ODE SALIM,S.Pd" dianggap sama.
+const normal = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
 
 // Daftar bernomor angka (1. 2. 3. …) — sama gaya dengan diktum Mengingat di SK.
 function DaftarAngka({ items }) {
@@ -165,14 +172,15 @@ function GayaPadatSatuHalaman() {
       }
       .pip-compact .pip-penutup p { margin: 0 0 6px; }
 
+      /* Tanda tangan hanya pengawas, di sisi kanan. */
       .pip-compact .pip-ttd {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 24px;
+        display: flex;
+        justify-content: flex-end;
         margin-top: 16px;
         text-align: center;
         page-break-inside: avoid;
       }
+      .pip-compact .pip-ttd > div { min-width: 55%; }
       .pip-compact .pip-ttd p { margin: 0; }
       .pip-compact .pip-ttd .ruang-ttd { height: 56px; }
       .pip-compact .pip-ttd .nama {
@@ -251,7 +259,6 @@ export default function PaktaIntegritasPengawas() {
     tahun: tahunPelajaranSekarang(),
   })
   const [jabatan, setJabatan] = useState('Guru')
-  const [tampilKepsek, setTampilKepsek] = useState(true)
 
   const [judul1, setJudul1] = useState(JUDUL_1_AWAL)
   const [judul2, setJudul2] = useState(JUDUL_2_AWAL)
@@ -334,23 +341,46 @@ export default function PaktaIntegritasPengawas() {
     return m
   }, [guru])
 
+  // Kepala Sekolah dikenali dari NIP atau nama yang sama dengan Profil Sekolah.
+  const apakahKepsek = (g) => {
+    if (!g) return false
+    const nipKepsek = normal(sekolah.nipKepala)
+    const namaKepsek = normal(sekolah.kepala)
+    if (nipKepsek && normal(g.nip) === nipKepsek) return true
+    if (namaKepsek && normal(g.nama_lengkap) === namaKepsek) return true
+    return false
+  }
+
+  // Pengawas pada jadwal tanpa Kepala Sekolah, dan guru untuk pilihan dropdown.
+  const pengawasTampil = useMemo(
+    () => pengawasJadwal.filter((p) => !apakahKepsek(guruPerId[p.guruId])),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pengawasJadwal, guruPerId, sekolah]
+  )
+  const guruPilihan = useMemo(
+    () => guru.filter((g) => !apakahKepsek(g)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [guru, sekolah]
+  )
+
   const kodePerGuru = useMemo(() => {
     const m = {}
     pengawasJadwal.forEach((p) => { m[p.guruId] = p.kode })
     return m
   }, [pengawasJadwal])
 
-  // Daftar lembar yang dicetak: satu per pengawas pada jadwal, satu guru terpilih,
-  // atau satu lembar kosong (nama & NIP diisi tangan) kalau belum ada pilihan.
+  // Daftar lembar yang dicetak: satu per pengawas pada jadwal (tanpa Kepala
+  // Sekolah), satu guru terpilih, atau satu lembar kosong (nama & NIP diisi
+  // tangan) kalau belum ada pilihan.
   const daftarCetak = useMemo(() => {
     let hasil = []
     if (cetak === 'semua') {
-      hasil = pengawasJadwal.map((p) => guruPerId[p.guruId]).filter(Boolean)
+      hasil = pengawasTampil.map((p) => guruPerId[p.guruId]).filter(Boolean)
     } else if (cetak && guruPerId[cetak]) {
       hasil = [guruPerId[cetak]]
     }
     return hasil.length > 0 ? hasil : [null]
-  }, [cetak, pengawasJadwal, guruPerId])
+  }, [cetak, pengawasTampil, guruPerId])
 
   // ── Susun isi dokumen ──
   const namaSekolah = isi(sekolah.nama, 'NAMA SEKOLAH')
@@ -386,7 +416,7 @@ export default function PaktaIntegritasPengawas() {
           judul="Pengawas yang dicetak"
           keterangan={
             pengawasJadwal.length > 0
-              ? `Diambil dari Jadwal Pengawas Ruang (${pengawasJadwal.length} pengawas). Satu pengawas = satu lembar.`
+              ? `Diambil dari Jadwal Pengawas Ruang (${pengawasTampil.length} pengawas, Kepala Sekolah tidak ikut dicetak). Satu pengawas = satu lembar.`
               : 'Belum ada pengawas pada Jadwal Pengawas Ruang. Pilih guru di sini, atau isi dulu jadwalnya lalu buka halaman ini lagi.'
           }
         >
@@ -394,10 +424,10 @@ export default function PaktaIntegritasPengawas() {
             <Field label="Cetak untuk">
               <select className={inputCls} value={cetak} onChange={(e) => setCetak(e.target.value)}>
                 <option value="">— lembar kosong (diisi tangan) —</option>
-                {pengawasJadwal.length > 0 && (
-                  <option value="semua">Semua pengawas pada jadwal ({pengawasJadwal.length} lembar)</option>
+                {pengawasTampil.length > 0 && (
+                  <option value="semua">Semua pengawas pada jadwal ({pengawasTampil.length} lembar)</option>
                 )}
-                {guru.map((g) => (
+                {guruPilihan.map((g) => (
                   <option key={g.id} value={g.id}>
                     {kodePerGuru[g.id] ? `${kodePerGuru[g.id]} — ` : ''}{g.nama_lengkap}
                   </option>
@@ -408,10 +438,6 @@ export default function PaktaIntegritasPengawas() {
               <input className={inputCls} value={jabatan} onChange={(e) => setJabatan(e.target.value)} />
             </Field>
           </div>
-          <label className="mt-3 inline-flex items-center gap-2 text-sm text-slate-700">
-            <input type="checkbox" checked={tampilKepsek} onChange={(e) => setTampilKepsek(e.target.checked)} className="rounded" />
-            Tampilkan tanda tangan Kepala Sekolah (Mengetahui)
-          </label>
         </Bagian>
 
         <Bagian judul="Kop surat" keterangan="Terisi otomatis dari Profil Sekolah (beserta logo); bisa diubah di sini, kosongkan yang tidak perlu ditampilkan.">
@@ -534,19 +560,8 @@ export default function PaktaIntegritasPengawas() {
                   ))}
                 </div>
 
+                {/* Tanda tangan hanya pengawas ruang. */}
                 <div className="pip-ttd">
-                  <div>
-                    {tampilKepsek && (
-                      <>
-                        <p>&nbsp;</p>
-                        <p>Mengetahui,</p>
-                        <p>Kepala Sekolah</p>
-                        <div className="ruang-ttd" />
-                        <p className="nama">{isi(sekolah.kepala, '………………………')}</p>
-                        {sekolah.nipKepala && <p>NIP. {sekolah.nipKepala}</p>}
-                      </>
-                    )}
-                  </div>
                   <div>
                     <p>{tempatTanggal}</p>
                     <p>Yang membuat pernyataan,</p>
