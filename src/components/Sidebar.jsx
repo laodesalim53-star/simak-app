@@ -239,6 +239,7 @@ function getGroupsAdmin(
             ]
           : []),
         { to: '/kartu', label: 'Cetak Kartu', icon: IdCard },
+        { to: '/dokumen-pip', label: 'Dokumen PIP', icon: FileSignature },
         { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
       ],
     },
