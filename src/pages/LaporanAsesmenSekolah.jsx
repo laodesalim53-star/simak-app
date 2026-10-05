@@ -23,6 +23,10 @@
 //   Setiap kali nilai di Nilai Asesmen diubah, tekan "Tarik ulang nilai"
 //   (atau buka ulang halaman ini). Kolom Ket dan mapel yang tidak ada di
 //   nilai_ijazah tetap bisa diketik manual di tabel.
+// - SUSUNAN PANITIA (tab Laporan): nilai awal hanya jabatan, TANPA nama
+//   (supaya nama guru satu sekolah tidak terbawa ke sekolah lain). Nama bisa
+//   diketik manual, dipilih dari data guru sekolah yang sedang login
+//   (tabel `guru`, difilter sekolah_id), atau diisi otomatis lewat tombol.
 //
 // CATATAN:
 // - Kolom `jenis_kelamin` di tabel siswa dicoba dibaca terpisah. Kalau nama
@@ -246,6 +250,9 @@ function rentangTanggal(a, b) {
   return `${tanggalPanjang(a)} – ${tanggalPanjang(b)}`
 }
 
+// PERBAIKAN: nilai awal hanya jabatan, TANPA nama orang. Sebelumnya nama guru
+// dari satu sekolah ditulis langsung di sini sehingga ikut muncul di semua
+// sekolah lain. Penanggung Jawab terisi otomatis dari Kepala Sekolah ({kepsek}).
 const PANITIA_AWAL = `Penanggung Jawab | {kepsek}
 Ketua |
 Sekretaris |
@@ -470,6 +477,10 @@ export default function LaporanAsesmenSekolah() {
   const [memuatNilai, setMemuatNilai] = useState(false)
   const [infoNilai, setInfoNilai] = useState('')
 
+  // Daftar guru sekolah yang sedang login (untuk mengisi Susunan Panitia).
+  const [guruList, setGuruList] = useState([])
+  const [infoGuru, setInfoGuru] = useState('')
+
   // Jadwal pengawas (hanya untuk mengambil tanggal & mapel Lembar 4).
   const [sesiJadwal, setSesiJadwal] = useState([])
   const [sesiTerpilih, setSesiTerpilih] = useState('')
@@ -616,9 +627,62 @@ export default function LaporanAsesmenSekolah() {
     }
   }
 
+  // Data guru milik sekolah yang sedang login (difilter sekolah_id, jadi data
+  // sekolah lain tidak pernah ikut). Nama dicari dari kolom nama_lengkap / nama /
+  // kolom pertama yang berawalan "nama".
+  async function muatGuru() {
+    if (!sekolahId) return
+    try {
+      const { data, error } = await supabase.from('guru').select('*').eq('sekolah_id', sekolahId)
+      if (error) throw error
+      const daftar = (data || [])
+        .map((g) => ({
+          id: g.id,
+          nama: String(g.nama_lengkap || g.nama || cariKolom(g, /^nama/i) || '').trim(),
+        }))
+        .filter((g) => g.nama)
+        .sort((a, b) => a.nama.localeCompare(b.nama, 'id'))
+      setGuruList(daftar)
+      setInfoGuru(daftar.length ? '' : 'Belum ada data guru untuk sekolah ini.')
+    } catch (e) {
+      console.error('Gagal memuat data guru:', e)
+      setGuruList([])
+      setInfoGuru(`Data guru belum bisa dibaca (${e?.message || 'galat tidak diketahui'}).`)
+    }
+  }
+
+  // Isi baris panitia yang masih kosong, urut dari daftar guru (Kepala Sekolah dilewati).
+  // Baris yang sudah terisi (termasuk Penanggung Jawab {kepsek}) tidak ditimpa.
+  function isiPanitiaDariGuru() {
+    const kepsek = String(form.kepalaNama || '').trim().toLowerCase()
+    const pool = guruList.filter((g) => g.nama.toLowerCase() !== kepsek)
+    setLap((l) => {
+      let k = 0
+      const baris = l.panitia.split('\n').map((b) => {
+        const [j, ...n] = b.split('|')
+        const sisa = n.join('|').trim()
+        if (!(j || '').trim() || sisa) return b
+        const g = pool[k++]
+        return g ? `${j.trim()} | ${g.nama}` : b
+      })
+      return { ...l, panitia: baris.join('\n') }
+    })
+  }
+
+  // Pilih guru untuk satu baris panitia lewat dropdown.
+  function setNamaPanitia(idx, nama) {
+    setLap((l) => {
+      const baris = l.panitia.split('\n')
+      const [j] = (baris[idx] || '').split('|')
+      baris[idx] = `${(j || '').trim()} | ${nama}`
+      return { ...l, panitia: baris.join('\n') }
+    })
+  }
+
   useEffect(() => {
     muat()
     muatSiswa()
+    muatGuru()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sekolahId])
 
@@ -861,7 +925,8 @@ export default function LaporanAsesmenSekolah() {
     .filter(Boolean)
     .map((x) => {
       const [j, ...n] = x.split('|')
-      return { jabatan: (j || '').trim(), nama: T(n.join('|').trim()) }
+      // Nama yang masih kosong tampil sebagai titik-titik (bukan baris kosong).
+      return { jabatan: (j || '').trim(), nama: T(n.join('|').trim()) || '…………' }
     })
   const ketuaPanitia = panitiaBaris.find((p) => /^ketua/i.test(p.jabatan))?.nama || ''
 
@@ -1140,6 +1205,47 @@ export default function LaporanAsesmenSekolah() {
                 <Field label="Susunan panitia" keterangan="Satu baris per orang, format: Jabatan | Nama">
                   <textarea className={inputCls} rows={6} value={lap.panitia} onChange={ubahLap('panitia')} />
                 </Field>
+
+                {/* Pilih nama panitia dari data guru sekolah ini */}
+                <div className="mt-2 rounded-lg border border-slate-200 p-3">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-slate-700">Pilih dari data guru ({guruList.length})</p>
+                    <button
+                      type="button"
+                      onClick={isiPanitiaDariGuru}
+                      disabled={guruList.length === 0}
+                      className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      Isi otomatis yang masih kosong
+                    </button>
+                  </div>
+                  {infoGuru && <p className="mb-2 text-xs text-amber-700">{infoGuru}</p>}
+                  <div className="space-y-1.5">
+                    {lap.panitia.split('\n').map((b, idx) => {
+                      const [j, ...n] = b.split('|')
+                      const jabatan = (j || '').trim()
+                      const nama = n.join('|').trim()
+                      if (!jabatan || nama.includes('{')) return null // lewati Penanggung Jawab
+                      const ada = guruList.some((g) => g.nama === nama)
+                      return (
+                        <div key={idx} className="flex items-center gap-2">
+                          <span className="w-28 shrink-0 text-sm text-slate-600">{jabatan}</span>
+                          <select
+                            className={inputCls}
+                            value={nama}
+                            onChange={(e) => setNamaPanitia(idx, e.target.value)}
+                          >
+                            <option value="">— pilih guru —</option>
+                            {nama && !ada && <option value={nama}>{nama}</option>}
+                            {guruList.map((g) => (
+                              <option key={g.id} value={g.nama}>{g.nama}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
 
