@@ -408,4 +408,3 @@ export default function BukuIndukSiswa() {
     </Layout>
   )
 }
-</document_content>
