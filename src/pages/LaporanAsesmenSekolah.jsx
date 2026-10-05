@@ -247,11 +247,11 @@ function rentangTanggal(a, b) {
 }
 
 const PANITIA_AWAL = `Penanggung Jawab | {kepsek}
-Ketua | Jamina Sarloy, A.Ma
-Sekretaris | Irna Wati, S.Pd.
-Bendahara | Steny Huliselan, S.Pd
-Anggota | Selvia Putri Hardifid, S.Pd.I
-Anggota | Sawiyah Sarloy, S.Pd`
+Ketua |
+Sekretaris |
+Bendahara |
+Anggota |
+Anggota |`
 
 const TEKS_AWAL = {
   pengantar: `Puji dan syukur dipersembahkan ke hadirat Tuhan Yang Maha Kuasa, atas rahmat dan karunia-Nya kami dapat menyelesaikan Laporan Pelaksanaan Kegiatan Ujian Sekolah Tahun Pelajaran {tapel}.
