@@ -3,8 +3,8 @@ import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Plus, Search, Pencil, Trash2, Printer, X, Download } from 'lucide-react'
 import Layout from '../components/Layout'
 // SESUAIKAN dua impor ini dengan lokasi di repo Anda:
-import { supabase } from '../lib/supabase'
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../lib/AuthContext'
+import { supabase } from '../lib/supabaseClient'
 import { CONFIG } from '../lib/administrasiKepsekConfig'
 
 const TABEL = 'administrasi_kepsek'
