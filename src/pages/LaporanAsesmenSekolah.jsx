@@ -1,6 +1,6 @@
 // src/pages/LaporanAsesmenSekolah.jsx
 //
-// Laporan Asesmen Sekolah (Kelas 6) dalam SATU halaman dengan 7 tab, satu tab
+// Laporan Asesmen Sekolah (Kelas 6) dalam SATU halaman dengan 8 tab, satu tab
 // per bagian sesuai file LAPORAN_ASESMEN_KELAS_6_2025 dan KATA_PENGANTAR_Asesmen:
 //   Laporan  - Kata Pengantar, Daftar Isi, Bab I-VI, Lampiran (teks bawaan, bisa diedit di form)
 //   Lembar 1 - Statistik nilai (tertinggi / terendah / rata-rata, tulis & praktik)
@@ -12,6 +12,11 @@
 //   Penganggaran - Anggaran/Biaya Kegiatan Asesmen Sekolah (sumber: file
 //                AKOMODASI_DANA_ASESMEN_SEKOLAH.xlsx); jumlah, total, terbilang dan
 //                jumlah peserta dihitung otomatis
+//   Pengesahan - Lembar Pengesahan Asesmen Sekolah + SK Penetapan Kelulusan Peserta
+//                Didik Kelas VI + lampiran daftar kelulusan (sumber: LEMBAR_PENGESAHAN.docx).
+//                Kepala Sekolah, NIP, kop, tempat & tanggal diambil dari isian yang sama;
+//                Sekretaris diambil dari tabel SK Panitia; daftar siswa (No. Peserta Ujian
+//                & nama) dari tabel `siswa` Kelas 6; keterangan kelulusan bisa diubah per siswa.
 //
 // Pola mengikuti DaftarHadirSiswaUjian.jsx:
 // - Kop surat, logo kabupaten/sekolah dari profil_sekolah, useAuth,
@@ -29,16 +34,18 @@
 //   (atau buka ulang halaman ini). Kolom Ket dan mapel yang tidak ada di
 //   nilai_ijazah tetap bisa diketik manual di tabel.
 // - SUSUNAN PANITIA: SATU SUMBER = tabel di tab SK Panitia. Bab II tab Laporan,
-//   tanda tangan Kata Pengantar (Ketua) dan tanda tangan Penganggaran (Bendahara)
-//   membaca langsung dari tabel itu. Nilai awal hanya jabatan, TANPA nama
-//   (supaya nama guru satu sekolah tidak terbawa ke sekolah lain). Nama dipilih
-//   dari data guru sekolah yang sedang login (tabel `guru`, difilter sekolah_id),
-//   diisi otomatis lewat tombol, atau diketik manual.
+//   tanda tangan Kata Pengantar (Ketua), tanda tangan Penganggaran (Bendahara)
+//   dan tanda tangan Lembar Pengesahan (Sekretaris) membaca langsung dari tabel itu.
+//   Nilai awal hanya jabatan, TANPA nama (supaya nama guru satu sekolah tidak
+//   terbawa ke sekolah lain). Nama dipilih dari data guru sekolah yang sedang login
+//   (tabel `guru`, difilter sekolah_id), diisi otomatis lewat tombol, atau diketik manual.
 //
 // CATATAN:
 // - Kolom `jenis_kelamin` di tabel siswa dicoba dibaca terpisah. Kalau nama
 //   kolomnya berbeda / tidak ada, jumlah L/P tidak terisi otomatis (isi manual),
 //   tapi halaman tetap jalan.
+// - Nama siswa dicari dari kolom nama_lengkap / nama / nama_siswa / kolom pertama
+//   berawalan "nama" di tabel siswa.
 // - Nama & NIP Kepala Sekolah dicoba diisi dari data sekolah (beberapa nama
 //   properti dicoba); tetap bisa diubah manual di form.
 // - Cetak: tombol Cetak mencetak tab yang sedang aktif; centang "Cetak semua
@@ -128,6 +135,11 @@ function jumlah(...vals) {
 function cariKolom(obj, pola) {
   const hit = Object.entries(obj || {}).find(([k, v]) => pola.test(k) && v !== null && String(v).trim() !== '')
   return hit ? String(hit[1]).trim() : ''
+}
+
+// Nama siswa dari baris tabel `siswa` (nama kolom dicari bertahap).
+function namaSiswa(s) {
+  return String(s?.nama_lengkap || s?.nama || s?.nama_siswa || cariKolom(s, /^nama/i) || '').trim()
 }
 
 // Format angka hasil hitung: maksimal 2 desimal, koma sebagai pemisah.
@@ -232,6 +244,7 @@ const TAB = [
   { id: 'penyelenggara', label: 'Lembar 4', sub: 'Penyelenggara' },
   { id: 'skpanitia', label: 'SK Panitia', sub: 'Penetapan Panitia AS' },
   { id: 'anggaran', label: 'Penganggaran', sub: 'Anggaran/Biaya Asesmen' },
+  { id: 'pengesahan', label: 'Pengesahan', sub: 'Lembar Pengesahan & SK Kelulusan' },
 ]
 
 const barisNilai = () =>
@@ -252,8 +265,8 @@ const barisPenyelenggara = () => ({
 // --- Tab "Laporan": teks bawaan (bisa diedit di form) & pembantu ---
 
 // Kata kunci otomatis dalam teks: {sekolah} {desa} {kecamatan} {kabupaten} {provinsi}
-// {tapel} {tahun} {kepsek} {us} {praktik} {sk} {rakor}. Diisi saat tampil, jadi
-// ikut berubah kalau datanya diubah. Kalau datanya kosong tampil "…………".
+// {tapel} {tahun} {kepsek} {us} {praktik} {sk} {rakor} {rapatguru}. Diisi saat tampil,
+// jadi ikut berubah kalau datanya diubah. Kalau datanya kosong tampil "…………".
 function isiTemplate(str, v) {
   return String(str || '').replace(/\{(\w+)\}/g, (_, k) =>
     v[k] !== undefined && String(v[k]).trim() !== '' ? v[k] : '…………'
@@ -515,6 +528,52 @@ const BLOK_EDIT_SK = [
   ['kedua', 'Memutuskan — KEDUA', 4],
 ]
 
+// --- Tab "Pengesahan": teks bawaan Lembar Pengesahan & SK Penetapan Kelulusan ---
+// (sumber: LEMBAR_PENGESAHAN.docx). Tanpa nama orang / nama sekolah tertentu;
+// memakai kata kunci {sekolah} {tapel} {tahun} {rapatguru}. Di SK Kelulusan, {tapel}
+// memakai "Tahun pelajaran SK Kelulusan" (kosong = sama dengan tahun pelajaran laporan).
+const TEKS_PGS = {
+  lembar: `Telah Diperiksa dan Disyahkan
+Berdasarkan Hasil Pemeriksaan dan Penilaian serta Pertimbangan
+Program Kerja tersebut dapat dipergunakan untuk dijadikan pedoman
+Dalam pelaksanaan Kegiatan Asesmen Sekolah (AS)`,
+
+  penyusun: `PANITIA PENYELENGGARA
+ASESMEN SEKOLAH (AS)
+TAHUN {tahun}`,
+
+  menimbang: `Bahwa peserta didik telah menyelesaikan seluruh program pembelajaran dan Asesmen Semester Akhir Jenjang Tahun Pelajaran {tapel}, maka perlu dikeluarkan keputusan tentang kelulusan peserta didik kelas VI {sekolah} Tahun Pelajaran {tapel};`,
+
+  mengingat: `Undang–Undang Nomor 20 tahun 2003 tentang Sistem Pendidikan Nasional.
+Peraturan Menteri Pendidikan, Kebudayaan, Riset dan Teknologi Nomor 21 Tahun 2022 Tentang Standar Penilaian Pendidikan pada Pendidikan Anak Usia Dini, Jenjang Pendidikan Dasar dan Jenjang Pendidikan Menengah.
+Keputusan Kepala Badan Standar, Kurikulum dan Asesmen Pendidikan Nomor 012A Tahun 2024 Tentang Perubahan Atas Keputusan Kepala Badan Standar, Kurikulum dan Asesmen Pendidikan Nomor 010 Tahun 2024 tentang Pedoman Pengelolaan Blangko Ijazah Pendidikan Dasar dan Pendidikan Menengah Tahun Ajaran {tapel};`,
+
+  memperhatikan: `Panduan Pembelajaran dan Asesmen (PPA) yang dikeluarkan oleh Kepala Badan Standar, Kurikulum dan Asesmen Pendidikan Kementerian Pendidikan, Kebudayaan, Riset dan Teknologi tahun 2022; Hasil analisis dan rapat dewan guru tentang penetapan kelulusan peserta didik pada tanggal {rapatguru}`,
+
+  kesatu: `Nama-nama sebagaimana tersebut dalam lampiran adalah Peserta Didik {sekolah} kelas VI yang telah menyelesaikan program pembelajaran dan mengikuti Asesmen Sumatif Akhir Jenjang Tahun Pelajaran {tapel};`,
+
+  kedua: `Nama-nama peserta didik sebagaimana tersebut dalam lampiran berdasarkan analisis kriteria kelulusan dinyatakan lulus/tidak lulus sebagaimana tersebut pada lampiran pada kolom kelulusan;`,
+
+  ketiga: `Apabila di kemudian hari terdapat kekeliruan dalam keputusan ini akan diperbaiki sebagaimana mestinya;`,
+
+  keempat: `Segala biaya yang timbul akibat ditetapkannya keputusan ini dibebankan pada anggaran BOSP;`,
+
+  kelima: `Keputusan ini berlaku sejak tanggal ditetapkan.`,
+}
+
+const BLOK_EDIT_PGS = [
+  ['lembar', 'Lembar Pengesahan — kalimat pengantar (satu baris = satu baris tampil)', 5],
+  ['penyusun', 'Lembar Pengesahan — blok "Disusun Oleh"', 4],
+  ['menimbang', 'SK Kelulusan — Menimbang', 4],
+  ['mengingat', 'SK Kelulusan — Mengingat (satu baris = satu butir, otomatis bernomor)', 6],
+  ['memperhatikan', 'SK Kelulusan — Memperhatikan', 4],
+  ['kesatu', 'SK Kelulusan — KESATU', 3],
+  ['kedua', 'SK Kelulusan — KEDUA', 3],
+  ['ketiga', 'SK Kelulusan — KETIGA', 2],
+  ['keempat', 'SK Kelulusan — KEEMPAT', 2],
+  ['kelima', 'SK Kelulusan — KELIMA', 2],
+]
+
 // Baris awal susunan panitia: hanya jabatan dalam tugas, tanpa nama orang.
 // Baris Penanggung jawab (Kepala Sekolah) dibuat otomatis saat tampil.
 const BARIS_SK_AWAL = () =>
@@ -612,7 +671,8 @@ export default function LaporanAsesmenSekolah() {
 
   // Tab SK Panitia: nomor SK, tempat/tanggal penetapan, teks, dan susunan panitia.
   // Tabel `baris` ini adalah SATU-SATUNYA sumber susunan panitia: dipakai juga oleh
-  // Bab II tab Laporan, tanda tangan Kata Pengantar (Ketua) dan Penganggaran (Bendahara).
+  // Bab II tab Laporan, tanda tangan Kata Pengantar (Ketua), Penganggaran (Bendahara)
+  // dan Lembar Pengesahan (Sekretaris).
   const [skp, setSkp] = useState(() => ({
     nomor: '',
     tempat: '',
@@ -620,6 +680,33 @@ export default function LaporanAsesmenSekolah() {
     teks: { ...TEKS_SK },
     baris: BARIS_SK_AWAL(),
   }))
+
+  // Tab Pengesahan: nomor SK kelulusan, tanggal pengesahan/penetapan (kosong = Tanggal
+  // laporan), tanggal rapat dewan guru (kosong = tanggal pengesahan), tahun pelajaran
+  // SK Kelulusan (kosong = tahun pelajaran laporan), Pengawas Sekolah, teks, dan
+  // keterangan kelulusan per siswa (`ket`: id siswa -> teks; kosong = "Lulus").
+  const [pgs, setPgs] = useState(() => ({
+    nomor: '',
+    tanggal: '',
+    rapat: '',
+    tapelSk: '',
+    pengawasNama: '',
+    pengawasNip: '',
+    teks: { ...TEKS_PGS },
+    ket: {},
+  }))
+  const ubahPgs = (k) => (e) => {
+    const v = e.target.value
+    setPgs((p) => ({ ...p, [k]: v }))
+  }
+  const ubahTeksPgs = (k) => (e) => {
+    const v = e.target.value
+    setPgs((p) => ({ ...p, teks: { ...p.teks, [k]: v } }))
+  }
+  const ubahKetPgs = (id) => (e) => {
+    const v = e.target.value
+    setPgs((p) => ({ ...p, ket: { ...p.ket, [id]: v } }))
+  }
 
   // Tab Penganggaran: tahun anggaran (kosong = tahun tanggal laporan), jumlah peserta
   // (kosong = otomatis dari data siswa Kelas 6), dan rincian biaya.
@@ -674,6 +761,12 @@ export default function LaporanAsesmenSekolah() {
         provinsi: l.provinsi || prof.provinsi || '',
         desa: l.desa || ((prof.alamat || '').match(/desa\s+([^,.\n]+)/i)?.[1] || '').trim(),
       }))
+      // Pengawas Sekolah (tab Pengesahan): dicoba dari profil_sekolah kalau kolomnya ada.
+      setPgs((p) => ({
+        ...p,
+        pengawasNama: p.pengawasNama || cariKolom(prof, /^(nama_)?pengawas(_sekolah)?$/i),
+        pengawasNip: p.pengawasNip || cariKolom(prof, /nip.*pengawas|pengawas.*nip/i),
+      }))
       setForm((f) => ({
         ...f,
         kabupaten: f.kabupaten || prof.kabupaten || '',
@@ -709,9 +802,10 @@ export default function LaporanAsesmenSekolah() {
     setMemuatSiswa(true)
     setGalatSiswa('')
     try {
+      // select('*') supaya nama siswa terbaca apa pun nama kolomnya (nama_lengkap / nama / ...).
       const { data, error } = await supabase
         .from('siswa')
-        .select('id, no_peserta_ujian, status, kelas(nama_kelas)')
+        .select('*, kelas(nama_kelas)')
         .eq('sekolah_id', sekolahId)
 
       if (error) throw error
@@ -732,13 +826,19 @@ export default function LaporanAsesmenSekolah() {
         const j = jkPerId[id] || ''
         return j.startsWith('L') ? 'L' : j.startsWith('P') ? 'P' : ''
       }
+      const ringkas = (s) => ({
+        id: s.id,
+        jk: jkDari(s.id),
+        nama: namaSiswa(s),
+        no: sudahTerdaftarPeserta(s) ? String(s.no_peserta_ujian).trim() : '',
+      })
       const kelas6 = (data || []).filter((s) => isKelas6(s.kelas?.nama_kelas))
-      setPeserta(kelas6.filter(sudahTerdaftarPeserta).map((s) => ({ id: s.id, jk: jkDari(s.id) })))
+      setPeserta(kelas6.filter(sudahTerdaftarPeserta).map(ringkas))
       // Dasar nilai asesmen: semua siswa Kelas 6 yang aktif (sama dengan halaman Nilai Asesmen).
       setSiswaK6(
         kelas6
           .filter((s) => !s.status || String(s.status).toLowerCase() === 'aktif')
-          .map((s) => ({ id: s.id, jk: jkDari(s.id) }))
+          .map(ringkas)
       )
     } catch (e) {
       console.error('Gagal memuat peserta untuk Laporan Asesmen:', e)
@@ -1049,6 +1149,21 @@ export default function LaporanAsesmenSekolah() {
   const perPesertaAng = pesertaAng > 0 ? totalAng / pesertaAng : 0
   // Bendahara diambil dari tabel SK Panitia (baris dengan jabatan memuat "bendahara").
   const bendahara = skp.baris.find((r) => /bendahara/i.test(r.tugas || '') && String(r.nama || '').trim())
+  // Sekretaris (Lembar Pengesahan) juga diambil dari tabel SK Panitia.
+  const sekretaris = skp.baris.find((r) => /sekretaris/i.test(r.tugas || '') && String(r.nama || '').trim())
+
+  // --- Pengesahan: daftar siswa untuk lampiran SK Kelulusan ---
+  // Pakai siswa Kelas 6 yang sudah punya No. Peserta; kalau belum ada, semua siswa
+  // Kelas 6 aktif. Urut No. Peserta, lalu nama.
+  const daftarKel = useMemo(() => {
+    const sumber = peserta.length > 0 ? peserta : siswaK6
+    return [...sumber].sort(
+      (a, b) =>
+        (a.no || '').localeCompare(b.no || '', 'id', { numeric: true }) || (a.nama || '').localeCompare(b.nama || '', 'id')
+    )
+  }, [peserta, siswaK6])
+  const ketSiswa = (id) => (pgs.ket[id] !== undefined ? pgs.ket[id] : 'Lulus')
+  const jmlLulusKel = daftarKel.filter((s) => /^lulus/i.test(String(ketSiswa(s.id)).trim())).length
 
   const namaSekolah = isi(sekolah.nama, 'NAMA SEKOLAH')
   const tglTtd = `${isi(form.tempat, '…………')}, ${isi(tanggalPanjang(form.tanggalLaporan), '…………')}`
@@ -1073,6 +1188,14 @@ export default function LaporanAsesmenSekolah() {
     rakor: hariTanggalPanjang(lap.rakorTanggal),
   }
   const T = (s) => isiTemplate(s, tokens)
+
+  // Tab Pengesahan: tanggal pengesahan/penetapan & rapat dewan guru, serta kata kunci
+  // untuk SK Kelulusan (tahun pelajaran bisa berbeda dari tahun pelajaran laporan).
+  const tglPgs = pgs.tanggal || form.tanggalLaporan
+  const tglRapat = pgs.rapat || tglPgs
+  const tokensPgs = { ...tokens, rapatguru: tanggalPanjang(tglRapat) }
+  const tapelSk = (pgs.tapelSk || '').trim() || form.tapel
+  const tokensKel = { ...tokensPgs, tapel: tapelSk }
 
   // Susunan panitia diambil dari tab SK Panitia (satu sumber): baris pertama
   // Penanggung Jawab = Kepala Sekolah, sisanya dari tabel SK. Nama kosong = titik-titik.
@@ -1192,10 +1315,37 @@ export default function LaporanAsesmenSekolah() {
     </div>
   )
 
+  // --- Tab Pengesahan: tanda tangan SK Kelulusan (tanpa "Mengetahui") ---
+  const ttdKel = (
+    <div className="ttd-blok mt-6 flex justify-end">
+      <div className="w-72">
+        <table className="mb-3">
+          <tbody>
+            <tr>
+              <td className="pr-3 whitespace-nowrap">Ditetapkan di</td>
+              <td>: {isi(form.tempat, '…………')}</td>
+            </tr>
+            <tr>
+              <td className="pr-3 whitespace-nowrap">Pada Tanggal</td>
+              <td>: {isi(tanggalPanjang(tglPgs), '…………')}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div className="text-center">
+          <p className="mb-14">Kepala Sekolah</p>
+          <p className="garis-nama font-semibold underline decoration-slate-400 underline-offset-4">
+            {isi(form.kepalaNama, '…………')}
+          </p>
+          <p>NIP. {isi(form.kepalaNip, '…………')}</p>
+        </div>
+      </div>
+    </div>
+  )
+
   return (
     <Layout
       title="Laporan Asesmen Sekolah"
-      subtitle="Laporan asesmen Kelas 6, SK Panitia, dan Penganggaran dalam satu halaman — pilih tab untuk berpindah lembar, siap cetak."
+      subtitle="Laporan asesmen Kelas 6, SK Panitia, Penganggaran, dan Pengesahan dalam satu halaman — pilih tab untuk berpindah lembar, siap cetak."
     >
       <style>{`
         @page { size: A4; margin: 12mm 14mm; }
@@ -1422,7 +1572,7 @@ export default function LaporanAsesmenSekolah() {
         {tabAktif === 'skpanitia' && (
           <Bagian
             judul="SK Penetapan Panitia Asesmen Sekolah"
-            keterangan="Nama sekolah, tahun pelajaran, dan Kepala Sekolah terisi otomatis. Baris Penanggung jawab selalu diambil dari Kepala Sekolah. Tabel susunan panitia ini juga dipakai di tab Laporan (Bab II) dan Penganggaran (Bendahara)."
+            keterangan="Nama sekolah, tahun pelajaran, dan Kepala Sekolah terisi otomatis. Baris Penanggung jawab selalu diambil dari Kepala Sekolah. Tabel susunan panitia ini juga dipakai di tab Laporan (Bab II), Penganggaran (Bendahara), dan Pengesahan (Sekretaris)."
           >
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Field label="Nomor SK">
@@ -1576,6 +1726,87 @@ export default function LaporanAsesmenSekolah() {
           </Bagian>
         )}
 
+        {tabAktif === 'pengesahan' && (
+          <Bagian
+            judul="Lembar Pengesahan & SK Penetapan Kelulusan"
+            keterangan="Nama sekolah, kop, tahun pelajaran, tempat, dan Kepala Sekolah terisi otomatis dari isian di atas. Sekretaris diambil dari tab SK Panitia. Daftar siswa (No. Peserta Ujian & nama) diambil dari data siswa Kelas 6."
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Nomor SK Kelulusan">
+                <input className={inputCls} value={pgs.nomor} onChange={ubahPgs('nomor')} placeholder="mis. 421.2/038/05/2026" />
+              </Field>
+              <Field label="Tanggal pengesahan / penetapan" keterangan="Kosong = sama dengan Tanggal laporan.">
+                <input type="date" className={inputCls} value={pgs.tanggal} onChange={ubahPgs('tanggal')} />
+              </Field>
+              <Field label="Tanggal rapat dewan guru" keterangan="Kosong = sama dengan tanggal pengesahan.">
+                <input type="date" className={inputCls} value={pgs.rapat} onChange={ubahPgs('rapat')} />
+              </Field>
+              <Field label="Tahun pelajaran SK Kelulusan" keterangan="Kosong = sama dengan tahun pelajaran laporan.">
+                <input className={inputCls} value={pgs.tapelSk} onChange={ubahPgs('tapelSk')} placeholder={form.tapel || '2025/2026'} />
+              </Field>
+              <Field label="Nama Pengawas Sekolah">
+                <input className={inputCls} value={pgs.pengawasNama} onChange={ubahPgs('pengawasNama')} />
+              </Field>
+              <Field label="NIP Pengawas Sekolah">
+                <input className={inputCls} value={pgs.pengawasNip} onChange={ubahPgs('pengawasNip')} />
+              </Field>
+            </div>
+
+            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+              <p>
+                Sekretaris:{' '}
+                {sekretaris ? (
+                  <b>{sekretaris.nama}</b>
+                ) : (
+                  <span className="text-amber-700">belum terisi — pilih guru dengan jabatan "Sekretaris" di tab SK Panitia.</span>
+                )}
+              </p>
+              <p className="mt-1">
+                {memuatSiswa
+                  ? 'Memuat data siswa…'
+                  : daftarKel.length === 0
+                  ? 'Belum ada siswa Kelas 6 yang terbaca untuk lampiran.'
+                  : `Lampiran memuat ${daftarKel.length} siswa Kelas 6${peserta.length > 0 ? ' ber-No. Peserta' : ' (belum ada yang ber-No. Peserta)'}; ${jmlLulusKel} berketerangan Lulus.`}
+              </p>
+              <button
+                type="button"
+                onClick={() => setPgs((p) => ({ ...p, ket: {} }))}
+                disabled={daftarKel.length === 0}
+                className="mt-2 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+              >
+                Setel semua keterangan ke "Lulus"
+              </button>
+              <p className="mt-2 text-xs text-slate-500">
+                Keterangan tiap siswa (Lulus / Tidak Lulus) bisa diketik langsung di tabel lampiran pada pratinjau.
+              </p>
+            </div>
+
+            <div className="mt-4">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium text-slate-700">Teks pengesahan & SK (klik untuk membuka & mengubah)</p>
+                <button
+                  type="button"
+                  onClick={() => setPgs((p) => ({ ...p, teks: { ...TEKS_PGS } }))}
+                  className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  Kembalikan teks ke bawaan
+                </button>
+              </div>
+              <p className="mb-2 text-xs text-slate-500">
+                Kata kunci otomatis: {'{sekolah} {tapel} {tahun} {rapatguru}'}.
+              </p>
+              {BLOK_EDIT_PGS.map(([k, label, baris]) => (
+                <details key={k} className="mb-2 rounded-lg border border-slate-200">
+                  <summary className="cursor-pointer px-3 py-2 text-sm text-slate-700">{label}</summary>
+                  <div className="px-3 pb-3">
+                    <textarea className={inputCls} rows={baris} value={pgs.teks[k]} onChange={ubahTeksPgs(k)} />
+                  </div>
+                </details>
+              ))}
+            </div>
+          </Bagian>
+        )}
+
         {tabAktif === 'penyelenggara' && (
           <Bagian
             judul="Pelaksanaan (Lembar 4)"
@@ -1614,7 +1845,7 @@ export default function LaporanAsesmenSekolah() {
         )}
 
         {/* Tab per lembar */}
-        <div role="tablist" className="mt-2 mb-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2">
+        <div role="tablist" className="mt-2 mb-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
           {TAB.map((t) => {
             const aktif = tabAktif === t.id
             return (
@@ -2306,6 +2537,174 @@ export default function LaporanAsesmenSekolah() {
             </table>
 
             {ttdSk}
+          </div>
+        </section>
+
+        {/* ===================== PENGESAHAN: LEMBAR PENGESAHAN + SK KELULUSAN ===================== */}
+        <section className={`${kelasLembar('pengesahan')} laporan`}>
+          {/* Halaman 1: Lembar Pengesahan */}
+          <div className="halaman">
+            <div className="text-center font-bold text-base space-y-1 mt-6 mb-10">
+              <p className="text-lg">LEMBAR PENGESAHAN</p>
+              <p className="text-lg">ASESMEN SEKOLAH</p>
+              <p className="text-lg">TAHUN PELAJARAN {isi(form.tapel, '…………')}</p>
+            </div>
+
+            <div className="text-center mb-10 space-y-1">
+              {T(pgs.teks.lembar)
+                .split('\n')
+                .map((x) => x.trim())
+                .filter(Boolean)
+                .map((x, i) => (
+                  <p key={i}>{x}</p>
+                ))}
+            </div>
+
+            <p className="text-center mb-2">Disusun Oleh :</p>
+            <div className="text-center font-bold mb-10 space-y-0.5">
+              {isiTemplate(pgs.teks.penyusun, tokens)
+                .split('\n')
+                .map((x) => x.trim())
+                .filter(Boolean)
+                .map((x, i) => (
+                  <p key={i}>{x}</p>
+                ))}
+            </div>
+
+            <p className="text-center mb-4">
+              Diperiksa dan disyahkan pada tanggal {isi(tanggalPanjang(tglPgs), '…………')}
+            </p>
+
+            <div className="ttd-blok flex justify-between gap-6 mt-6">
+              <div className="w-64 text-center">
+                <p className="mb-16">Kepala {namaSekolah}</p>
+                <p className="garis-nama font-semibold underline decoration-slate-400 underline-offset-4">
+                  {isi(String(form.kepalaNama || '').toUpperCase(), '…………')}
+                </p>
+                <p>NIP. {isi(form.kepalaNip, '…………')}</p>
+              </div>
+              <div className="w-64 text-center">
+                <p className="mb-16">Sekretaris</p>
+                <p className="garis-nama font-semibold underline decoration-slate-400 underline-offset-4">
+                  {isi(String(sekretaris?.nama || '').toUpperCase(), '…………')}
+                </p>
+                <p>NIP. {isi(sekretaris?.nip, '…………')}</p>
+              </div>
+            </div>
+
+            <div className="ttd-blok mt-8 flex justify-center">
+              <div className="w-72 text-center">
+                <p>Mengetahui</p>
+                <p className="mb-16">Pengawas Sekolah</p>
+                <p className="garis-nama font-semibold underline decoration-slate-400 underline-offset-4">
+                  {isi(String(pgs.pengawasNama || '').toUpperCase(), '…………')}
+                </p>
+                <p>NIP. {isi(pgs.pengawasNip, '…………')}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Halaman 2: SK Penetapan Kelulusan */}
+          <div className="halaman">
+            {kop}
+            <div className="text-center font-bold mb-4 space-y-0.5">
+              <p>SURAT KEPUTUSAN</p>
+              <p>KEPALA {namaSekolahBesar}</p>
+              <p>NOMOR : {isi(pgs.nomor, '…………')}</p>
+              <p className="pt-2">TENTANG</p>
+              <p>PENETAPAN KELULUSAN PESERTA DIDIK KELAS VI</p>
+              <p>TAHUN PELAJARAN {isi(tapelSk, '…………')}</p>
+            </div>
+
+            <table className="w-full mb-2">
+              <tbody>
+                <tr className="align-top">
+                  <td className="w-28 whitespace-nowrap">Menimbang</td>
+                  <td className="w-4">:</td>
+                  <td className="teks-laporan">{isiTemplate(pgs.teks.menimbang, tokensKel)}</td>
+                </tr>
+                <tr className="align-top">
+                  <td className="w-28 whitespace-nowrap pt-2">Mengingat</td>
+                  <td className="w-4 pt-2">:</td>
+                  <td className="pt-2">
+                    <Butir teks={pgs.teks.mengingat} v={tokensKel} nomor />
+                  </td>
+                </tr>
+                <tr className="align-top">
+                  <td className="w-28 whitespace-nowrap pt-2">Memperhatikan</td>
+                  <td className="w-4 pt-2">:</td>
+                  <td className="teks-laporan pt-2">{isiTemplate(pgs.teks.memperhatikan, tokensKel)}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <p className="text-center font-bold my-3">MEMUTUSKAN</p>
+            <table className="w-full">
+              <tbody>
+                <tr className="align-top">
+                  <td className="w-28 whitespace-nowrap">Menetapkan</td>
+                  <td className="w-4">:</td>
+                  <td />
+                </tr>
+                {[
+                  ['KESATU', 'kesatu'],
+                  ['KEDUA', 'kedua'],
+                  ['KETIGA', 'ketiga'],
+                  ['KEEMPAT', 'keempat'],
+                  ['KELIMA', 'kelima'],
+                ].map(([label, k]) => (
+                  <tr key={k} className="align-top">
+                    <td className="whitespace-nowrap pt-1 font-semibold">{label}</td>
+                    <td className="pt-1">:</td>
+                    <td className="teks-laporan pt-1">{isiTemplate(pgs.teks[k], tokensKel)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {ttdKel}
+          </div>
+
+          {/* Halaman 3: Lampiran daftar kelulusan */}
+          <div className="halaman">
+            <p className="mb-2">Lampiran :</p>
+            {kop}
+            <div className="text-center font-bold mb-4 space-y-0.5">
+              <p>PENETAPAN KELULUSAN PESERTA DIDIK KELAS VI</p>
+              <p>TAHUN PELAJARAN {isi(tapelSk, '…………')}</p>
+            </div>
+
+            <table className="w-full border-collapse text-[12px]">
+              <thead>
+                <tr>
+                  <Th className="w-10">No</Th>
+                  <Th className="w-44">No Peserta Ujian</Th>
+                  <Th>Nama Siswa</Th>
+                  <Th className="w-32">Keterangan</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {daftarKel.length === 0 && (
+                  <tr>
+                    <Td colSpan={4} className="text-center text-slate-500">
+                      {memuatSiswa ? 'Memuat data siswa…' : 'Belum ada data siswa Kelas 6.'}
+                    </Td>
+                  </tr>
+                )}
+                {daftarKel.map((s, i) => (
+                  <tr key={s.id}>
+                    <Td className="text-center">{i + 1}</Td>
+                    <Td className="text-center">{s.no || '-'}</Td>
+                    <Td>{String(s.nama || '').toUpperCase()}</Td>
+                    <Td className="p-0">
+                      <input className="sel-input" value={ketSiswa(s.id)} onChange={ubahKetPgs(s.id)} />
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {ttdKel}
           </div>
         </section>
       </div>
