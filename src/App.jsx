@@ -64,6 +64,8 @@ const LaporanSemester = lazy(() => import('./pages/LaporanSemester'))
 const LaporanBulanan = lazy(() => import('./pages/LaporanBulanan'))
 // Laporan Daftar Hadir Guru/Pegawai — halaman berdiri sendiri, dipisah dari
 // selector "Jenis Laporan" di LaporanBulanan.jsx (logika & template sama).
+const AdministrasiKepalaSekolah = lazy(() => import('./pages/AdministrasiKepalaSekolah'))
+const AdministrasiKepsekItem = lazy(() => import('./pages/AdministrasiKepsekItem'))
 const LaporanDaftarHadirGuru = lazy(() => import('./pages/LaporanDaftarHadirGuru'))
 const PusatLaporanGuru = lazy(() => import('./pages/PusatLaporanGuru'))
 const GudangSK = lazy(() => import('./pages/GudangSK'))                    
@@ -402,6 +404,12 @@ export default function App() {
           <Route path="/data-pegawai-puskesmas" element={<ProtectedRoute adminOnly><DataPegawaiPuskesmas /></ProtectedRoute>} />
           <Route path="/presensi-puskesmas" element={<ProtectedRoute adminOnly><PresensiPuskesmas /></ProtectedRoute>} />
           <Route path="/daftar-hadir-puskesmas" element={<ProtectedRoute adminOnly><DaftarHadirPuskesmas /></ProtectedRoute>} />
+          
+          {/* ============================================================
+          ADMINISTRASI KEPALA SEKOLAH (hub + 15 halaman dokumen)
+          ============================================================ */}
+          <Route path="/administrasi-kepsek" element={<ProtectedRoute adminOnly><AdministrasiKepalaSekolah /></ProtectedRoute>} />
+          <Route path="/administrasi-kepsek/:slug" element={<ProtectedRoute adminOnly><AdministrasiKepsekItem /></ProtectedRoute>} />
 
           {/* ============================================================
               3. LAPORAN GURU & SAMPUL LAPORAN
