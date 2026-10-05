@@ -43,6 +43,7 @@ const DEF = {
   nomorSurat: "421.2/038/05/2026", kota: "Waria", kotaKuasa: "Dobo", tanggal: new Date().toISOString().slice(0, 10),
   bank: "BRI CABANG DOBO", nominal: "450000", alamatOrtu: "Desa Waria Kecamatan Aru Utara Timur",
 };
+const MG_DEF = { atas: 12, bawah: 20, kiri: 18, kanan: 18, huruf: 10 };
 const LABEL = { sekolah: "Nama sekolah (kop)", namaSekolah: "Nama satuan pendidikan", alamatSekolah: "Alamat sekolah", tahun: "Tahun PIP",
   kepsek: "Nama kepala sekolah", nip: "NIP", pangkat: "Pangkat/Golongan", ktpKepsek: "No. KTP kepala sekolah", hpKepsek: "No. HP kepala sekolah",
   alamatKepsek: "Alamat kepala sekolah", nomorSurat: "Nomor surat", kota: "Kota surat", kotaKuasa: "Kota surat kuasa", tanggal: "Tanggal surat",
@@ -65,7 +66,7 @@ const CSS = `
 .pip .tabs button.on{background:#1f4e79}
 .pip details{border:1px solid #ddd;border-radius:6px;padding:8px 12px;margin:8px 0}.pip summary{cursor:pointer;font-size:14px}
 .pip .fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;margin-top:10px}
-.pip label.f{display:flex;flex-direction:column;font-size:12px;color:#555;gap:2px}.pip input[type=text],.pip input[type=date],.pip select{padding:6px;border:1px solid #bbb;border-radius:4px;font-size:13px}
+.pip label.f{display:flex;flex-direction:column;font-size:12px;color:#555;gap:2px}.pip input[type=text],.pip input[type=date],.pip input[type=number],.pip select{padding:6px;border:1px solid #bbb;border-radius:4px;font-size:13px}
 .pip .list{max-height:190px;overflow:auto;border:1px solid #ddd;border-radius:6px;padding:6px 10px;columns:2 260px;font-size:13px}
 .pip .list label{display:block;padding:1px 0}.pip .err{color:#b00020;font-size:13px}
 .pip .paper{background:#eee;padding:12px;margin-top:12px;overflow:auto}
@@ -118,6 +119,11 @@ export default function DokumenPIP() {
   const [semua, setSemua] = useState(false);
   const [err, setErr] = useState("");
   const [logo, setLogo] = useState("");
+  const [mg, setMg] = useState(() => { try { return { ...MG_DEF, ...JSON.parse(localStorage.getItem("pip-margin") || "{}") }; } catch { return MG_DEF; } });
+  const ubahMg = (k, v) => { const n = { ...mg, [k]: v }; setMg(n); try { localStorage.setItem("pip-margin", JSON.stringify(n)); } catch { /* abaikan */ } };
+  const resetMg = () => { setMg(MG_DEF); try { localStorage.removeItem("pip-margin"); } catch { /* abaikan */ } };
+  const M = (k) => Math.max(0, Math.min(60, Number(mg[k]) || 0));
+  const CSS_CETAK = `@media print{@page{size:A4;margin:${M("atas")}mm ${M("kanan")}mm ${M("bawah")}mm ${M("kiri")}mm}.pip .sheet.satu{height:${297 - M("atas") - M("bawah") - 1}mm}}.pip .sheet.satu{font-size:${Math.max(7, Number(mg.huruf) || 10)}pt}`;
 
   const terpilih = useMemo(() => siswa.filter((x) => pilih.has(x.id)), [siswa, pilih]);
   const total = terpilih.length * (Number(s.nominal) || 0);
@@ -233,7 +239,7 @@ export default function DokumenPIP() {
 
   return (
     <Layout title="Dokumen PIP" subtitle="Surat aktivasi rekening, SPTJM, dan surat kuasa dari data siswa">
-    <div className="pip"><style>{CSS}</style>
+    <div className="pip"><style>{CSS}</style><style>{CSS_CETAK}</style>
       <div className="bar">
         {isAdmin && <label className="file">Isi rekening dari Excel PIP<input type="file" accept=".xls,.xlsx" onChange={impor} hidden /></label>}
         {siswa.length > 0 && <span style={{ fontSize: 13 }}>{terpilih.length} dari {siswa.length} siswa dipilih · total {rp(total)}</span>}
@@ -249,6 +255,11 @@ export default function DokumenPIP() {
         <div className="bar">{logo && <img src={logo} alt="Logo sekolah" style={{ height: 48 }} />}
           <label className="file">{logo ? "Ganti logo" : "Unggah logo sekolah"}<input type="file" accept="image/*" onChange={pilihLogo} hidden /></label>
           {logo && <button onClick={hapusLogo}>Hapus logo</button>}</div></details>
+
+      <details><summary>Pengaturan cetak (margin kertas)</summary>
+        <div className="fgrid">{[["atas", "Margin atas (mm)"], ["bawah", "Margin bawah (mm)"], ["kiri", "Margin kiri (mm)"], ["kanan", "Margin kanan (mm)"], ["huruf", "Ukuran huruf SPTJM (pt)"]].map(([k, l]) => <label className="f" key={k}>{l}<input type="number" step="0.5" min="0" value={mg[k]} onChange={(e) => ubahMg(k, e.target.value)} /></label>)}</div>
+        <div className="sub" style={{ marginTop: 8 }}>Margin berlaku di setiap halaman saat dicetak (pratinjau di layar tidak berubah). Naikkan margin bawah bila teks terpotong printer; bila SPTJM jadi 2 halaman, kecilkan ukuran huruf.</div>
+        <div className="bar"><button onClick={resetMg}>Kembalikan default</button></div></details>
 
       <div className="tabs" role="tablist">{["Surat Keterangan Aktivasi", "SPTJM", "Surat Kuasa"].map((t, i) => <button key={t} role="tab" aria-selected={tab === i} className={tab === i ? "on" : ""} onClick={() => setTab(i)}>{t}</button>)}</div>
 
