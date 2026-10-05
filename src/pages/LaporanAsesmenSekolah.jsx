@@ -7,6 +7,8 @@
 //   Lembar 2 - Klasifikasi nilai (jumlah peserta per rentang nilai)
 //   Lembar 3 - Peserta terdaftar, hadir, lulus & tidak lulus (L / P / Jml)
 //   Lembar 4 - Laporan sekolah penyelenggara (kehadiran + masalah & saran)
+//   SK Panitia - SK Penetapan Panitia Asesmen Sekolah + lampiran susunan panitia
+//                (sumber: sk_Proktor_2021.docx; nama/NIP/golongan bisa ditarik dari tabel `guru`)
 //
 // Pola mengikuti DaftarHadirSiswaUjian.jsx:
 // - Kop surat, logo kabupaten/sekolah dari profil_sekolah, useAuth,
@@ -186,6 +188,7 @@ const TAB = [
   { id: 'klasifikasi', label: 'Lembar 2', sub: 'Klasifikasi Nilai' },
   { id: 'kelulusan', label: 'Lembar 3', sub: 'Kelulusan' },
   { id: 'penyelenggara', label: 'Lembar 4', sub: 'Penyelenggara' },
+  { id: 'skpanitia', label: 'SK Panitia', sub: 'Penetapan Panitia AS' },
 ]
 
 const barisNilai = () =>
@@ -453,6 +456,42 @@ const BLOK_EDIT = [
   ['lampiran', 'Lampiran-lampiran', 12],
 ]
 
+// --- Tab "SK Panitia": teks bawaan SK Penetapan Panitia Asesmen Sekolah ---
+// (sumber: sk_Proktor_2021.docx). Tanpa nama orang / nama sekolah tertentu;
+// semuanya memakai kata kunci {sekolah} {tapel} dan data sekolah yang login.
+const TEKS_SK = {
+  menimbang: `bahwa dalam rangka mendukung kelancaran Pelaksanaan Asesmen Sekolah (AS) {sekolah} Tahun Pelajaran {tapel} perlu menetapkan Panitia Asesmen Sekolah (AS) {sekolah} Tahun Pelajaran {tapel}.`,
+
+  mengingat: `Undang-Undang Nomor 20 Tahun 2003 tentang Sistem Pendidikan Nasional (Lembaran Negara Tahun 2003 Nomor 78 Tambahan Lembaran Negara Nomor 4301);
+Undang-Undang Nomor 12 Tahun 2011 tentang Pembentukan Peraturan Perundang-undangan (Lembaran Negara Tahun 2011 Nomor 82 Tambahan Lembaran Negara Nomor 5234);
+Undang-Undang Nomor 23 Tahun 2014 tentang Pemerintahan Daerah (Lembaran Negara Tahun 2014 Nomor 244 Tambahan Lembaran Negara Nomor 5587) sebagaimana telah diubah beberapa kali terakhir dengan Undang-Undang Nomor 9 Tahun 2015 tentang Perubahan Kedua Atas Undang-Undang Nomor 23 Tahun 2014 tentang Pemerintahan Daerah (Lembaran Negara Tahun 2015 Nomor 58 Tambahan Lembaran Negara Nomor 5679);
+Peraturan Pemerintah Nomor 19 Tahun 2005 tentang Standar Nasional Pendidikan (Lembaran Negara Tahun 2005 Nomor 41 Tambahan Lembaran Negara Nomor 4496) sebagaimana telah diubah dengan Peraturan Pemerintah Nomor 32 Tahun 2013 (Lembaran Negara Tahun 2013 Nomor 71 Tambahan Lembaran Negara Nomor 5410);
+Peraturan Pemerintah Nomor 17 Tahun 2010 tentang Pengelolaan dan Penyelenggaraan Pendidikan (Lembaran Negara Tahun 2010 Nomor 23 Tambahan Lembaran Negara Nomor 5105) sebagaimana telah diubah dengan Peraturan Pemerintah Nomor 66 Tahun 2010 (Lembaran Negara Tahun 2010 Nomor 112 Tambahan Lembaran Negara Nomor 5157);
+Peraturan Menteri Pendidikan dan Kebudayaan Republik Indonesia Nomor 3 Tahun 2017 tentang Penilaian Hasil Belajar Oleh Pemerintah dan Penilaian Hasil Belajar Oleh Satuan Pendidikan;
+Peraturan Kepala Badan Standar, Kurikulum, dan Asesmen Pendidikan Kementerian Pendidikan dan Kebudayaan, Riset, dan Teknologi Nomor: 030/H/PG.00/2021 tentang Prosedur Operasional Standar Penyelenggaraan Asesmen Nasional Tahun 2021.`,
+
+  pertama: `Membentuk dan menetapkan Panitia Asesmen Sekolah (AS) {sekolah} Tahun Pelajaran {tapel}. Daftar nama Panitia Asesmen Sekolah (AS) {sekolah} Tahun Pelajaran {tapel} terlampir;`,
+
+  kedua: `Surat Keputusan ini berlaku sejak tanggal ditetapkan dan apabila di kemudian hari terdapat kekeliruan akan dibetulkan sebagaimana mestinya. Hal-hal yang belum diatur dalam Surat Keputusan ini akan diatur kemudian.`,
+}
+
+const BLOK_EDIT_SK = [
+  ['menimbang', 'Menimbang', 4],
+  ['mengingat', 'Mengingat (satu baris = satu butir, otomatis bernomor)', 14],
+  ['pertama', 'Memutuskan — PERTAMA', 4],
+  ['kedua', 'Memutuskan — KEDUA', 4],
+]
+
+// Baris awal susunan panitia: hanya jabatan dalam tugas, tanpa nama orang.
+// Baris Penanggung jawab (Kepala Sekolah) dibuat otomatis saat tampil.
+const BARIS_SK_AWAL = () =>
+  ['Ketua', 'Sekretaris', 'Bendahara', 'Anggota', 'Anggota'].map((t) => ({
+    tugas: t,
+    nama: '',
+    nip: '',
+    dinas: '',
+  }))
+
 export default function LaporanAsesmenSekolah() {
   const { sekolahId: sekolahIdCtx, profil } = useAuth()
   const sekolahId = sekolahIdCtx || profil?.sekolah_id
@@ -508,6 +547,16 @@ export default function LaporanAsesmenSekolah() {
   const [klas, setKlas] = useState(barisKlasifikasi)
   const [lulus, setLulus] = useState(barisKelulusan)
   const [pen, setPen] = useState(barisPenyelenggara)
+
+  // Tab SK Panitia: nomor SK, tempat/tanggal penetapan, teks, dan susunan panitia.
+  const [skp, setSkp] = useState(() => ({
+    nomor: '',
+    tempat: '',
+    tanggal: '',
+    teks: { ...TEKS_SK },
+    baris: BARIS_SK_AWAL(),
+  }))
+  const [infoSk, setInfoSk] = useState('')
 
   // Tab Laporan: isian & teks laporan lengkap (Kata Pengantar s.d. Lampiran).
   const [lap, setLap] = useState(() => ({
@@ -639,6 +688,9 @@ export default function LaporanAsesmenSekolah() {
         .map((g) => ({
           id: g.id,
           nama: String(g.nama_lengkap || g.nama || cariKolom(g, /^nama/i) || '').trim(),
+          // NIP & golongan dipakai tab SK Panitia (dicari dari nama kolom yang mirip).
+          nip: String(g.nip || cariKolom(g, /(^|_)nip($|_)/i) || '').trim(),
+          gol: String(cariKolom(g, /golongan|pangkat|(^|_)gol($|_)/i) || '').trim(),
         }))
         .filter((g) => g.nama)
         .sort((a, b) => a.nama.localeCompare(b.nama, 'id'))
@@ -678,6 +730,76 @@ export default function LaporanAsesmenSekolah() {
       return { ...l, panitia: baris.join('\n') }
     })
   }
+
+  // --- SK Panitia: pengubah isian & tarik data guru ---
+  const ubahSkp = (k) => (e) => {
+    const v = e.target.value
+    setSkp((s) => ({ ...s, [k]: v }))
+  }
+  const ubahTeksSk = (k) => (e) => {
+    const v = e.target.value
+    setSkp((s) => ({ ...s, teks: { ...s.teks, [k]: v } }))
+  }
+  const ubahBarisSk = (i, k) => (e) => {
+    const v = e.target.value
+    setSkp((s) => ({ ...s, baris: s.baris.map((r, j) => (j === i ? { ...r, [k]: v } : r)) }))
+  }
+
+  // Pilih guru untuk satu baris: nama, NIP & golongan terisi dari data guru.
+  function pilihGuruSk(i, id) {
+    const g = guruList.find((x) => String(x.id) === String(id))
+    setSkp((s) => ({
+      ...s,
+      baris: s.baris.map((r, j) =>
+        j === i ? (g ? { ...r, nama: g.nama, nip: g.nip || '', dinas: g.gol || '' } : { ...r, nama: '', nip: '', dinas: '' }) : r
+      ),
+    }))
+  }
+
+  // Isi baris yang masih kosong, urut dari daftar guru (Kepala Sekolah & yang sudah dipakai dilewati).
+  function isiBarisSkDariGuru() {
+    const kepsek = String(form.kepalaNama || '').trim().toLowerCase()
+    setSkp((s) => {
+      const dipakai = new Set(s.baris.map((r) => r.nama.trim().toLowerCase()).filter(Boolean))
+      const pool = guruList.filter((g) => g.nama.toLowerCase() !== kepsek && !dipakai.has(g.nama.toLowerCase()))
+      let k = 0
+      return {
+        ...s,
+        baris: s.baris.map((r) => {
+          if (r.nama.trim()) return r
+          const g = pool[k++]
+          return g ? { ...r, nama: g.nama, nip: g.nip || '', dinas: g.gol || '' } : r
+        }),
+      }
+    })
+  }
+
+  // Ambil susunan panitia yang sudah diisi di tab Laporan (Penanggung Jawab dilewati).
+  function ambilDariPanitiaLaporan() {
+    const daftar = lap.panitia
+      .split('\n')
+      .map((b) => {
+        const [j, ...n] = b.split('|')
+        return { tugas: (j || '').trim(), nama: n.join('|').trim() }
+      })
+      .filter((p) => p.tugas && p.nama && !p.nama.includes('{') && !/^penanggung/i.test(p.tugas))
+    if (daftar.length === 0) {
+      setInfoSk('Susunan panitia di tab Laporan masih kosong.')
+      return
+    }
+    setSkp((s) => ({
+      ...s,
+      baris: daftar.map((p) => {
+        const g = guruList.find((x) => x.nama.toLowerCase() === p.nama.toLowerCase())
+        return { tugas: p.tugas, nama: p.nama, nip: g?.nip || '', dinas: g?.gol || '' }
+      }),
+    }))
+    setInfoSk(`Terisi ${daftar.length} anggota dari susunan panitia di tab Laporan.`)
+  }
+
+  const tambahBarisSk = () =>
+    setSkp((s) => ({ ...s, baris: [...s.baris, { tugas: 'Anggota', nama: '', nip: '', dinas: '' }] }))
+  const hapusBarisSk = () => setSkp((s) => ({ ...s, baris: s.baris.length > 1 ? s.baris.slice(0, -1) : s.baris }))
 
   useEffect(() => {
     muat()
@@ -1007,6 +1129,37 @@ export default function LaporanAsesmenSekolah() {
 
   const kelasLembar = (id) => `lembar ${tabAktif === id ? 'aktif' : ''}`
 
+  // --- Tab SK Panitia: data turunan ---
+  const namaSekolahBesar = String(namaSekolah).toUpperCase()
+  const tempatSk = skp.tempat || form.tempat
+  const tglSk = skp.tanggal || form.tanggalLaporan
+  const ttdSk = (
+    <div className="ttd-blok mt-6 flex justify-end">
+      <div className="w-72">
+        <table className="mb-3">
+          <tbody>
+            <tr>
+              <td className="pr-3 whitespace-nowrap">Ditetapkan di</td>
+              <td>: {isi(tempatSk, '…………')}</td>
+            </tr>
+            <tr>
+              <td className="pr-3 whitespace-nowrap">Pada Tanggal</td>
+              <td>: {isi(tanggalPanjang(tglSk), '…………')}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div className="text-center">
+          <p>Mengetahui</p>
+          <p className="mb-14">Kepala Sekolah</p>
+          <p className="garis-nama font-semibold underline decoration-slate-400 underline-offset-4">
+            {isi(form.kepalaNama, '…………')}
+          </p>
+          <p>NIP. {isi(form.kepalaNip, '…………')}</p>
+        </div>
+      </div>
+    </div>
+  )
+
   return (
     <Layout
       title="Laporan Asesmen Sekolah"
@@ -1276,6 +1429,112 @@ export default function LaporanAsesmenSekolah() {
           </Bagian>
         )}
 
+        {tabAktif === 'skpanitia' && (
+          <Bagian
+            judul="SK Penetapan Panitia Asesmen Sekolah"
+            keterangan="Nama sekolah, tahun pelajaran, dan Kepala Sekolah terisi otomatis. Baris Penanggung jawab selalu diambil dari Kepala Sekolah."
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Field label="Nomor SK">
+                <input className={inputCls} value={skp.nomor} onChange={ubahSkp('nomor')} placeholder="mis. 421.2/038/06/2026" />
+              </Field>
+              <Field label="Ditetapkan di" keterangan="Kosong = sama dengan Tempat di bagian Tanda tangan.">
+                <input className={inputCls} value={skp.tempat} onChange={ubahSkp('tempat')} placeholder={form.tempat || 'nama tempat'} />
+              </Field>
+              <Field label="Tanggal ditetapkan" keterangan="Kosong = sama dengan Tanggal laporan.">
+                <input type="date" className={inputCls} value={skp.tanggal} onChange={ubahSkp('tanggal')} />
+              </Field>
+            </div>
+
+            <div className="mt-4 rounded-lg border border-slate-200 p-3">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium text-slate-700">Susunan panitia — pilih dari data guru ({guruList.length})</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={isiBarisSkDariGuru}
+                    disabled={guruList.length === 0}
+                    className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Isi otomatis yang masih kosong
+                  </button>
+                  <button
+                    type="button"
+                    onClick={ambilDariPanitiaLaporan}
+                    className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                  >
+                    Ambil dari tab Laporan
+                  </button>
+                </div>
+              </div>
+              {infoGuru && <p className="mb-2 text-xs text-amber-700">{infoGuru}</p>}
+              {infoSk && <p className="mb-2 text-xs text-slate-600">{infoSk}</p>}
+              <div className="space-y-1.5">
+                {skp.baris.map((r, i) => {
+                  const ada = guruList.some((g) => g.nama === r.nama)
+                  const idTerpilih = guruList.find((g) => g.nama === r.nama)?.id ?? ''
+                  return (
+                    <div key={i} className="grid grid-cols-1 sm:grid-cols-[9rem_1fr] items-center gap-2">
+                      <input
+                        className={inputCls}
+                        value={r.tugas}
+                        onChange={ubahBarisSk(i, 'tugas')}
+                        aria-label="Jabatan dalam tugas"
+                      />
+                      <select className={inputCls} value={idTerpilih} onChange={(e) => pilihGuruSk(i, e.target.value)}>
+                        <option value="">{r.nama && !ada ? `${r.nama} (diketik manual)` : '— pilih guru —'}</option>
+                        {guruList.map((g) => (
+                          <option key={g.id} value={g.id}>{g.nama}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={tambahBarisSk}
+                  className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  + Tambah baris
+                </button>
+                <button
+                  type="button"
+                  onClick={hapusBarisSk}
+                  className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  − Hapus baris terakhir
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-slate-500">
+                NIP, jabatan dalam dinas (golongan), dan nama yang tidak ada di daftar guru bisa diketik langsung di tabel pratinjau di bawah.
+              </p>
+            </div>
+
+            <div className="mt-4">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium text-slate-700">Teks SK (klik untuk membuka & mengubah)</p>
+                <button
+                  type="button"
+                  onClick={() => setSkp((s) => ({ ...s, teks: { ...TEKS_SK } }))}
+                  className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  Kembalikan teks ke bawaan
+                </button>
+              </div>
+              {BLOK_EDIT_SK.map(([k, label, baris]) => (
+                <details key={k} className="mb-2 rounded-lg border border-slate-200">
+                  <summary className="cursor-pointer px-3 py-2 text-sm text-slate-700">{label}</summary>
+                  <div className="px-3 pb-3">
+                    <textarea className={inputCls} rows={baris} value={skp.teks[k]} onChange={ubahTeksSk(k)} />
+                  </div>
+                </details>
+              ))}
+            </div>
+          </Bagian>
+        )}
+
         {tabAktif === 'penyelenggara' && (
           <Bagian
             judul="Pelaksanaan (Lembar 4)"
@@ -1314,7 +1573,7 @@ export default function LaporanAsesmenSekolah() {
         )}
 
         {/* Tab per lembar */}
-        <div role="tablist" className="mt-2 mb-3 grid grid-cols-2 sm:grid-cols-5 gap-2">
+        <div role="tablist" className="mt-2 mb-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
           {TAB.map((t) => {
             const aktif = tabAktif === t.id
             return (
@@ -1772,6 +2031,130 @@ export default function LaporanAsesmenSekolah() {
 
           <p className="mt-2 text-[12px] italic">Laporan ini disampaikan ke Penyelenggara Tingkat Sub Rayon.</p>
           {ttd}
+        </section>
+
+        {/* ===================== SK PANITIA ASESMEN SEKOLAH ===================== */}
+        <section className={`${kelasLembar('skpanitia')} laporan`}>
+          {/* Halaman 1: SK */}
+          <div className="halaman">
+            {kop}
+            <div className="text-center font-bold mb-4 space-y-0.5">
+              <p>SURAT KEPUTUSAN KEPALA SEKOLAH {namaSekolahBesar}</p>
+              <p>NOMOR : {isi(skp.nomor, '…………')}</p>
+              <p className="pt-2">TENTANG</p>
+              <p>PENETAPAN PANITIA ASESMEN SEKOLAH (AS) {namaSekolahBesar}</p>
+              <p>TAHUN PELAJARAN {isi(form.tapel, '…………')}</p>
+            </div>
+
+            <p className="text-center font-bold mb-3">KEPALA SEKOLAH {namaSekolahBesar}</p>
+
+            <table className="w-full mb-2">
+              <tbody>
+                <tr className="align-top">
+                  <td className="w-24 whitespace-nowrap">Menimbang</td>
+                  <td className="w-4">:</td>
+                  <td className="teks-laporan">{T(skp.teks.menimbang)}</td>
+                </tr>
+                <tr className="align-top">
+                  <td className="w-24 whitespace-nowrap pt-2">Mengingat</td>
+                  <td className="w-4 pt-2">:</td>
+                  <td className="pt-2">
+                    <Butir teks={skp.teks.mengingat} v={tokens} nomor />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <p className="text-center font-bold my-3">MEMUTUSKAN:</p>
+            <table className="w-full">
+              <tbody>
+                <tr className="align-top">
+                  <td className="w-24 whitespace-nowrap">Menetapkan</td>
+                  <td className="w-4">:</td>
+                  <td />
+                </tr>
+                <tr className="align-top">
+                  <td className="whitespace-nowrap pt-1 font-semibold">PERTAMA</td>
+                  <td className="pt-1">:</td>
+                  <td className="teks-laporan pt-1">{T(skp.teks.pertama)}</td>
+                </tr>
+                <tr className="align-top">
+                  <td className="whitespace-nowrap pt-1 font-semibold">KEDUA</td>
+                  <td className="pt-1">:</td>
+                  <td className="teks-laporan pt-1">{T(skp.teks.kedua)}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            {ttdSk}
+          </div>
+
+          {/* Halaman 2: Lampiran susunan panitia */}
+          <div className="halaman">
+            <div className="mb-4">
+              <p className="font-bold">Lampiran Keputusan Kepala {namaSekolah}</p>
+              <table>
+                <tbody>
+                  <tr>
+                    <td className="pr-4">Nomor</td>
+                    <td>: {isi(skp.nomor, '…………')}</td>
+                  </tr>
+                  <tr>
+                    <td className="pr-4">Tanggal</td>
+                    <td>: {isi(tanggalPanjang(tglSk), '…………')}</td>
+                  </tr>
+                  <tr className="align-top">
+                    <td className="pr-4">Tentang</td>
+                    <td>: Penetapan Panitia Asesmen Sekolah (AS) {namaSekolah} Tahun Pelajaran {isi(form.tapel, '…………')}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <p className="text-center font-bold mb-2">
+              SUSUNAN PANITIA ASESMEN SEKOLAH (AS) {namaSekolahBesar} TAHUN PELAJARAN {isi(form.tapel, '…………')}
+            </p>
+            <table className="w-full border-collapse text-[12px]">
+              <thead>
+                <tr>
+                  <Th className="w-8">NO</Th>
+                  <Th>NAMA</Th>
+                  <Th className="w-40">NIP</Th>
+                  <Th className="w-28">JABATAN DALAM DINAS</Th>
+                  <Th className="w-28">JABATAN DALAM TUGAS</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {/* Baris 1: Penanggung jawab = Kepala Sekolah (otomatis) */}
+                <tr>
+                  <Td className="text-center">1</Td>
+                  <Td>{isi(form.kepalaNama, '…………')}</Td>
+                  <Td className="text-center">{isi(form.kepalaNip, '…………')}</Td>
+                  <Td className="text-center">Kepala Sekolah</Td>
+                  <Td className="text-center">Penanggung jawab</Td>
+                </tr>
+                {skp.baris.map((r, i) => (
+                  <tr key={i}>
+                    <Td className="text-center">{i + 2}</Td>
+                    <Td className="p-0">
+                      <input className="sel-input sel-kiri px-1.5" value={r.nama} onChange={ubahBarisSk(i, 'nama')} />
+                    </Td>
+                    <Td className="p-0">
+                      <input className="sel-input" value={r.nip} onChange={ubahBarisSk(i, 'nip')} />
+                    </Td>
+                    <Td className="p-0">
+                      <input className="sel-input" value={r.dinas} onChange={ubahBarisSk(i, 'dinas')} />
+                    </Td>
+                    <Td className="p-0">
+                      <input className="sel-input" value={r.tugas} onChange={ubahBarisSk(i, 'tugas')} />
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {ttdSk}
+          </div>
         </section>
       </div>
     </Layout>
