@@ -122,6 +122,7 @@ const BuatUjian = lazy(() => import('./pages/BuatUjian'))
 const BuatKuisSeru = lazy(() => import('./pages/BuatKuisSeru'))
 const HasilKuisSeru = lazy(() => import('./pages/HasilKuisSeru'))
 const KartuSiswa = lazy(() => import('./pages/KartuSiswa'))
+const DokumenPIP = lazy(() => import('./pages/DokumenPIP'))
 const HariLibur = lazy(() => import('./pages/HariLibur'))
 const KalenderPendidikan = lazy(() => import('./pages/KalenderPendidikan'))
 
@@ -486,6 +487,7 @@ export default function App() {
           <Route path="/buat-kuis-seru" element={<ProtectedRoute><BuatKuisSeru /></ProtectedRoute>} />
           <Route path="/hasil-kuis-seru" element={<ProtectedRoute><HasilKuisSeru /></ProtectedRoute>} />
           <Route path="/kartu" element={<ProtectedRoute adminOnly><KartuSiswa /></ProtectedRoute>} />
+          <Route path="/dokumen-pip" element={<ProtectedRoute adminOnly><DokumenPIP /></ProtectedRoute>} />
           <Route path="/hari-libur" element={<ProtectedRoute adminOnly><HariLibur /></ProtectedRoute>} />
           {/* Kalender Pendidikan: BUKAN adminOnly — guru tetap bisa melihat kalender,
               kontrol edit (klik tanggal untuk ubah status) sudah dibatasi di dalam
