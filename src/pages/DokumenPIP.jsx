@@ -183,6 +183,16 @@ export default function DokumenPIP() {
     let simpanLogo = ""; try { simpanLogo = localStorage.getItem("pip-logo-" + sekolahId) || ""; } catch { /* abaikan */ }
     if (simpanLogo) setLogo(simpanLogo);
     let simpanS = {}; try { simpanS = JSON.parse(localStorage.getItem("pip-data-" + sekolahId) || "{}"); } catch { /* abaikan */ }
+    supabase.from("data_kuasa_pip").select("*").eq("sekolah_id", sekolahId).then(({ data: rows }) => {
+      if (batal || !rows) return;
+      const m = {};
+      for (const r of rows) {
+        const o = {};
+        for (const k of ["pemberi", "ttl", "ktp", "hp", "alamat"]) if (r[k]) o[k] = r[k];
+        m[r.siswa_id] = o;
+      }
+      setExtra(m);
+    });
     Promise.all([
       supabase.from("profil_sekolah").select("*").eq("sekolah_id", sekolahId).maybeSingle(),
       supabase.from("pengaturan_pip").select("data").eq("sekolah_id", sekolahId).maybeSingle(),
@@ -236,6 +246,20 @@ export default function DokumenPIP() {
   const toggle = (set, setter, v) => { const n = new Set(set); n.has(v) ? n.delete(v) : n.add(v); setter(n); };
   const ex = (x) => ({ pemberi: x.pemberi, ttl: "", ktp: x.ktp, hp: x.hp || "-", alamat: x.alamat || s.alamatOrtu, ...(extra[x.id] || {}) });
   const setEx = (x, k, v) => setExtra({ ...extra, [x.id]: { ...ex(x), [k]: v } });
+  const [menyimpanKuasa, setMenyimpanKuasa] = useState(false);
+  async function simpanKuasa(x) {
+    if (!sekolahId || !x) return;
+    const e = ex(x);
+    setMenyimpanKuasa(true);
+    const { error } = await supabase.from("data_kuasa_pip").upsert({
+      sekolah_id: sekolahId, siswa_id: String(x.id),
+      pemberi: e.pemberi || "", ttl: e.ttl || "", ktp: e.ktp || "",
+      hp: e.hp === "-" ? "" : e.hp || "", alamat: e.alamat || "",
+    }, { onConflict: "sekolah_id,siswa_id" });
+    setMenyimpanKuasa(false);
+    if (error) { setInfo(""); setErr("Gagal menyimpan data orang tua: " + error.message); return; }
+    setErr(""); setInfo(`Data orang tua ${x.nama} tersimpan.`);
+  }
   function cetak(all) { setSemua(all); setTimeout(() => { window.print(); setSemua(false); }, 80); }
 
   const Ttd = ({ kota }) => (<div style={{ marginLeft: "auto", width: 260, textAlign: "center", breakInside: "avoid" }}>{kota}, {tanggal}<br />Kepala Satuan Pendidikan<div className="gap" /><b><u>{s.kepsek}</u></b><br />NIP. {s.nip}</div>);
@@ -328,7 +352,9 @@ export default function DokumenPIP() {
           <div className="fgrid">
             <label className="f">Siswa<select value={cur} onChange={(e) => setCur(+e.target.value)}>{siswa.map((a, i) => <option key={a.id} value={i}>{a.nama}</option>)}</select></label>
             {[["pemberi", "Nama pemberi kuasa (orang tua)"], ["ttl", "Tempat, tanggal lahir"], ["ktp", "No. KTP"], ["hp", "No. HP"], ["alamat", "Alamat"]].map(([k, l]) => <label className="f" key={k}>{l}<input type="text" value={ex(x)[k]} onChange={(e) => setEx(x, k, e.target.value)} /></label>)}
-          </div></div>)}
+          </div>
+          {isAdmin && <div className="bar"><button className="on" onClick={() => simpanKuasa(x)} disabled={menyimpanKuasa}>{menyimpanKuasa ? "Menyimpan..." : "Simpan data orang tua"}</button></div>}
+        </div>)}
         <div className="bar">
           <button className="on" onClick={() => cetak(false)} disabled={tab !== 2 ? !terpilih.length : !x}>{tab === 2 ? "Cetak surat ini" : "Cetak"}</button>
           {tab === 2 && <button onClick={() => cetak(true)} disabled={!terpilih.length}>Cetak semua siswa terpilih ({terpilih.length})</button>}
