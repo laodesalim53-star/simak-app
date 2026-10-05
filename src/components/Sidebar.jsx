@@ -1,256 +1,1243 @@
-import { useEffect, useMemo, useState } from "react";
-import * as XLSX from "xlsx";
-import { supabase } from "../lib/supabaseClient";
-import { useAuth } from "../lib/AuthContext";
-import Layout from "../components/Layout";
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import {
+  X,
+  LayoutDashboard,
+  Users,
+  GraduationCap,
+  DoorOpen,
+  CalendarClock,
+  ClipboardCheck,
+  FileType2,
+  BookOpenCheck,
+  Megaphone,
+  Power,
+  Boxes,
+  CalendarDays,
+  Mail,
+  FileBadge,
+  FileSignature,
+  ScrollText,
+  Stamp,
+  Wallet,
+  Banknote,
+  DatabaseBackup,
+  UserPlus,
+  Landmark,
+  Library,
+  NotebookPen,
+  Archive,
+  UserCircle,
+  Images,
+  Image,
+  HardDrive,
+  ClipboardList,
+  Database,
+  IdCard,
+  FilePlus,
+  CalendarOff,
+  FileCheck2,
+  UserCog,
+  Award,
+  Video,
+  Receipt,
+  ShoppingCart,
+  Store,
+  History,
+  PackagePlus,
+  FolderHeart,
+  PiggyBank,
+  FileSpreadsheet,
+  Gamepad2,
+  ScanLine,
+  CalendarRange,
+  ShieldCheck,
+  MessageCircle,
+  MessagesSquare,
+  Building2,
+  FileStack,
+  Inbox,
+  Sparkles,
+  Briefcase,
+  BookOpen,
+  LayoutGrid,
+  CalendarCheck,
+  BookMarked,
+  ChevronDown,
+  Link2,
+  Shield,
+  Gavel,
+  FileText,
+} from 'lucide-react'
+import { useAuth } from '../lib/AuthContext'
+import { supabase } from '../lib/supabaseClient'
+import PaketBadge, { usePaketSaatIni } from './PaketBadge'
 
-const BULAN = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
-const tgl = (iso) => { const d = new Date(iso); return `${d.getDate()} ${BULAN[d.getMonth()]} ${d.getFullYear()}`; };
-const rp = (n) => "Rp " + Number(n || 0).toLocaleString("id-ID");
-const cell = (v) => String(v ?? "").trim().replace(/^'/, "");
-
-const ALIAS = {
-  nama: ["nama_pd", "nama", "nama siswa", "nama peserta didik"],
-  kelas: ["kelas"],
-  rek: ["no_rekening", "rekening", "nomor rekening", "no rekening"],
-  ayah: ["nama_ayah", "ayah"],
-  ibu: ["nama_ibu_kandung", "ibu"],
-  nominal: ["nominal"],
-  nisn: ["nisn"],
-  nik: ["nik"],
-};
-
-function parseExcel(buf) {
-  const wb = XLSX.read(buf);
-  const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: "" });
-  const hi = rows.findIndex((r) => r.some((c) => ALIAS.nama.includes(String(c).trim().toLowerCase())));
-  if (hi < 0) throw new Error("Kolom nama_pd (atau nama) tidak ditemukan di baris judul.");
-  const head = rows[hi].map((c) => String(c).trim().toLowerCase());
-  const idx = Object.fromEntries(Object.keys(ALIAS).map((k) => [k, head.findIndex((h) => ALIAS[k].includes(h))]));
-  return rows.slice(hi + 1).filter((r) => cell(r[idx.nama])).map((r, id) => {
-    const g = (k) => (idx[k] < 0 ? "" : cell(r[idx[k]]));
-    return { id, nama: g("nama").toUpperCase(), kelas: g("kelas").replace(/\D/g, "") || g("kelas"),
-      rek: g("rek"), nisn: g("nisn"), nik: g("nik") };
-  });
+// Helper: hapus channel Supabase Realtime dengan nama (topic) yang sama
+// kalau masih ada, sebelum bikin channel baru dengan nama itu lagi.
+// Mencegah error "cannot add postgres_changes callback after subscribe()"
+// yang muncul kalau channel dengan topic sama sempat ter-subscribe dua
+// kali — biasanya karena React StrictMode menjalankan useEffect dua kali
+// saat development, atau navigasi cepat antar halaman sebelum channel
+// lama sempat dibersihkan oleh fungsi cleanup useEffect.
+function bersihkanChannelLama(namaChannel) {
+  const channelLama = supabase.getChannels().find((ch) => ch.topic === `realtime:${namaChannel}`)
+  if (channelLama) supabase.removeChannel(channelLama)
 }
 
-const DEF = {
-  sekolah: "SEKOLAH DASAR NEGERI WARIA", kabupaten: "KABUPATEN KEPULAUAN ARU", dinas: "DINAS PENDIDIKAN DAN KEBUDAYAAN",
-  namaSekolah: "SD Negeri Waria", alamatSekolah: "Jln. Pendidikan, Desa Waria", provinsi: "Maluku", tahun: "2026",
-  kepsek: "LA ODE SALIM, S.Pd", nip: "198309062009041001", pangkat: "Penata Tingkat I, III/d",
-  ktpKepsek: "8107040609830001", hpKepsek: "082197574897", alamatKepsek: "Jln. Rabiadja, Kelurahan Sialima",
-  nomorSurat: "421.2/038/05/2026", kota: "Waria", kotaKuasa: "Dobo", tanggal: new Date().toISOString().slice(0, 10),
-  bank: "BRI CABANG DOBO", nominal: "450000", alamatOrtu: "Desa Waria Kecamatan Aru Utara Timur",
-};
-const LABEL = { sekolah: "Nama sekolah (kop)", namaSekolah: "Nama satuan pendidikan", alamatSekolah: "Alamat sekolah", tahun: "Tahun PIP",
-  kepsek: "Nama kepala sekolah", nip: "NIP", pangkat: "Pangkat/Golongan", ktpKepsek: "No. KTP kepala sekolah", hpKepsek: "No. HP kepala sekolah",
-  alamatKepsek: "Alamat kepala sekolah", nomorSurat: "Nomor surat", kota: "Kota surat", kotaKuasa: "Kota surat kuasa", tanggal: "Tanggal surat",
-  bank: "Nama bank (jika kosong di data siswa)", nominal: "Nominal PIP per siswa (Rp)", alamatOrtu: "Alamat orang tua (jika kosong)" };
-
-const ALASAN = {
-  a1: "Daerah khusus yang ditetapkan Kementerian;", a2: "Daerah yang sedang mengalami bencana yang ditetapkan oleh Pemerintah Daerah atau Pemerintah Pusat; dan/atau",
-  a3: "Daerah lain yang sulit untuk mengakses ke Bank Penyalur berdasarkan rekomendasi Pemerintah Daerah.",
-  b1: "Sedang sakit;", b2: "Penyandang disabilitas;", b3: "Diundang dalam acara kunjungan kerja Pemerintah; dan/atau",
-  b4: "Kondisi sulit lainnya berdasarkan rekomendasi Pemerintah Daerah.",
-};
-
-const CSS = `
-.pip{font-family:system-ui,sans-serif;color:#1c1c1c;max-width:1100px;margin:0 auto;padding:16px}
-.pip h1{font-size:20px;margin:0 0 4px}.pip .sub{color:#666;font-size:13px;margin-bottom:12px}
-.pip .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0}
-.pip button,.pip .file{border:1px solid #bbb;background:#fff;border-radius:6px;padding:7px 12px;font-size:13px;cursor:pointer}
-.pip button.on{background:#1f4e79;color:#fff;border-color:#1f4e79}.pip button:focus-visible,.pip input:focus-visible,.pip select:focus-visible{outline:2px solid #1f4e79;outline-offset:2px}
-.pip .tabs{display:flex;border-bottom:2px solid #ddd;margin-top:14px}.pip .tabs button{border:0;border-radius:6px 6px 0 0;background:none;padding:10px 16px;font-size:14px}
-.pip .tabs button.on{background:#1f4e79}
-.pip details{border:1px solid #ddd;border-radius:6px;padding:8px 12px;margin:8px 0}.pip summary{cursor:pointer;font-size:14px}
-.pip .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;margin-top:10px}
-.pip label.f{display:flex;flex-direction:column;font-size:12px;color:#555;gap:2px}.pip input[type=text],.pip input[type=date],.pip select{padding:6px;border:1px solid #bbb;border-radius:4px;font-size:13px}
-.pip .list{max-height:190px;overflow:auto;border:1px solid #ddd;border-radius:6px;padding:6px 10px;columns:2 260px;font-size:13px}
-.pip .list label{display:block;padding:1px 0}.pip .err{color:#b00020;font-size:13px}
-.pip .paper{background:#eee;padding:12px;margin-top:12px;overflow:auto}
-.pip .sheet{background:#fff;width:210mm;min-height:297mm;margin:0 auto 12px;padding:18mm 20mm;box-sizing:border-box;font:12pt/1.45 "Times New Roman",serif;color:#000}
-.pip .sheet p{margin:0 0 8px;text-align:justify}.pip .kop{text-align:center;font-weight:bold;border-bottom:3px double #000;padding-bottom:6px;margin-bottom:14px;line-height:1.3}
-.pip .kop2{position:relative;min-height:76px;border-bottom:3px double #000;padding-bottom:6px;margin-bottom:14px}.pip .kop2 img{position:absolute;left:0;top:0;width:72px;height:72px;object-fit:contain}.pip .kop2 .kop{border:0;margin:0;padding:0 84px}
-.pip .jd{text-align:center;font-weight:bold;margin:10px 0 12px}.pip .jd u{display:block}
-.pip table.t{border-collapse:collapse;width:100%;margin:8px 0}.pip table.t td,.pip table.t th{border:1px solid #000;padding:3px 6px;font-size:11.5pt}
-.pip table.k td{padding:1px 0;vertical-align:top}.pip .ttd{display:flex;justify-content:space-between;margin-top:18px;text-align:center}.pip .ttd div{min-width:200px}
-.pip .gap{height:60px}.pip .cb{display:flex;gap:6px;margin:0 0 3px 24px;text-align:left;cursor:pointer}
-@media print{body *{visibility:hidden}.pip-print,.pip-print *{visibility:visible}.pip-print{position:absolute;left:0;top:0;width:100%}
-.pip .paper{background:none;padding:0;overflow:visible}.pip .sheet{margin:0;box-shadow:none;page-break-after:always;min-height:0}.pip .sheet:last-child{page-break-after:auto}@page{size:A4;margin:0}}`;
-
-const isi = (v) => { const x = String(v ?? "").trim(); return /^[-–.\s0]*$/.test(x) ? "" : x; };
-function pemberiDari(r) {
-  for (const [n, k] of [["nama_wali", "nik_wali"], ["nama_ayah", "nik_ayah"], ["nama_ibu", "nik_ibu"]])
-    if (isi(r[n])) return { pemberi: isi(r[n]), ktp: cell(isi(r[k])) };
-  return { pemberi: isi(r.nama_orang_tua), ktp: cell(isi(r.nik_ayah) || isi(r.nik_ibu)) };
+// Menu ADMIN dikelompokkan per kategori supaya tidak jadi satu daftar panjang.
+// Dibuat sebagai fungsi karena "Persetujuan Akun" dan "Profil Sekolah" hanya
+// boleh tampil untuk admin utama / superadmin, bukan admin biasa.
+function getGroupsAdmin(
+  isAdminUtama,
+  isSuperAdmin,
+  isKepalaSekolah,
+  jumlahMenunggu = 0,
+  jumlahPesanBelumDibaca = 0,
+  jumlahPesanPusatBelumDibaca = 0,
+  jumlahPengajuanTokoMenunggu = 0,
+  jumlahSiapDicairkan = 0,
+  jumlahLiveChatBelumDibaca = 0
+) {
+  return [
+    {
+      label: null, // tanpa judul grup — selalu di atas
+      links: [
+        // PERBAIKAN: "/" sekarang halaman Beranda publik (poster promosi),
+        // Dashboard aplikasi dipindah ke "/dashboard" — menu ini harus ikut.
+        { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
+        { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
+        // Upgrade Fitur: status paket (free/standar/premium) melekat ke akun
+        // masing-masing, jadi menu ini tampil untuk semua role, bukan cuma admin.
+        { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
+        { to: '/link-layanan', label: 'Link Layanan', icon: Link2 },
+        // Tab "Admin Pusat" sekarang jadi bagian dari halaman /pesan (lihat
+        // Pesan.jsx) — badge menggabungkan unread pesan biasa + admin pusat.
+        { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca + jumlahPesanPusatBelumDibaca },
+        // PERBAIKAN: "Live Chat" (percakapan dengan pengunjung publik di
+        // Beranda) sebelumnya tampil untuk SEMUA admin-tier (admin,
+        // admin_utama, superadmin, kepala_sekolah), padahal tabel
+        // live_chat_pesan adalah satu kotak masuk GLOBAL milik superadmin
+        // (tidak ada kolom sekolah_id, RLS di Supabase juga sudah dikunci
+        // hanya untuk role 'superadmin'). Menu ini sekarang disembunyikan
+        // untuk admin sekolah, sama seperti pola item superadmin-only lain
+        // di bawah (Manajemen Sekolah, Persetujuan Toko, Pencairan Dana).
+        ...(isSuperAdmin
+          ? [{ to: '/live-chat', label: 'Live Chat', icon: MessagesSquare, badge: jumlahLiveChatBelumDibaca }]
+          : []),
+        { to: '/toko', label: 'Toko', icon: Store },
+        { to: '/riwayat-pesanan', label: 'Riwayat Pesanan', icon: Receipt },
+        { to: '/pesanan-masuk', label: 'Pesanan Masuk (Toko)', icon: Inbox },
+        // "Ajukan Toko" hanya untuk admin sekolah (admin/admin_utama) — sesuai
+        // RLS insert pengajuan_toko yang membatasi ke kedua role itu.
+        // Superadmin tidak mengajukan toko, jadi menu ini disembunyikan
+        // untuknya (superadmin punya menu "Persetujuan Toko" sendiri).
+        ...(!isSuperAdmin
+          ? [{ to: '/ajukan-toko', label: 'Ajukan Toko', icon: Store }]
+          : []),
+        // PERBAIKAN: menu "Administrasi Kelas" sebelumnya tidak ada di sini
+        // sama sekali — hanya ada di menu Guru, menu Admin Kantor, dan menu
+        // Pegawai Kantor. Akibatnya admin sekolah (admin/admin_utama/
+        // superadmin/kepala_sekolah) tidak bisa mengakses halaman ini dari
+        // sidebar. Ditambahkan di sini, sejajar posisinya dengan menu Guru.
+        { to: '/administrasi-kelas', label: 'Administrasi Kelas', icon: LayoutGrid },
+        { to: '/rapat', label: 'Rapat Video', icon: Video },
+        { to: '/galeri', label: 'Galeri Kegiatan', icon: Images },
+        { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
+        { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
+        { to: '/alat-pdf', label: 'Alat PDF', icon: FileType2 },
+        { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
+      ],
+    },
+    {
+      label: 'Akademik',
+      links: [
+        { to: '/siswa', label: 'Data Siswa', icon: Users },
+        { to: '/guru', label: 'Data Guru', icon: GraduationCap },
+        { to: '/nilai-asesmen', label: 'Nilai Asesmen', icon: FileSpreadsheet },
+        // PERBAIKAN: baris "Rapor Siswa" (/rapor) dihapus dari sini — sudah
+        // bisa diakses lewat kartu "Rapor" di halaman Administrasi Kelas
+        // (menu di atas), jadi baris ini dulu bikin dobel untuk admin.
+        { to: '/portofolio-siswa', label: 'Portofolio Siswa', icon: FolderHeart },
+        { to: '/sertifikat', label: 'Sertifikat & Penghargaan', icon: Award },
+        { to: '/buat-ujian', label: 'Buat Ujian', icon: FilePlus },
+        { to: '/hasil-ujian', label: 'Hasil Ujian', icon: ClipboardList },
+        { to: '/bank-soal', label: 'Bank Soal', icon: Database },
+        { to: '/materi-kelas', label: 'Materi Pembelajaran', icon: BookMarked },
+        { to: '/buat-kuis-seru', label: 'Kuis Seru (Kls 1-3)', icon: Gamepad2 },
+      ],
+    },
+    {
+      label: 'Keuangan & Aset',
+      links: [
+        { to: '/keuangan', label: 'Keuangan', icon: Wallet },
+        { to: '/bku-bank', label: 'BKU Bank (BOS-K5)', icon: PiggyBank },
+        { to: '/kuitansi', label: 'Kuitansi', icon: Receipt },
+        { to: '/kuitansi-jasa', label: 'Kuitansi Jasa', icon: Receipt },
+        { to: '/nota', label: 'Nota Belanja', icon: ShoppingCart },
+        { to: '/perpustakaan', label: 'Perpustakaan', icon: Library },
+        { to: '/inventaris', label: 'Inventaris', icon: Boxes },
+        // BARU: Kondisi Bangunan — satu paket dengan RingkasanAset.jsx yang
+        // dipakai di Laporan Kepala Sekolah / Laporan Kepala KUA.
+        { to: '/bangunan', label: 'Kondisi Bangunan', icon: DoorOpen },
+        // Riwayat Pencairan Saya: sisi penjual/pemilik toko (admin/admin_utama)
+        // melihat riwayat pencairan dana toko miliknya sendiri. Bukan untuk
+        // superadmin — superadmin punya "Pencairan Dana" (global, semua toko)
+        // di bawah, bukan riwayat pencairan milik toko sendiri.
+        ...(!isSuperAdmin
+          ? [{ to: '/riwayat-pencairan-saya', label: 'Riwayat Pencairan Saya', icon: History }]
+          : []),
+        // Pencairan Dana hanya untuk superadmin — satu-satunya yang boleh
+        // menandai dana sudah ditransfer ke penjual (lewat RPC
+        // fn_cairkan_pesanan / fn_tahan_pencairan, lihat PencairanDana.jsx).
+        ...(isSuperAdmin
+          ? [
+              {
+                to: '/pencairan-dana',
+                label: 'Pencairan Dana',
+                icon: Banknote,
+                badge: jumlahSiapDicairkan,
+              },
+            ]
+          : []),
+      ],
+    },
+    {
+      label: 'Administrasi',
+      links: [
+        { to: '/pengajuan-surat-aktif', label: 'Pengajuan Surat Aktif', icon: FileCheck2 },
+        { to: '/perbaikan-data-siswa', label: 'Perbaikan Data Siswa', icon: UserCog },
+        { to: '/surat', label: 'Surat Masuk/Keluar', icon: Mail },
+        // PERBAIKAN: Portal Ujian berada di bawah path /gudang-sk/portal-ujian,
+        // sehingga NavLink "Gudang SK" ikut aktif di halaman Portal Ujian
+        // (dan anak-anaknya, mis. Laporan Asesmen). `excludePrefix` membuat
+        // Gudang SK mati kalau sedang berada di bawah Portal Ujian.
+        { to: '/gudang-sk', label: 'Gudang SK', icon: FileStack, excludePrefix: '/gudang-sk/portal-ujian' },
+        { to: '/gudang-sk/portal-ujian', label: 'Portal Ujian', icon: ClipboardCheck },
+        { to: '/ppdb-admin', label: 'PPDB Siswa Baru', icon: UserPlus },
+        // Laporan Kepegawaian Guru: satu pintu untuk semua laporan guru,
+        // TERMASUK Laporan Bulanan, Cetak Sampul, Data Ujian 8355 & Cetak
+        // 8355 (menu-menu terpisah untuk itu semua sudah dihapus dari sini
+        // — sekarang jadi kartu di dalam halaman ini, lihat PusatLaporanGuru.jsx).
+        { to: '/laporan-guru', label: 'Pusat Laporan Kepegawaian', icon: GraduationCap },
+        // BARU: Daftar Hadir Guru & Tendik (komponen DaftarHadirPegawai.jsx dipakai bersama tenant kantor)
+        { to: '/daftar-hadir-pegawai', label: 'Daftar Hadir Guru & Tendik', icon: ClipboardList },
+        { to: '/hari-libur', label: 'Hari Libur', icon: CalendarOff },
+        { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
+        { to: '/backup', label: 'Backup Data', icon: DatabaseBackup },
+        // Manajemen Sekolah hanya untuk superadmin.
+        ...(isSuperAdmin
+          ? [
+              { to: '/manajemen-sekolah', label: 'Manajemen Sekolah', icon: Building2 },
+            ]
+          : []),
+        // "Persetujuan Akun" dan "Profil Sekolah" hanya untuk admin utama / superadmin
+        ...(isAdminUtama
+          ? [
+              { to: '/persetujuan-akun', label: 'Persetujuan Akun', icon: ShieldCheck, badge: jumlahMenunggu },
+              { to: '/profil-sekolah', label: 'Profil Sekolah', icon: Landmark },
+            ]
+          : []),
+        { to: '/kartu', label: 'Cetak Kartu', icon: IdCard },
+        { to: '/dokumen-pip', label: 'Dokumen PIP', icon: FileSignature },
+        { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
+      ],
+    },
+  ]
 }
 
-const mapRow = (r) => ({
-  id: r.id, nama: (r.nama_lengkap || "").toUpperCase(), status: r.status, nisn: cell(r.nisn), nik: cell(r.nik),
-  kelas: String(r.kelas?.nama_kelas || "").replace(/\D/g, "") || r.kelas?.nama_kelas || "",
-  rek: cell(r.no_rekening), bank: r.bank || "", atasNama: r.rekening_atas_nama || "",
-  ...pemberiDari(r), hp: r.no_hp_orang_tua || "", alamat: r.alamat_tinggal || r.alamat || "",
-});
+// Menu ADMIN untuk tenant "kantor" (isKantor) — versi ringkas dari
+// getGroupsAdmin() di atas, hanya fitur umum yang diminta: data pegawai,
+// presensi, surat-menyurat, dan dokumen. Semua item akademik (siswa, kelas,
+// rapor, nilai, ijazah, RPP, bank soal, PPDB, dst) dan Toko/Keuangan sengaja
+// TIDAK disertakan supaya menu tidak membingungkan untuk tenant kantor.
+// CATATAN: "Data Pegawai" SEKARANG mengarah ke /data-pegawai-kantor (route
+// & tabel `pegawai_kantor` terpisah dari /guru & tabel `guru`) — sebelumnya
+// sempat reuse /guru, tapi itu bikin data pegawai kantor tercampur ke tabel
+// guru yang penuh field khas Dapodik (NUPTK, mata pelajaran, dll) yang
+// tidak relevan untuk kantor. Rute lain (Presensi, Laporan Kepegawaian,
+// Profil Kantor) untuk saat ini MASIH reuse rute sekolah — lihat catatan di
+// komponen halaman masing-masing kalau nanti perlu dipisah juga.
+function getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelumDibaca = 0) {
+  return [
+    {
+      label: null,
+      links: [
+        { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
+        { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
+        { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
+        { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
+        { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
+        { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
+        { to: '/alat-pdf', label: 'Alat PDF', icon: FileType2 },
+        { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
+        { to: '/link-layanan', label: 'Link Layanan', icon: Link2 },
+      ],
+    },
+    {
+      label: 'Kepegawaian',
+      links: [
+        { to: '/data-pegawai-kantor', label: 'Data Pegawai', icon: Briefcase },
+        // PERBAIKAN: sebelumnya reuse "/presensi" (punya guru) — sekarang pakai
+        // rute & tabel presensi_pegawai_kantor sendiri (lihat PresensiKantor.jsx).
+        { to: '/presensi-kantor', label: 'Presensi Pegawai', icon: ClipboardCheck },
+        { to: '/profil-kantor', label: 'Profil Kantor', icon: Building2 },
+        { to: '/daftar-hadir-kantor', label: 'Daftar Hadir Kantor', icon: FileSpreadsheet },
+        { to: '/daftar-hadir-pegawai', label: 'Daftar Hadir Pegawai', icon: ClipboardList },
+      ],
+    },
+    {
+      label: 'Keagamaan',
+      links: [
+        { to: '/pusat-materi-majelis', label: 'Materi Majelis', icon: BookOpenCheck },
+        { to: '/rktp-penyuluh-2', label: 'RKTP Penyuluh 2', icon: CalendarCheck },
+        { to: '/pusat-kelompok-binaan', label: 'Kelompok Binaan', icon: Users },
+        { to: '/pendaftaran-nikah', label: 'Pendaftaran Nikah', icon: FileSignature },
+        { to: '/laporan-kepenghuluan', label: 'Laporan Kepenghuluan', icon: FileStack },
+      ],
+    },
+    // BARU: Aset Kantor — Inventaris & Kondisi Bangunan kantor (dipakai
+    // juga oleh RingkasanAset.jsx di Laporan Kepala Sekolah / Laporan Kepala KUA).
+    {
+      label: 'Aset Kantor',
+      links: [
+        { to: '/inventaris', label: 'Inventaris', icon: Boxes },
+        { to: '/bangunan', label: 'Kondisi Bangunan', icon: DoorOpen },
+      ],
+    },
+    {
+      label: 'Administrasi',
+      links: [
+        { to: '/agenda', label: 'Agenda Kantor', icon: CalendarDays },
+        { to: '/surat', label: 'Surat Masuk/Keluar', icon: Mail },
+        { to: '/surat-pengantar', label: 'Surat Pengantar', icon: Stamp },
+        { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
+        { to: '/backup', label: 'Backup Data', icon: DatabaseBackup },
+        // "Persetujuan Akun", "Verifikasi Nikah", "Laporan Kepala KUA" dan
+        // "Laporan Bulanan KUA" hanya untuk admin utama.
+        ...(isAdminUtama
+          ? [
+              { to: '/persetujuan-akun', label: 'Persetujuan Akun', icon: ShieldCheck, badge: jumlahMenunggu },
+              { to: '/verifikasi-nikah', label: 'Verifikasi Nikah', icon: FileSignature },
+              { to: '/laporan-kepala-kua', label: 'Laporan Kepala KUA', icon: BookOpen },
+              { to: '/laporan-bulanan-kua', label: 'Laporan Bulanan KUA', icon: NotebookPen },
+            ]
+          : []),
+      ],
+    },
+  ]
+}
 
-export default function DokumenPIP() {
-  const { sekolahId, isAdmin } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [info, setInfo] = useState("");
-  const [siswa, setSiswa] = useState([]);
-  const [pilih, setPilih] = useState(new Set());
-  const [tab, setTab] = useState(0);
-  const [s, setS] = useState(DEF);
-  const [alasan, setAlasan] = useState(new Set(["a3"]));
-  const [extra, setExtra] = useState({});
-  const [cur, setCur] = useState(0);
-  const [semua, setSemua] = useState(false);
-  const [err, setErr] = useState("");
-  const [logo, setLogo] = useState("");
+// Menu ADMIN untuk tenant "puskesmas" (isPuskesmas) — sejajar pola
+// getGroupsKantorAdmin() di atas, tapi TANPA grup Keagamaan (khusus KUA)
+// dan tanpa item bernuansa sekolah (Akademik, Toko, Keuangan sekolah, dst).
+// Fokus: profil puskesmas, kepegawaian, dokumen, dan administrasi umum.
+// Halaman-halaman rute di bawah ini (/profil-puskesmas, /presensi-puskesmas,
+// /data-pegawai-puskesmas, /daftar-hadir-puskesmas) perlu dibuat menyusul —
+// belum ada di aplikasi saat catatan ini ditulis.
+function getGroupsPuskesmasAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelumDibaca = 0) {
+  return [
+    {
+      label: null,
+      links: [
+        { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
+        { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
+        { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
+        { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
+        { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
+        { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
+        { to: '/alat-pdf', label: 'Alat PDF', icon: FileType2 },
+        { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
+        { to: '/link-layanan', label: 'Link Layanan', icon: Link2 },
+      ],
+    },
+    {
+      label: 'Pelayanan',
+      links: [
+        { to: '/bidan-puskesmas', label: 'Bidan / Mantri', icon: FolderHeart },
+      ],
+    },
+    {
+      label: 'Kepegawaian',
+      links: [
+        { to: '/data-pegawai-puskesmas', label: 'Data Pegawai', icon: Briefcase },
+        { to: '/presensi-puskesmas', label: 'Presensi Pegawai', icon: ClipboardCheck },
+        { to: '/profil-puskesmas', label: 'Profil Puskesmas', icon: Building2 },
+        { to: '/keuangan-bok', label: 'Keuangan BOK', icon: Wallet },
+        { to: '/daftar-hadir-puskesmas', label: 'Daftar Hadir Pegawai', icon: ClipboardList },
+        { to: '/str-sip-puskesmas', label: 'STR & SIP Pegawai', icon: ShieldCheck },
+        { to: '/jadwal-piket-puskesmas', label: 'Jadwal Piket/Jaga', icon: CalendarRange },
+        { to: '/cuti-izin-puskesmas', label: 'Cuti & Izin Pegawai', icon: CalendarCheck },
+      ],
+    },
+    {
+      label: 'Administrasi',
+      links: [
+        { to: '/agenda', label: 'Agenda Puskesmas', icon: CalendarDays },
+        { to: '/surat', label: 'Surat Masuk/Keluar', icon: Mail },
+        { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
+        { to: '/backup', label: 'Backup Data', icon: DatabaseBackup },
+        // "Persetujuan Akun" hanya untuk admin utama / kepala puskesmas.
+        ...(isAdminUtama
+          ? [{ to: '/persetujuan-akun', label: 'Persetujuan Akun', icon: ShieldCheck, badge: jumlahMenunggu }]
+          : []),
+      ],
+    },
+  ]
+}
+// Menu ADMIN untuk tenant "polres" (isPolres) — pola sama dengan kantor/puskesmas.
+// Rute kepegawaian masih memakai halaman kantor yang sudah ada.
+function getGroupsPolresAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelumDibaca = 0) {
+  return [
+    {
+      label: null,
+      links: [
+        { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
+        { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
+        { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
+        { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
+        { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
+        { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
+        { to: '/alat-pdf', label: 'Alat PDF', icon: FileType2 },
+        { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
+        { to: '/link-layanan', label: 'Link Layanan', icon: Link2 },
+      ],
+    },
+    {
+      label: 'Kepegawaian',
+      links: [
+        { to: '/profil-polres', label: 'Profil Polres', icon: Shield },
+        { to: '/data-personel-polres', label: 'Data Personel', icon: Briefcase },
+        { to: '/presensi-polres', label: 'Presensi Personel', icon: ClipboardCheck },
+        { to: '/daftar-hadir-polres', label: 'Daftar Hadir', icon: FileSpreadsheet },
+      ],
+    },
+    // BARU: Reskrim — register perkara bagian Penyidik (ReskrimPenyidik.jsx).
+    // Grup dipisah supaya bagian Reskrim lain bisa ditambah di sini nanti.
+    {
+      label: 'Reskrim',
+      links: [
+        { to: '/reskrim-penyidik', label: 'Penyidik', icon: Gavel },
+        { to: '/reskrim/surat', label: 'Surat Reskrim', icon: FileText },
+      ],
+    },
+    {
+      label: 'Administrasi',
+      links: [
+        { to: '/agenda', label: 'Agenda Polres', icon: CalendarDays },
+        { to: '/surat', label: 'Surat Masuk/Keluar', icon: Mail },
+        { to: '/surat-pengantar', label: 'Surat Pengantar', icon: Stamp },
+        { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
+        { to: '/backup', label: 'Backup Data', icon: DatabaseBackup },
+        ...(isAdminUtama
+          ? [{ to: '/persetujuan-akun', label: 'Persetujuan Akun', icon: ShieldCheck, badge: jumlahMenunggu }]
+          : []),
+      ],
+    },
+  ]
+}
 
-  const terpilih = useMemo(() => siswa.filter((x) => pilih.has(x.id)), [siswa, pilih]);
-  const total = terpilih.length * (Number(s.nominal) || 0);
-  const tanpaRek = siswa.filter((x) => !x.rek).length;
-  const tanggal = tgl(s.tanggal);
+// Menu PEGAWAI (non-admin) untuk tenant "polres".
+function getLinksPolresPegawai(jumlahPesanBelumDibaca = 0) {
+  return [
+    { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
+    { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
+    { to: '/presensi-polres', label: 'Presensi', icon: ClipboardCheck },
+    // BARU: Reskrim Penyidik — semua user dalam tenant polres bisa mengakses.
+    { to: '/reskrim-penyidik', label: 'Reskrim Penyidik', icon: Gavel },
+    { to: '/reskrim/surat', label: 'Surat Reskrim', icon: FileText },
+    { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
+    { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
+    { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
+    { to: '/alat-pdf', label: 'Alat PDF', icon: FileType2 },
+    { to: '/agenda', label: 'Agenda Polres', icon: CalendarDays },
+    { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
+    { to: '/link-layanan', label: 'Link Layanan', icon: Link2 },
+    { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
+    { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
+  ]
+}
 
-  useEffect(() => {
-    if (!sekolahId) return;
-    let simpan = ""; try { simpan = localStorage.getItem("pip-logo-" + sekolahId) || ""; } catch { /* abaikan */ }
-    if (simpan) { setLogo(simpan); return; }
-    supabase.from("profil_sekolah").select("*").eq("sekolah_id", sekolahId).maybeSingle().then(({ data }) => {
-      const u = data && ["logo_url", "logo", "logo_sekolah", "logo_path"].map((k) => data[k]).find((v) => typeof v === "string" && /^(https?:|data:)/.test(v));
-      if (u) setLogo(u);
-    });
-  }, [sekolahId]);
-  function pilihLogo(e) {
-    const f = e.target.files?.[0]; e.target.value = ""; if (!f) return;
-    const fr = new FileReader();
-    fr.onload = () => { setLogo(fr.result); try { localStorage.setItem("pip-logo-" + sekolahId, fr.result); } catch { /* terlalu besar, tetap dipakai sesi ini */ } };
-    fr.readAsDataURL(f);
+// Menu GURU: tetap ringkas, tidak perlu dikelompokkan
+// Kuitansi, Kuitansi Jasa & Nota Belanja SENGAJA TIDAK ada di sini — ketiga
+// fitur ini admin-only (lihat RLS policy nota_hanya_admin di Supabase).
+function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
+  return [
+  // PERBAIKAN: "/" sekarang halaman Beranda publik, Dashboard di "/dashboard".
+  { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
+  { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
+  { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
+  { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
+  { to: '/toko', label: 'Toko', icon: Store },
+  { to: '/riwayat-pesanan', label: 'Riwayat Pesanan', icon: Receipt },
+  { to: '/pesanan-masuk', label: 'Pesanan Masuk (Toko)', icon: Inbox },
+  { to: '/administrasi-kelas', label: 'Administrasi Kelas', icon: LayoutGrid },
+  { to: '/rapat', label: 'Rapat Video', icon: Video },
+  { to: '/galeri', label: 'Galeri Kegiatan', icon: Images },
+  { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
+  { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
+  { to: '/alat-pdf', label: 'Alat PDF', icon: FileType2 },
+  // PERBAIKAN: baris "Administrasi Kelas" sebelumnya terduplikasi di sini
+  // (sudah ada satu di atas, sebelum "Rapat Video") — duplikat dihapus.
+  { to: '/siswa', label: 'Data Siswa', icon: Users },
+  { to: '/nilai-asesmen', label: 'Nilai Asesmen', icon: FileSpreadsheet },
+  // PERBAIKAN: baris "Rapor Siswa" (/rapor) dihapus dari sini — sudah bisa
+  // diakses lewat kartu "Rapor" di halaman Administrasi Kelas (menu di
+  // atas), jadi baris ini dulu bikin dobel untuk guru.
+  { to: '/sertifikat', label: 'Sertifikat & Penghargaan', icon: Award },
+  { to: '/pengajuan-surat-aktif', label: 'Pengajuan Surat Aktif', icon: FileCheck2 },
+  { to: '/perbaikan-data-siswa', label: 'Perbaikan Data Siswa', icon: UserCog },
+  // Hanya tautan pintasan ke form publik, sama seperti menu orang tua —
+  // approval pendaftar PPDB tetap khusus admin lewat /ppdb-admin.
+  // PERBAIKAN: /ppdb/:sekolahId, bukan "/ppdb" polos (lihat catatan di
+  // getLinksOrangTua di atas).
+  { to: sekolahIdGuru ? `/ppdb/${sekolahIdGuru}` : '/ppdb', label: 'PPDB Siswa Baru', icon: UserPlus, external: true },
+  { to: '/buat-ujian', label: 'Buat Ujian', icon: FilePlus },
+  { to: '/hasil-ujian', label: 'Hasil Ujian', icon: ClipboardList },
+  { to: '/bank-soal', label: 'Bank Soal', icon: Database },
+  { to: '/materi-kelas', label: 'Materi Pembelajaran', icon: BookMarked },
+  { to: '/buat-kuis-seru', label: 'Kuis Seru (Kls 1-3)', icon: Gamepad2 },
+  { to: '/perpustakaan', label: 'Perpustakaan', icon: Library },
+  { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
+  // BARU: Daftar Hadir Guru & Tendik (guru hanya bisa melihat & mencetak)
+  { to: '/daftar-hadir-pegawai', label: 'Daftar Hadir Guru & Tendik', icon: ClipboardList },
+  { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
+  { to: '/link-layanan', label: 'Link Layanan', icon: Link2 },
+  { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
+  ]
+}
+
+// Menu PEGAWAI (non-admin) untuk tenant "kantor" — versi ringkas dari
+// getLinksGuru() di atas, dipakai kalau isKantor true. Sama seperti
+// getGroupsKantorAdmin(), rute tetap sama, cuma item akademik/toko
+// dihilangkan dan labelnya disesuaikan.
+function getLinksKantorPegawai(jumlahPesanBelumDibaca = 0) {
+  return [
+    { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
+    { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
+    { to: '/pusat-materi-majelis', label: 'Materi Majelis', icon: BookOpenCheck },
+    { to: '/rktp-penyuluh-2', label: 'RKTP Penyuluh 2', icon: CalendarCheck },
+    { to: '/pusat-kelompok-binaan', label: 'Kelompok Binaan', icon: Users },
+    { to: '/pendaftaran-nikah', label: 'Pendaftaran Nikah', icon: FileSignature },
+    { to: '/laporan-kepenghuluan', label: 'Laporan Kepenghuluan', icon: FileStack },
+    { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
+    { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
+    { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
+    { to: '/alat-pdf', label: 'Alat PDF', icon: FileType2 },
+    { to: '/presensi', label: 'Presensi', icon: ClipboardCheck },
+    { to: '/agenda', label: 'Agenda Kantor', icon: CalendarDays },
+    { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
+    { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
+    { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
+  ]
+}
+
+// Menu PEGAWAI (non-admin) untuk tenant "puskesmas" — sejajar pola
+// getLinksKantorPegawai() di atas, tanpa item Keagamaan (khusus KUA) dan
+// tanpa item bernuansa sekolah. Hanya profil, presensi, dokumen, dan item
+// umum lain.
+function getLinksPuskesmasPegawai(jumlahPesanBelumDibaca = 0) {
+  return [
+    { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
+    { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
+    { to: '/presensi-puskesmas', label: 'Presensi', icon: ClipboardCheck },
+    { to: '/jadwal-piket-saya', label: 'Jadwal Piket Saya', icon: CalendarRange },
+    { to: '/cuti-izin-saya', label: 'Cuti & Izin Saya', icon: CalendarCheck },
+    { to: '/bidan-puskesmas', label: 'Bidan / Mantri', icon: FolderHeart },
+    { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
+    { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
+    { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
+    { to: '/alat-pdf', label: 'Alat PDF', icon: FileType2 },
+    { to: '/agenda', label: 'Agenda Puskesmas', icon: CalendarDays },
+    { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
+    { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
+    { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
+  ]
+}
+
+// PERBAIKAN ANDROID: tinggi baris menu dinaikkan di layar kecil (py-3, teks
+// 15px) supaya area sentuh lebih nyaman (~44px), `touch-manipulation`
+// menghilangkan jeda 300ms saat tap, dan efek hover dibatasi ke layar
+// desktop (md:hover) supaya tidak "menempel" setelah menyentuh menu di
+// layar sentuh — diganti efek `active:` saat ditekan.
+//
+// PERBAIKAN (menu ganda aktif): properti `excludePrefix` — kalau path saat
+// ini diawali `excludePrefix`, menu ini TIDAK ditandai aktif walaupun
+// NavLink menganggapnya cocok. Dipakai untuk menu induk (mis. Gudang SK)
+// yang punya menu anak sendiri di sidebar (mis. Portal Ujian) supaya
+// tidak menyala bersamaan.
+function NavItem({ to, label, icon: Icon, end, badge, onNavigate, external, excludePrefix }) {
+  const { pathname } = useLocation()
+  const cekAktif = (isActive) =>
+    isActive && !(excludePrefix && pathname.startsWith(excludePrefix))
+
+  const content = (isActive) => (
+    <>
+      <Icon
+        size={18}
+        strokeWidth={1.8}
+        fill={isActive ? 'rgba(255,255,255,0.25)' : 'currentColor'}
+        fillOpacity={isActive ? 1 : 0.15}
+      />
+      <span className="flex-1">{label}</span>
+      {!!badge && (
+        <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0 shadow-sm shadow-red-900/40">
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
+    </>
+  )
+
+  // PERBAIKAN: beberapa halaman (mis. /ppdb) sengaja berdiri sendiri tanpa
+  // Sidebar/tombol kembali, karena memang dibuat untuk diakses publik dari
+  // luar aplikasi. Kalau dibuka lewat navigasi SPA biasa (NavLink), orang
+  // tua yang sedang login akan "terdampar" di sana tanpa jalan kembali ke
+  // dasbornya. Untuk item bertanda `external`, buka di tab baru supaya
+  // dasbor tetap terbuka.
+  if (external) {
+    return (
+      <a
+        href={to}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={onNavigate}
+        className="flex items-center gap-3 px-3 py-3 md:py-2.5 rounded-lg text-[15px] md:text-sm font-medium transition-all touch-manipulation text-white/70 active:bg-white/[0.12] md:hover:bg-white/[0.08] md:hover:text-white"
+      >
+        {content(false)}
+      </a>
+    )
   }
-  function hapusLogo() { setLogo(""); try { localStorage.removeItem("pip-logo-" + sekolahId); } catch { /* abaikan */ } }
-
-  async function muat() {
-    if (!sekolahId) { setSiswa([]); setLoading(false); return; }
-    setLoading(true);
-    const { data, error } = await supabase.from("siswa").select("*, kelas(nama_kelas)").eq("sekolah_id", sekolahId).eq("status", "aktif").order("nama_lengkap");
-    if (error) setErr("Gagal memuat siswa: " + error.message);
-    const rows = (data || []).map(mapRow);
-    setSiswa(rows); setPilih(new Set(rows.filter((x) => x.rek).map((x) => x.id))); setLoading(false);
-  }
-  useEffect(() => { muat(); /* eslint-disable-next-line */ }, [sekolahId]);
-
-  // Opsional: Excel SK Nominasi PIP dipakai untuk mengisi/memperbarui no_rekening di data siswa (cocok lewat NISN, NIK, lalu nama).
-  async function impor(e) {
-    const f = e.target.files?.[0]; e.target.value = ""; if (!f || !sekolahId) return;
-    try {
-      const rows = parseExcel(await f.arrayBuffer());
-      const cocok = rows.map((r) => ({ r, d: siswa.find((d) => (r.nisn && d.nisn === r.nisn) || (r.nik && d.nik === r.nik) || d.nama === r.nama) })).filter((m) => m.d && m.r.rek);
-      const tidak = rows.length - cocok.length;
-      if (!cocok.length) { setErr("Tidak ada siswa di Excel yang cocok dengan data aplikasi (NISN/NIK/nama)."); return; }
-      if (!confirm(`Perbarui nomor rekening ${cocok.length} siswa dari Excel?${tidak ? `\n${tidak} baris tidak cocok dan dilewati.` : ""}`)) return;
-      for (const { r, d } of cocok) {
-        const upd = { no_rekening: r.rek }; if (!d.bank) upd.bank = s.bank;
-        const { error } = await supabase.from("siswa").update(upd).eq("id", d.id).eq("sekolah_id", sekolahId);
-        if (error) throw error;
-      }
-      setErr(""); setInfo(`${cocok.length} nomor rekening diperbarui${tidak ? `, ${tidak} baris tidak cocok` : ""}.`); await muat();
-    } catch (x) { setErr(x.message || "Gagal membaca/menyimpan Excel."); }
-  }
-  const toggle = (set, setter, v) => { const n = new Set(set); n.has(v) ? n.delete(v) : n.add(v); setter(n); };
-  const ex = (x) => ({ pemberi: x.pemberi, ttl: "", ktp: x.ktp, hp: x.hp || "-", alamat: x.alamat || s.alamatOrtu, ...(extra[x.id] || {}) });
-  const setEx = (x, k, v) => setExtra({ ...extra, [x.id]: { ...ex(x), [k]: v } });
-  function cetak(all) { setSemua(all); setTimeout(() => { window.print(); setSemua(false); }, 80); }
-
-  const Kop = () => (<div className="kop2">{logo && <img src={logo} alt="Logo" />}<div className="kop">{s.dinas}<br />{s.kabupaten}<br />{s.sekolah}</div></div>);
-  const Ttd = ({ kota }) => (<div style={{ marginLeft: "auto", width: 260, textAlign: "center" }}>{kota}, {tanggal}<br />Kepala Satuan Pendidikan<div className="gap" /><b><u>{s.kepsek}</u></b><br />NIP. {s.nip}</div>);
-
-  const Aktivasi = () => (
-    <div className="sheet"><Kop />
-      <div className="jd">SURAT KETERANGAN<br />AKTIVASI REKENING SIMPEL PIP<br /><span style={{ fontWeight: "normal" }}>Nomor : {s.nomorSurat}</span></div>
-      <p>Yang bertandatangan di bawah ini :</p>
-      <table className="k"><tbody>
-        {[["Nama", s.kepsek], ["NIP", s.nip], ["Jabatan", "KEPALA SEKOLAH"], ["Satuan Pendidikan", s.namaSekolah.toUpperCase()]].map(([a, b]) => <tr key={a}><td width="170">{a}</td><td>: {b}</td></tr>)}
-      </tbody></table>
-      <p style={{ marginTop: 8 }}>Dengan ini menerangkan bahwa nama-nama tersebut di bawah ini, adalah benar Peserta Didik {s.namaSekolah} dan yang bersangkutan sebagai Penerima PIP Tahun {s.tahun}</p>
-      <table className="t"><thead><tr><th width="40">No</th><th>Nama Peserta Didik Tertera di SK</th><th width="60">Kelas</th><th width="170">Nomor Rekening</th></tr></thead>
-        <tbody>{terpilih.map((x, i) => <tr key={x.id}><td align="center">{i + 1}.</td><td>{x.nama}</td><td align="center">{x.kelas}</td><td>{x.rek}</td></tr>)}</tbody></table>
-      <p>Demikian surat keterangan ini dibuat untuk digunakan sebagai salah satu persyaratan untuk melakukan aktivasi rekening SimPel di Bank penyalur.</p>
-      <Ttd kota={s.kota} />
-    </div>);
-
-  const Cb = ({ k }) => (<label className="cb"><input type="checkbox" checked={alasan.has(k)} onChange={() => toggle(alasan, setAlasan, k)} /><span>{ALASAN[k]}</span></label>);
-  const Sptjm = () => (
-    <div className="sheet"><Kop />
-      <div className="jd">SURAT PERNYATAAN TANGGUNG JAWAB MUTLAK (SPTJM)<br />PENARIKAN DANA OLEH KUASA PENERIMA PIP</div>
-      <p>Yang bertanda tangan di bawah ini, saya :</p>
-      <table className="k"><tbody>
-        {[["Nama", s.kepsek], ["Jabatan", "Kepala Sekolah"], ["NIP", s.nip], ["Satuan Pendidikan", s.namaSekolah], ["Alamat", s.alamatSekolah], ["Kab/Kota", s.kabupaten.replace("KABUPATEN ", "").replace(/\w+/g, (w) => w[0] + w.slice(1).toLowerCase())], ["Provinsi", s.provinsi]].map(([a, b]) => <tr key={a}><td width="170">{a}</td><td>: {b}</td></tr>)}
-      </tbody></table>
-      <p style={{ marginTop: 8 }}>Dengan ini menyatakan :</p>
-      <p>1. Bertanggung jawab sepenuhnya untuk melakukan penarikan dana PIP Dikdasmen melalui pemberian kuasa dari {terpilih.length} peserta didik dengan jumlah dana sebesar <b>{rp(total)}</b> di satuan pendidikan saya sesuai surat kuasa penarikan dana PIP Dikdasmen, dengan alasan sebagai berikut (tandai ✓ yang dipilih) :</p>
-      <p style={{ marginLeft: 18, marginBottom: 2 }}>a. Lokasi tempat tinggal dan satuan pendidikan peserta didik berada di :</p>{["a1", "a2", "a3"].map((k) => <Cb key={k} k={k} />)}
-      <p style={{ marginLeft: 18, margin: "6px 0 2px" }}>b. Peserta didik/orang tua/wali yang tidak memungkinkan untuk melakukan aktivasi rekening secara langsung yang disebabkan karena :</p>{["b1", "b2", "b3", "b4"].map((k) => <Cb key={k} k={k} />)}
-      <p style={{ marginTop: 8 }}>2. Bertanggung jawab sepenuhnya untuk menyerahkan dana kepada peserta didik penerima dana PIP Dikdasmen sesuai surat kuasa penarikan dana PIP Dikdasmen dalam waktu paling lambat 7 (tujuh) hari kerja setelah penarikan dana dilakukan.</p>
-      <p>3. Menyampaikan laporan penarikan dana kepada Dinas Pendidikan Provinsi/Kabupaten/Kota dalam waktu paling lambat 7 (tujuh) hari kerja setelah penarikan dana dilakukan dengan melampirkan Format Surat Tanda Serah Terima Dana Melalui Kuasa yang telah diisi dan ditandatangani.</p>
-      <p>4. Apabila di kemudian hari terjadi tuntutan hukum baik pidana maupun perdata terkait dengan penarikan dana PIP Dikdasmen, maka saya siap untuk bertanggung jawab sesuai ketentuan hukum yang berlaku.</p>
-      <p>Demikian surat pernyataan pertanggungjawaban mutlak ini saya buat dengan kesadaran dan penuh tanggung jawab.</p>
-      <div style={{ marginLeft: "auto", width: 260, textAlign: "center" }}>{s.kota}, {tanggal}<div style={{ border: "1px solid #000", width: 90, margin: "6px auto", padding: "10px 0", fontSize: "9pt" }}>METERAI<br />Rp 10.000</div><b><u>{s.kepsek}</u></b><br />NIP. {s.nip}</div>
-    </div>);
-
-  const Kuasa = ({ x }) => { const e = ex(x); return (
-    <div className="sheet">
-      <div className="jd"><u>SURAT KUASA</u></div>
-      <p>Yang bertanda tangan di bawah ini :</p>
-      <table className="k"><tbody>{[["Nama", e.pemberi], ["Tempat dan Tanggal Lahir", e.ttl || "-"], ["No. KTP", e.ktp || "-"], ["No. Telepon/HP", e.hp], ["Alamat", e.alamat]].map(([a, b]) => <tr key={a}><td width="220">{a}</td><td>: {b}</td></tr>)}</tbody></table>
-      <p>Selanjutnya disebut <b>Pemberi Kuasa</b></p>
-      <p>Dengan ini memberi kuasa kepada :</p>
-      <table className="k"><tbody>{[["Nama", s.kepsek], ["NIP", s.nip], ["Pangkat/Golongan", s.pangkat], ["Jabatan", "Kepala " + s.namaSekolah], ["No. KTP", s.ktpKepsek], ["No. Telepon/HP", s.hpKepsek], ["Alamat", s.alamatKepsek]].map(([a, b]) => <tr key={a}><td width="220">{a}</td><td>: {b}</td></tr>)}</tbody></table>
-      <p>Selanjutnya disebut <b>Penerima Kuasa</b></p>
-      <p>Dengan surat ini, saya sebagai Pemberi Kuasa, memberikan kuasa kepada Penerima Kuasa untuk melakukan pengambilan uang secara tunai pada rekening PIP milik anak saya dengan data-data sebagai berikut :</p>
-      <table className="k"><tbody>{[["No. Rekening", x.rek], ["Atas Nama", x.atasNama || x.nama], ["Nama Bank", x.bank || s.bank]].map(([a, b]) => <tr key={a}><td width="220">{a}</td><td>: {b}</td></tr>)}</tbody></table>
-      <p style={{ marginTop: 8 }}>Hal-hal dan segala akibat yang disebabkan Surat Kuasa ini adalah tanggung jawab sepenuhnya Pemberi Kuasa.</p>
-      <p>Demikian Surat Kuasa ini saya buat dengan kesadaran penuh dan tanpa ada paksaan dari pihak manapun dan semoga dapat digunakan sebagaimana mestinya.</p>
-      <p style={{ textAlign: "right" }}>{s.kotaKuasa}, {tanggal}</p>
-      <div className="ttd"><div>Penerima Kuasa<br />Kepala Sekolah,<div className="gap" /><b><u>{s.kepsek}</u></b><br />NIP. {s.nip}</div>
-        <div>Pemberi Kuasa<br />Orang Tua Siswa,<div className="gap" /><b><u>{e.pemberi}</u></b></div></div>
-    </div>); };
-
-  const x = siswa[cur];
-  const daftarKuasa = semua ? terpilih : x ? [x] : [];
 
   return (
-    <Layout title="Dokumen PIP" subtitle="Surat aktivasi rekening, SPTJM, dan surat kuasa dari data siswa">
-    <div className="pip"><style>{CSS}</style>
-      <div className="bar">
-        {isAdmin && <label className="file">Isi rekening dari Excel PIP<input type="file" accept=".xls,.xlsx" onChange={impor} hidden /></label>}
-        {siswa.length > 0 && <span style={{ fontSize: 13 }}>{terpilih.length} dari {siswa.length} siswa dipilih · total {rp(total)}</span>}
-      </div>
-      {err && <div className="err" role="alert">{err}</div>}
-      {info && <div className="sub" role="status">{info}</div>}
-      {tanpaRek > 0 && <div className="sub">{tanpaRek} siswa aktif belum punya nomor rekening, jadi tidak dipilih otomatis.</div>}
-      {siswa.length > 0 && (<details><summary>Pilih siswa ({terpilih.length})</summary>
-        <div className="bar"><button onClick={() => setPilih(new Set(siswa.map((a) => a.id)))}>Pilih semua</button><button onClick={() => setPilih(new Set())}>Kosongkan</button></div>
-        <div className="list">{siswa.map((a) => <label key={a.id}><input type="checkbox" checked={pilih.has(a.id)} onChange={() => toggle(pilih, setPilih, a.id)} /> {a.nama} (kls {a.kelas})</label>)}</div></details>)}
-      <details><summary>Data sekolah dan surat</summary>
-        <div className="grid">{Object.keys(LABEL).map((k) => <label className="f" key={k}>{LABEL[k]}<input type={k === "tanggal" ? "date" : "text"} value={s[k]} onChange={(e) => setS({ ...s, [k]: e.target.value })} /></label>)}</div>
-        <div className="bar">{logo && <img src={logo} alt="Logo sekolah" style={{ height: 48 }} />}
-          <label className="file">{logo ? "Ganti logo" : "Unggah logo sekolah"}<input type="file" accept="image/*" onChange={pilihLogo} hidden /></label>
-          {logo && <button onClick={hapusLogo}>Hapus logo</button>}</div></details>
+    <NavLink
+      to={to}
+      end={end}
+      onClick={onNavigate}
+      className={({ isActive }) =>
+        `flex items-center gap-3 px-3 py-3 md:py-2.5 rounded-lg text-[15px] md:text-sm font-medium transition-all touch-manipulation ${
+          cekAktif(isActive)
+            ? 'text-white shadow-sm shadow-black/20'
+            : 'text-white/70 active:bg-white/[0.12] md:hover:bg-white/[0.08] md:hover:text-white'
+        }`
+      }
+      style={({ isActive }) => (cekAktif(isActive) ? { background: 'var(--sidebar-active-gradient)' } : undefined)}
+    >
+      {({ isActive }) => content(cekAktif(isActive))}
+    </NavLink>
+  )
+}
 
-      <div className="tabs" role="tablist">{["Surat Keterangan Aktivasi", "SPTJM", "Surat Kuasa"].map((t, i) => <button key={t} role="tab" aria-selected={tab === i} className={tab === i ? "on" : ""} onClick={() => setTab(i)}>{t}</button>)}</div>
+// Ambil URL foto guru dari kolom foto_profil_path (isinya path storage,
+// bukan URL lengkap) di bucket "foto-profil".
+function getFotoUrl(fotoProfilPath) {
+  if (!fotoProfilPath) return null
+  if (fotoProfilPath.startsWith('http')) return fotoProfilPath
+  const { data } = supabase.storage.from('foto-profil').getPublicUrl(fotoProfilPath)
+  return data?.publicUrl || null
+}
 
-      {loading ? <p className="sub" style={{ marginTop: 16 }}>Memuat data siswa...</p> : !sekolahId ? <p className="sub" style={{ marginTop: 16 }}>Belum ada sekolah aktif.</p> : siswa.length === 0 ? <p className="sub" style={{ marginTop: 16 }}>Belum ada siswa aktif di sekolah ini.</p> : (<>
-        {tab === 2 && x && (<div style={{ marginTop: 12 }}>
-          <div className="grid">
-            <label className="f">Siswa<select value={cur} onChange={(e) => setCur(+e.target.value)}>{siswa.map((a, i) => <option key={a.id} value={i}>{a.nama}</option>)}</select></label>
-            {[["pemberi", "Nama pemberi kuasa (orang tua)"], ["ttl", "Tempat, tanggal lahir"], ["ktp", "No. KTP"], ["hp", "No. HP"], ["alamat", "Alamat"]].map(([k, l]) => <label className="f" key={k}>{l}<input type="text" value={ex(x)[k]} onChange={(e) => setEx(x, k, e.target.value)} /></label>)}
-          </div></div>)}
-        <div className="bar">
-          <button className="on" onClick={() => cetak(false)} disabled={tab !== 2 ? !terpilih.length : !x}>{tab === 2 ? "Cetak surat ini" : "Cetak"}</button>
-          {tab === 2 && <button onClick={() => cetak(true)} disabled={!terpilih.length}>Cetak semua siswa terpilih ({terpilih.length})</button>}
+function getInisial(nama) {
+  if (!nama) return '?'
+  const kata = nama.trim().split(/\s+/)
+  const inisial = kata.length > 1 ? kata[0][0] + kata[1][0] : kata[0].slice(0, 2)
+  return inisial.toUpperCase()
+}
+
+// Label peran yang tampil di header sidebar — utamakan jabatan yang dipilih
+// sendiri saat daftar (mis. "Kepala Sekolah"), baru fallback ke role teknis.
+// PERBAIKAN: sebelumnya fungsi ini selalu jatuh ke 'Guru' sebagai default
+// kalau semua pengecekan role di atas bernilai false — termasuk saat
+// PROFIL BELUM DIMUAT atau user BELUM LOGIN (mis. tamu yang lihat-lihat
+// halaman Toko, atau sesaat setelah klik Logout). Akibatnya sidebar
+// sempat menampilkan "Guru" padahal orangnya tamu / bukan guru sama
+// sekali. Sekarang: tanpa sesi -> 'Tamu', dan 'Guru' hanya dipakai kalau
+// memang jabatan/role di profil benar-benar 'guru'.
+// PERBAIKAN 2: tambahan untuk tenant kantor — 'kepala_kantor' & 'pegawai'
+// sebelumnya tidak dikenali sama sekali sehingga macet di 'Memuat...'.
+// PERBAIKAN 3: tambahan untuk tenant puskesmas — 'kepala_puskesmas'
+// sekarang dikenali juga, sejajar dengan 'kepala_kantor'.
+function getLabelPeran(profil, isSuperAdmin, isAdminUtama, isAdmin, isOrangTua, hasSession) {
+  if (!hasSession) return 'Tamu'
+  if (isSuperAdmin) return 'Superadmin'
+  if (profil?.jabatan === 'kepala_sekolah') return 'Kepala Sekolah'
+  if (profil?.jabatan === 'kepala_kantor') return 'Kepala Kantor'
+  if (profil?.jabatan === 'kepala_puskesmas') return 'Kepala Puskesmas'
+  if (profil?.jabatan === 'kepala_polres') return 'Kepala Polres'
+  if (isAdminUtama) return 'Admin Utama'
+  if (isAdmin) return 'Admin'
+  if (isOrangTua) return 'Orang Tua/Wali'
+  if (profil?.jabatan === 'guru' || profil?.role === 'guru') return 'Guru'
+  if (profil?.jabatan === 'pegawai' || profil?.role === 'pegawai') return 'Pegawai'
+  // Sesi ada tapi profil belum selesai dimuat / tidak dikenali perannya.
+  return 'Memuat...'
+}
+
+// Menu ORANG TUA: sangat ringkas, hanya halaman read-only milik anak
+// mereka sendiri — TIDAK PERNAH pakai getLinksGuru(), supaya orang tua
+// tidak pernah melihat menu kerja guru (Presensi, Nilai, dsb yang bisa
+// diedit untuk SEMUA siswa di kelas).
+function getLinksOrangTua(jumlahPesanBelumDibaca = 0, sekolahId = null) {
+  return [
+    // PERBAIKAN: "/" sekarang halaman Beranda publik, Dashboard di "/dashboard".
+    { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
+    { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
+    { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
+    { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
+    { to: '/toko', label: 'Toko', icon: Store },
+    { to: '/riwayat-pesanan', label: 'Riwayat Pesanan', icon: Receipt },
+    { to: '/pesanan-masuk', label: 'Pesanan Masuk (Toko)', icon: Inbox },
+    { to: '/rapat', label: 'Rapat Video', icon: Video },
+    { to: '/rapor-anak', label: 'Rapor Anak', icon: FileBadge },
+    { to: '/presensi-anak', label: 'Presensi Anak', icon: ClipboardCheck },
+    { to: '/portofolio-anak', label: 'Portofolio Anak', icon: Image },
+    { to: '/galeri-orang-tua', label: 'Galeri Kegiatan', icon: Images },
+    { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
+    // Kalender pendidikan (read-only untuk orang tua — halaman
+    // KalenderPendidikan.jsx sudah otomatis menyembunyikan kontrol edit
+    // untuk siapa pun yang bukan admin) dan tautan pintasan ke form
+    // pendaftaran siswa baru (PPDB) yang memang sudah publik.
+    // PERBAIKAN: link sekarang menyertakan sekolahId akun ini sendiri
+    // (/ppdb/:sekolahId) — sebelumnya "/ppdb" polos selalu terbaca sebagai
+    // sekolah yang salah (lihat perbaikan di PPDBPublik.jsx).
+    { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
+    { to: sekolahId ? `/ppdb/${sekolahId}` : '/ppdb', label: 'PPDB Siswa Baru', icon: UserPlus, external: true },
+  ]
+}
+
+export default function Sidebar({ open = false, onClose = () => {} }) {
+  const {
+    signOut,
+    session,
+    profil,
+    isAdmin,
+    isAdminUtama,
+    isSuperAdmin,
+    isKepalaSekolah,
+    isOrangTua,
+    sekolahId,
+    isKantor,
+    isPuskesmas,
+    isPolres,
+  } = useAuth()
+  const navigate = useNavigate()
+  const fotoUrl = getFotoUrl(profil?.foto_profil_path)
+  const namaTampil = profil?.nama_lengkap || session?.user?.email || 'Pengguna'
+
+  const labelPeran = getLabelPeran(profil, isSuperAdmin, isAdminUtama, isAdmin, isOrangTua, !!session)
+  // Paket akun yang sedang login (free / standar / premium) untuk lencana di header.
+  const paketSaatIni = usePaketSaatIni()
+
+  // PERBAIKAN: sebelumnya tombol ini cuma memanggil signOut() dan
+  // menunggu redirect otomatis dari ProtectedRoute. Itu tidak berlaku di
+  // halaman publik seperti /toko (sengaja bisa diakses tamu), jadi kalau
+  // Logout diklik di sana, sesi Supabase sudah berakhir di baliknya tapi
+  // tampilannya diam saja (terasa seperti "tidak langsung keluar", baru
+  // ke-apply setelah diklik dua kali). Sekarang kita eksplisit arahkan ke
+  // /login begitu proses signOut selesai, di halaman manapun.
+  const handleLogout = async () => {
+    await signOut()
+    navigate('/login', { replace: true })
+  }
+
+  // PERBAIKAN ANDROID: saat drawer menu terbuka di HP, kunci scroll halaman
+  // di belakangnya supaya menggeser menu tidak ikut menggulung halaman.
+  // Hanya berlaku di layar kecil (di desktop sidebar selalu tampil).
+  useEffect(() => {
+    if (!open || typeof window === 'undefined' || window.innerWidth >= 768) return
+    const overflowSebelumnya = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = overflowSebelumnya
+    }
+  }, [open])
+
+  // PERBAIKAN TAMPILAN: sidebar admin punya ~20 menu ditumpuk vertikal,
+  // sulit di-scan. Grup berlabel (Akademik, Keuangan & Aset, Administrasi,
+  // dst) sekarang bisa di-collapse/expand per grup lewat header grup yang
+  // bisa diklik. Grup tanpa label (menu utama paling atas) selalu terbuka.
+  // Default semua grup terbuka (tidak ada yang tertutup) supaya perilaku
+  // awal tidak berubah drastis — pengguna tinggal ciutkan grup yang jarang
+  // dipakai.
+  const [grupTertutup, setGrupTertutup] = useState({})
+
+  function toggleGrup(label) {
+    setGrupTertutup((prev) => ({ ...prev, [label]: !prev[label] }))
+  }
+
+  // Notifikasi real-time: jumlah pendaftaran akun yang masih menunggu persetujuan.
+  // Hanya relevan untuk admin utama / superadmin yang punya menu "Persetujuan Akun".
+  const [jumlahMenunggu, setJumlahMenunggu] = useState(0)
+
+  useEffect(() => {
+    if (!isAdminUtama) {
+      setJumlahMenunggu(0)
+      return
+    }
+
+    let aktif = true
+
+    async function muatJumlahMenunggu() {
+      let query = supabase
+        .from('profil')
+        .select('id', { count: 'exact', head: true })
+        .eq('status_akun', 'menunggu')
+      if (!isSuperAdmin) {
+        query = query.eq('sekolah_id', sekolahId)
+      }
+      const { count } = await query
+      if (aktif) setJumlahMenunggu(count || 0)
+    }
+
+    muatJumlahMenunggu()
+
+    // Dengarkan perubahan tabel profil secara real-time (pendaftar baru, disetujui, ditolak, dll)
+    // supaya badge notifikasi ter-update otomatis tanpa perlu refresh halaman.
+    // PERBAIKAN: bersihkan channel lama dengan nama sama dulu (kalau masih
+    // ada) sebelum subscribe baru — mencegah error "cannot add
+    // postgres_changes callback after subscribe()".
+    bersihkanChannelLama('persetujuan-akun-notifikasi')
+    const channel = supabase
+      .channel('persetujuan-akun-notifikasi')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profil' }, () => {
+        muatJumlahMenunggu()
+      })
+      .subscribe()
+
+    return () => {
+      aktif = false
+      supabase.removeChannel(channel)
+    }
+  }, [isAdminUtama, isSuperAdmin, sekolahId])
+
+  // Notifikasi real-time: jumlah pengajuan toko yang masih menunggu persetujuan.
+  // Hanya relevan untuk superadmin (satu-satunya yang punya menu "Persetujuan Toko").
+  const [jumlahPengajuanTokoMenunggu, setJumlahPengajuanTokoMenunggu] = useState(0)
+
+  useEffect(() => {
+    if (!isSuperAdmin) {
+      setJumlahPengajuanTokoMenunggu(0)
+      return
+    }
+
+    let aktif = true
+
+    async function muatJumlahPengajuanToko() {
+      const { count } = await supabase
+        .from('pengajuan_toko')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'menunggu')
+      if (aktif) setJumlahPengajuanTokoMenunggu(count || 0)
+    }
+
+    muatJumlahPengajuanToko()
+
+    bersihkanChannelLama('pengajuan-toko-notifikasi')
+    const channel = supabase
+      .channel('pengajuan-toko-notifikasi')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pengajuan_toko' }, () => {
+        muatJumlahPengajuanToko()
+      })
+      .subscribe()
+
+    return () => {
+      aktif = false
+      supabase.removeChannel(channel)
+    }
+  }, [isSuperAdmin])
+
+  // Notifikasi real-time: jumlah pesanan yang sudah siap dicairkan tapi
+  // belum ditransfer ke penjual. Hanya relevan untuk superadmin (satu-
+  // satunya yang punya menu "Pencairan Dana" dan boleh memanggil RPC
+  // fn_cairkan_pesanan / fn_tahan_pencairan.
+  const [jumlahSiapDicairkan, setJumlahSiapDicairkan] = useState(0)
+
+  useEffect(() => {
+    if (!isSuperAdmin) {
+      setJumlahSiapDicairkan(0)
+      return
+    }
+
+    let aktif = true
+
+    async function muatJumlahSiapDicairkan() {
+      const { count } = await supabase
+        .from('pesanan')
+        .select('id', { count: 'exact', head: true })
+        .eq('status_pencairan', 'siap_dicairkan')
+      if (aktif) setJumlahSiapDicairkan(count || 0)
+    }
+
+    muatJumlahSiapDicairkan()
+
+    bersihkanChannelLama('pencairan-dana-notifikasi')
+    const channel = supabase
+      .channel('pencairan-dana-notifikasi')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pesanan' }, () => {
+        muatJumlahSiapDicairkan()
+      })
+      .subscribe()
+
+    return () => {
+      aktif = false
+      supabase.removeChannel(channel)
+    }
+  }, [isSuperAdmin])
+
+  // Notifikasi real-time: jumlah pesan masuk yang belum dibaca (fitur Pesan).
+  const [jumlahPesanBelumDibaca, setJumlahPesanBelumDibaca] = useState(0)
+
+  useEffect(() => {
+    if (!session?.user?.id) {
+      setJumlahPesanBelumDibaca(0)
+      return
+    }
+
+    let aktif = true
+
+    async function muatJumlahPesan() {
+      const { count: jumlahPribadi } = await supabase
+        .from('pesan')
+        .select('id', { count: 'exact', head: true })
+        .eq('penerima_id', session.user.id)
+        .eq('dibaca', false)
+
+      // Siaran: RLS otomatis menyaring hanya yang sesuai target_role saya.
+      // Belum dibaca = belum ada baris di pesan_siaran_dibaca untuk saya.
+      const { data: semuaSiaran } = await supabase.from('pesan_siaran').select('id')
+      const { data: siaranDibaca } = await supabase
+        .from('pesan_siaran_dibaca')
+        .select('siaran_id')
+        .eq('profil_id', session.user.id)
+      const idDibaca = new Set((siaranDibaca || []).map((r) => r.siaran_id))
+      const jumlahSiaran = (semuaSiaran || []).filter((s) => !idDibaca.has(s.id)).length
+
+      if (aktif) setJumlahPesanBelumDibaca((jumlahPribadi || 0) + jumlahSiaran)
+    }
+
+    muatJumlahPesan()
+
+    bersihkanChannelLama('pesan-notifikasi')
+    const channel = supabase
+      .channel('pesan-notifikasi')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pesan' }, () => {
+        muatJumlahPesan()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pesan_siaran' }, () => {
+        muatJumlahPesan()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pesan_siaran_dibaca' }, () => {
+        muatJumlahPesan()
+      })
+      .subscribe()
+
+    return () => {
+      aktif = false
+      supabase.removeChannel(channel)
+    }
+  }, [session?.user?.id])
+
+  // Notifikasi real-time: jumlah pesan Admin Pusat yang belum dibaca.
+  // Guru tidak pernah masuk sini (isAdmin selalu false untuk guru).
+  const [jumlahPesanPusatBelumDibaca, setJumlahPesanPusatBelumDibaca] = useState(0)
+
+  useEffect(() => {
+    if (!session?.user?.id || !isAdmin) {
+      setJumlahPesanPusatBelumDibaca(0)
+      return
+    }
+
+    let aktif = true
+
+    async function muatJumlahPesanPusat() {
+      let query = supabase
+        .from('pesan_pusat')
+        .select('id', { count: 'exact', head: true })
+
+      query = isSuperAdmin
+        ? query.eq('sisi', 'sekolah').eq('dibaca_pusat', false)
+        : query.eq('sisi', 'pusat').eq('dibaca_sekolah', false).eq('sekolah_id', sekolahId)
+
+      const { count } = await query
+      if (aktif) setJumlahPesanPusatBelumDibaca(count || 0)
+    }
+
+    muatJumlahPesanPusat()
+
+    bersihkanChannelLama('pesan-pusat-notifikasi')
+    const channel = supabase
+      .channel('pesan-pusat-notifikasi')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pesan_pusat' }, () => {
+        muatJumlahPesanPusat()
+      })
+      .subscribe()
+
+    return () => {
+      aktif = false
+      supabase.removeChannel(channel)
+    }
+  }, [session?.user?.id, isAdmin, isSuperAdmin, sekolahId])
+
+  // Notifikasi real-time: jumlah pesan Live Chat dari pengunjung publik yang
+  // belum dibaca admin.
+  // PERBAIKAN: sebelumnya syaratnya "isAdmin" (mencakup admin sekolah biasa),
+  // padahal Live Chat sekarang khusus superadmin (lihat catatan di
+  // getGroupsAdmin di atas dan RLS live_chat_pesan di Supabase). Disamakan
+  // jadi "isSuperAdmin" supaya admin sekolah tidak lagi query tabel ini sama
+  // sekali dari Sidebar, dan tidak subscribe ke channel real-time-nya.
+  const [jumlahLiveChatBelumDibaca, setJumlahLiveChatBelumDibaca] = useState(0)
+
+  useEffect(() => {
+    if (!isSuperAdmin) {
+      setJumlahLiveChatBelumDibaca(0)
+      return
+    }
+
+    let aktif = true
+
+    async function muatJumlahLiveChat() {
+      const { count } = await supabase
+        .from('live_chat_pesan')
+        .select('id', { count: 'exact', head: true })
+        .eq('dibaca', false)
+        .eq('pengirim', 'pengunjung')
+      if (aktif) setJumlahLiveChatBelumDibaca(count || 0)
+    }
+
+    muatJumlahLiveChat()
+
+    bersihkanChannelLama('live-chat-notifikasi')
+    const channel = supabase
+      .channel('live-chat-notifikasi')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'live_chat_pesan' }, () => {
+        muatJumlahLiveChat()
+      })
+      .subscribe()
+
+    return () => {
+      aktif = false
+      supabase.removeChannel(channel)
+    }
+  }, [isSuperAdmin])
+
+  // Pilih set menu admin & non-admin sesuai jenis tenant (sekolah, kantor,
+  // puskesmas, polres). Semua tenant non-sekolah saling eksklusif.
+  const groupsAdmin = isKantor
+    ? getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu, jumlahPesanBelumDibaca)
+    : isPuskesmas
+    ? getGroupsPuskesmasAdmin(isAdminUtama, jumlahMenunggu, jumlahPesanBelumDibaca)
+    : isPolres
+    ? getGroupsPolresAdmin(isAdminUtama, jumlahMenunggu, jumlahPesanBelumDibaca)
+    : getGroupsAdmin(
+        isAdminUtama,
+        isSuperAdmin,
+        isKepalaSekolah,
+        jumlahMenunggu,
+        jumlahPesanBelumDibaca,
+        jumlahPesanPusatBelumDibaca,
+        jumlahPengajuanTokoMenunggu,
+        jumlahSiapDicairkan,
+        jumlahLiveChatBelumDibaca
+      )
+  const linksGuru = isKantor
+    ? getLinksKantorPegawai(jumlahPesanBelumDibaca)
+    : isPuskesmas
+    ? getLinksPuskesmasPegawai(jumlahPesanBelumDibaca)
+    : isPolres
+    ? getLinksPolresPegawai(jumlahPesanBelumDibaca)
+    : getLinksGuru(jumlahPesanBelumDibaca, sekolahId)
+  const linksOrangTua = getLinksOrangTua(jumlahPesanBelumDibaca, sekolahId)
+
+  return (
+    <>
+      {/* Overlay gelap di belakang drawer — hanya tampil di HP saat menu dibuka */}
+      {open && (
+        <div
+          onClick={onClose}
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[1px] md:hidden"
+          aria-hidden="true"
+        />
+      )}
+
+      {/*
+        PERBAIKAN ANDROID:
+        - tinggi memakai 100dvh (tinggi layar yang sudah dikurangi address bar
+          Chrome Android) — sebelumnya h-screen (100vh) membuat menu paling
+          bawah tertutup bilah browser. Class h-screen dibiarkan sebagai
+          cadangan untuk browser lama yang belum mengenal dvh.
+        - tap highlight abu-abu bawaan Android dimatikan.
+      */}
+     <aside
+     style={{ height: '100dvh', background: 'var(--sidebar-solid)', borderColor: 'var(--sidebar-border)' }}
+     className={`w-72 max-w-[85vw] md:w-64 shrink-0 text-white flex flex-col h-screen fixed md:sticky top-0 left-0 z-50 border-r transition-transform duration-300 ease-out [-webkit-tap-highlight-color:transparent]
+     ${open ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}
+    >
+     <div
+    style={{ paddingTop: 'calc(1.25rem + env(safe-area-inset-top, 0px))', background: 'var(--sidebar-header-gradient)' }}
+    className="relative overflow-hidden shrink-0 px-4 pb-5 border-b border-white/10"
+      >
+        {/*
+          Tombol tutup — hanya tampil di HP.
+          PERBAIKAN ANDROID: dulu tombol ini menempel di pojok kanan atas dan
+          bertumpuk dengan tombol Keluar (power). Sekarang sejajar
+          vertikal di tengah baris header, dan baris di bawahnya diberi
+          ruang kosong di kanan (pr-11) supaya keduanya berdampingan.
+        */}
+        <button
+          onClick={onClose}
+          title="Tutup menu"
+          aria-label="Tutup menu"
+          className="absolute top-1/2 right-2 -translate-y-1/2 z-10 w-10 h-10 rounded-lg flex items-center justify-center text-white/70 active:bg-white/10 touch-manipulation md:hidden"
+        >
+          <X size={20} />
+        </button>
+        {/* Motif batik dekoratif (senada dengan banner dashboard) */}
+        <svg
+          className="absolute inset-0 w-full h-full opacity-[0.35] pointer-events-none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+<defs>
+  <pattern id="batikSidebar" width="90" height="90" patternUnits="userSpaceOnUse">
+    {/* Medali bersayap (gaya lambang KORPRI, stilisasi) */}
+    <g transform="translate(45,32)">
+      <circle cx="0" cy="0" r="9" fill="none" stroke="var(--sidebar-accent)" strokeWidth="1.3" />
+      <path d="M0 -4 L1.6 -1 L4.8 -0.6 L2.4 1.6 L3 4.8 L0 3.2 L-3 4.8 L-2.4 1.6 L-4.8 -0.6 L-1.6 -1 Z"
+        fill="var(--sidebar-accent)" />
+      <path d="M-9 0 C-16 -4, -22 -1, -26 4 C-20 3, -14 4, -9 3 Z" fill="var(--sidebar-accent)" opacity="0.85" />
+      <path d="M9 0 C16 -4, 22 -1, 26 4 C20 3, 14 4, 9 3 Z" fill="var(--sidebar-accent)" opacity="0.85" />
+      <path d="M-7 6 C-4 9, 4 9, 7 6" stroke="var(--sidebar-accent)" strokeWidth="1.1" fill="none" />
+    </g>
+    {/* Ukiran bunga di bawah medali */}
+    <g transform="translate(45,64)" stroke="var(--sidebar-accent)" strokeWidth="1" fill="none">
+      <path d="M-14 0 C-10 -6, -4 -6, 0 0 C4 -6, 10 -6, 14 0" />
+      <circle cx="-14" cy="0" r="2" fill="var(--sidebar-accent)" stroke="none" />
+      <circle cx="0" cy="-3" r="2.2" fill="var(--sidebar-accent)" stroke="none" />
+      <circle cx="14" cy="0" r="2" fill="var(--sidebar-accent)" stroke="none" />
+      <path d="M-14 0 v6 M0 -3 v9 M14 0 v6" />
+    </g>
+  </pattern>
+</defs>
+<rect width="100%" height="100%" fill="url(#batikSidebar)" />
+        </svg>
+
+        <div className="relative flex items-center gap-3 pr-11 md:pr-0">
+          {fotoUrl ? (
+<img
+  src={fotoUrl}
+  alt={namaTampil}
+  style={{ borderColor: 'color-mix(in srgb, var(--sidebar-accent) 60%, transparent)' }}
+  className="w-11 h-11 rounded-full object-cover shrink-0 border-2"
+/>
+          ) : (
+<div
+  className="w-11 h-11 rounded-full flex items-center justify-center font-display font-bold text-white text-sm shrink-0 border-2"
+  style={{
+    background: 'var(--sidebar-active-gradient)',
+    borderColor: 'color-mix(in srgb, var(--sidebar-accent) 60%, transparent)',
+  }}
+>
+              {getInisial(namaTampil)}
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="font-display font-semibold text-[13px] leading-tight truncate text-white">{namaTampil}</p>
+            {/* Label peran + lencana paket (Free / Standar / Premium). Lencana
+                disembunyikan untuk superadmin karena bukan pelanggan paket. */}
+            <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1">
+              <p className="text-xs text-white/60">{labelPeran}</p>
+              {session && !isSuperAdmin && <PaketBadge paket={paketSaatIni} size="sm" />}
+            </div>
+          </div>
+          <button
+            onClick={session ? handleLogout : () => navigate('/login')}
+            title={session ? 'Keluar' : 'Masuk'}
+            aria-label={session ? 'Keluar' : 'Masuk'}
+            className="w-10 h-10 rounded-lg flex items-center justify-center text-red-400 active:bg-red-500/20 md:hover:bg-red-500/15 md:hover:text-red-300 transition-colors shrink-0 touch-manipulation"
+          >
+            <Power size={20} strokeWidth={2.2} />
+          </button>
         </div>
-        <div className="paper pip-print">{tab === 0 && <Aktivasi />}{tab === 1 && <Sptjm />}{tab === 2 && daftarKuasa.map((a) => <Kuasa key={a.id} x={a} />)}</div></>)}
-    </div>
-    </Layout>
-  );
+      </div>
+
+      {/*
+        PERBAIKAN: motif batik menu dulu diletakkan DI DALAM area yang bisa
+        di-scroll, sehingga ikut tergulung ke atas dan bagian bawah menu yang
+        panjang jadi polos tanpa motif. Sekarang motif ada di pembungkus luar
+        yang diam, dan hanya <nav> di dalamnya yang di-scroll.
+        - overscroll-contain: menggulung sampai ujung menu tidak lagi
+          "menembus" menggulung halaman di belakang.
+        - padding bawah ditambah area aman (env) supaya menu terakhir tidak
+          tertutup bilah navigasi/gestur Android.
+      */}
+     <div className="relative flex-1 min-h-0" style={{ background: 'var(--sidebar-body-gradient)' }}>
+        {/* Motif batik area menu — gaya berbeda dari header (kawung/diamond, bukan lingkaran) */}
+        <svg
+          className="absolute inset-0 w-full h-full opacity-[0.22] pointer-events-none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <defs>
+            <pattern
+              id="batikMenu"
+              width="36"
+              height="36"
+              patternUnits="userSpaceOnUse"
+              patternTransform="rotate(45)"
+            >
+              <rect x="12" y="0" width="12" height="12" fill="none" stroke="var(--sidebar-accent)" strokeWidth="1.2" />
+              <circle cx="18" cy="6" r="2.6" fill="var(--sidebar-accent)" />
+              <path d="M0 18 L18 0 M18 36 L36 18" stroke="var(--sidebar-accent)" strokeWidth="1" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#batikMenu)" />
+        </svg>
+
+        <nav
+          style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
+          className="relative h-full overflow-y-auto overscroll-contain pt-4 px-3"
+        >
+        {isAdmin ? (
+          groupsAdmin.map((group, i) => {
+            const tertutup = group.label ? !!grupTertutup[group.label] : false
+            return (
+              <div key={group.label ?? `top-${i}`} className={i > 0 ? 'mt-5' : ''}>
+                {group.label && (
+                  <button
+                    type="button"
+                    onClick={() => toggleGrup(group.label)}
+                    className="w-full flex items-center justify-between px-3 mb-1.5 py-1 text-[11px] font-semibold tracking-wider uppercase text-white/50 hover:text-white/80 transition-colors touch-manipulation"
+                  >
+                    <span>{group.label}</span>
+                    <ChevronDown
+                      size={13}
+                      className={`transition-transform duration-200 ${tertutup ? '-rotate-90' : ''}`}
+                    />
+                  </button>
+                )}
+                {!tertutup && (
+                  <div className="space-y-1">
+                    {group.links.map((link) => (
+                      <NavItem key={link.to} {...link} onNavigate={onClose} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })
+        ) : isOrangTua ? (
+          <div className="space-y-1">
+            {linksOrangTua.map((link) => (
+              <NavItem key={link.to} {...link} onNavigate={onClose} />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {linksGuru.map((link) => (
+              <NavItem key={link.to} {...link} onNavigate={onClose} />
+            ))}
+          </div>
+        )}
+        </nav>
+      </div>
+      </aside>
+    </>
+  )
 }
