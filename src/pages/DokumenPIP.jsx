@@ -85,7 +85,10 @@ const CSS = `
 .pip .sheet.satu .jd{margin:6px 0 8px}
 .pip .sheet.satu .cb{margin:0 0 1px 24px}
 @media print{body *{visibility:hidden}.pip-print,.pip-print *{visibility:visible}.pip-print{position:absolute;left:0;top:0;width:100%}
-.pip .paper{background:none;padding:0;overflow:visible}.pip .sheet{margin:0;box-shadow:none;page-break-after:always;min-height:0}.pip .sheet:last-child{page-break-after:auto}.pip .sheet.satu{page-break-after:auto}@page{size:A4;margin:0}}`;
+.pip .paper{background:none;padding:0;overflow:visible}.pip .sheet{margin:0;padding:0;width:auto;box-shadow:none;page-break-after:always;min-height:0}.pip .sheet:last-child{page-break-after:auto}
+.pip .sheet.satu{height:271mm;padding:0;page-break-after:auto}
+.pip table.t thead{display:table-header-group}.pip table.t tr{break-inside:avoid}.pip .sheet table.k{break-inside:avoid}
+@page{size:A4;margin:12mm 18mm}}`;
 
 const isi = (v) => { const x = String(v ?? "").trim(); return /^[-–.\s0]*$/.test(x) ? "" : x; };
 function pemberiDari(r) {
@@ -170,7 +173,7 @@ export default function DokumenPIP() {
   const setEx = (x, k, v) => setExtra({ ...extra, [x.id]: { ...ex(x), [k]: v } });
   function cetak(all) { setSemua(all); setTimeout(() => { window.print(); setSemua(false); }, 80); }
 
-  const Ttd = ({ kota }) => (<div style={{ marginLeft: "auto", width: 260, textAlign: "center" }}>{kota}, {tanggal}<br />Kepala Satuan Pendidikan<div className="gap" /><b><u>{s.kepsek}</u></b><br />NIP. {s.nip}</div>);
+  const Ttd = ({ kota }) => (<div style={{ marginLeft: "auto", width: 260, textAlign: "center", breakInside: "avoid" }}>{kota}, {tanggal}<br />Kepala Satuan Pendidikan<div className="gap" /><b><u>{s.kepsek}</u></b><br />NIP. {s.nip}</div>);
 
   // Catatan: Aktivasi() dan Sptjm() dipanggil sebagai fungsi (bukan <Aktivasi />)
   // supaya KopSurat tidak di-mount ulang dan query Supabase tidak terulang tiap ketikan.
