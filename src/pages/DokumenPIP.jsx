@@ -64,7 +64,7 @@ const CSS = `
 .pip .tabs{display:flex;border-bottom:2px solid #ddd;margin-top:14px}.pip .tabs button{border:0;border-radius:6px 6px 0 0;background:none;padding:10px 16px;font-size:14px}
 .pip .tabs button.on{background:#1f4e79}
 .pip details{border:1px solid #ddd;border-radius:6px;padding:8px 12px;margin:8px 0}.pip summary{cursor:pointer;font-size:14px}
-.pip .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;margin-top:10px}
+.pip .fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;margin-top:10px}
 .pip label.f{display:flex;flex-direction:column;font-size:12px;color:#555;gap:2px}.pip input[type=text],.pip input[type=date],.pip select{padding:6px;border:1px solid #bbb;border-radius:4px;font-size:13px}
 .pip .list{max-height:190px;overflow:auto;border:1px solid #ddd;border-radius:6px;padding:6px 10px;columns:2 260px;font-size:13px}
 .pip .list label{display:block;padding:1px 0}.pip .err{color:#b00020;font-size:13px}
@@ -245,7 +245,7 @@ export default function DokumenPIP() {
         <div className="bar"><button onClick={() => setPilih(new Set(siswa.map((a) => a.id)))}>Pilih semua</button><button onClick={() => setPilih(new Set())}>Kosongkan</button></div>
         <div className="list">{siswa.map((a) => <label key={a.id}><input type="checkbox" checked={pilih.has(a.id)} onChange={() => toggle(pilih, setPilih, a.id)} /> {a.nama} (kls {a.kelas})</label>)}</div></details>)}
       <details><summary>Data sekolah dan surat</summary>
-        <div className="grid">{Object.keys(LABEL).map((k) => <label className="f" key={k}>{LABEL[k]}<input type={k === "tanggal" ? "date" : "text"} value={s[k]} onChange={(e) => setS({ ...s, [k]: e.target.value })} /></label>)}</div>
+        <div className="fgrid">{Object.keys(LABEL).map((k) => <label className="f" key={k}>{LABEL[k]}<input type={k === "tanggal" ? "date" : "text"} value={s[k]} onChange={(e) => setS({ ...s, [k]: e.target.value })} /></label>)}</div>
         <div className="bar">{logo && <img src={logo} alt="Logo sekolah" style={{ height: 48 }} />}
           <label className="file">{logo ? "Ganti logo" : "Unggah logo sekolah"}<input type="file" accept="image/*" onChange={pilihLogo} hidden /></label>
           {logo && <button onClick={hapusLogo}>Hapus logo</button>}</div></details>
@@ -254,7 +254,7 @@ export default function DokumenPIP() {
 
       {loading ? <p className="sub" style={{ marginTop: 16 }}>Memuat data siswa...</p> : !sekolahId ? <p className="sub" style={{ marginTop: 16 }}>Belum ada sekolah aktif.</p> : siswa.length === 0 ? <p className="sub" style={{ marginTop: 16 }}>Belum ada siswa aktif di sekolah ini.</p> : (<>
         {tab === 2 && x && (<div style={{ marginTop: 12 }}>
-          <div className="grid">
+          <div className="fgrid">
             <label className="f">Siswa<select value={cur} onChange={(e) => setCur(+e.target.value)}>{siswa.map((a, i) => <option key={a.id} value={i}>{a.nama}</option>)}</select></label>
             {[["pemberi", "Nama pemberi kuasa (orang tua)"], ["ttl", "Tempat, tanggal lahir"], ["ktp", "No. KTP"], ["hp", "No. HP"], ["alamat", "Alamat"]].map(([k, l]) => <label className="f" key={k}>{l}<input type="text" value={ex(x)[k]} onChange={(e) => setEx(x, k, e.target.value)} /></label>)}
           </div></div>)}
