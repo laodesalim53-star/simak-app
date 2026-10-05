@@ -51,7 +51,9 @@ function LembarBukuInduk({ s, kelasNama, sekolah, aktif }) {
   const foto = fotoUrl(s.foto_path)
   const kepsek = pick(sekolah, 'nama_kepala_sekolah', 'kepala_sekolah', 'nama_kepsek')
   const nipKepsek = pick(sekolah, 'nip_kepala_sekolah', 'nip_kepsek')
-  const kota = pick(sekolah, 'kabupaten_kota', 'kabupaten', 'kota')
+  // Tempat tanda tangan = lokasi sekolah (bukan kabupaten). Bisa diisi manual lewat kolom
+  // profil_sekolah.tempat_ttd; kalau kosong dipakai kecamatan, lalu desa/kelurahan.
+  const kota = pick(sekolah, 'tempat_ttd', 'kecamatan', 'kelurahan_desa', 'desa', 'kelurahan')
 
   return (
     <section className={`bi-section ${aktif ? 'bi-aktif' : ''}`}>
@@ -127,7 +129,7 @@ function LembarBukuInduk({ s, kelasNama, sekolah, aktif }) {
           </tr>
         </thead>
         <tbody>
-          {[0, 1, 2, 3].map((i) => (
+          {[0, 1, 2].map((i) => (
             <tr key={i}>
               <td>&nbsp;</td>
               <td />
@@ -251,35 +253,38 @@ export default function BukuIndukSiswa() {
       subtitle="Data lengkap siswa sejak masuk sampai lulus, diambil dari data Siswa."
     >
       <style>{`
-        @page { size: A4 portrait; margin: 10mm; }
+        @page { size: A4 portrait; margin: 8mm; }
         .bi-wrap.print-only { position: static !important; }
         @media screen { .bi-wrap.print-only { display: block !important; } }
         .bi-section { display: none; background: #fff; width: 190mm; max-width: none; margin: 0 auto;
-          padding: 10mm; box-sizing: border-box; color: #000; font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.35; }
+          padding: 10mm; box-sizing: border-box; color: #000; font-family: 'Times New Roman', Times, serif; font-size: 10pt; line-height: 1.25; }
         .bi-section.bi-aktif { display: block; }
         @media screen { .bi-section { border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08); } }
-        .bi-section .kop-surat-resmi { margin-bottom: 10px; }
-        .bi-judul { text-align: center; margin-bottom: 8px; padding-bottom: 2px; }
-        .bi-judul-utama { font-weight: bold; font-size: 14pt; letter-spacing: 1px; text-decoration: underline; }
-        .bi-bagian { font-weight: bold; margin: 10px 0 3px; font-size: 11pt; }
+        .bi-section .kop-surat-resmi { margin-bottom: 6px; }
+        .bi-section .kop-surat-resmi img { width: 64px !important; height: 64px !important; }
+        .bi-judul { text-align: center; margin-bottom: 4px; }
+        .bi-judul-utama { font-weight: bold; font-size: 12pt; letter-spacing: 1px; text-decoration: underline; }
+        .bi-bagian { font-weight: bold; margin: 6px 0 2px; font-size: 10pt; }
         .bi-tabel { width: 100%; border-collapse: collapse; }
-        .bi-tabel td { padding: 1.5px 0; vertical-align: top; }
+        .bi-tabel td { padding: 0.5px 0; vertical-align: top; }
         .bi-no { width: 7mm; }
         .bi-label { width: 52mm; }
         .bi-sep { width: 4mm; text-align: center; }
         .bi-isi { border-bottom: 1px dotted #666; }
         .bi-grid { width: 100%; border-collapse: collapse; }
-        .bi-grid th, .bi-grid td { border: 1px solid #000; padding: 3px 5px; font-size: 10pt; height: 8mm; }
+        .bi-grid th, .bi-grid td { border: 1px solid #000; padding: 2px 5px; font-size: 9pt; height: 6mm; }
         .bi-grid th { text-align: center; height: auto; }
-        .bi-ttd-wrap { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 14px; page-break-inside: avoid; }
-        .bi-foto { width: 30mm; height: 40mm; border: 1px solid #000; display: flex; align-items: center; justify-content: center;
+        .bi-ttd-wrap { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 8px; break-inside: avoid; page-break-inside: avoid; }
+        .bi-foto { width: 26mm; height: 34mm; border: 1px solid #000; display: flex; align-items: center; justify-content: center;
           text-align: center; font-size: 9pt; color: #555; overflow: hidden; }
         .bi-foto img { position: static !important; display: block; float: none; width: 100%; height: 100%; object-fit: cover; }
         .bi-ttd { text-align: center; min-width: 65mm; }
-        .bi-ttd-ruang { height: 18mm; }
+        .bi-ttd-ruang { height: 13mm; }
         .bi-ttd-nama { font-weight: bold; text-decoration: underline; }
         @media print {
-          .bi-section { display: none; border: 0; box-shadow: none; border-radius: 0; padding: 0; width: auto; }
+          .bi-scroll { overflow: visible !important; }
+          .bi-wrap { width: 100% !important; margin: 0 !important; }
+          .bi-section { display: none; border: 0; box-shadow: none; border-radius: 0; padding: 0; width: 100% !important; max-width: 100%; overflow: hidden; }
           .bi-wrap.mode-satu .bi-section.bi-aktif { display: block; }
           .bi-wrap.mode-semua .bi-section { display: block; break-after: page; page-break-after: always; }
           .bi-wrap.mode-semua .bi-section:last-child { break-after: auto; page-break-after: auto; }
@@ -388,7 +393,7 @@ export default function BukuIndukSiswa() {
             </ul>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto bi-scroll">
             <div className={`bi-wrap print-only mode-${mode}`}>
               {hasil
                 .filter((s) => mode === 'semua' || (terpilih && s.id === terpilih.id))
