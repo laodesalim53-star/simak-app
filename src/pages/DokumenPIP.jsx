@@ -70,6 +70,7 @@ const CSS = `
 .pip .paper{background:#eee;padding:12px;margin-top:12px;overflow:auto}
 .pip .sheet{background:#fff;width:210mm;min-height:297mm;margin:0 auto 12px;padding:18mm 20mm;box-sizing:border-box;font:12pt/1.45 "Times New Roman",serif;color:#000}
 .pip .sheet p{margin:0 0 8px;text-align:justify}.pip .kop{text-align:center;font-weight:bold;border-bottom:3px double #000;padding-bottom:6px;margin-bottom:14px;line-height:1.3}
+.pip .kop2{position:relative;min-height:76px;border-bottom:3px double #000;padding-bottom:6px;margin-bottom:14px}.pip .kop2 img{position:absolute;left:0;top:0;width:72px;height:72px;object-fit:contain}.pip .kop2 .kop{border:0;margin:0;padding:0 84px}
 .pip .jd{text-align:center;font-weight:bold;margin:10px 0 12px}.pip .jd u{display:block}
 .pip table.t{border-collapse:collapse;width:100%;margin:8px 0}.pip table.t td,.pip table.t th{border:1px solid #000;padding:3px 6px;font-size:11.5pt}
 .pip table.k td{padding:1px 0;vertical-align:top}.pip .ttd{display:flex;justify-content:space-between;margin-top:18px;text-align:center}.pip .ttd div{min-width:200px}
@@ -77,12 +78,18 @@ const CSS = `
 @media print{body *{visibility:hidden}.pip-print,.pip-print *{visibility:visible}.pip-print{position:absolute;left:0;top:0;width:100%}
 .pip .paper{background:none;padding:0;overflow:visible}.pip .sheet{margin:0;box-shadow:none;page-break-after:always;min-height:0}.pip .sheet:last-child{page-break-after:auto}@page{size:A4;margin:0}}`;
 
+const isi = (v) => { const x = String(v ?? "").trim(); return /^[-–.\s0]*$/.test(x) ? "" : x; };
+function pemberiDari(r) {
+  for (const [n, k] of [["nama_wali", "nik_wali"], ["nama_ayah", "nik_ayah"], ["nama_ibu", "nik_ibu"]])
+    if (isi(r[n])) return { pemberi: isi(r[n]), ktp: cell(isi(r[k])) };
+  return { pemberi: isi(r.nama_orang_tua), ktp: cell(isi(r.nik_ayah) || isi(r.nik_ibu)) };
+}
+
 const mapRow = (r) => ({
   id: r.id, nama: (r.nama_lengkap || "").toUpperCase(), status: r.status, nisn: cell(r.nisn), nik: cell(r.nik),
   kelas: String(r.kelas?.nama_kelas || "").replace(/\D/g, "") || r.kelas?.nama_kelas || "",
   rek: cell(r.no_rekening), bank: r.bank || "", atasNama: r.rekening_atas_nama || "",
-  pemberi: r.nama_wali || r.nama_ayah || r.nama_ibu || r.nama_orang_tua || "",
-  ktp: r.nik_wali || r.nik_ayah || r.nik_ibu || "", hp: r.no_hp_orang_tua || "", alamat: r.alamat_tinggal || r.alamat || "",
+  ...pemberiDari(r), hp: r.no_hp_orang_tua || "", alamat: r.alamat_tinggal || r.alamat || "",
 });
 
 export default function DokumenPIP() {
@@ -98,11 +105,29 @@ export default function DokumenPIP() {
   const [cur, setCur] = useState(0);
   const [semua, setSemua] = useState(false);
   const [err, setErr] = useState("");
+  const [logo, setLogo] = useState("");
 
   const terpilih = useMemo(() => siswa.filter((x) => pilih.has(x.id)), [siswa, pilih]);
   const total = terpilih.length * (Number(s.nominal) || 0);
   const tanpaRek = siswa.filter((x) => !x.rek).length;
   const tanggal = tgl(s.tanggal);
+
+  useEffect(() => {
+    if (!sekolahId) return;
+    let simpan = ""; try { simpan = localStorage.getItem("pip-logo-" + sekolahId) || ""; } catch { /* abaikan */ }
+    if (simpan) { setLogo(simpan); return; }
+    supabase.from("profil_sekolah").select("*").eq("sekolah_id", sekolahId).maybeSingle().then(({ data }) => {
+      const u = data && ["logo_url", "logo", "logo_sekolah", "logo_path"].map((k) => data[k]).find((v) => typeof v === "string" && /^(https?:|data:)/.test(v));
+      if (u) setLogo(u);
+    });
+  }, [sekolahId]);
+  function pilihLogo(e) {
+    const f = e.target.files?.[0]; e.target.value = ""; if (!f) return;
+    const fr = new FileReader();
+    fr.onload = () => { setLogo(fr.result); try { localStorage.setItem("pip-logo-" + sekolahId, fr.result); } catch { /* terlalu besar, tetap dipakai sesi ini */ } };
+    fr.readAsDataURL(f);
+  }
+  function hapusLogo() { setLogo(""); try { localStorage.removeItem("pip-logo-" + sekolahId); } catch { /* abaikan */ } }
 
   async function muat() {
     if (!sekolahId) { setSiswa([]); setLoading(false); return; }
@@ -136,7 +161,7 @@ export default function DokumenPIP() {
   const setEx = (x, k, v) => setExtra({ ...extra, [x.id]: { ...ex(x), [k]: v } });
   function cetak(all) { setSemua(all); setTimeout(() => { window.print(); setSemua(false); }, 80); }
 
-  const Kop = () => <div className="kop">{s.dinas}<br />{s.kabupaten}<br />{s.sekolah}</div>;
+  const Kop = () => (<div className="kop2">{logo && <img src={logo} alt="Logo" />}<div className="kop">{s.dinas}<br />{s.kabupaten}<br />{s.sekolah}</div></div>);
   const Ttd = ({ kota }) => (<div style={{ marginLeft: "auto", width: 260, textAlign: "center" }}>{kota}, {tanggal}<br />Kepala Satuan Pendidikan<div className="gap" /><b><u>{s.kepsek}</u></b><br />NIP. {s.nip}</div>);
 
   const Aktivasi = () => (
@@ -207,7 +232,10 @@ export default function DokumenPIP() {
         <div className="bar"><button onClick={() => setPilih(new Set(siswa.map((a) => a.id)))}>Pilih semua</button><button onClick={() => setPilih(new Set())}>Kosongkan</button></div>
         <div className="list">{siswa.map((a) => <label key={a.id}><input type="checkbox" checked={pilih.has(a.id)} onChange={() => toggle(pilih, setPilih, a.id)} /> {a.nama} (kls {a.kelas})</label>)}</div></details>)}
       <details><summary>Data sekolah dan surat</summary>
-        <div className="grid">{Object.keys(LABEL).map((k) => <label className="f" key={k}>{LABEL[k]}<input type={k === "tanggal" ? "date" : "text"} value={s[k]} onChange={(e) => setS({ ...s, [k]: e.target.value })} /></label>)}</div></details>
+        <div className="grid">{Object.keys(LABEL).map((k) => <label className="f" key={k}>{LABEL[k]}<input type={k === "tanggal" ? "date" : "text"} value={s[k]} onChange={(e) => setS({ ...s, [k]: e.target.value })} /></label>)}</div>
+        <div className="bar">{logo && <img src={logo} alt="Logo sekolah" style={{ height: 48 }} />}
+          <label className="file">{logo ? "Ganti logo" : "Unggah logo sekolah"}<input type="file" accept="image/*" onChange={pilihLogo} hidden /></label>
+          {logo && <button onClick={hapusLogo}>Hapus logo</button>}</div></details>
 
       <div className="tabs" role="tablist">{["Surat Keterangan Aktivasi", "SPTJM", "Surat Kuasa"].map((t, i) => <button key={t} role="tab" aria-selected={tab === i} className={tab === i ? "on" : ""} onClick={() => setTab(i)}>{t}</button>)}</div>
 
