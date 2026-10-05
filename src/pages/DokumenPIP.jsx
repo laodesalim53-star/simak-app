@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import Layout from "../components/Layout";
+import KopSurat from "../components/KopSurat";
 
 const BULAN = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
 const tgl = (iso) => { const d = new Date(iso); return `${d.getDate()} ${BULAN[d.getMonth()]} ${d.getFullYear()}`; };
@@ -75,8 +76,16 @@ const CSS = `
 .pip table.t{border-collapse:collapse;width:100%;margin:8px 0}.pip table.t td,.pip table.t th{border:1px solid #000;padding:3px 6px;font-size:11.5pt}
 .pip table.k td{padding:1px 0;vertical-align:top}.pip .ttd{display:flex;justify-content:space-between;margin-top:18px;text-align:center}.pip .ttd div{min-width:200px}
 .pip .gap{height:60px}.pip .cb{display:flex;gap:6px;margin:0 0 3px 24px;text-align:left;cursor:pointer}
+.pip .sheet .kop-surat-resmi{margin-bottom:12px}
+.pip .sheet .kop-surat-resmi p{margin:0;text-align:center}
+.pip .sheet .kop-surat-resmi p.mt-1{margin-top:4px}
+.pip .sheet.satu{min-height:0;height:296mm;overflow:hidden;padding:11mm 18mm;font-size:10pt;line-height:1.28}
+.pip .sheet.satu p{margin:0 0 4px}
+.pip .sheet.satu .kop-surat-resmi{margin-bottom:8px}
+.pip .sheet.satu .jd{margin:6px 0 8px}
+.pip .sheet.satu .cb{margin:0 0 1px 24px}
 @media print{body *{visibility:hidden}.pip-print,.pip-print *{visibility:visible}.pip-print{position:absolute;left:0;top:0;width:100%}
-.pip .paper{background:none;padding:0;overflow:visible}.pip .sheet{margin:0;box-shadow:none;page-break-after:always;min-height:0}.pip .sheet:last-child{page-break-after:auto}@page{size:A4;margin:0}}`;
+.pip .paper{background:none;padding:0;overflow:visible}.pip .sheet{margin:0;box-shadow:none;page-break-after:always;min-height:0}.pip .sheet:last-child{page-break-after:auto}.pip .sheet.satu{page-break-after:auto}@page{size:A4;margin:0}}`;
 
 const isi = (v) => { const x = String(v ?? "").trim(); return /^[-–.\s0]*$/.test(x) ? "" : x; };
 function pemberiDari(r) {
@@ -161,11 +170,12 @@ export default function DokumenPIP() {
   const setEx = (x, k, v) => setExtra({ ...extra, [x.id]: { ...ex(x), [k]: v } });
   function cetak(all) { setSemua(all); setTimeout(() => { window.print(); setSemua(false); }, 80); }
 
-  const Kop = () => (<div className="kop2">{logo && <img src={logo} alt="Logo" />}<div className="kop">{s.dinas}<br />{s.kabupaten}<br />{s.sekolah}</div></div>);
   const Ttd = ({ kota }) => (<div style={{ marginLeft: "auto", width: 260, textAlign: "center" }}>{kota}, {tanggal}<br />Kepala Satuan Pendidikan<div className="gap" /><b><u>{s.kepsek}</u></b><br />NIP. {s.nip}</div>);
 
+  // Catatan: Aktivasi() dan Sptjm() dipanggil sebagai fungsi (bukan <Aktivasi />)
+  // supaya KopSurat tidak di-mount ulang dan query Supabase tidak terulang tiap ketikan.
   const Aktivasi = () => (
-    <div className="sheet"><Kop />
+    <div className="sheet"><KopSurat />
       <div className="jd">SURAT KETERANGAN<br />AKTIVASI REKENING SIMPEL PIP<br /><span style={{ fontWeight: "normal" }}>Nomor : {s.nomorSurat}</span></div>
       <p>Yang bertandatangan di bawah ini :</p>
       <table className="k"><tbody>
@@ -180,21 +190,21 @@ export default function DokumenPIP() {
 
   const Cb = ({ k }) => (<label className="cb"><input type="checkbox" checked={alasan.has(k)} onChange={() => toggle(alasan, setAlasan, k)} /><span>{ALASAN[k]}</span></label>);
   const Sptjm = () => (
-    <div className="sheet"><Kop />
+    <div className="sheet satu"><KopSurat />
       <div className="jd">SURAT PERNYATAAN TANGGUNG JAWAB MUTLAK (SPTJM)<br />PENARIKAN DANA OLEH KUASA PENERIMA PIP</div>
       <p>Yang bertanda tangan di bawah ini, saya :</p>
       <table className="k"><tbody>
         {[["Nama", s.kepsek], ["Jabatan", "Kepala Sekolah"], ["NIP", s.nip], ["Satuan Pendidikan", s.namaSekolah], ["Alamat", s.alamatSekolah], ["Kab/Kota", s.kabupaten.replace("KABUPATEN ", "").replace(/\w+/g, (w) => w[0] + w.slice(1).toLowerCase())], ["Provinsi", s.provinsi]].map(([a, b]) => <tr key={a}><td width="170">{a}</td><td>: {b}</td></tr>)}
       </tbody></table>
-      <p style={{ marginTop: 8 }}>Dengan ini menyatakan :</p>
+      <p style={{ marginTop: 6 }}>Dengan ini menyatakan :</p>
       <p>1. Bertanggung jawab sepenuhnya untuk melakukan penarikan dana PIP Dikdasmen melalui pemberian kuasa dari {terpilih.length} peserta didik dengan jumlah dana sebesar <b>{rp(total)}</b> di satuan pendidikan saya sesuai surat kuasa penarikan dana PIP Dikdasmen, dengan alasan sebagai berikut (tandai ✓ yang dipilih) :</p>
       <p style={{ marginLeft: 18, marginBottom: 2 }}>a. Lokasi tempat tinggal dan satuan pendidikan peserta didik berada di :</p>{["a1", "a2", "a3"].map((k) => <Cb key={k} k={k} />)}
-      <p style={{ marginLeft: 18, margin: "6px 0 2px" }}>b. Peserta didik/orang tua/wali yang tidak memungkinkan untuk melakukan aktivasi rekening secara langsung yang disebabkan karena :</p>{["b1", "b2", "b3", "b4"].map((k) => <Cb key={k} k={k} />)}
-      <p style={{ marginTop: 8 }}>2. Bertanggung jawab sepenuhnya untuk menyerahkan dana kepada peserta didik penerima dana PIP Dikdasmen sesuai surat kuasa penarikan dana PIP Dikdasmen dalam waktu paling lambat 7 (tujuh) hari kerja setelah penarikan dana dilakukan.</p>
+      <p style={{ marginLeft: 18, margin: "4px 0 2px" }}>b. Peserta didik/orang tua/wali yang tidak memungkinkan untuk melakukan aktivasi rekening secara langsung yang disebabkan karena :</p>{["b1", "b2", "b3", "b4"].map((k) => <Cb key={k} k={k} />)}
+      <p style={{ marginTop: 6 }}>2. Bertanggung jawab sepenuhnya untuk menyerahkan dana kepada peserta didik penerima dana PIP Dikdasmen sesuai surat kuasa penarikan dana PIP Dikdasmen dalam waktu paling lambat 7 (tujuh) hari kerja setelah penarikan dana dilakukan.</p>
       <p>3. Menyampaikan laporan penarikan dana kepada Dinas Pendidikan Provinsi/Kabupaten/Kota dalam waktu paling lambat 7 (tujuh) hari kerja setelah penarikan dana dilakukan dengan melampirkan Format Surat Tanda Serah Terima Dana Melalui Kuasa yang telah diisi dan ditandatangani.</p>
       <p>4. Apabila di kemudian hari terjadi tuntutan hukum baik pidana maupun perdata terkait dengan penarikan dana PIP Dikdasmen, maka saya siap untuk bertanggung jawab sesuai ketentuan hukum yang berlaku.</p>
       <p>Demikian surat pernyataan pertanggungjawaban mutlak ini saya buat dengan kesadaran dan penuh tanggung jawab.</p>
-      <div style={{ marginLeft: "auto", width: 260, textAlign: "center" }}>{s.kota}, {tanggal}<div style={{ border: "1px solid #000", width: 90, margin: "6px auto", padding: "10px 0", fontSize: "9pt" }}>METERAI<br />Rp 10.000</div><b><u>{s.kepsek}</u></b><br />NIP. {s.nip}</div>
+      <div style={{ marginLeft: "auto", width: 260, textAlign: "center" }}>{s.kota}, {tanggal}<div style={{ border: "1px solid #000", width: 80, margin: "4px auto", padding: "6px 0", fontSize: "8pt" }}>METERAI<br />Rp 10.000</div><b><u>{s.kepsek}</u></b><br />NIP. {s.nip}</div>
     </div>);
 
   const Kuasa = ({ x }) => { const e = ex(x); return (
@@ -249,7 +259,7 @@ export default function DokumenPIP() {
           <button className="on" onClick={() => cetak(false)} disabled={tab !== 2 ? !terpilih.length : !x}>{tab === 2 ? "Cetak surat ini" : "Cetak"}</button>
           {tab === 2 && <button onClick={() => cetak(true)} disabled={!terpilih.length}>Cetak semua siswa terpilih ({terpilih.length})</button>}
         </div>
-        <div className="paper pip-print">{tab === 0 && <Aktivasi />}{tab === 1 && <Sptjm />}{tab === 2 && daftarKuasa.map((a) => <Kuasa key={a.id} x={a} />)}</div></>)}
+        <div className="paper pip-print">{tab === 0 && Aktivasi()}{tab === 1 && Sptjm()}{tab === 2 && daftarKuasa.map((a) => <Kuasa key={a.id} x={a} />)}</div></>)}
     </div>
     </Layout>
   );
