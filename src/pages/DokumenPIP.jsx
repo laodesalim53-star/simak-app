@@ -35,14 +35,44 @@ function parseExcel(buf) {
   });
 }
 
+// Nilai awal NETRAL (tidak boleh berisi data sekolah tertentu).
+// Data sekolah diambil dari profil_sekolah milik sekolah yang sedang login
+// dan isian manual disimpan per sekolah_id.
 const DEF = {
-  sekolah: "SEKOLAH DASAR NEGERI WARIA", kabupaten: "KABUPATEN KEPULAUAN ARU", dinas: "DINAS PENDIDIKAN DAN KEBUDAYAAN",
-  namaSekolah: "SD Negeri Waria", alamatSekolah: "Jln. Pendidikan, Desa Waria", provinsi: "Maluku", tahun: "2026",
-  kepsek: "LA ODE SALIM, S.Pd", nip: "198309062009041001", pangkat: "Penata Tingkat I, III/d",
-  ktpKepsek: "8107040609830001", hpKepsek: "082197574897", alamatKepsek: "Jln. Rabiadja, Kelurahan Sialima",
-  nomorSurat: "421.2/038/05/2026", kota: "Waria", kotaKuasa: "Dobo", tanggal: new Date().toISOString().slice(0, 10),
-  bank: "BRI CABANG DOBO", nominal: "450000", alamatOrtu: "Desa Waria Kecamatan Aru Utara Timur",
+  sekolah: "", kabupaten: "", dinas: "",
+  namaSekolah: "", alamatSekolah: "", provinsi: "", tahun: String(new Date().getFullYear()),
+  kepsek: "", nip: "", pangkat: "",
+  ktpKepsek: "", hpKepsek: "", alamatKepsek: "",
+  nomorSurat: "", kota: "", kotaKuasa: "", tanggal: new Date().toISOString().slice(0, 10),
+  bank: "", nominal: "450000", alamatOrtu: "",
 };
+
+// Ambil nilai string pertama yang terisi dari beberapa kemungkinan nama kolom.
+const pick = (d, keys) => {
+  for (const k of keys) if (d?.[k] && typeof d[k] === "string" && d[k].trim()) return d[k].trim();
+  return "";
+};
+// Petakan baris profil_sekolah ke field surat. Sesuaikan nama kolom bila perlu.
+const dariProfil = (d) => {
+  if (!d) return {};
+  const nama = pick(d, ["nama_sekolah", "nama", "sekolah"]);
+  const kab = pick(d, ["kabupaten", "kab_kota", "kota"]);
+  const out = {
+    namaSekolah: nama,
+    sekolah: nama.toUpperCase(),
+    alamatSekolah: pick(d, ["alamat", "alamat_sekolah"]),
+    kepsek: pick(d, ["nama_kepala_sekolah", "kepala_sekolah", "nama_kepsek"]),
+    nip: pick(d, ["nip_kepala_sekolah", "nip_kepsek", "nip"]),
+    pangkat: pick(d, ["pangkat_kepala_sekolah", "pangkat_golongan", "pangkat"]),
+    kota: pick(d, ["kecamatan", "kabupaten", "kota"]),
+    kotaKuasa: kab,
+    provinsi: pick(d, ["provinsi"]),
+    kabupaten: kab ? (/^kabupaten/i.test(kab) ? kab : "KABUPATEN " + kab).toUpperCase() : "",
+  };
+  // buang field kosong supaya tidak menimpa nilai lain
+  return Object.fromEntries(Object.entries(out).filter(([, v]) => v));
+};
+
 const MG_DEF = { atas: 12, bawah: 20, kiri: 18, kanan: 18, huruf: 10 };
 const LABEL = { sekolah: "Nama sekolah (kop)", namaSekolah: "Nama satuan pendidikan", alamatSekolah: "Alamat sekolah", tahun: "Tahun PIP",
   kepsek: "Nama kepala sekolah", nip: "NIP", pangkat: "Pangkat/Golongan", ktpKepsek: "No. KTP kepala sekolah", hpKepsek: "No. HP kepala sekolah",
@@ -130,15 +160,44 @@ export default function DokumenPIP() {
   const tanpaRek = siswa.filter((x) => !x.rek).length;
   const tanggal = tgl(s.tanggal);
 
+  // Ubah satu isian surat dan simpan per sekolah (agar tidak tercampur antar akun).
+  const ubahS = (k, v) => {
+    const n = { ...s, [k]: v };
+    setS(n);
+    if (sekolahId) { try { localStorage.setItem("pip-data-" + sekolahId, JSON.stringify(n)); } catch { /* abaikan */ } }
+  };
+
+  async function simpanDb() {
+    if (!sekolahId) return;
+    const { error } = await supabase.from("pengaturan_pip").upsert({ sekolah_id: sekolahId, data: s }, { onConflict: "sekolah_id" });
+    if (error) { setInfo(""); setErr("Gagal menyimpan pengaturan: " + error.message); return; }
+    setErr(""); setInfo("Pengaturan surat PIP tersimpan di database.");
+  }
+
+  // Saat sekolah berganti: reset ke nilai netral, lalu isi dari profil_sekolah
+  // milik sekolah ini, kemudian timpa dengan isian manual yang pernah disimpan.
   useEffect(() => {
     if (!sekolahId) return;
-    let simpan = ""; try { simpan = localStorage.getItem("pip-logo-" + sekolahId) || ""; } catch { /* abaikan */ }
-    if (simpan) { setLogo(simpan); return; }
-    supabase.from("profil_sekolah").select("*").eq("sekolah_id", sekolahId).maybeSingle().then(({ data }) => {
-      const u = data && ["logo_url", "logo", "logo_sekolah", "logo_path"].map((k) => data[k]).find((v) => typeof v === "string" && /^(https?:|data:)/.test(v));
-      if (u) setLogo(u);
+    let batal = false;
+    setS(DEF); setLogo(""); setExtra({}); setCur(0);
+    let simpanLogo = ""; try { simpanLogo = localStorage.getItem("pip-logo-" + sekolahId) || ""; } catch { /* abaikan */ }
+    if (simpanLogo) setLogo(simpanLogo);
+    let simpanS = {}; try { simpanS = JSON.parse(localStorage.getItem("pip-data-" + sekolahId) || "{}"); } catch { /* abaikan */ }
+    Promise.all([
+      supabase.from("profil_sekolah").select("*").eq("sekolah_id", sekolahId).maybeSingle(),
+      supabase.from("pengaturan_pip").select("data").eq("sekolah_id", sekolahId).maybeSingle(),
+    ]).then(([{ data }, { data: pg }]) => {
+      if (batal) return;
+      // urutan prioritas: default < profil_sekolah < localStorage (lama) < database
+      setS({ ...DEF, ...dariProfil(data), ...simpanS, ...(pg?.data || {}) });
+      if (!simpanLogo) {
+        const u = data && ["logo_url", "logo", "logo_sekolah", "logo_path"].map((k) => data[k]).find((v) => typeof v === "string" && /^(https?:|data:)/.test(v));
+        if (u) setLogo(u);
+      }
     });
+    return () => { batal = true; };
   }, [sekolahId]);
+
   function pilihLogo(e) {
     const f = e.target.files?.[0]; e.target.value = ""; if (!f) return;
     const fr = new FileReader();
@@ -167,7 +226,7 @@ export default function DokumenPIP() {
       if (!cocok.length) { setErr("Tidak ada siswa di Excel yang cocok dengan data aplikasi (NISN/NIK/nama)."); return; }
       if (!confirm(`Perbarui nomor rekening ${cocok.length} siswa dari Excel?${tidak ? `\n${tidak} baris tidak cocok dan dilewati.` : ""}`)) return;
       for (const { r, d } of cocok) {
-        const upd = { no_rekening: r.rek }; if (!d.bank) upd.bank = s.bank;
+        const upd = { no_rekening: r.rek }; if (!d.bank && s.bank) upd.bank = s.bank;
         const { error } = await supabase.from("siswa").update(upd).eq("id", d.id).eq("sekolah_id", sekolahId);
         if (error) throw error;
       }
@@ -251,7 +310,8 @@ export default function DokumenPIP() {
         <div className="bar"><button onClick={() => setPilih(new Set(siswa.map((a) => a.id)))}>Pilih semua</button><button onClick={() => setPilih(new Set())}>Kosongkan</button></div>
         <div className="list">{siswa.map((a) => <label key={a.id}><input type="checkbox" checked={pilih.has(a.id)} onChange={() => toggle(pilih, setPilih, a.id)} /> {a.nama} (kls {a.kelas})</label>)}</div></details>)}
       <details><summary>Data sekolah dan surat</summary>
-        <div className="fgrid">{Object.keys(LABEL).map((k) => <label className="f" key={k}>{LABEL[k]}<input type={k === "tanggal" ? "date" : "text"} value={s[k]} onChange={(e) => setS({ ...s, [k]: e.target.value })} /></label>)}</div>
+        <div className="fgrid">{Object.keys(LABEL).map((k) => <label className="f" key={k}>{LABEL[k]}<input type={k === "tanggal" ? "date" : "text"} value={s[k]} onChange={(e) => ubahS(k, e.target.value)} /></label>)}</div>
+        {isAdmin && <div className="bar"><button className="on" onClick={simpanDb}>Simpan pengaturan ke database</button></div>}
         <div className="bar">{logo && <img src={logo} alt="Logo sekolah" style={{ height: 48 }} />}
           <label className="file">{logo ? "Ganti logo" : "Unggah logo sekolah"}<input type="file" accept="image/*" onChange={pilihLogo} hidden /></label>
           {logo && <button onClick={hapusLogo}>Hapus logo</button>}</div></details>
