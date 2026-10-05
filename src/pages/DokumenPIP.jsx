@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/AuthContext";
 import Layout from "../components/Layout";
 import KopSurat from "../components/KopSurat";
+import LampiranKKKTP from "../components/LampiranKKKTP";
 
 const BULAN = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
 const tgl = (iso) => { const d = new Date(iso); return `${d.getDate()} ${BULAN[d.getMonth()]} ${d.getFullYear()}`; };
@@ -319,10 +320,11 @@ export default function DokumenPIP() {
 
   const x = siswa[cur];
   const daftarKuasa = semua ? terpilih : x ? [x] : [];
+  const daftarTab = ["Surat Keterangan Aktivasi", "SPTJM", "Surat Kuasa", ...(isAdmin ? ["Lampiran KK & KTP"] : [])];
 
   return (
-    <Layout title="Dokumen PIP" subtitle="Surat aktivasi rekening, SPTJM, dan surat kuasa dari data siswa">
-    <div className="pip"><style>{CSS}</style><style>{CSS_CETAK}</style>
+    <Layout title="Dokumen PIP" subtitle="Surat aktivasi rekening, SPTJM, surat kuasa, dan lampiran KK & KTP dari data siswa">
+    <div className="pip"><style>{CSS}</style>{tab !== 3 && <style>{CSS_CETAK}</style>}
       <div className="bar">
         {isAdmin && <label className="file">Isi rekening dari Excel PIP<input type="file" accept=".xls,.xlsx" onChange={impor} hidden /></label>}
         {siswa.length > 0 && <span style={{ fontSize: 13 }}>{terpilih.length} dari {siswa.length} siswa dipilih · total {rp(total)}</span>}
@@ -342,24 +344,28 @@ export default function DokumenPIP() {
 
       <details><summary>Pengaturan cetak (margin kertas)</summary>
         <div className="fgrid">{[["atas", "Margin atas (mm)"], ["bawah", "Margin bawah (mm)"], ["kiri", "Margin kiri (mm)"], ["kanan", "Margin kanan (mm)"], ["huruf", "Ukuran huruf SPTJM (pt)"]].map(([k, l]) => <label className="f" key={k}>{l}<input type="number" step="0.5" min="0" value={mg[k]} onChange={(e) => ubahMg(k, e.target.value)} /></label>)}</div>
-        <div className="sub" style={{ marginTop: 8 }}>Margin berlaku di setiap halaman saat dicetak (pratinjau di layar tidak berubah). Naikkan margin bawah bila teks terpotong printer; bila SPTJM jadi 2 halaman, kecilkan ukuran huruf.</div>
+        <div className="sub" style={{ marginTop: 8 }}>Margin berlaku di setiap halaman saat dicetak (pratinjau di layar tidak berubah). Naikkan margin bawah bila teks terpotong printer; bila SPTJM jadi 2 halaman, kecilkan ukuran huruf. Pengaturan ini tidak berlaku untuk tab Lampiran KK &amp; KTP (punya margin sendiri).</div>
         <div className="bar"><button onClick={resetMg}>Kembalikan default</button></div></details>
 
-      <div className="tabs" role="tablist">{["Surat Keterangan Aktivasi", "SPTJM", "Surat Kuasa"].map((t, i) => <button key={t} role="tab" aria-selected={tab === i} className={tab === i ? "on" : ""} onClick={() => setTab(i)}>{t}</button>)}</div>
+      <div className="tabs" role="tablist">{daftarTab.map((t, i) => <button key={t} role="tab" aria-selected={tab === i} className={tab === i ? "on" : ""} onClick={() => setTab(i)}>{t}</button>)}</div>
 
       {loading ? <p className="sub" style={{ marginTop: 16 }}>Memuat data siswa...</p> : !sekolahId ? <p className="sub" style={{ marginTop: 16 }}>Belum ada sekolah aktif.</p> : siswa.length === 0 ? <p className="sub" style={{ marginTop: 16 }}>Belum ada siswa aktif di sekolah ini.</p> : (<>
-        {tab === 2 && x && (<div style={{ marginTop: 12 }}>
-          <div className="fgrid">
-            <label className="f">Siswa<select value={cur} onChange={(e) => setCur(+e.target.value)}>{siswa.map((a, i) => <option key={a.id} value={i}>{a.nama}</option>)}</select></label>
-            {[["pemberi", "Nama pemberi kuasa (orang tua)"], ["ttl", "Tempat, tanggal lahir"], ["ktp", "No. KTP"], ["hp", "No. HP"], ["alamat", "Alamat"]].map(([k, l]) => <label className="f" key={k}>{l}<input type="text" value={ex(x)[k]} onChange={(e) => setEx(x, k, e.target.value)} /></label>)}
+        {tab === 3 && isAdmin && <LampiranKKKTP sekolahId={sekolahId} siswa={siswa} />}
+        {tab !== 3 && (<>
+          {tab === 2 && x && (<div style={{ marginTop: 12 }}>
+            <div className="fgrid">
+              <label className="f">Siswa<select value={cur} onChange={(e) => setCur(+e.target.value)}>{siswa.map((a, i) => <option key={a.id} value={i}>{a.nama}</option>)}</select></label>
+              {[["pemberi", "Nama pemberi kuasa (orang tua)"], ["ttl", "Tempat, tanggal lahir"], ["ktp", "No. KTP"], ["hp", "No. HP"], ["alamat", "Alamat"]].map(([k, l]) => <label className="f" key={k}>{l}<input type="text" value={ex(x)[k]} onChange={(e) => setEx(x, k, e.target.value)} /></label>)}
+            </div>
+            {isAdmin && <div className="bar"><button className="on" onClick={() => simpanKuasa(x)} disabled={menyimpanKuasa}>{menyimpanKuasa ? "Menyimpan..." : "Simpan data orang tua"}</button></div>}
+          </div>)}
+          <div className="bar">
+            <button className="on" onClick={() => cetak(false)} disabled={tab !== 2 ? !terpilih.length : !x}>{tab === 2 ? "Cetak surat ini" : "Cetak"}</button>
+            {tab === 2 && <button onClick={() => cetak(true)} disabled={!terpilih.length}>Cetak semua siswa terpilih ({terpilih.length})</button>}
           </div>
-          {isAdmin && <div className="bar"><button className="on" onClick={() => simpanKuasa(x)} disabled={menyimpanKuasa}>{menyimpanKuasa ? "Menyimpan..." : "Simpan data orang tua"}</button></div>}
-        </div>)}
-        <div className="bar">
-          <button className="on" onClick={() => cetak(false)} disabled={tab !== 2 ? !terpilih.length : !x}>{tab === 2 ? "Cetak surat ini" : "Cetak"}</button>
-          {tab === 2 && <button onClick={() => cetak(true)} disabled={!terpilih.length}>Cetak semua siswa terpilih ({terpilih.length})</button>}
-        </div>
-        <div className="paper pip-print">{tab === 0 && Aktivasi()}{tab === 1 && Sptjm()}{tab === 2 && daftarKuasa.map((a) => <Kuasa key={a.id} x={a} />)}</div></>)}
+          <div className="paper pip-print">{tab === 0 && Aktivasi()}{tab === 1 && Sptjm()}{tab === 2 && daftarKuasa.map((a) => <Kuasa key={a.id} x={a} />)}</div>
+        </>)}
+      </>)}
     </div>
     </Layout>
   );
