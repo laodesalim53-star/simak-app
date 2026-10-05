@@ -1,0 +1,228 @@
+import { useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
+import { supabase } from "../lib/supabaseClient";
+import { useAuth } from "../lib/AuthContext";
+import Layout from "../components/Layout";
+
+const BULAN = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+const tgl = (iso) => { const d = new Date(iso); return `${d.getDate()} ${BULAN[d.getMonth()]} ${d.getFullYear()}`; };
+const rp = (n) => "Rp " + Number(n || 0).toLocaleString("id-ID");
+const cell = (v) => String(v ?? "").trim().replace(/^'/, "");
+
+const ALIAS = {
+  nama: ["nama_pd", "nama", "nama siswa", "nama peserta didik"],
+  kelas: ["kelas"],
+  rek: ["no_rekening", "rekening", "nomor rekening", "no rekening"],
+  ayah: ["nama_ayah", "ayah"],
+  ibu: ["nama_ibu_kandung", "ibu"],
+  nominal: ["nominal"],
+  nisn: ["nisn"],
+  nik: ["nik"],
+};
+
+function parseExcel(buf) {
+  const wb = XLSX.read(buf);
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: "" });
+  const hi = rows.findIndex((r) => r.some((c) => ALIAS.nama.includes(String(c).trim().toLowerCase())));
+  if (hi < 0) throw new Error("Kolom nama_pd (atau nama) tidak ditemukan di baris judul.");
+  const head = rows[hi].map((c) => String(c).trim().toLowerCase());
+  const idx = Object.fromEntries(Object.keys(ALIAS).map((k) => [k, head.findIndex((h) => ALIAS[k].includes(h))]));
+  return rows.slice(hi + 1).filter((r) => cell(r[idx.nama])).map((r, id) => {
+    const g = (k) => (idx[k] < 0 ? "" : cell(r[idx[k]]));
+    return { id, nama: g("nama").toUpperCase(), kelas: g("kelas").replace(/\D/g, "") || g("kelas"),
+      rek: g("rek"), nisn: g("nisn"), nik: g("nik") };
+  });
+}
+
+const DEF = {
+  sekolah: "SEKOLAH DASAR NEGERI WARIA", kabupaten: "KABUPATEN KEPULAUAN ARU", dinas: "DINAS PENDIDIKAN DAN KEBUDAYAAN",
+  namaSekolah: "SD Negeri Waria", alamatSekolah: "Jln. Pendidikan, Desa Waria", provinsi: "Maluku", tahun: "2026",
+  kepsek: "LA ODE SALIM, S.Pd", nip: "198309062009041001", pangkat: "Penata Tingkat I, III/d",
+  ktpKepsek: "8107040609830001", hpKepsek: "082197574897", alamatKepsek: "Jln. Rabiadja, Kelurahan Sialima",
+  nomorSurat: "421.2/038/05/2026", kota: "Waria", kotaKuasa: "Dobo", tanggal: new Date().toISOString().slice(0, 10),
+  bank: "BRI CABANG DOBO", nominal: "450000", alamatOrtu: "Desa Waria Kecamatan Aru Utara Timur",
+};
+const LABEL = { sekolah: "Nama sekolah (kop)", namaSekolah: "Nama satuan pendidikan", alamatSekolah: "Alamat sekolah", tahun: "Tahun PIP",
+  kepsek: "Nama kepala sekolah", nip: "NIP", pangkat: "Pangkat/Golongan", ktpKepsek: "No. KTP kepala sekolah", hpKepsek: "No. HP kepala sekolah",
+  alamatKepsek: "Alamat kepala sekolah", nomorSurat: "Nomor surat", kota: "Kota surat", kotaKuasa: "Kota surat kuasa", tanggal: "Tanggal surat",
+  bank: "Nama bank (jika kosong di data siswa)", nominal: "Nominal PIP per siswa (Rp)", alamatOrtu: "Alamat orang tua (jika kosong)" };
+
+const ALASAN = {
+  a1: "Daerah khusus yang ditetapkan Kementerian;", a2: "Daerah yang sedang mengalami bencana yang ditetapkan oleh Pemerintah Daerah atau Pemerintah Pusat; dan/atau",
+  a3: "Daerah lain yang sulit untuk mengakses ke Bank Penyalur berdasarkan rekomendasi Pemerintah Daerah.",
+  b1: "Sedang sakit;", b2: "Penyandang disabilitas;", b3: "Diundang dalam acara kunjungan kerja Pemerintah; dan/atau",
+  b4: "Kondisi sulit lainnya berdasarkan rekomendasi Pemerintah Daerah.",
+};
+
+const CSS = `
+.pip{font-family:system-ui,sans-serif;color:#1c1c1c;max-width:1100px;margin:0 auto;padding:16px}
+.pip h1{font-size:20px;margin:0 0 4px}.pip .sub{color:#666;font-size:13px;margin-bottom:12px}
+.pip .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0}
+.pip button,.pip .file{border:1px solid #bbb;background:#fff;border-radius:6px;padding:7px 12px;font-size:13px;cursor:pointer}
+.pip button.on{background:#1f4e79;color:#fff;border-color:#1f4e79}.pip button:focus-visible,.pip input:focus-visible,.pip select:focus-visible{outline:2px solid #1f4e79;outline-offset:2px}
+.pip .tabs{display:flex;border-bottom:2px solid #ddd;margin-top:14px}.pip .tabs button{border:0;border-radius:6px 6px 0 0;background:none;padding:10px 16px;font-size:14px}
+.pip .tabs button.on{background:#1f4e79}
+.pip details{border:1px solid #ddd;border-radius:6px;padding:8px 12px;margin:8px 0}.pip summary{cursor:pointer;font-size:14px}
+.pip .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;margin-top:10px}
+.pip label.f{display:flex;flex-direction:column;font-size:12px;color:#555;gap:2px}.pip input[type=text],.pip input[type=date],.pip select{padding:6px;border:1px solid #bbb;border-radius:4px;font-size:13px}
+.pip .list{max-height:190px;overflow:auto;border:1px solid #ddd;border-radius:6px;padding:6px 10px;columns:2 260px;font-size:13px}
+.pip .list label{display:block;padding:1px 0}.pip .err{color:#b00020;font-size:13px}
+.pip .paper{background:#eee;padding:12px;margin-top:12px;overflow:auto}
+.pip .sheet{background:#fff;width:210mm;min-height:297mm;margin:0 auto 12px;padding:18mm 20mm;box-sizing:border-box;font:12pt/1.45 "Times New Roman",serif;color:#000}
+.pip .sheet p{margin:0 0 8px;text-align:justify}.pip .kop{text-align:center;font-weight:bold;border-bottom:3px double #000;padding-bottom:6px;margin-bottom:14px;line-height:1.3}
+.pip .jd{text-align:center;font-weight:bold;margin:10px 0 12px}.pip .jd u{display:block}
+.pip table.t{border-collapse:collapse;width:100%;margin:8px 0}.pip table.t td,.pip table.t th{border:1px solid #000;padding:3px 6px;font-size:11.5pt}
+.pip table.k td{padding:1px 0;vertical-align:top}.pip .ttd{display:flex;justify-content:space-between;margin-top:18px;text-align:center}.pip .ttd div{min-width:200px}
+.pip .gap{height:60px}.pip .cb{display:flex;gap:6px;margin:0 0 3px 24px;text-align:left;cursor:pointer}
+@media print{body *{visibility:hidden}.pip-print,.pip-print *{visibility:visible}.pip-print{position:absolute;left:0;top:0;width:100%}
+.pip .paper{background:none;padding:0;overflow:visible}.pip .sheet{margin:0;box-shadow:none;page-break-after:always;min-height:0}.pip .sheet:last-child{page-break-after:auto}@page{size:A4;margin:0}}`;
+
+const mapRow = (r) => ({
+  id: r.id, nama: (r.nama_lengkap || "").toUpperCase(), status: r.status, nisn: cell(r.nisn), nik: cell(r.nik),
+  kelas: String(r.kelas?.nama_kelas || "").replace(/\D/g, "") || r.kelas?.nama_kelas || "",
+  rek: cell(r.no_rekening), bank: r.bank || "", atasNama: r.rekening_atas_nama || "",
+  pemberi: r.nama_wali || r.nama_ayah || r.nama_ibu || r.nama_orang_tua || "",
+  ktp: r.nik_wali || r.nik_ayah || r.nik_ibu || "", hp: r.no_hp_orang_tua || "", alamat: r.alamat_tinggal || r.alamat || "",
+});
+
+export default function DokumenPIP() {
+  const { sekolahId, isAdmin } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [info, setInfo] = useState("");
+  const [siswa, setSiswa] = useState([]);
+  const [pilih, setPilih] = useState(new Set());
+  const [tab, setTab] = useState(0);
+  const [s, setS] = useState(DEF);
+  const [alasan, setAlasan] = useState(new Set(["a3"]));
+  const [extra, setExtra] = useState({});
+  const [cur, setCur] = useState(0);
+  const [semua, setSemua] = useState(false);
+  const [err, setErr] = useState("");
+
+  const terpilih = useMemo(() => siswa.filter((x) => pilih.has(x.id)), [siswa, pilih]);
+  const total = terpilih.length * (Number(s.nominal) || 0);
+  const tanpaRek = siswa.filter((x) => !x.rek).length;
+  const tanggal = tgl(s.tanggal);
+
+  async function muat() {
+    if (!sekolahId) { setSiswa([]); setLoading(false); return; }
+    setLoading(true);
+    const { data, error } = await supabase.from("siswa").select("*, kelas(nama_kelas)").eq("sekolah_id", sekolahId).eq("status", "aktif").order("nama_lengkap");
+    if (error) setErr("Gagal memuat siswa: " + error.message);
+    const rows = (data || []).map(mapRow);
+    setSiswa(rows); setPilih(new Set(rows.filter((x) => x.rek).map((x) => x.id))); setLoading(false);
+  }
+  useEffect(() => { muat(); /* eslint-disable-next-line */ }, [sekolahId]);
+
+  // Opsional: Excel SK Nominasi PIP dipakai untuk mengisi/memperbarui no_rekening di data siswa (cocok lewat NISN, NIK, lalu nama).
+  async function impor(e) {
+    const f = e.target.files?.[0]; e.target.value = ""; if (!f || !sekolahId) return;
+    try {
+      const rows = parseExcel(await f.arrayBuffer());
+      const cocok = rows.map((r) => ({ r, d: siswa.find((d) => (r.nisn && d.nisn === r.nisn) || (r.nik && d.nik === r.nik) || d.nama === r.nama) })).filter((m) => m.d && m.r.rek);
+      const tidak = rows.length - cocok.length;
+      if (!cocok.length) { setErr("Tidak ada siswa di Excel yang cocok dengan data aplikasi (NISN/NIK/nama)."); return; }
+      if (!confirm(`Perbarui nomor rekening ${cocok.length} siswa dari Excel?${tidak ? `\n${tidak} baris tidak cocok dan dilewati.` : ""}`)) return;
+      for (const { r, d } of cocok) {
+        const upd = { no_rekening: r.rek }; if (!d.bank) upd.bank = s.bank;
+        const { error } = await supabase.from("siswa").update(upd).eq("id", d.id).eq("sekolah_id", sekolahId);
+        if (error) throw error;
+      }
+      setErr(""); setInfo(`${cocok.length} nomor rekening diperbarui${tidak ? `, ${tidak} baris tidak cocok` : ""}.`); await muat();
+    } catch (x) { setErr(x.message || "Gagal membaca/menyimpan Excel."); }
+  }
+  const toggle = (set, setter, v) => { const n = new Set(set); n.has(v) ? n.delete(v) : n.add(v); setter(n); };
+  const ex = (x) => ({ pemberi: x.pemberi, ttl: "", ktp: x.ktp, hp: x.hp || "-", alamat: x.alamat || s.alamatOrtu, ...(extra[x.id] || {}) });
+  const setEx = (x, k, v) => setExtra({ ...extra, [x.id]: { ...ex(x), [k]: v } });
+  function cetak(all) { setSemua(all); setTimeout(() => { window.print(); setSemua(false); }, 80); }
+
+  const Kop = () => <div className="kop">{s.dinas}<br />{s.kabupaten}<br />{s.sekolah}</div>;
+  const Ttd = ({ kota }) => (<div style={{ marginLeft: "auto", width: 260, textAlign: "center" }}>{kota}, {tanggal}<br />Kepala Satuan Pendidikan<div className="gap" /><b><u>{s.kepsek}</u></b><br />NIP. {s.nip}</div>);
+
+  const Aktivasi = () => (
+    <div className="sheet"><Kop />
+      <div className="jd">SURAT KETERANGAN<br />AKTIVASI REKENING SIMPEL PIP<br /><span style={{ fontWeight: "normal" }}>Nomor : {s.nomorSurat}</span></div>
+      <p>Yang bertandatangan di bawah ini :</p>
+      <table className="k"><tbody>
+        {[["Nama", s.kepsek], ["NIP", s.nip], ["Jabatan", "KEPALA SEKOLAH"], ["Satuan Pendidikan", s.namaSekolah.toUpperCase()]].map(([a, b]) => <tr key={a}><td width="170">{a}</td><td>: {b}</td></tr>)}
+      </tbody></table>
+      <p style={{ marginTop: 8 }}>Dengan ini menerangkan bahwa nama-nama tersebut di bawah ini, adalah benar Peserta Didik {s.namaSekolah} dan yang bersangkutan sebagai Penerima PIP Tahun {s.tahun}</p>
+      <table className="t"><thead><tr><th width="40">No</th><th>Nama Peserta Didik Tertera di SK</th><th width="60">Kelas</th><th width="170">Nomor Rekening</th></tr></thead>
+        <tbody>{terpilih.map((x, i) => <tr key={x.id}><td align="center">{i + 1}.</td><td>{x.nama}</td><td align="center">{x.kelas}</td><td>{x.rek}</td></tr>)}</tbody></table>
+      <p>Demikian surat keterangan ini dibuat untuk digunakan sebagai salah satu persyaratan untuk melakukan aktivasi rekening SimPel di Bank penyalur.</p>
+      <Ttd kota={s.kota} />
+    </div>);
+
+  const Cb = ({ k }) => (<label className="cb"><input type="checkbox" checked={alasan.has(k)} onChange={() => toggle(alasan, setAlasan, k)} /><span>{ALASAN[k]}</span></label>);
+  const Sptjm = () => (
+    <div className="sheet"><Kop />
+      <div className="jd">SURAT PERNYATAAN TANGGUNG JAWAB MUTLAK (SPTJM)<br />PENARIKAN DANA OLEH KUASA PENERIMA PIP</div>
+      <p>Yang bertanda tangan di bawah ini, saya :</p>
+      <table className="k"><tbody>
+        {[["Nama", s.kepsek], ["Jabatan", "Kepala Sekolah"], ["NIP", s.nip], ["Satuan Pendidikan", s.namaSekolah], ["Alamat", s.alamatSekolah], ["Kab/Kota", s.kabupaten.replace("KABUPATEN ", "").replace(/\w+/g, (w) => w[0] + w.slice(1).toLowerCase())], ["Provinsi", s.provinsi]].map(([a, b]) => <tr key={a}><td width="170">{a}</td><td>: {b}</td></tr>)}
+      </tbody></table>
+      <p style={{ marginTop: 8 }}>Dengan ini menyatakan :</p>
+      <p>1. Bertanggung jawab sepenuhnya untuk melakukan penarikan dana PIP Dikdasmen melalui pemberian kuasa dari {terpilih.length} peserta didik dengan jumlah dana sebesar <b>{rp(total)}</b> di satuan pendidikan saya sesuai surat kuasa penarikan dana PIP Dikdasmen, dengan alasan sebagai berikut (tandai ✓ yang dipilih) :</p>
+      <p style={{ marginLeft: 18, marginBottom: 2 }}>a. Lokasi tempat tinggal dan satuan pendidikan peserta didik berada di :</p>{["a1", "a2", "a3"].map((k) => <Cb key={k} k={k} />)}
+      <p style={{ marginLeft: 18, margin: "6px 0 2px" }}>b. Peserta didik/orang tua/wali yang tidak memungkinkan untuk melakukan aktivasi rekening secara langsung yang disebabkan karena :</p>{["b1", "b2", "b3", "b4"].map((k) => <Cb key={k} k={k} />)}
+      <p style={{ marginTop: 8 }}>2. Bertanggung jawab sepenuhnya untuk menyerahkan dana kepada peserta didik penerima dana PIP Dikdasmen sesuai surat kuasa penarikan dana PIP Dikdasmen dalam waktu paling lambat 7 (tujuh) hari kerja setelah penarikan dana dilakukan.</p>
+      <p>3. Menyampaikan laporan penarikan dana kepada Dinas Pendidikan Provinsi/Kabupaten/Kota dalam waktu paling lambat 7 (tujuh) hari kerja setelah penarikan dana dilakukan dengan melampirkan Format Surat Tanda Serah Terima Dana Melalui Kuasa yang telah diisi dan ditandatangani.</p>
+      <p>4. Apabila di kemudian hari terjadi tuntutan hukum baik pidana maupun perdata terkait dengan penarikan dana PIP Dikdasmen, maka saya siap untuk bertanggung jawab sesuai ketentuan hukum yang berlaku.</p>
+      <p>Demikian surat pernyataan pertanggungjawaban mutlak ini saya buat dengan kesadaran dan penuh tanggung jawab.</p>
+      <div style={{ marginLeft: "auto", width: 260, textAlign: "center" }}>{s.kota}, {tanggal}<div style={{ border: "1px solid #000", width: 90, margin: "6px auto", padding: "10px 0", fontSize: "9pt" }}>METERAI<br />Rp 10.000</div><b><u>{s.kepsek}</u></b><br />NIP. {s.nip}</div>
+    </div>);
+
+  const Kuasa = ({ x }) => { const e = ex(x); return (
+    <div className="sheet">
+      <div className="jd"><u>SURAT KUASA</u></div>
+      <p>Yang bertanda tangan di bawah ini :</p>
+      <table className="k"><tbody>{[["Nama", e.pemberi], ["Tempat dan Tanggal Lahir", e.ttl || "-"], ["No. KTP", e.ktp || "-"], ["No. Telepon/HP", e.hp], ["Alamat", e.alamat]].map(([a, b]) => <tr key={a}><td width="220">{a}</td><td>: {b}</td></tr>)}</tbody></table>
+      <p>Selanjutnya disebut <b>Pemberi Kuasa</b></p>
+      <p>Dengan ini memberi kuasa kepada :</p>
+      <table className="k"><tbody>{[["Nama", s.kepsek], ["NIP", s.nip], ["Pangkat/Golongan", s.pangkat], ["Jabatan", "Kepala " + s.namaSekolah], ["No. KTP", s.ktpKepsek], ["No. Telepon/HP", s.hpKepsek], ["Alamat", s.alamatKepsek]].map(([a, b]) => <tr key={a}><td width="220">{a}</td><td>: {b}</td></tr>)}</tbody></table>
+      <p>Selanjutnya disebut <b>Penerima Kuasa</b></p>
+      <p>Dengan surat ini, saya sebagai Pemberi Kuasa, memberikan kuasa kepada Penerima Kuasa untuk melakukan pengambilan uang secara tunai pada rekening PIP milik anak saya dengan data-data sebagai berikut :</p>
+      <table className="k"><tbody>{[["No. Rekening", x.rek], ["Atas Nama", x.atasNama || x.nama], ["Nama Bank", x.bank || s.bank]].map(([a, b]) => <tr key={a}><td width="220">{a}</td><td>: {b}</td></tr>)}</tbody></table>
+      <p style={{ marginTop: 8 }}>Hal-hal dan segala akibat yang disebabkan Surat Kuasa ini adalah tanggung jawab sepenuhnya Pemberi Kuasa.</p>
+      <p>Demikian Surat Kuasa ini saya buat dengan kesadaran penuh dan tanpa ada paksaan dari pihak manapun dan semoga dapat digunakan sebagaimana mestinya.</p>
+      <p style={{ textAlign: "right" }}>{s.kotaKuasa}, {tanggal}</p>
+      <div className="ttd"><div>Penerima Kuasa<br />Kepala Sekolah,<div className="gap" /><b><u>{s.kepsek}</u></b><br />NIP. {s.nip}</div>
+        <div>Pemberi Kuasa<br />Orang Tua Siswa,<div className="gap" /><b><u>{e.pemberi}</u></b></div></div>
+    </div>); };
+
+  const x = siswa[cur];
+  const daftarKuasa = semua ? terpilih : x ? [x] : [];
+
+  return (
+    <Layout title="Dokumen PIP" subtitle="Surat aktivasi rekening, SPTJM, dan surat kuasa dari data siswa">
+    <div className="pip"><style>{CSS}</style>
+      <div className="bar">
+        {isAdmin && <label className="file">Isi rekening dari Excel PIP<input type="file" accept=".xls,.xlsx" onChange={impor} hidden /></label>}
+        {siswa.length > 0 && <span style={{ fontSize: 13 }}>{terpilih.length} dari {siswa.length} siswa dipilih · total {rp(total)}</span>}
+      </div>
+      {err && <div className="err" role="alert">{err}</div>}
+      {info && <div className="sub" role="status">{info}</div>}
+      {tanpaRek > 0 && <div className="sub">{tanpaRek} siswa aktif belum punya nomor rekening, jadi tidak dipilih otomatis.</div>}
+      {siswa.length > 0 && (<details><summary>Pilih siswa ({terpilih.length})</summary>
+        <div className="bar"><button onClick={() => setPilih(new Set(siswa.map((a) => a.id)))}>Pilih semua</button><button onClick={() => setPilih(new Set())}>Kosongkan</button></div>
+        <div className="list">{siswa.map((a) => <label key={a.id}><input type="checkbox" checked={pilih.has(a.id)} onChange={() => toggle(pilih, setPilih, a.id)} /> {a.nama} (kls {a.kelas})</label>)}</div></details>)}
+      <details><summary>Data sekolah dan surat</summary>
+        <div className="grid">{Object.keys(LABEL).map((k) => <label className="f" key={k}>{LABEL[k]}<input type={k === "tanggal" ? "date" : "text"} value={s[k]} onChange={(e) => setS({ ...s, [k]: e.target.value })} /></label>)}</div></details>
+
+      <div className="tabs" role="tablist">{["Surat Keterangan Aktivasi", "SPTJM", "Surat Kuasa"].map((t, i) => <button key={t} role="tab" aria-selected={tab === i} className={tab === i ? "on" : ""} onClick={() => setTab(i)}>{t}</button>)}</div>
+
+      {loading ? <p className="sub" style={{ marginTop: 16 }}>Memuat data siswa...</p> : !sekolahId ? <p className="sub" style={{ marginTop: 16 }}>Belum ada sekolah aktif.</p> : siswa.length === 0 ? <p className="sub" style={{ marginTop: 16 }}>Belum ada siswa aktif di sekolah ini.</p> : (<>
+        {tab === 2 && x && (<div style={{ marginTop: 12 }}>
+          <div className="grid">
+            <label className="f">Siswa<select value={cur} onChange={(e) => setCur(+e.target.value)}>{siswa.map((a, i) => <option key={a.id} value={i}>{a.nama}</option>)}</select></label>
+            {[["pemberi", "Nama pemberi kuasa (orang tua)"], ["ttl", "Tempat, tanggal lahir"], ["ktp", "No. KTP"], ["hp", "No. HP"], ["alamat", "Alamat"]].map(([k, l]) => <label className="f" key={k}>{l}<input type="text" value={ex(x)[k]} onChange={(e) => setEx(x, k, e.target.value)} /></label>)}
+          </div></div>)}
+        <div className="bar">
+          <button className="on" onClick={() => cetak(false)} disabled={tab !== 2 ? !terpilih.length : !x}>{tab === 2 ? "Cetak surat ini" : "Cetak"}</button>
+          {tab === 2 && <button onClick={() => cetak(true)} disabled={!terpilih.length}>Cetak semua siswa terpilih ({terpilih.length})</button>}
+        </div>
+        <div className="paper pip-print">{tab === 0 && <Aktivasi />}{tab === 1 && <Sptjm />}{tab === 2 && daftarKuasa.map((a) => <Kuasa key={a.id} x={a} />)}</div></>)}
+    </div>
+    </Layout>
+  );
+}
