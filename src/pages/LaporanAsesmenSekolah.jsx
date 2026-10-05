@@ -1,6 +1,6 @@
 // src/pages/LaporanAsesmenSekolah.jsx
 //
-// Laporan Asesmen Sekolah (Kelas 6) dalam SATU halaman dengan 5 tab, satu tab
+// Laporan Asesmen Sekolah (Kelas 6) dalam SATU halaman dengan 7 tab, satu tab
 // per bagian sesuai file LAPORAN_ASESMEN_KELAS_6_2025 dan KATA_PENGANTAR_Asesmen:
 //   Laporan  - Kata Pengantar, Daftar Isi, Bab I-VI, Lampiran (teks bawaan, bisa diedit di form)
 //   Lembar 1 - Statistik nilai (tertinggi / terendah / rata-rata, tulis & praktik)
@@ -9,6 +9,9 @@
 //   Lembar 4 - Laporan sekolah penyelenggara (kehadiran + masalah & saran)
 //   SK Panitia - SK Penetapan Panitia Asesmen Sekolah + lampiran susunan panitia
 //                (sumber: sk_Proktor_2021.docx; nama/NIP/golongan bisa ditarik dari tabel `guru`)
+//   Penganggaran - Anggaran/Biaya Kegiatan Asesmen Sekolah (sumber: file
+//                AKOMODASI_DANA_ASESMEN_SEKOLAH.xlsx); jumlah, total, terbilang dan
+//                jumlah peserta dihitung otomatis
 //
 // Pola mengikuti DaftarHadirSiswaUjian.jsx:
 // - Kop surat, logo kabupaten/sekolah dari profil_sekolah, useAuth,
@@ -25,10 +28,12 @@
 //   Setiap kali nilai di Nilai Asesmen diubah, tekan "Tarik ulang nilai"
 //   (atau buka ulang halaman ini). Kolom Ket dan mapel yang tidak ada di
 //   nilai_ijazah tetap bisa diketik manual di tabel.
-// - SUSUNAN PANITIA (tab Laporan): nilai awal hanya jabatan, TANPA nama
-//   (supaya nama guru satu sekolah tidak terbawa ke sekolah lain). Nama bisa
-//   diketik manual, dipilih dari data guru sekolah yang sedang login
-//   (tabel `guru`, difilter sekolah_id), atau diisi otomatis lewat tombol.
+// - SUSUNAN PANITIA: SATU SUMBER = tabel di tab SK Panitia. Bab II tab Laporan,
+//   tanda tangan Kata Pengantar (Ketua) dan tanda tangan Penganggaran (Bendahara)
+//   membaca langsung dari tabel itu. Nilai awal hanya jabatan, TANPA nama
+//   (supaya nama guru satu sekolah tidak terbawa ke sekolah lain). Nama dipilih
+//   dari data guru sekolah yang sedang login (tabel `guru`, difilter sekolah_id),
+//   diisi otomatis lewat tombol, atau diketik manual.
 //
 // CATATAN:
 // - Kolom `jenis_kelamin` di tabel siswa dicoba dibaca terpisah. Kalau nama
@@ -37,7 +42,7 @@
 // - Nama & NIP Kepala Sekolah dicoba diisi dari data sekolah (beberapa nama
 //   properti dicoba); tetap bisa diubah manual di form.
 // - Cetak: tombol Cetak mencetak tab yang sedang aktif; centang "Cetak semua
-//   lembar" untuk mencetak keempatnya (satu lembar per halaman).
+//   lembar" untuk mencetak semuanya (satu lembar per halaman).
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, Printer, RefreshCw, Wand2 } from 'lucide-react'
@@ -130,6 +135,43 @@ function fmt(x) {
   return String(Math.round(x * 100) / 100).replace('.', ',')
 }
 
+// --- Pembantu tab Penganggaran ---
+
+// Angka format Indonesia: "150.000" -> 150000, "2,5" -> 2.5, "Rp 1.250.000" -> 1250000.
+function angka(v) {
+  const s = String(v ?? '').trim().replace(/\s|rp/gi, '')
+  if (!s) return 0
+  const ribuan = /^\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)
+  const n = parseFloat(ribuan ? s.replace(/\./g, '').replace(',', '.') : s.replace(',', '.'))
+  return Number.isNaN(n) ? 0 : n
+}
+
+// 2725000 -> "2.725.000"
+function rupiah(n) {
+  return new Intl.NumberFormat('id-ID').format(Math.round(n || 0))
+}
+
+function terbilang(n) {
+  const s = ['', 'satu', 'dua', 'tiga', 'empat', 'lima', 'enam', 'tujuh', 'delapan', 'sembilan', 'sepuluh', 'sebelas']
+  if (n < 12) return s[n]
+  if (n < 20) return terbilang(n - 10) + ' belas'
+  if (n < 100) return terbilang(Math.floor(n / 10)) + ' puluh' + (n % 10 ? ' ' + terbilang(n % 10) : '')
+  if (n < 200) return 'seratus' + (n - 100 ? ' ' + terbilang(n - 100) : '')
+  if (n < 1000) return terbilang(Math.floor(n / 100)) + ' ratus' + (n % 100 ? ' ' + terbilang(n % 100) : '')
+  if (n < 2000) return 'seribu' + (n - 1000 ? ' ' + terbilang(n - 1000) : '')
+  if (n < 1e6) return terbilang(Math.floor(n / 1000)) + ' ribu' + (n % 1000 ? ' ' + terbilang(n % 1000) : '')
+  if (n < 1e9) return terbilang(Math.floor(n / 1e6)) + ' juta' + (n % 1e6 ? ' ' + terbilang(n % 1e6) : '')
+  if (n < 1e12) return terbilang(Math.floor(n / 1e9)) + ' miliar' + (n % 1e9 ? ' ' + terbilang(n % 1e9) : '')
+  return String(n)
+}
+
+function terbilangRp(n) {
+  const x = Math.round(n || 0)
+  if (!x) return 'Nol rupiah'
+  const t = `${terbilang(x)} rupiah`
+  return t.charAt(0).toUpperCase() + t.slice(1)
+}
+
 // Indeks klasifikasi (sesuai KLASIFIKASI di bawah) untuk satu nilai.
 function indeksKlasifikasi(v) {
   if (v < 50) return 0
@@ -189,6 +231,7 @@ const TAB = [
   { id: 'kelulusan', label: 'Lembar 3', sub: 'Kelulusan' },
   { id: 'penyelenggara', label: 'Lembar 4', sub: 'Penyelenggara' },
   { id: 'skpanitia', label: 'SK Panitia', sub: 'Penetapan Panitia AS' },
+  { id: 'anggaran', label: 'Penganggaran', sub: 'Anggaran/Biaya Asesmen' },
 ]
 
 const barisNilai = () =>
@@ -252,16 +295,6 @@ function rentangTanggal(a, b) {
   }
   return `${tanggalPanjang(a)} – ${tanggalPanjang(b)}`
 }
-
-// PERBAIKAN: nilai awal hanya jabatan, TANPA nama orang. Sebelumnya nama guru
-// dari satu sekolah ditulis langsung di sini sehingga ikut muncul di semua
-// sekolah lain. Penanggung Jawab terisi otomatis dari Kepala Sekolah ({kepsek}).
-const PANITIA_AWAL = `Penanggung Jawab | {kepsek}
-Ketua |
-Sekretaris |
-Bendahara |
-Anggota |
-Anggota |`
 
 const TEKS_AWAL = {
   pengantar: `Puji dan syukur dipersembahkan ke hadirat Tuhan Yang Maha Kuasa, atas rahmat dan karunia-Nya kami dapat menyelesaikan Laporan Pelaksanaan Kegiatan Ujian Sekolah Tahun Pelajaran {tapel}.
@@ -492,6 +525,35 @@ const BARIS_SK_AWAL = () =>
     dinas: '',
   }))
 
+// Rincian biaya awal tab Penganggaran (dari sheet WARIA di AKOMODASI_DANA_ASESMEN_SEKOLAH.xlsx).
+// Format: [uraian, kegiatan, volume, satuan, biaya satuan]. Semua bisa diubah di tabel.
+const ITEM_ANGGARAN_AWAL = [
+  ['Honor Pengawas', 1, 5, 'Orang', 150000],
+  ['Honor Koreksi', 1, 5, 'Orang', 50000],
+  ['Aqua Botol', 1, 2, 'Karton', 50000],
+  ['Beras 15 Kg', 1, 2, 'Karung', 250000],
+  ['Kacang Ijo', 1, 3, 'Kg', 50000],
+  ['Gula 5 Kg', 1, 5, 'Bungkus', 15000],
+  ['Tepung Terigu', 1, 6, 'Kg', 15000],
+  ['Daun Teh Sari Wangi', 1, 4, 'Dos', 10000],
+  ['Permen 5 Pak', 1, 5, 'Pak', 10000],
+  ['Buku 1 Pak', 1, 2, 'Pak', 35000],
+  ['Pensil 2B', 1, 2, 'Dos', 70000],
+  ['Penghapus Pensil', 1, 2, 'Dos', 60000],
+  ['Pena Fester', 1, 2, 'Dos', 35000],
+  ['Runcing Pensil', 1, 12, 'Buah', 5000],
+  ['Bawang Merah dan Bawang Putih', 1, 1, 'Kg', 60000],
+  ['Minyak Bimoli', 1, 4, 'Liter', 50000],
+]
+const barisAnggaran = () =>
+  ITEM_ANGGARAN_AWAL.map(([uraian, kegiatan, volume, satuan, biaya]) => ({
+    uraian,
+    kegiatan: String(kegiatan),
+    volume: String(volume),
+    satuan,
+    biaya: String(biaya),
+  }))
+
 export default function LaporanAsesmenSekolah() {
   const { sekolahId: sekolahIdCtx, profil } = useAuth()
   const sekolahId = sekolahIdCtx || profil?.sekolah_id
@@ -516,7 +578,7 @@ export default function LaporanAsesmenSekolah() {
   const [memuatNilai, setMemuatNilai] = useState(false)
   const [infoNilai, setInfoNilai] = useState('')
 
-  // Daftar guru sekolah yang sedang login (untuk mengisi Susunan Panitia).
+  // Daftar guru sekolah yang sedang login (untuk mengisi Susunan Panitia di tab SK Panitia).
   const [guruList, setGuruList] = useState([])
   const [infoGuru, setInfoGuru] = useState('')
 
@@ -549,6 +611,8 @@ export default function LaporanAsesmenSekolah() {
   const [pen, setPen] = useState(barisPenyelenggara)
 
   // Tab SK Panitia: nomor SK, tempat/tanggal penetapan, teks, dan susunan panitia.
+  // Tabel `baris` ini adalah SATU-SATUNYA sumber susunan panitia: dipakai juga oleh
+  // Bab II tab Laporan, tanda tangan Kata Pengantar (Ketua) dan Penganggaran (Bendahara).
   const [skp, setSkp] = useState(() => ({
     nomor: '',
     tempat: '',
@@ -556,7 +620,18 @@ export default function LaporanAsesmenSekolah() {
     teks: { ...TEKS_SK },
     baris: BARIS_SK_AWAL(),
   }))
-  const [infoSk, setInfoSk] = useState('')
+
+  // Tab Penganggaran: tahun anggaran (kosong = tahun tanggal laporan), jumlah peserta
+  // (kosong = otomatis dari data siswa Kelas 6), dan rincian biaya.
+  const [ang, setAng] = useState(() => ({ tahun: '', peserta: '', baris: barisAnggaran() }))
+  const ubahAng = (i, k) => (e) => {
+    const v = e.target.value
+    setAng((a) => ({ ...a, baris: a.baris.map((r, j) => (j === i ? { ...r, [k]: v } : r)) }))
+  }
+  const tambahBarisAng = () =>
+    setAng((a) => ({ ...a, baris: [...a.baris, { uraian: '', kegiatan: '1', volume: '', satuan: '', biaya: '' }] }))
+  const hapusBarisAng = () =>
+    setAng((a) => ({ ...a, baris: a.baris.length > 1 ? a.baris.slice(0, -1) : a.baris }))
 
   // Tab Laporan: isian & teks laporan lengkap (Kata Pengantar s.d. Lampiran).
   const [lap, setLap] = useState(() => ({
@@ -569,7 +644,6 @@ export default function LaporanAsesmenSekolah() {
     usSelesai: '',
     prMulai: '',
     prSelesai: '',
-    panitia: PANITIA_AWAL,
     teks: { ...TEKS_AWAL },
     butir: BUTIR_AWAL(),
   }))
@@ -703,34 +777,6 @@ export default function LaporanAsesmenSekolah() {
     }
   }
 
-  // Isi baris panitia yang masih kosong, urut dari daftar guru (Kepala Sekolah dilewati).
-  // Baris yang sudah terisi (termasuk Penanggung Jawab {kepsek}) tidak ditimpa.
-  function isiPanitiaDariGuru() {
-    const kepsek = String(form.kepalaNama || '').trim().toLowerCase()
-    const pool = guruList.filter((g) => g.nama.toLowerCase() !== kepsek)
-    setLap((l) => {
-      let k = 0
-      const baris = l.panitia.split('\n').map((b) => {
-        const [j, ...n] = b.split('|')
-        const sisa = n.join('|').trim()
-        if (!(j || '').trim() || sisa) return b
-        const g = pool[k++]
-        return g ? `${j.trim()} | ${g.nama}` : b
-      })
-      return { ...l, panitia: baris.join('\n') }
-    })
-  }
-
-  // Pilih guru untuk satu baris panitia lewat dropdown.
-  function setNamaPanitia(idx, nama) {
-    setLap((l) => {
-      const baris = l.panitia.split('\n')
-      const [j] = (baris[idx] || '').split('|')
-      baris[idx] = `${(j || '').trim()} | ${nama}`
-      return { ...l, panitia: baris.join('\n') }
-    })
-  }
-
   // --- SK Panitia: pengubah isian & tarik data guru ---
   const ubahSkp = (k) => (e) => {
     const v = e.target.value
@@ -772,29 +818,6 @@ export default function LaporanAsesmenSekolah() {
         }),
       }
     })
-  }
-
-  // Ambil susunan panitia yang sudah diisi di tab Laporan (Penanggung Jawab dilewati).
-  function ambilDariPanitiaLaporan() {
-    const daftar = lap.panitia
-      .split('\n')
-      .map((b) => {
-        const [j, ...n] = b.split('|')
-        return { tugas: (j || '').trim(), nama: n.join('|').trim() }
-      })
-      .filter((p) => p.tugas && p.nama && !p.nama.includes('{') && !/^penanggung/i.test(p.tugas))
-    if (daftar.length === 0) {
-      setInfoSk('Susunan panitia di tab Laporan masih kosong.')
-      return
-    }
-    setSkp((s) => ({
-      ...s,
-      baris: daftar.map((p) => {
-        const g = guruList.find((x) => x.nama.toLowerCase() === p.nama.toLowerCase())
-        return { tugas: p.tugas, nama: p.nama, nip: g?.nip || '', dinas: g?.gol || '' }
-      }),
-    }))
-    setInfoSk(`Terisi ${daftar.length} anggota dari susunan panitia di tab Laporan.`)
   }
 
   const tambahBarisSk = () =>
@@ -1018,6 +1041,15 @@ export default function LaporanAsesmenSekolah() {
     tidakHadir: jumlah(pen.penyelenggara.tidakHadir, pen.bergabung.tidakHadir),
   }
 
+  // --- Penganggaran: dihitung otomatis ---
+  const tahunAng = ang.tahun.trim() || (form.tanggalLaporan || '').slice(0, 4)
+  const jumlahBarisAng = ang.baris.map((r) => angka(r.kegiatan) * angka(r.volume) * angka(r.biaya))
+  const totalAng = jumlahBarisAng.reduce((a, b) => a + b, 0)
+  const pesertaAng = ang.peserta.trim() !== '' ? angka(ang.peserta) : totalPeserta || siswaK6.length
+  const perPesertaAng = pesertaAng > 0 ? totalAng / pesertaAng : 0
+  // Bendahara diambil dari tabel SK Panitia (baris dengan jabatan memuat "bendahara").
+  const bendahara = skp.baris.find((r) => /bendahara/i.test(r.tugas || '') && String(r.nama || '').trim())
+
   const namaSekolah = isi(sekolah.nama, 'NAMA SEKOLAH')
   const tglTtd = `${isi(form.tempat, '…………')}, ${isi(tanggalPanjang(form.tanggalLaporan), '…………')}`
 
@@ -1041,15 +1073,15 @@ export default function LaporanAsesmenSekolah() {
     rakor: hariTanggalPanjang(lap.rakorTanggal),
   }
   const T = (s) => isiTemplate(s, tokens)
-  const panitiaBaris = lap.panitia
-    .split('\n')
-    .map((x) => x.trim())
-    .filter(Boolean)
-    .map((x) => {
-      const [j, ...n] = x.split('|')
-      // Nama yang masih kosong tampil sebagai titik-titik (bukan baris kosong).
-      return { jabatan: (j || '').trim(), nama: T(n.join('|').trim()) || '…………' }
-    })
+
+  // Susunan panitia diambil dari tab SK Panitia (satu sumber): baris pertama
+  // Penanggung Jawab = Kepala Sekolah, sisanya dari tabel SK. Nama kosong = titik-titik.
+  const panitiaBaris = [
+    { jabatan: 'Penanggung Jawab', nama: String(form.kepalaNama || '').trim() || '…………' },
+    ...skp.baris
+      .filter((r) => String(r.tugas || '').trim())
+      .map((r) => ({ jabatan: r.tugas.trim(), nama: String(r.nama || '').trim() || '…………' })),
+  ]
   const ketuaPanitia = panitiaBaris.find((p) => /^ketua/i.test(p.jabatan))?.nama || ''
 
   // Ringkasan kelulusan per mapel, otomatis dari Lembar 3 (kalau sudah terisi).
@@ -1163,7 +1195,7 @@ export default function LaporanAsesmenSekolah() {
   return (
     <Layout
       title="Laporan Asesmen Sekolah"
-      subtitle="Empat lembar laporan asesmen Kelas 6 dalam satu halaman — pilih tab untuk berpindah lembar, siap cetak."
+      subtitle="Laporan asesmen Kelas 6, SK Panitia, dan Penganggaran dalam satu halaman — pilih tab untuk berpindah lembar, siap cetak."
     >
       <style>{`
         @page { size: A4; margin: 12mm 14mm; }
@@ -1236,7 +1268,7 @@ export default function LaporanAsesmenSekolah() {
           </div>
         )}
 
-        <Bagian judul="Identitas & kop surat" keterangan="Terisi otomatis dari Profil Sekolah; bisa diubah di sini. Berlaku untuk keempat lembar.">
+        <Bagian judul="Identitas & kop surat" keterangan="Terisi otomatis dari Profil Sekolah; bisa diubah di sini. Berlaku untuk semua lembar.">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Pemerintah Kabupaten/Kota">
               <input className={inputCls} value={form.kabupaten} onChange={ubah('kabupaten')} placeholder="KABUPATEN …" />
@@ -1354,51 +1386,9 @@ export default function LaporanAsesmenSekolah() {
               <Field label="Ujian praktik — selesai">
                 <input type="date" className={inputCls} value={lap.prSelesai} onChange={ubahLap('prSelesai')} />
               </Field>
-              <div className="sm:col-span-2">
-                <Field label="Susunan panitia" keterangan="Satu baris per orang, format: Jabatan | Nama">
-                  <textarea className={inputCls} rows={6} value={lap.panitia} onChange={ubahLap('panitia')} />
-                </Field>
-
-                {/* Pilih nama panitia dari data guru sekolah ini */}
-                <div className="mt-2 rounded-lg border border-slate-200 p-3">
-                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-medium text-slate-700">Pilih dari data guru ({guruList.length})</p>
-                    <button
-                      type="button"
-                      onClick={isiPanitiaDariGuru}
-                      disabled={guruList.length === 0}
-                      className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-                    >
-                      Isi otomatis yang masih kosong
-                    </button>
-                  </div>
-                  {infoGuru && <p className="mb-2 text-xs text-amber-700">{infoGuru}</p>}
-                  <div className="space-y-1.5">
-                    {lap.panitia.split('\n').map((b, idx) => {
-                      const [j, ...n] = b.split('|')
-                      const jabatan = (j || '').trim()
-                      const nama = n.join('|').trim()
-                      if (!jabatan || nama.includes('{')) return null // lewati Penanggung Jawab
-                      const ada = guruList.some((g) => g.nama === nama)
-                      return (
-                        <div key={idx} className="flex items-center gap-2">
-                          <span className="w-28 shrink-0 text-sm text-slate-600">{jabatan}</span>
-                          <select
-                            className={inputCls}
-                            value={nama}
-                            onChange={(e) => setNamaPanitia(idx, e.target.value)}
-                          >
-                            <option value="">— pilih guru —</option>
-                            {nama && !ada && <option value={nama}>{nama}</option>}
-                            {guruList.map((g) => (
-                              <option key={g.id} value={g.nama}>{g.nama}</option>
-                            ))}
-                          </select>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
+              <div className="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                Susunan panitia (Bab II) diambil otomatis dari tabel di tab <b>SK Panitia</b>. Ubah nama,
+                NIP, atau jabatan di tab itu, dan laporan ini ikut berubah.
               </div>
             </div>
 
@@ -1432,7 +1422,7 @@ export default function LaporanAsesmenSekolah() {
         {tabAktif === 'skpanitia' && (
           <Bagian
             judul="SK Penetapan Panitia Asesmen Sekolah"
-            keterangan="Nama sekolah, tahun pelajaran, dan Kepala Sekolah terisi otomatis. Baris Penanggung jawab selalu diambil dari Kepala Sekolah."
+            keterangan="Nama sekolah, tahun pelajaran, dan Kepala Sekolah terisi otomatis. Baris Penanggung jawab selalu diambil dari Kepala Sekolah. Tabel susunan panitia ini juga dipakai di tab Laporan (Bab II) dan Penganggaran (Bendahara)."
           >
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Field label="Nomor SK">
@@ -1458,17 +1448,9 @@ export default function LaporanAsesmenSekolah() {
                   >
                     Isi otomatis yang masih kosong
                   </button>
-                  <button
-                    type="button"
-                    onClick={ambilDariPanitiaLaporan}
-                    className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
-                  >
-                    Ambil dari tab Laporan
-                  </button>
                 </div>
               </div>
               {infoGuru && <p className="mb-2 text-xs text-amber-700">{infoGuru}</p>}
-              {infoSk && <p className="mb-2 text-xs text-slate-600">{infoSk}</p>}
               <div className="space-y-1.5">
                 {skp.baris.map((r, i) => {
                   const ada = guruList.some((g) => g.nama === r.nama)
@@ -1535,6 +1517,65 @@ export default function LaporanAsesmenSekolah() {
           </Bagian>
         )}
 
+        {tabAktif === 'anggaran' && (
+          <Bagian
+            judul="Penganggaran Asesmen Sekolah"
+            keterangan="Jumlah tiap baris = Kegiatan × Volume × Biaya. Total, terbilang, dan jumlah peserta dihitung otomatis. Bendahara diambil dari tab SK Panitia, Kepala Sekolah dari identitas di atas. Angka boleh diketik 150000 atau 150.000."
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Tahun anggaran" keterangan="Kosong = tahun dari Tanggal laporan.">
+                <input
+                  className={inputCls}
+                  value={ang.tahun}
+                  onChange={(e) => setAng((a) => ({ ...a, tahun: e.target.value }))}
+                  placeholder={(form.tanggalLaporan || '').slice(0, 4)}
+                />
+              </Field>
+              <Field label="Jumlah peserta" keterangan="Kosong = otomatis dari data siswa Kelas 6.">
+                <input
+                  className={inputCls}
+                  inputMode="numeric"
+                  value={ang.peserta}
+                  onChange={(e) => setAng((a) => ({ ...a, peserta: e.target.value }))}
+                  placeholder={String(totalPeserta || siswaK6.length || '')}
+                />
+              </Field>
+            </div>
+            <p className="mt-3 text-sm text-slate-700">
+              Total anggaran <b>Rp {rupiah(totalAng)}</b> untuk {pesertaAng || 0} peserta
+              {pesertaAng > 0 && <> (rata-rata Rp {rupiah(perPesertaAng)} per peserta)</>}.
+            </p>
+            {!bendahara && (
+              <p className="mt-1 text-xs text-amber-700">
+                Bendahara belum terisi. Pilih guru dengan jabatan "Bendahara" di tab SK Panitia.
+              </p>
+            )}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={tambahBarisAng}
+                className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+              >
+                + Tambah baris
+              </button>
+              <button
+                type="button"
+                onClick={hapusBarisAng}
+                className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+              >
+                − Hapus baris terakhir
+              </button>
+              <button
+                type="button"
+                onClick={() => setAng((a) => ({ ...a, baris: barisAnggaran() }))}
+                className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Kembalikan rincian ke bawaan
+              </button>
+            </div>
+          </Bagian>
+        )}
+
         {tabAktif === 'penyelenggara' && (
           <Bagian
             judul="Pelaksanaan (Lembar 4)"
@@ -1573,7 +1614,7 @@ export default function LaporanAsesmenSekolah() {
         )}
 
         {/* Tab per lembar */}
-        <div role="tablist" className="mt-2 mb-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+        <div role="tablist" className="mt-2 mb-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2">
           {TAB.map((t) => {
             const aktif = tabAktif === t.id
             return (
@@ -1765,6 +1806,12 @@ export default function LaporanAsesmenSekolah() {
           <div className="halaman">
             <JudulBab no="IV" judul="Pembiayaan" />
             <Paragraf teks={lap.teks.pembiayaan} v={tokens} />
+            {totalAng > 0 && (
+              <p className="teks-laporan indent-8 mb-2">
+                Total biaya kegiatan Asesmen Sekolah sebesar Rp {rupiah(totalAng)} ({terbilangRp(totalAng)}),
+                dengan rincian sebagaimana tercantum pada lampiran Anggaran/Biaya Kegiatan Asesmen Sekolah.
+              </p>
+            )}
           </div>
 
           {/* BAB V */}
@@ -2031,6 +2078,111 @@ export default function LaporanAsesmenSekolah() {
 
           <p className="mt-2 text-[12px] italic">Laporan ini disampaikan ke Penyelenggara Tingkat Sub Rayon.</p>
           {ttd}
+        </section>
+
+        {/* ===================== PENGANGGARAN ===================== */}
+        <section className={kelasLembar('anggaran')}>
+          {kop}
+          <div className="judul-blok text-center mb-4">
+            <p className="font-display text-base font-bold uppercase">Anggaran/Biaya Kegiatan Asesmen Sekolah</p>
+            <p className="font-bold">Tahun {isi(tahunAng, '…………')}</p>
+          </div>
+
+          <p className="font-bold mb-1">A. Pembiayaan Sekolah :</p>
+          <table className="w-full border-collapse text-[12px] mb-4">
+            <thead>
+              <tr>
+                <Th className="w-8">No</Th>
+                <Th>Nama Satuan Pendidikan</Th>
+                <Th className="w-40">Jumlah Peserta</Th>
+                <Th className="w-40">Jumlah (Rp)</Th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <Td className="text-center">1</Td>
+                <Td>{namaSekolah}</Td>
+                <Td className="text-center">{pesertaAng || 0} Peserta</Td>
+                <Td className="text-right">{rupiah(totalAng)}</Td>
+              </tr>
+              <tr>
+                <Td />
+                <Td className="font-semibold">Jumlah</Td>
+                <Td className="text-center font-semibold">{pesertaAng || 0} Peserta</Td>
+                <Td className="text-right font-semibold">{rupiah(totalAng)}</Td>
+              </tr>
+            </tbody>
+          </table>
+
+          <p className="font-bold mb-1">
+            B. Rincian Penggunaan Dana Kegiatan Asesmen Sekolah Tahun {isi(tahunAng, '…………')} :
+          </p>
+          <table className="w-full border-collapse text-[12px]">
+            <thead>
+              <tr>
+                <Th className="w-8">No</Th>
+                <Th>Uraian Biaya / Kegiatan</Th>
+                <Th className="w-16">Kegiatan</Th>
+                <Th className="w-16">Volume</Th>
+                <Th className="w-20">Satuan</Th>
+                <Th className="w-24">Biaya (Rp)</Th>
+                <Th className="w-28">Jumlah (Rp)</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {ang.baris.map((r, i) => (
+                <tr key={i}>
+                  <Td className="text-center">{i + 1}</Td>
+                  <Td className="p-0">
+                    <input className="sel-input sel-kiri px-1.5" value={r.uraian} onChange={ubahAng(i, 'uraian')} />
+                  </Td>
+                  <Td className="p-0">
+                    <input className="sel-input" inputMode="decimal" value={r.kegiatan} onChange={ubahAng(i, 'kegiatan')} />
+                  </Td>
+                  <Td className="p-0">
+                    <input className="sel-input" inputMode="decimal" value={r.volume} onChange={ubahAng(i, 'volume')} />
+                  </Td>
+                  <Td className="p-0">
+                    <input className="sel-input" value={r.satuan} onChange={ubahAng(i, 'satuan')} />
+                  </Td>
+                  <Td className="p-0">
+                    <input
+                      className="sel-input"
+                      style={{ textAlign: 'right', paddingRight: 4 }}
+                      inputMode="decimal"
+                      value={r.biaya}
+                      onChange={ubahAng(i, 'biaya')}
+                    />
+                  </Td>
+                  <Td className="text-right">{jumlahBarisAng[i] ? rupiah(jumlahBarisAng[i]) : ''}</Td>
+                </tr>
+              ))}
+              <tr>
+                <Td colSpan={6} className="text-center font-semibold">Jumlah Anggaran</Td>
+                <Td className="text-right font-semibold">{rupiah(totalAng)}</Td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="mt-2 text-[12px] italic">Terbilang: {terbilangRp(totalAng)}</p>
+
+          <div className="ttd-blok mt-6 flex justify-between gap-6">
+            <div className="w-64 text-center">
+              <p>&nbsp;</p>
+              <p className="mb-14">Bendahara</p>
+              <p className="garis-nama font-semibold underline decoration-slate-400 underline-offset-4">
+                {isi(bendahara?.nama, '…………')}
+              </p>
+              <p>NIP. {isi(bendahara?.nip, '…………')}</p>
+            </div>
+            <div className="w-64 text-center">
+              <p>{tglTtd}</p>
+              <p className="mb-14">Kepala Sekolah</p>
+              <p className="garis-nama font-semibold underline decoration-slate-400 underline-offset-4">
+                {isi(form.kepalaNama, '…………')}
+              </p>
+              <p>NIP. {isi(form.kepalaNip, '…………')}</p>
+            </div>
+          </div>
         </section>
 
         {/* ===================== SK PANITIA ASESMEN SEKOLAH ===================== */}
