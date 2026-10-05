@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import {
   X,
@@ -208,7 +208,11 @@ function getGroupsAdmin(
         { to: '/pengajuan-surat-aktif', label: 'Pengajuan Surat Aktif', icon: FileCheck2 },
         { to: '/perbaikan-data-siswa', label: 'Perbaikan Data Siswa', icon: UserCog },
         { to: '/surat', label: 'Surat Masuk/Keluar', icon: Mail },
-        { to: '/gudang-sk', label: 'Gudang SK', icon: FileStack },
+        // PERBAIKAN: Portal Ujian berada di bawah path /gudang-sk/portal-ujian,
+        // sehingga NavLink "Gudang SK" ikut aktif di halaman Portal Ujian
+        // (dan anak-anaknya, mis. Laporan Asesmen). `excludePrefix` membuat
+        // Gudang SK mati kalau sedang berada di bawah Portal Ujian.
+        { to: '/gudang-sk', label: 'Gudang SK', icon: FileStack, excludePrefix: '/gudang-sk/portal-ujian' },
         { to: '/gudang-sk/portal-ujian', label: 'Portal Ujian', icon: ClipboardCheck },
         { to: '/ppdb-admin', label: 'PPDB Siswa Baru', icon: UserPlus },
         // Laporan Kepegawaian Guru: satu pintu untuk semua laporan guru,
@@ -399,14 +403,14 @@ function getGroupsPolresAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelum
       ],
     },
     {
-label: 'Kepegawaian',
-links: [
-  { to: '/profil-polres', label: 'Profil Polres', icon: Shield },
-  { to: '/data-personel-polres', label: 'Data Personel', icon: Briefcase },
-  { to: '/presensi-polres', label: 'Presensi Personel', icon: ClipboardCheck },
-  { to: '/daftar-hadir-polres', label: 'Daftar Hadir', icon: FileSpreadsheet },
-],
-},
+      label: 'Kepegawaian',
+      links: [
+        { to: '/profil-polres', label: 'Profil Polres', icon: Shield },
+        { to: '/data-personel-polres', label: 'Data Personel', icon: Briefcase },
+        { to: '/presensi-polres', label: 'Presensi Personel', icon: ClipboardCheck },
+        { to: '/daftar-hadir-polres', label: 'Daftar Hadir', icon: FileSpreadsheet },
+      ],
+    },
     // BARU: Reskrim — register perkara bagian Penyidik (ReskrimPenyidik.jsx).
     // Grup dipisah supaya bagian Reskrim lain bisa ditambah di sini nanti.
     {
@@ -555,7 +559,17 @@ function getLinksPuskesmasPegawai(jumlahPesanBelumDibaca = 0) {
 // menghilangkan jeda 300ms saat tap, dan efek hover dibatasi ke layar
 // desktop (md:hover) supaya tidak "menempel" setelah menyentuh menu di
 // layar sentuh — diganti efek `active:` saat ditekan.
-function NavItem({ to, label, icon: Icon, end, badge, onNavigate, external }) {
+//
+// PERBAIKAN (menu ganda aktif): properti `excludePrefix` — kalau path saat
+// ini diawali `excludePrefix`, menu ini TIDAK ditandai aktif walaupun
+// NavLink menganggapnya cocok. Dipakai untuk menu induk (mis. Gudang SK)
+// yang punya menu anak sendiri di sidebar (mis. Portal Ujian) supaya
+// tidak menyala bersamaan.
+function NavItem({ to, label, icon: Icon, end, badge, onNavigate, external, excludePrefix }) {
+  const { pathname } = useLocation()
+  const cekAktif = (isActive) =>
+    isActive && !(excludePrefix && pathname.startsWith(excludePrefix))
+
   const content = (isActive) => (
     <>
       <Icon
@@ -600,14 +614,14 @@ function NavItem({ to, label, icon: Icon, end, badge, onNavigate, external }) {
       onClick={onNavigate}
       className={({ isActive }) =>
         `flex items-center gap-3 px-3 py-3 md:py-2.5 rounded-lg text-[15px] md:text-sm font-medium transition-all touch-manipulation ${
-          isActive
+          cekAktif(isActive)
             ? 'text-white shadow-sm shadow-black/20'
             : 'text-white/70 active:bg-white/[0.12] md:hover:bg-white/[0.08] md:hover:text-white'
         }`
       }
-      style={({ isActive }) => (isActive ? { background: 'var(--sidebar-active-gradient)' } : undefined)}
+      style={({ isActive }) => (cekAktif(isActive) ? { background: 'var(--sidebar-active-gradient)' } : undefined)}
     >
-      {({ isActive }) => content(isActive)}
+      {({ isActive }) => content(cekAktif(isActive))}
     </NavLink>
   )
 }
