@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, Printer, Search, Users, ScrollText } from 'lucide-react'
 import Layout from '../components/Layout'
+import KopSurat from '../components/KopSurat'
 import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../lib/AuthContext'
 
 // Bucket Storage tempat foto siswa disimpan (kolom siswa.foto_path). Sesuaikan jika namanya beda.
 const FOTO_BUCKET = 'foto-siswa'
@@ -47,16 +49,17 @@ function Baris({ no, label, children }) {
 
 function LembarBukuInduk({ s, kelasNama, sekolah, aktif }) {
   const foto = fotoUrl(s.foto_path)
-  const namaSekolah = pick(sekolah, 'nama_sekolah', 'nama')
   const kepsek = pick(sekolah, 'nama_kepala_sekolah', 'kepala_sekolah', 'nama_kepsek')
   const nipKepsek = pick(sekolah, 'nip_kepala_sekolah', 'nip_kepsek')
   const kota = pick(sekolah, 'kabupaten_kota', 'kabupaten', 'kota')
 
   return (
     <section className={`bi-section ${aktif ? 'bi-aktif' : ''}`}>
+      {/* Kop surat resmi (nama sekolah, alamat, logo) */}
+      <KopSurat />
+
       <div className="bi-judul">
         <div className="bi-judul-utama">BUKU INDUK SISWA</div>
-        {namaSekolah && <div className="bi-judul-sub">{String(namaSekolah).toUpperCase()}</div>}
       </div>
 
       <table className="bi-tabel">
@@ -159,9 +162,12 @@ function LembarBukuInduk({ s, kelasNama, sekolah, aktif }) {
 }
 
 export default function BukuIndukSiswa() {
+  const { profil } = useAuth()
+  const sid = profil?.sekolah_id || null
+
   const [siswa, setSiswa] = useState([])
   const [kelas, setKelas] = useState([])
-  const [sekolah, setSekolah] = useState(null)
+  const [sekolahList, setSekolahList] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -175,20 +181,32 @@ export default function BukuIndukSiswa() {
     let batal = false
     ;(async () => {
       setLoading(true)
+      let qs = supabase.from('siswa').select('*').order('nama_lengkap', { ascending: true })
+      let qk = supabase.from('kelas').select('*')
+      if (sid) {
+        qs = qs.eq('sekolah_id', sid)
+        qk = qk.eq('sekolah_id', sid)
+      }
       const [rs, rk, rp] = await Promise.all([
-        supabase.from('siswa').select('*').order('nama_lengkap', { ascending: true }),
-        supabase.from('kelas').select('*'),
-        supabase.from('profil_sekolah').select('*').limit(1).maybeSingle(),
+        qs,
+        qk,
+        supabase.from('profil_sekolah').select('*'),
       ])
       if (batal) return
       if (rs.error) setError(rs.error.message)
       setSiswa(rs.data || [])
       setKelas(rk.data || [])
-      setSekolah(rp.data || null)
+      setSekolahList(rp.data || [])
       setLoading(false)
     })()
     return () => { batal = true }
-  }, [])
+  }, [sid])
+
+  const sekolahMap = useMemo(() => {
+    const m = {}
+    sekolahList.forEach((p) => { m[p.sekolah_id || p.id] = p })
+    return m
+  }, [sekolahList])
 
   const namaKelas = useMemo(() => {
     const m = {}
@@ -213,9 +231,18 @@ export default function BukuIndukSiswa() {
 
   const terpilih = hasil.find((s) => s.id === terpilihId) || hasil[0] || null
 
+  // Setelah dialog cetak ditutup, kembali ke mode 'satu' supaya layar tidak
+  // memuat ratusan lembar (dan ratusan KopSurat) sekaligus.
+  useEffect(() => {
+    const reset = () => setMode('satu')
+    window.addEventListener('afterprint', reset)
+    return () => window.removeEventListener('afterprint', reset)
+  }, [])
+
   const cetak = (m) => {
     setMode(m)
-    setTimeout(() => window.print(), 150)
+    // Jeda sedikit lebih lama agar kop surat (data + logo) selesai dimuat.
+    setTimeout(() => window.print(), m === 'semua' ? 1200 : 400)
   }
 
   return (
@@ -231,9 +258,9 @@ export default function BukuIndukSiswa() {
           padding: 10mm; box-sizing: border-box; color: #000; font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.35; }
         .bi-section.bi-aktif { display: block; }
         @media screen { .bi-section { border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08); } }
-        .bi-judul { text-align: center; margin-bottom: 8px; border-bottom: 3px double #000; padding-bottom: 6px; }
-        .bi-judul-utama { font-weight: bold; font-size: 15pt; letter-spacing: 1px; }
-        .bi-judul-sub { font-weight: bold; font-size: 11pt; }
+        .bi-section .kop-surat-resmi { margin-bottom: 10px; }
+        .bi-judul { text-align: center; margin-bottom: 8px; padding-bottom: 2px; }
+        .bi-judul-utama { font-weight: bold; font-size: 14pt; letter-spacing: 1px; text-decoration: underline; }
         .bi-bagian { font-weight: bold; margin: 10px 0 3px; font-size: 11pt; }
         .bi-tabel { width: 100%; border-collapse: collapse; }
         .bi-tabel td { padding: 1.5px 0; vertical-align: top; }
@@ -363,15 +390,17 @@ export default function BukuIndukSiswa() {
 
           <div className="overflow-x-auto">
             <div className={`bi-wrap print-only mode-${mode}`}>
-              {hasil.map((s) => (
-                <LembarBukuInduk
-                  key={s.id}
-                  s={s}
-                  kelasNama={namaKelas[s.kelas_id]}
-                  sekolah={sekolah}
-                  aktif={terpilih && s.id === terpilih.id}
-                />
-              ))}
+              {hasil
+                .filter((s) => mode === 'semua' || (terpilih && s.id === terpilih.id))
+                .map((s) => (
+                  <LembarBukuInduk
+                    key={s.id}
+                    s={s}
+                    kelasNama={namaKelas[s.kelas_id]}
+                    sekolah={sekolahMap[s.sekolah_id] || sekolahMap[sid] || null}
+                    aktif={terpilih && s.id === terpilih.id}
+                  />
+                ))}
             </div>
           </div>
         </div>
@@ -379,3 +408,4 @@ export default function BukuIndukSiswa() {
     </Layout>
   )
 }
+</document_content>
