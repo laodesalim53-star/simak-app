@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, Printer, Search, Users, ScrollText } from 'lucide-react'
 import Layout from '../components/Layout'
-import { supabase } from '../lib/supabase' // sesuaikan jika path client Supabase Anda berbeda
+import { supabase } from '../lib/supabaseClient'
 
 // Bucket Storage tempat foto siswa disimpan (kolom siswa.foto_path). Sesuaikan jika namanya beda.
 const FOTO_BUCKET = 'foto-siswa'
