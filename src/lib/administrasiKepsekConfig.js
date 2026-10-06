@@ -73,8 +73,8 @@ export const CONFIG = {
   },
   'buku-induk-siswa': {
     judul: 'Buku Induk Siswa', ket: 'Data lengkap siswa sejak masuk sampai lulus', tanggalLabel: 'Tanggal Masuk',
-    // Impor dari tabel siswa. PERIKSA nama kolom di sini sesuai tabel `siswa` Anda.
-    impor: { tabel: 'siswa', tanggal: 'tanggal_masuk', peta: { nama: 'nama', nis: 'nis', nisn: 'nisn', kelas: 'kelas', jk: 'jenis_kelamin', tempat_lahir: 'tempat_lahir', tanggal_lahir: 'tanggal_lahir', agama: 'agama', alamat: 'alamat', nama_ayah: 'nama_ayah', nama_ibu: 'nama_ibu' } },
+    // Impor dari tabel siswa. Kolom nama di tabel siswa adalah `nama_lengkap`.
+    impor: { tabel: 'siswa', tanggal: 'tanggal_masuk', peta: { nama: 'nama_lengkap', nis: 'nis', nisn: 'nisn', kelas: 'kelas', jk: 'jenis_kelamin', tempat_lahir: 'tempat_lahir', tanggal_lahir: 'tanggal_lahir', agama: 'agama', alamat: 'alamat', nama_ayah: 'nama_ayah', nama_ibu: 'nama_ibu' } },
     fields: [
       f('nama', 'Nama Lengkap', 'text', { req: 1, tab: 1 }),
       f('nis', 'NIS', 'text', { tab: 1 }),
@@ -93,11 +93,19 @@ export const CONFIG = {
       f('keterangan', 'Keterangan', 'textarea'),
     ],
   },
+  // Mutasi Siswa: kolom identitas diisi otomatis dari Data Siswa lewat kotak cari di form
+  // (lihat pilihSiswa di AdministrasiKepsekItem.jsx). Tetap bisa diisi manual.
   'mutasi-siswa': {
     judul: 'Mutasi Siswa', ket: 'Siswa masuk, pindah, dan keluar', tanggalLabel: 'Tanggal Mutasi',
     fields: [
       f('nama', 'Nama Siswa', 'text', { req: 1, tab: 1 }),
+      f('nis', 'NIS'),
+      f('nisn', 'NISN'),
       f('kelas', 'Kelas', 'text', { tab: 1 }),
+      f('jk', 'Jenis Kelamin', 'select', { o: ['Laki-laki', 'Perempuan'] }),
+      f('tempat_lahir', 'Tempat Lahir'),
+      f('tanggal_lahir', 'Tanggal Lahir', 'date'),
+      f('nama_ortu', 'Nama Orang Tua / Wali'),
       f('jenis', 'Jenis Mutasi', 'select', { o: ['Masuk', 'Pindah', 'Keluar', 'Lulus'], req: 1, tab: 1 }),
       f('asal_tujuan', 'Asal / Sekolah Tujuan', 'text', { tab: 1 }),
       f('alasan', 'Alasan', 'textarea', { tab: 1 }),
