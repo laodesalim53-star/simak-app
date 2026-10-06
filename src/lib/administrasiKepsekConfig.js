@@ -2,6 +2,8 @@
 // Semua data disimpan di satu tabel: administrasi_kepsek (kolom `jenis` = kunci di bawah).
 // Field: k=kunci, l=label, t=tipe (text|textarea|date|time|number|rp|select|guru),
 //        o=opsi (select), req=wajib, tab=tampil di tabel & cetak.
+import { JENIS_RAPAT } from './templatePenilaian'
+
 const f = (k, l, t = 'text', extra = {}) => ({ k, l, t, ...extra })
 const STATUS = ['Draf', 'Final']
 const PREDIKAT = ['Sangat Baik', 'Baik', 'Cukup', 'Kurang']
@@ -161,6 +163,8 @@ export const CONFIG = {
       f('tindak_lanjut', 'Tindak Lanjut', 'textarea', { tab: 1 }),
     ],
   },
+  // Evaluasi Kinerja Guru: memilih Predikat atau mengisi Nilai akan mengisi otomatis
+  // Catatan Penilai dan Tindak Lanjut (lihat autoIsiPenilaian di templatePenilaian.js).
   'evaluasi-kinerja-guru': {
     judul: 'Evaluasi Kinerja Guru', ket: 'Penilaian kinerja guru (PKG)', tanggalLabel: 'Tanggal Penilaian',
     fields: [
@@ -220,15 +224,24 @@ export const CONFIG = {
       f('keterangan', 'Keterangan'),
     ],
   },
+  // Notulen Rapat: memilih "Jenis Rapat" mengisi otomatis Pembahasan, Keputusan, dan Tindak Lanjut
+  // (lihat autoIsiNotulen). Tombol cetak per baris mencetak format notulen resmi (cetakNotulen).
   'notulen-rapat': {
     judul: 'Notulen Rapat', ket: 'Catatan dan keputusan rapat', tanggalLabel: 'Tanggal Rapat',
+    cetakNotulen: true,
     fields: [
       f('agenda', 'Agenda Rapat', 'text', { req: 1, tab: 1 }),
+      f('jenis_rapat', 'Jenis Rapat (isi format otomatis)', 'select', { o: JENIS_RAPAT, tab: 1 }),
       f('tempat', 'Tempat', 'text', { tab: 1 }),
+      f('jam_mulai', 'Jam Mulai', 'time'),
+      f('jam_selesai', 'Jam Selesai', 'time'),
       f('pimpinan', 'Pimpinan Rapat', 'text'),
+      f('notulis', 'Notulis', 'text'),
       f('peserta', 'Jumlah Peserta', 'number', { tab: 1 }),
+      f('daftar_hadir', 'Daftar Hadir (satu nama per baris)', 'textarea'),
       f('pembahasan', 'Pembahasan', 'textarea', { tab: 1 }),
       f('keputusan', 'Keputusan', 'textarea', { tab: 1 }),
+      f('tindak_lanjut', 'Tindak Lanjut', 'textarea'),
     ],
   },
   'evaluasi-diri': {
