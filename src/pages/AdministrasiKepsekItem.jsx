@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Plus, Search, Pencil, Trash2, Printer, X, Download, FileText, RefreshCw, Wallet } from 'lucide-react'
+import { ArrowLeft, Plus, Search, Pencil, Trash2, Printer, X, Download, FileText, RefreshCw, Wallet, CalendarRange } from 'lucide-react'
 import Layout from '../components/Layout'
 import KopSurat from '../components/KopSurat'
+import KalenderTahunan from '../components/KalenderTahunan'
 // SESUAIKAN dua impor ini dengan lokasi di repo Anda:
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
@@ -198,6 +199,7 @@ export default function AdministrasiKepsekItem() {
   const [savingPagu, setSavingPagu] = useState(false)
   const [ref, setRef] = useState({ kegiatan: [], rekening: [], penerimaan: [] }) // referensi ARKAS
   const [lembar, setLembar] = useState(null) // { tahun, sumber } -> Lembar Kerja ARKAS
+  const [tampilKal, setTampilKal] = useState('tahunan') // 'tahunan' | 'daftar' (halaman Kalender Pendidikan)
 
   const kolom = useMemo(() => (cfg ? cfg.fields.filter((x) => x.tab) : []), [cfg])
 
@@ -242,6 +244,13 @@ export default function AdministrasiKepsekItem() {
     document.body.classList.toggle('cetak-lembar', !!lembar)
     return () => document.body.classList.remove('cetak-lembar')
   }, [lembar])
+
+  // Kalender tahunan tampil: cetak memakai area cetak kalender, bukan tabel daftar
+  const kalTahunan = slug === 'kalender-pendidikan' && tampilKal === 'tahunan'
+  useEffect(() => {
+    document.body.classList.toggle('cetak-kalender', kalTahunan)
+    return () => document.body.classList.remove('cetak-kalender')
+  }, [kalTahunan])
 
   useEffect(() => {
     if (!sekolahId || !cfg) return
@@ -1017,6 +1026,9 @@ export default function AdministrasiKepsekItem() {
           #cetak-area, #cetak-area * { visibility: visible; }
           #cetak-area { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
           body.cetak-lembar #cetak-area { display: none !important; }
+          body.cetak-kalender #cetak-area { display: none !important; }
+          #cetak-kalender, #cetak-kalender * { visibility: visible; }
+          #cetak-kalender { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
           #cetak-lembar, #cetak-lembar * { visibility: visible; }
           #cetak-lembar { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
           @page { size: A4 landscape; margin: 12mm; }
@@ -1069,13 +1081,19 @@ export default function AdministrasiKepsekItem() {
               </button>
             </>
           )}
+          {slug === 'kalender-pendidikan' && (
+            <button onClick={() => setTampilKal((v) => (v === 'tahunan' ? 'daftar' : 'tahunan'))}
+              className={`${tombol} bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 col-span-2 sm:col-span-1`}>
+              <CalendarRange size={16} /> {tampilKal === 'tahunan' ? 'Daftar Agenda' : 'Kalender Tahunan'}
+            </button>
+          )}
           {slug === 'rkt' && (
             <button onClick={tarikRKT} disabled={menarik || loading}
               className={`${tombol} bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-60 col-span-2 sm:col-span-1`}>
               <Download size={16} /> {menarik ? 'Menarik data...' : 'Tarik Data Otomatis'}
             </button>
           )}
-          <button onClick={() => window.print()} disabled={rows.length === 0}
+          <button onClick={() => window.print()} disabled={rows.length === 0 && !kalTahunan}
             className={`${tombol} bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40`}>
             <Printer size={16} /> Cetak
           </button>
@@ -1127,7 +1145,10 @@ export default function AdministrasiKepsekItem() {
         </div>
       )}
 
-      {loading ? (
+      {kalTahunan ? (
+        <KalenderTahunan agenda={rows} kepsek={profil?.kepala_sekolah || ''} nip={nipKepsek}
+          tempat={bersih(profil?.tempat_ttd || profil?.kabupaten)} />
+      ) : loading ? (
         <p className="text-sm text-slate-500">Memuat data...</p>
       ) : tersaring.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-500">
