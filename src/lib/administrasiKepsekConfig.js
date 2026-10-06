@@ -22,6 +22,7 @@ export const CONFIG = {
     judul: 'RKT', ket: 'Rencana Kerja Tahunan', tanggalLabel: 'Tanggal Disusun',
     // Tombol "Tarik Data Otomatis" (di halaman) menyusun draf dari RKAS, Kalender,
     // Inventaris, Evaluasi Diri, KOSP, data siswa, dan guru. Jenjang dibaca dari profil sekolah.
+    // Field "Data ARKAS" di bawah dipakai tombol "Tarik dari RKT" di halaman RKAS.
     fields: [
       f('jenjang', 'Jenjang', 'select', { o: ['SD', 'SMP'], tab: 1 }),
       f('tahun', 'Tahun Anggaran', 'text', { req: 1 }),
@@ -31,6 +32,13 @@ export const CONFIG = {
       f('pj', 'Penanggung Jawab', 'text', { tab: 1 }),
       f('waktu', 'Waktu Pelaksanaan', 'text', { tab: 1 }),
       f('anggaran', 'Anggaran', 'rp', { tab: 1 }),
+      f('komponen', 'Komponen (ARKAS)'),
+      f('kode_kegiatan', 'Kode Kegiatan (ARKAS)'),
+      f('kode_rekening', 'Kode Rekening (ARKAS)'),
+      f('volume', 'Volume (ARKAS)', 'number'),
+      f('satuan', 'Satuan (ARKAS)'),
+      f('bulan', 'Bulan (ARKAS)', 'select', { o: BULAN }),
+      f('tahap', 'Tahap (ARKAS)', 'select', { o: ['Tahap 1', 'Tahap 2'] }),
       f('sumber_data', 'Sumber Data', 'select', { o: ['Manual', 'KOSP', 'RKAS', 'Kalender', 'Inventaris', 'Evaluasi Diri', 'Data Siswa', 'Data Guru'] }),
       f('status', 'Status', 'select', { o: ['Rencana', 'Berjalan', 'Selesai'] }),
     ],
