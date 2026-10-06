@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Plus, Search, Pencil, Trash2, Printer, X, Download, FileText, RefreshCw } from 'lucide-react'
 import Layout from '../components/Layout'
+import KopSurat from '../components/KopSurat'
 // SESUAIKAN dua impor ini dengan lokasi di repo Anda:
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
@@ -744,10 +745,8 @@ export default function AdministrasiKepsekItem() {
 
       {/* Area cetak (hanya tampil saat print) */}
       <div id="cetak-area" className="hidden" style={{ color: '#000', fontSize: '11pt' }}>
-        <div style={{ textAlign: 'center', marginBottom: 12 }}>
-          {namaSekolah && <div style={{ fontWeight: 700, textTransform: 'uppercase' }}>{namaSekolah}</div>}
-          <div style={{ fontWeight: 700, fontSize: '13pt' }}>{cfg.judul.toUpperCase()}</div>
-        </div>
+        <KopSurat />
+        <div style={{ textAlign: 'center', marginBottom: 12, fontWeight: 700, fontSize: '13pt' }}>{cfg.judul.toUpperCase()}</div>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10pt' }}>
           <thead>
             <tr>
@@ -758,7 +757,7 @@ export default function AdministrasiKepsekItem() {
           </thead>
           <tbody>
             {tersaring.map((r, i) => (
-              <tr key={r.id}>
+              <tr key={r.id} style={{ pageBreakInside: 'avoid' }}>
                 <td style={{ border: '1px solid #000', padding: '4px 6px', textAlign: 'center' }}>{i + 1}</td>
                 <td style={{ border: '1px solid #000', padding: '4px 6px' }}>{tgl(r.tanggal)}</td>
                 {kolom.map((c) => (
@@ -766,18 +765,16 @@ export default function AdministrasiKepsekItem() {
                 ))}
               </tr>
             ))}
-          </tbody>
-          {idxTotal >= 0 && (
-            <tfoot>
-              <tr>
+            {idxTotal >= 0 && (
+              <tr style={{ pageBreakInside: 'avoid' }}>
                 <td colSpan={2 + idxTotal} style={{ border: '1px solid #000', padding: '4px 6px', textAlign: 'right', fontWeight: 700 }}>JUMLAH TOTAL</td>
                 <td style={{ border: '1px solid #000', padding: '4px 6px', fontWeight: 700, whiteSpace: 'nowrap' }}>{rupiah(totalAnggaran)}</td>
                 {kolom.length - idxTotal - 1 > 0 && (
                   <td colSpan={kolom.length - idxTotal - 1} style={{ border: '1px solid #000', padding: '4px 6px' }} />
                 )}
               </tr>
-            </tfoot>
-          )}
+            )}
+          </tbody>
         </table>
         <div style={{ marginTop: 28, marginLeft: '65%', textAlign: 'center', pageBreakInside: 'avoid' }}>
           <div>Kepala Sekolah</div>
