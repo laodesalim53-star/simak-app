@@ -126,6 +126,22 @@ export const CONFIG = {
   },
   'agenda-surat': {
     judul: 'Agenda Surat', ket: 'Surat masuk dan surat keluar', tanggalLabel: 'Tanggal Diterima / Dikirim',
+    // Impor dari halaman Surat Masuk & Keluar (tabel `surat`). Yang sudah ada dilewati.
+    imporTabel: {
+      tabel: 'surat', label: 'Impor dari Surat Masuk & Keluar',
+      kunci: (d, t) => `${d.jenis}|${d.no_surat}|${d.perihal}|${t || ''}`,
+      ubah: (s) => ({
+        tanggal: s.tanggal || null,
+        data: {
+          jenis: s.jenis === 'keluar' ? 'Surat Keluar' : 'Surat Masuk',
+          no_surat: s.nomor_surat || '-',
+          tgl_surat: s.tanggal || '',
+          asal_tujuan: s.pengirim_tujuan || '',
+          perihal: s.perihal,
+          keterangan: s.catatan || '',
+        },
+      }),
+    },
     fields: [
       f('jenis', 'Jenis', 'select', { o: ['Surat Masuk', 'Surat Keluar'], req: 1, tab: 1 }),
       f('no_surat', 'Nomor Surat', 'text', { req: 1, tab: 1 }),
@@ -179,6 +195,21 @@ export const CONFIG = {
   },
   inventaris: {
     judul: 'Buku Inventaris', ket: 'Barang milik sekolah dan kondisinya', tanggalLabel: 'Tanggal Perolehan',
+    // Impor dari halaman Inventaris (tabel `inventaris`). Yang sudah ada dilewati.
+    imporTabel: {
+      tabel: 'inventaris', label: 'Impor dari Data Inventaris',
+      kunci: (d) => `${d.nama}|${d.lokasi || ''}`,
+      ubah: (s) => ({
+        tanggal: s.tanggal_masuk || null,
+        data: {
+          nama: s.nama_barang,
+          jumlah: s.jumlah,
+          kondisi: { baik: 'Baik', rusak_ringan: 'Rusak Ringan', rusak_berat: 'Rusak Berat' }[s.kondisi] || '',
+          lokasi: s.lokasi || '',
+          keterangan: [s.kategori, s.catatan].filter(Boolean).join(' - '),
+        },
+      }),
+    },
     fields: [
       f('nama', 'Nama Barang', 'text', { req: 1, tab: 1 }),
       f('kode', 'Kode Barang', 'text', { tab: 1 }),
