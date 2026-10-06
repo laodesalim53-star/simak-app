@@ -1,10 +1,11 @@
-// Konfigurasi 16 halaman Administrasi Kepala Sekolah.
+// Konfigurasi halaman Administrasi Kepala Sekolah.
 // Semua data disimpan di satu tabel: administrasi_kepsek (kolom `jenis` = kunci di bawah).
 // Field: k=kunci, l=label, t=tipe (text|textarea|date|time|number|rp|select|guru),
 //        o=opsi (select), req=wajib, tab=tampil di tabel & cetak.
 const f = (k, l, t = 'text', extra = {}) => ({ k, l, t, ...extra })
 const STATUS = ['Draf', 'Final']
 const PREDIKAT = ['Sangat Baik', 'Baik', 'Cukup', 'Kurang']
+const BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
 
 export const CONFIG = {
   kosp: {
@@ -39,7 +40,7 @@ export const CONFIG = {
     fields: [
       f('tahun', 'Tahun Anggaran', 'text', { req: 1 }),
       f('sumber', 'Sumber Dana', 'select', { o: ['BOS Reguler', 'BOS Kinerja', 'BOS Afirmasi', 'Lainnya'], tab: 1 }),
-      // Tiga field di bawah dirender khusus di form (pilihan kode dengan saran dari tabel referensi).
+      // Tiga field di bawah dirender khusus di form (isian kode dengan saran dari tabel referensi).
       // Posisi `komponen` menentukan letak isian kode di form.
       f('komponen', 'Komponen'),
       f('kode_kegiatan', 'Kode Kegiatan', 'text', { tab: 1 }),
@@ -51,7 +52,7 @@ export const CONFIG = {
       f('jumlah', 'Jumlah', 'rp', { tab: 1 }),
       f('bulan', 'Bulan', 'select', { o: BULAN }),
       f('tahap', 'Tahap', 'select', { o: ['Tahap 1', 'Tahap 2'], tab: 1 }),
-  },
+    ],
   },
   'kalender-pendidikan': {
     judul: 'Kalender Pendidikan', ket: 'Hari efektif dan agenda tahunan', tanggalLabel: 'Tanggal Mulai',
@@ -193,4 +194,29 @@ export const CONFIG = {
       f('status', 'Status', 'select', { o: ['Belum', 'Proses', 'Tercapai'], tab: 1 }),
     ],
   },
+}
+
+// ---------------------------------------------------------------------
+// OPSIONAL (patch tahap 3): Realisasi BOS / BKU.
+// Hapus blok ini jika belum memakai halaman realisasi-bos.
+// Ditaruh DI LUAR objek CONFIG, setelah tanda } penutup di atas.
+// ---------------------------------------------------------------------
+const opsi = (k) => CONFIG.rkas.fields.find((x) => x.k === k)?.o || []
+
+CONFIG['realisasi-bos'] = {
+  judul: 'Realisasi BOS (BKU)',
+  ket: 'Catatan belanja yang sudah dibayar, padanan Penatausahaan di ARKAS. Dibandingkan dengan RKAS di halaman RKAS.',
+  tanggalLabel: 'Tanggal Transaksi',
+  fields: [
+    f('tahun', 'Tahun Anggaran', 'text', { req: 1, tab: 1 }),
+    f('sumber', 'Sumber Dana', 'select', { o: opsi('sumber'), req: 1, tab: 1 }),
+    f('tahap', 'Tahap', 'select', { o: ['Tahap 1', 'Tahap 2'], req: 1, tab: 1 }),
+    f('kode_kegiatan', 'Kode Kegiatan', 'text', { tab: 1 }),
+    f('uraian', 'Uraian Transaksi', 'textarea', { req: 1, tab: 1 }),
+    f('no_bukti', 'No. Bukti / Kuitansi', 'text', { tab: 1 }),
+    f('kode_rekening', 'Kode Rekening'),
+    f('belanja', 'Jumlah Belanja (Rp)', 'rp', { req: 1, tab: 1 }),
+    f('pajak_dipungut', 'Pajak Dipungut (Rp)', 'rp'),
+    f('pajak_disetor', 'Pajak Disetor (Rp)', 'rp'),
+  ],
 }
