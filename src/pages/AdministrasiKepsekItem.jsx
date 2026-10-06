@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Plus, Search, Pencil, Trash2, Printer, X, Download, FileText, RefreshCw, Wallet, CalendarRange } from 'lucide-react'
 import Layout from '../components/Layout'
 import KopSurat from '../components/KopSurat'
-import KalenderTahunan from '../lib/KalenderTahunan'
+import KalenderTahunan from '../components/KalenderTahunan'
 // SESUAIKAN dua impor ini dengan lokasi di repo Anda:
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
