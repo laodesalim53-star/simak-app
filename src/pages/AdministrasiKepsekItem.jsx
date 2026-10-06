@@ -537,6 +537,15 @@ export default function AdministrasiKepsekItem() {
 
   const inputCls = 'w-full px-3 py-2.5 text-base sm:text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400'
   const namaSekolah = profil?.nama_sekolah || profil?.nama || ''
+  const nipKepsek = bersih(profil?.nip_kepala_sekolah || profil?.nip_kepsek || profil?.nip)
+
+  // Total anggaran: RKT memakai kolom `anggaran`, RKAS memakai kolom `jumlah`. Mengikuti hasil pencarian.
+  const kunciTotal = slug === 'rkt' ? 'anggaran' : slug === 'rkas' ? 'jumlah' : null
+  const idxTotal = kunciTotal ? kolom.findIndex((c) => c.k === kunciTotal) : -1
+  const totalAnggaran = idxTotal >= 0
+    ? tersaring.reduce((n, r) => n + (Number(r.data?.[kunciTotal]) || 0), 0)
+    : 0
+  const rupiah = (n) => 'Rp ' + Number(n).toLocaleString('id-ID')
   const tombol = 'inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors'
 
   return (
@@ -679,6 +688,13 @@ export default function AdministrasiKepsekItem() {
         </>
       )}
 
+      {idxTotal >= 0 && tersaring.length > 0 && (
+        <div className="mt-3 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm">
+          <span className="text-slate-600">Jumlah total anggaran ({tersaring.length} baris)</span>
+          <span className="font-semibold text-slate-900">{rupiah(totalAnggaran)}</span>
+        </div>
+      )}
+
       {/* Modal form: lembar bawah penuh di HP, dialog di layar lebar */}
       {form && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40" onClick={() => setForm(null)}>
@@ -751,11 +767,23 @@ export default function AdministrasiKepsekItem() {
               </tr>
             ))}
           </tbody>
+          {idxTotal >= 0 && (
+            <tfoot>
+              <tr>
+                <td colSpan={2 + idxTotal} style={{ border: '1px solid #000', padding: '4px 6px', textAlign: 'right', fontWeight: 700 }}>JUMLAH TOTAL</td>
+                <td style={{ border: '1px solid #000', padding: '4px 6px', fontWeight: 700, whiteSpace: 'nowrap' }}>{rupiah(totalAnggaran)}</td>
+                {kolom.length - idxTotal - 1 > 0 && (
+                  <td colSpan={kolom.length - idxTotal - 1} style={{ border: '1px solid #000', padding: '4px 6px' }} />
+                )}
+              </tr>
+            </tfoot>
+          )}
         </table>
         <div style={{ marginTop: 28, marginLeft: '65%', textAlign: 'center', pageBreakInside: 'avoid' }}>
           <div>Kepala Sekolah</div>
           <div style={{ height: 64 }} />
           <div style={{ fontWeight: 700, textDecoration: 'underline' }}>{profil?.kepala_sekolah || '........................'}</div>
+          <div>NIP. {nipKepsek || '........................'}</div>
         </div>
       </div>
     </Layout>
