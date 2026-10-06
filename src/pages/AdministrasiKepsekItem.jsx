@@ -11,6 +11,8 @@ import { CONFIG } from '../lib/administrasiKepsekConfig'
 import { KOSP_SD } from './kosp-sd'
 // Template isi KOSP jenjang SMP (file kosp-smp.js di folder yang sama)
 import { KOSP_SMP } from './kosp-smp'
+// Kertas Kerja ARKAS (src/lib/kertasKerja.js; file ini mengimpor nilaiItem dari src/lib/aturanBos.js)
+import { susunKertasKerja, KODE_PENERIMAAN } from '../lib/kertasKerja'
 
 const TABEL = 'administrasi_kepsek'
 
@@ -40,6 +42,18 @@ const deteksiJenjang = (p) =>
 const angka = (v) => Number(v) || 0
 // Nilai satu item RKAS: kolom jumlah, atau volume x harga bila jumlah kosong.
 const nilaiRkas = (d) => angka(d?.jumlah) || angka(d?.volume) * angka(d?.harga)
+
+// Gaya tabel Lembar Kerja ARKAS
+const sel = { border: '1px solid #000', padding: '4px 6px', verticalAlign: 'top' }
+const gayaBaris = {
+  standar: { background: '#e2e2e2', fontWeight: 700 },
+  komponen: { background: '#efefef', fontWeight: 700 },
+  kegiatan: { background: '#f7f7f7', fontWeight: 600 },
+  rekening: { fontWeight: 600 },
+  uraian: {},
+}
+const geser = { standar: 0, komponen: 6, kegiatan: 12, rekening: 18, uraian: 24 }
+const angkaId = (n) => (n ? Number(n).toLocaleString('id-ID') : '0')
 
 // Program kerja turunan KOSP. Baris RKT dibuat hanya jika bagian KOSP-nya sudah ada di halaman KOSP.
 // `bagian` = nilai "Bagian Dokumen" di KOSP. {awal} diganti sesuai jenjang.
@@ -161,6 +175,8 @@ export default function AdministrasiKepsekItem() {
   const [paguList, setPaguList] = useState([]) // baris jenis 'pagu' (khusus halaman RKAS)
   const [formPagu, setFormPagu] = useState(null) // { id?, data }
   const [savingPagu, setSavingPagu] = useState(false)
+  const [ref, setRef] = useState({ kegiatan: [], rekening: [], penerimaan: [] }) // referensi ARKAS
+  const [lembar, setLembar] = useState(null) // { tahun, sumber } -> Lembar Kerja ARKAS
 
   const kolom = useMemo(() => (cfg ? cfg.fields.filter((x) => x.tab) : []), [cfg])
 
@@ -178,7 +194,7 @@ export default function AdministrasiKepsekItem() {
     setLoading(false)
   }, [sekolahId, slug, cfg])
 
-  useEffect(() => { setQ(''); setForm(null); muat() }, [muat])
+  useEffect(() => { setQ(''); setForm(null); setLembar(null); muat() }, [muat])
 
   const muatPagu = useCallback(async () => {
     if (!sekolahId || slug !== 'rkas') { setPaguList([]); return }
@@ -189,6 +205,22 @@ export default function AdministrasiKepsekItem() {
   }, [sekolahId, slug])
 
   useEffect(() => { muatPagu() }, [muatPagu])
+
+  // Referensi kode kegiatan, rekening, dan penerimaan ARKAS (khusus halaman RKAS)
+  useEffect(() => {
+    if (slug !== 'rkas') return
+    Promise.all([
+      supabase.from('ref_arkas_kegiatan').select('kode, tingkat, induk, nama').order('kode'),
+      supabase.from('ref_arkas_rekening').select('kode, nama').order('kode'),
+      supabase.from('ref_arkas_penerimaan').select('kode, nama').order('kode'),
+    ]).then(([k, r, p]) => setRef({ kegiatan: k.data || [], rekening: r.data || [], penerimaan: p.data || [] }))
+  }, [slug])
+
+  // Saat Lembar Kerja terbuka, area cetak tabel biasa dinonaktifkan agar tidak ikut tercetak
+  useEffect(() => {
+    document.body.classList.toggle('cetak-lembar', !!lembar)
+    return () => document.body.classList.remove('cetak-lembar')
+  }, [lembar])
 
   useEffect(() => {
     if (!sekolahId || !cfg) return
@@ -640,6 +672,123 @@ export default function AdministrasiKepsekItem() {
   const rupiah = (n) => 'Rp ' + Number(n).toLocaleString('id-ID')
   const tombol = 'inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors'
 
+  // ---- Lembar Kerja ARKAS (halaman RKAS) ----
+  const bukaLembar = () => {
+    const p = ringkasPagu[0]
+    const r = rows[0]
+    setLembar({
+      tahun: String(p?.data?.tahun ?? r?.data?.tahun ?? new Date().getFullYear()),
+      sumber: p?.data?.sumber ?? r?.data?.sumber ?? Object.keys(KODE_PENERIMAAN)[0],
+    })
+  }
+  const opsiSumber = cfg.fields.find((x) => x.k === 'sumber')?.o || Object.keys(KODE_PENERIMAAN)
+
+  const hitungLembar = (lb) => {
+    const items = rows.filter((r) => String(r.data?.tahun) === String(lb.tahun) && r.data?.sumber === lb.sumber)
+    const kk = susunKertasKerja(
+      items.map((r) => ({ id: r.id, tanggal: r.tanggal, created_at: r.created_at, data: r.data })),
+      ref,
+    )
+    const sumT = (t) => items.filter((r) => r.data?.tahap === t).reduce((n, r) => n + nilaiRkas(r.data), 0)
+    const pg = ringkasPagu.find((x) => String(x.data?.tahun) === String(lb.tahun) && x.data?.sumber === lb.sumber)
+    return { ...lb, ...kk, t1: sumT('Tahap 1'), t2: sumT('Tahap 2'), pagu: pg?.pagu || 0 }
+  }
+  const dataLembar = lembar ? hitungLembar(lembar) : null
+
+  const unduhCsv = (d) => {
+    const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
+    const baris = [['Kode Kegiatan', 'Kode Rekening', 'Uraian', 'Volume', 'Satuan', 'Harga Satuan', 'Jumlah', 'Jenis Belanja', 'Bulan', 'Tahap']]
+    d.baris.filter((b) => b.tingkat === 'uraian').forEach((b) => baris.push([
+      b.kodeKeg, b.kodeRek, b.nama, b.volume, b.satuan, b.harga, b.jumlah,
+      b.modal > 0 ? 'Belanja Modal' : 'Belanja Operasi', b.bulan, b.tahap,
+    ]))
+    const csv = '\uFEFF' + baris.map((b) => b.map(esc).join(';')).join('\r\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `kertas-kerja-arkas-${d.sumber.replace(/\s+/g, '-')}-${d.tahun}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const tabelLembar = (d) => {
+    const kodePen = KODE_PENERIMAAN[d.sumber]
+    const daftarPen = ref.penerimaan.length ? ref.penerimaan : (kodePen ? [{ kode: kodePen, nama: d.sumber }] : [])
+    const selisih = d.pagu - d.total
+    return (
+      <>
+        <p style={{ fontWeight: 700, margin: '0 0 4px' }}>A. PENERIMAAN</p>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10pt', marginBottom: 12 }}>
+          <thead>
+            <tr>{['No', 'Kode Penerimaan', 'Sumber Dana', 'Jumlah'].map((h) => (
+              <th key={h} style={{ ...sel, background: '#eee', textAlign: 'center' }}>{h}</th>
+            ))}</tr>
+          </thead>
+          <tbody>
+            {daftarPen.map((p, i) => (
+              <tr key={p.kode}>
+                <td style={{ ...sel, textAlign: 'center' }}>{i + 1}</td>
+                <td style={sel}>{p.kode}</td>
+                <td style={sel}>{p.nama}</td>
+                <td style={{ ...sel, textAlign: 'right' }}>{angkaId(p.kode === kodePen ? d.pagu : 0)}</td>
+              </tr>
+            ))}
+            <tr>
+              <td colSpan={3} style={{ ...sel, textAlign: 'right', fontWeight: 700 }}>Total Penerimaan</td>
+              <td style={{ ...sel, textAlign: 'right', fontWeight: 700 }}>{angkaId(d.pagu)}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p style={{ fontWeight: 700, margin: '0 0 4px' }}>B. BELANJA ({d.sumber})</p>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10pt' }}>
+          <thead>
+            <tr>{['No', 'Kode Rekening', 'Kode Kegiatan', 'Uraian Kegiatan', 'Jumlah', 'Belanja Operasi', 'Belanja Modal'].map((h) => (
+              <th key={h} style={{ ...sel, background: '#eee', textAlign: 'center' }}>{h}</th>
+            ))}</tr>
+          </thead>
+          <tbody>
+            {d.baris.length === 0 && (
+              <tr><td colSpan={7} style={{ ...sel, textAlign: 'center' }}>Belum ada item RKAS untuk sumber dana dan tahun ini.</td></tr>
+            )}
+            {d.baris.map((b, i) => {
+              const teks = b.tingkat === 'uraian' ? `${b.no}. ${b.nama}`
+                : b.tingkat === 'rekening' ? b.nama
+                : `${b.kode}${b.kode ? '. ' : ''}${b.nama}`
+              return (
+                <tr key={i} style={{ pageBreakInside: 'avoid', ...gayaBaris[b.tingkat] }}>
+                  <td style={{ ...sel, textAlign: 'center' }}>{i + 1}</td>
+                  <td style={{ ...sel, whiteSpace: 'nowrap' }}>{b.kodeRek || ''}</td>
+                  <td style={{ ...sel, whiteSpace: 'nowrap' }}>{b.kodeKeg || ''}</td>
+                  <td style={{ ...sel, paddingLeft: 6 + geser[b.tingkat], whiteSpace: 'pre-line' }}>
+                    {teks}
+                    {b.rincian && <div style={{ fontWeight: 400, fontSize: '9pt', color: '#444' }}>{b.rincian}</div>}
+                  </td>
+                  <td style={{ ...sel, textAlign: 'right', whiteSpace: 'nowrap' }}>{angkaId(b.jumlah)}</td>
+                  <td style={{ ...sel, textAlign: 'right', whiteSpace: 'nowrap' }}>{angkaId(b.operasi)}</td>
+                  <td style={{ ...sel, textAlign: 'right', whiteSpace: 'nowrap' }}>{angkaId(b.modal)}</td>
+                </tr>
+              )
+            })}
+            <tr style={{ pageBreakInside: 'avoid', fontWeight: 700 }}>
+              <td colSpan={4} style={{ ...sel, textAlign: 'right' }}>Jumlah</td>
+              <td style={{ ...sel, textAlign: 'right', whiteSpace: 'nowrap' }}>{angkaId(d.total)}</td>
+              <td style={{ ...sel, textAlign: 'right', whiteSpace: 'nowrap' }}>{angkaId(d.operasi)}</td>
+              <td style={{ ...sel, textAlign: 'right', whiteSpace: 'nowrap' }}>{angkaId(d.modal)}</td>
+            </tr>
+            {[['Belanja Tahap 1', d.t1], ['Belanja Tahap 2', d.t2], ['Pagu Tahunan', d.pagu], ['Sisa Pagu', selisih]].map(([lbl, nilai]) => (
+              <tr key={lbl} style={{ pageBreakInside: 'avoid' }}>
+                <td colSpan={4} style={{ ...sel, textAlign: 'right' }}>{lbl}</td>
+                <td style={{ ...sel, textAlign: 'right', whiteSpace: 'nowrap' }}>{angkaId(nilai)}</td>
+                <td colSpan={2} style={sel} />
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </>
+    )
+  }
+
   return (
     <Layout title={cfg.judul} subtitle={cfg.ket}>
       <style>{`
@@ -647,6 +796,9 @@ export default function AdministrasiKepsekItem() {
           body * { visibility: hidden; }
           #cetak-area, #cetak-area * { visibility: visible; }
           #cetak-area { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
+          body.cetak-lembar #cetak-area { display: none !important; }
+          #cetak-lembar, #cetak-lembar * { visibility: visible; }
+          #cetak-lembar { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
           @page { size: A4 landscape; margin: 12mm; }
         }
       `}</style>
@@ -682,10 +834,16 @@ export default function AdministrasiKepsekItem() {
             </>
           )}
           {slug === 'rkas' && (
-            <button onClick={() => bukaPagu(null)}
-              className={`${tombol} bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 col-span-2 sm:col-span-1`}>
-              <Wallet size={16} /> Atur Pagu Anggaran
-            </button>
+            <>
+              <button onClick={() => bukaPagu(null)}
+                className={`${tombol} bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 col-span-2 sm:col-span-1`}>
+                <Wallet size={16} /> Atur Pagu Anggaran
+              </button>
+              <button onClick={bukaLembar}
+                className={`${tombol} bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 col-span-2 sm:col-span-1`}>
+                <FileText size={16} /> Lembar Kerja ARKAS
+              </button>
+            </>
           )}
           {slug === 'rkt' && (
             <button onClick={tarikRKT} disabled={menarik || loading}
@@ -936,6 +1094,87 @@ export default function AdministrasiKepsekItem() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Modal Lembar Kerja ARKAS */}
+      {lembar && dataLembar && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40" onClick={() => setLembar(null)}>
+          <div onClick={(e) => e.stopPropagation()}
+            className="bg-white w-full sm:max-w-6xl max-h-[92vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl">
+            <div className="sticky top-0 z-10 bg-white flex flex-wrap items-center gap-2 px-4 py-3 border-b border-slate-100">
+              <h2 className="font-display font-semibold text-slate-900 mr-2">Lembar Kerja ARKAS</h2>
+              <input type="text" value={lembar.tahun} aria-label="Tahun anggaran"
+                onChange={(e) => setLembar((p) => ({ ...p, tahun: e.target.value }))}
+                className={`${inputCls} !w-24`} />
+              <select value={lembar.sumber} aria-label="Sumber dana"
+                onChange={(e) => setLembar((p) => ({ ...p, sumber: e.target.value }))}
+                className={`${inputCls} !w-44`}>
+                {opsiSumber.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+              <div className="ml-auto flex gap-2">
+                <button type="button" onClick={() => unduhCsv(dataLembar)} disabled={dataLembar.baris.length === 0}
+                  className={`${tombol} bg-white border border-slate-200 text-slate-700 disabled:opacity-40`}>
+                  <Download size={16} /> CSV
+                </button>
+                <button type="button" onClick={() => window.print()}
+                  className={`${tombol} bg-blue-700 text-white`}>
+                  <Printer size={16} /> Cetak
+                </button>
+                <button type="button" onClick={() => setLembar(null)} aria-label="Tutup" className="p-2 text-slate-500"><X size={18} /></button>
+              </div>
+            </div>
+
+            <div className="p-4 overflow-x-auto">
+              {dataLembar.belumBerkode > 0 && (
+                <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-2 text-xs text-amber-700">
+                  {dataLembar.belumBerkode} item belum punya kode kegiatan yang valid (format 00.00.00), jadi dikelompokkan di "Belum berkode kegiatan".
+                </p>
+              )}
+              {dataLembar.tanpaRekening > 0 && (
+                <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-2 text-xs text-amber-700">
+                  {dataLembar.tanpaRekening} item belum punya kode rekening, dihitung sebagai Belanja Operasi.
+                </p>
+              )}
+              {dataLembar.pagu > 0 && Math.round(dataLembar.pagu - dataLembar.total) !== 0 && (
+                <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-2 text-xs text-amber-700">
+                  Penerimaan dan belanja tidak sama: pagu {rupiah(dataLembar.pagu)}, belanja {rupiah(dataLembar.total)}. ARKAS menandai kondisi ini dengan tanda ~.
+                </p>
+              )}
+              {tabelLembar(dataLembar)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Area cetak Lembar Kerja ARKAS (hanya tampil saat print) */}
+      {lembar && dataLembar && (
+        <div id="cetak-lembar" className="hidden" style={{ color: '#000', fontSize: '11pt' }}>
+          <KopSurat />
+          <div style={{ textAlign: 'center', marginBottom: 12, fontWeight: 700, fontSize: '13pt' }}>
+            KERTAS KERJA RENCANA KEGIATAN DAN ANGGARAN SEKOLAH (RKAS)<br />TAHUN ANGGARAN {dataLembar.tahun}
+          </div>
+          {tabelLembar(dataLembar)}
+          <div style={{ marginTop: 24, pageBreakInside: 'avoid' }}>
+            <div style={{ textAlign: 'right', marginBottom: 8 }}>
+              {bersih(profil?.tempat_ttd || profil?.kabupaten)}{bersih(profil?.tempat_ttd || profil?.kabupaten) ? ', ' : ''}{tgl(new Date().toISOString())}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', textAlign: 'center' }}>
+              {[
+                ['Mengetahui,', 'Komite Sekolah', '........................', ''],
+                ['', 'Bendahara Sekolah', '........................', ''],
+                ['', 'Kepala Sekolah', profil?.kepala_sekolah || '........................', nipKepsek],
+              ].map(([atas, jabatan, nama, nip]) => (
+                <div key={jabatan} style={{ width: '30%' }}>
+                  <div style={{ minHeight: '1.3em' }}>{atas}</div>
+                  <div>{jabatan}</div>
+                  <div style={{ height: 64 }} />
+                  <div style={{ fontWeight: 700, textDecoration: 'underline' }}>{nama}</div>
+                  <div>{nip ? `NIP. ${nip}` : ''}</div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
