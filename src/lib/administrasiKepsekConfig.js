@@ -39,12 +39,19 @@ export const CONFIG = {
     fields: [
       f('tahun', 'Tahun Anggaran', 'text', { req: 1 }),
       f('sumber', 'Sumber Dana', 'select', { o: ['BOS Reguler', 'BOS Kinerja', 'BOS Afirmasi', 'Lainnya'], tab: 1 }),
+      // Tiga field di bawah dirender khusus di form (pilihan kode dengan saran dari tabel referensi).
+      // Posisi `komponen` menentukan letak isian kode di form.
+      f('komponen', 'Komponen'),
+      f('kode_kegiatan', 'Kode Kegiatan', 'text', { tab: 1 }),
+      f('kode_rekening', 'Kode Rekening'),
       f('uraian', 'Uraian Kegiatan', 'textarea', { req: 1, tab: 1 }),
       f('volume', 'Volume', 'number', { tab: 1 }),
       f('satuan', 'Satuan', 'text', { tab: 1 }),
       f('harga', 'Harga Satuan', 'rp'),
       f('jumlah', 'Jumlah', 'rp', { tab: 1 }),
-    ],
+      f('bulan', 'Bulan', 'select', { o: BULAN }),
+      f('tahap', 'Tahap', 'select', { o: ['Tahap 1', 'Tahap 2'], tab: 1 }),
+  },
   },
   'kalender-pendidikan': {
     judul: 'Kalender Pendidikan', ket: 'Hari efektif dan agenda tahunan', tanggalLabel: 'Tanggal Mulai',
