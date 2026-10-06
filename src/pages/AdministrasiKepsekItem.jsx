@@ -54,6 +54,7 @@ const gayaBaris = {
 }
 const geser = { standar: 0, komponen: 6, kegiatan: 12, rekening: 18, uraian: 24 }
 const angkaId = (n) => (n ? Number(n).toLocaleString('id-ID') : '0')
+const POLA_KEG = /^\d{2}\.\d{2}\.\d{2}$/
 
 // Program kerja turunan KOSP. Baris RKT dibuat hanya jika bagian KOSP-nya sudah ada di halaman KOSP.
 // `bagian` = nilai "Bagian Dokumen" di KOSP. {awal} diganti sesuai jenjang.
@@ -260,15 +261,50 @@ export default function AdministrasiKepsekItem() {
 
   const bukaBaru = () => setForm({ tanggal: new Date().toISOString().slice(0, 10), data: {} })
   const bukaEdit = (r) => setForm({ id: r.id, tanggal: r.tanggal || '', data: { ...r.data } })
+  // ---- Isi otomatis form RKAS: kode kegiatan, kode rekening, dan jumlah ----
+  const adaField = (k) => cfg.fields.some((x) => x.k === k)
+  const namaKeg = (kode) => ref.kegiatan.find((x) => x.kode === kode)?.nama || ''
+  const namaRek = (kode) => ref.rekening.find((x) => x.kode === kode)?.nama || ''
+  const hitungJumlah = (data) => {
+    const total = angka(data.volume) * angka(data.harga)
+    if (total > 0) data.jumlah = total
+  }
+
   const setField = (k, v) => setForm((p) => {
     const data = { ...p.data, [k]: v }
-    // RKAS: jumlah = volume x harga satuan (tetap bisa diubah manual setelahnya)
-    if (slug === 'rkas' && (k === 'volume' || k === 'harga')) {
-      const total = angka(data.volume) * angka(data.harga)
-      if (total > 0) data.jumlah = total
+    if (slug === 'rkas') {
+      // jumlah = volume x harga satuan (tetap bisa diubah manual setelahnya)
+      if (k === 'volume' || k === 'harga') hitungJumlah(data)
+      // kode kegiatan -> nama kegiatan dan komponen (bila field-nya ada di form)
+      if (k === 'kode_kegiatan' && POLA_KEG.test(bersih(v))) {
+        const kode = bersih(v)
+        if (adaField('kegiatan') && namaKeg(kode)) data.kegiatan = namaKeg(kode)
+        if (adaField('komponen') && namaKeg(kode.slice(0, 5))) data.komponen = namaKeg(kode.slice(0, 5))
+      }
+      // kode rekening -> nama rekening
+      if (k === 'kode_rekening' && adaField('rekening') && namaRek(bersih(v))) data.rekening = namaRek(bersih(v))
     }
     return { ...p, data }
   })
+
+  // Setelah uraian diisi: pinjam kode, satuan, dan harga dari item RKAS terdahulu yang uraiannya sama.
+  // Hanya mengisi kolom yang masih kosong.
+  const sarankanDariUraian = () => {
+    if (slug !== 'rkas') return
+    setForm((p) => {
+      const u = bersih(p.data.uraian).toLowerCase()
+      if (!u) return p
+      const cocok = rows.find((r) => r.id !== p.id && bersih(r.data?.uraian).toLowerCase() === u
+        && (bersih(r.data?.kode_kegiatan) || bersih(r.data?.kode_rekening)))
+      if (!cocok) return p
+      const data = { ...p.data }
+      ;['kode_kegiatan', 'kode_rekening', 'kegiatan', 'komponen', 'rekening', 'satuan', 'harga'].forEach((k) => {
+        if (!bersih(data[k]) && bersih(cocok.data?.[k])) data[k] = cocok.data[k]
+      })
+      if (!angka(data.jumlah)) hitungJumlah(data)
+      return { ...p, data }
+    })
+  }
 
   // Sisa pagu (setelah item ini) untuk tahun + sumber dana yang dipilih; null jika pagu belum diatur.
   const sisaPaguUntuk = (data, idEdit) => {
@@ -1008,7 +1044,8 @@ export default function AdministrasiKepsekItem() {
                   <label key={fld.k} className={`block text-sm ${lebar}`}>
                     <span className="text-slate-600">{fld.l}{fld.req && <span className="text-rose-500"> *</span>}</span>
                     {fld.t === 'textarea' ? (
-                      <textarea rows={String(v).length > 300 ? 14 : 3} value={v} onChange={(e) => setField(fld.k, e.target.value)} className={`${inputCls} mt-1`} />
+                      <textarea rows={String(v).length > 300 ? 14 : 3} value={v} onChange={(e) => setField(fld.k, e.target.value)}
+                        onBlur={fld.k === 'uraian' ? sarankanDariUraian : undefined} className={`${inputCls} mt-1`} />
                     ) : fld.t === 'select' || fld.t === 'guru' ? (
                       <select value={v} onChange={(e) => setField(fld.k, e.target.value)} className={`${inputCls} mt-1`}>
                         <option value="">Pilih...</option>
@@ -1018,11 +1055,45 @@ export default function AdministrasiKepsekItem() {
                       <input
                         type={fld.t === 'rp' ? 'number' : fld.t}
                         inputMode={fld.t === 'number' || fld.t === 'rp' ? 'numeric' : undefined}
+                        list={slug === 'rkas' && fld.k === 'kode_kegiatan' ? 'dl-keg' : slug === 'rkas' && fld.k === 'kode_rekening' ? 'dl-rek' : undefined}
+                        autoComplete={slug === 'rkas' && (fld.k === 'kode_kegiatan' || fld.k === 'kode_rekening') ? 'off' : undefined}
+                        onBlur={fld.k === 'uraian' ? sarankanDariUraian : undefined}
                         value={v} onChange={(e) => setField(fld.k, e.target.value)} className={`${inputCls} mt-1`} />
                     )}
                   </label>
                 )
               })}
+              {slug === 'rkas' && (
+                <>
+                  <datalist id="dl-keg">
+                    {ref.kegiatan.filter((x) => POLA_KEG.test(x.kode)).map((x) => <option key={x.kode} value={x.kode}>{x.nama}</option>)}
+                  </datalist>
+                  <datalist id="dl-rek">
+                    {ref.rekening.map((x) => <option key={x.kode} value={x.kode}>{x.nama}</option>)}
+                  </datalist>
+                </>
+              )}
+              {slug === 'rkas' && (() => {
+                const kk = bersih(form.data.kode_kegiatan)
+                const kr = bersih(form.data.kode_rekening)
+                if (!kk && !kr) return null
+                const total = angka(form.data.volume) * angka(form.data.harga)
+                return (
+                  <div className="sm:col-span-2 text-xs space-y-0.5">
+                    {kk && (POLA_KEG.test(kk)
+                      ? <p className={namaKeg(kk) ? 'text-emerald-700' : 'text-amber-700'}>Kegiatan: {namaKeg(kk) || 'kode tidak ada di referensi ARKAS'}</p>
+                      : <p className="text-amber-700">Kode kegiatan harus berformat 00.00.00.</p>)}
+                    {kr && (
+                      <p className={namaRek(kr) ? 'text-emerald-700' : 'text-amber-700'}>
+                        Rekening: {namaRek(kr) || 'kode tidak ada di referensi ARKAS'}{kr.startsWith('5.2') ? ' (Belanja Modal)' : kr.startsWith('5.1') ? ' (Belanja Operasi)' : ''}
+                      </p>
+                    )}
+                    {total > 0 && angka(form.data.jumlah) !== total && (
+                      <p className="text-amber-700">Jumlah ({rupiah(angka(form.data.jumlah))}) berbeda dari volume x harga ({rupiah(total)}).</p>
+                    )}
+                  </div>
+                )
+              })()}
               {slug === 'rkas' && (() => {
                 const sisa = sisaPaguUntuk(form.data, form.id)
                 if (sisa === null) return <p className="sm:col-span-2 text-xs text-slate-500">Pagu untuk tahun dan sumber dana ini belum diatur.</p>
