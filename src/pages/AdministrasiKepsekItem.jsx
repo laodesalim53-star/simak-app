@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Plus, Search, Pencil, Trash2, Printer, X, Download, FileText, RefreshCw } from 'lucide-react'
+import { ArrowLeft, Plus, Search, Pencil, Trash2, Printer, X, Download, FileText, RefreshCw, Wallet } from 'lucide-react'
 import Layout from '../components/Layout'
 import KopSurat from '../components/KopSurat'
 // SESUAIKAN dua impor ini dengan lokasi di repo Anda:
@@ -36,6 +36,10 @@ const bersih = (v) => String(v ?? '').trim()
 // Jenjang sekolah (SD/SMP) dibaca dari profil sekolah.
 const deteksiJenjang = (p) =>
   /smp|sltp/i.test(bersih(p?.nama_sekolah || p?.nama)) || bersih(p?.jenjang).toUpperCase().includes('SMP') ? 'SMP' : 'SD'
+
+const angka = (v) => Number(v) || 0
+// Nilai satu item RKAS: kolom jumlah, atau volume x harga bila jumlah kosong.
+const nilaiRkas = (d) => angka(d?.jumlah) || angka(d?.volume) * angka(d?.harga)
 
 // Program kerja turunan KOSP. Baris RKT dibuat hanya jika bagian KOSP-nya sudah ada di halaman KOSP.
 // `bagian` = nilai "Bagian Dokumen" di KOSP. {awal} diganti sesuai jenjang.
@@ -154,6 +158,9 @@ export default function AdministrasiKepsekItem() {
   const [memuatKosp, setMemuatKosp] = useState(false)
   const [sinkron, setSinkron] = useState(false)
   const [menarik, setMenarik] = useState(false)
+  const [paguList, setPaguList] = useState([]) // baris jenis 'pagu' (khusus halaman RKAS)
+  const [formPagu, setFormPagu] = useState(null) // { id?, data }
+  const [savingPagu, setSavingPagu] = useState(false)
 
   const kolom = useMemo(() => (cfg ? cfg.fields.filter((x) => x.tab) : []), [cfg])
 
@@ -173,6 +180,16 @@ export default function AdministrasiKepsekItem() {
 
   useEffect(() => { setQ(''); setForm(null); muat() }, [muat])
 
+  const muatPagu = useCallback(async () => {
+    if (!sekolahId || slug !== 'rkas') { setPaguList([]); return }
+    const { data, error } = await supabase
+      .from(TABEL).select('*').eq('sekolah_id', sekolahId).eq('jenis', 'pagu')
+      .order('created_at', { ascending: false })
+    if (!error) setPaguList(data || [])
+  }, [sekolahId, slug])
+
+  useEffect(() => { muatPagu() }, [muatPagu])
+
   useEffect(() => {
     if (!sekolahId || !cfg) return
     if (cfg.fields.some((x) => x.t === 'guru')) {
@@ -191,6 +208,15 @@ export default function AdministrasiKepsekItem() {
     return rows.filter((r) => JSON.stringify(r.data).toLowerCase().includes(kata))
   }, [rows, q])
 
+  // Rekap pagu: terpakai dihitung otomatis dari item RKAS (tahun + sumber dana sama)
+  const ringkasPagu = useMemo(() => paguList.map((p) => {
+    const terpakai = rows
+      .filter((r) => String(r.data?.tahun) === String(p.data?.tahun) && r.data?.sumber === p.data?.sumber)
+      .reduce((n, r) => n + nilaiRkas(r.data), 0)
+    const pagu = angka(p.data?.pagu_tahun)
+    return { ...p, pagu, terpakai, sisa: pagu - terpakai }
+  }).sort((a, b) => String(b.data?.tahun).localeCompare(String(a.data?.tahun))), [paguList, rows])
+
   if (!cfg) {
     return (
       <Layout title="Administrasi Kepala Sekolah">
@@ -202,12 +228,35 @@ export default function AdministrasiKepsekItem() {
 
   const bukaBaru = () => setForm({ tanggal: new Date().toISOString().slice(0, 10), data: {} })
   const bukaEdit = (r) => setForm({ id: r.id, tanggal: r.tanggal || '', data: { ...r.data } })
-  const setField = (k, v) => setForm((p) => ({ ...p, data: { ...p.data, [k]: v } }))
+  const setField = (k, v) => setForm((p) => {
+    const data = { ...p.data, [k]: v }
+    // RKAS: jumlah = volume x harga satuan (tetap bisa diubah manual setelahnya)
+    if (slug === 'rkas' && (k === 'volume' || k === 'harga')) {
+      const total = angka(data.volume) * angka(data.harga)
+      if (total > 0) data.jumlah = total
+    }
+    return { ...p, data }
+  })
+
+  // Sisa pagu (setelah item ini) untuk tahun + sumber dana yang dipilih; null jika pagu belum diatur.
+  const sisaPaguUntuk = (data, idEdit) => {
+    const pg = ringkasPagu.find((x) => String(x.data?.tahun) === String(data.tahun) && x.data?.sumber === data.sumber)
+    if (!pg) return null
+    const lama = idEdit ? rows.find((r) => r.id === idEdit) : null
+    const nilaiLama = lama && String(lama.data?.tahun) === String(pg.data?.tahun) && lama.data?.sumber === pg.data?.sumber
+      ? nilaiRkas(lama.data) : 0
+    return pg.sisa + nilaiLama - nilaiRkas(data)
+  }
 
   const simpan = async (e) => {
     e.preventDefault()
     const kurang = cfg.fields.find((x) => x.req && !String(form.data[x.k] ?? '').trim())
     if (kurang) return alert(`${kurang.l} wajib diisi.`)
+    if (slug === 'rkas') {
+      const sisa = sisaPaguUntuk(form.data, form.id)
+      if (sisa !== null && sisa < 0 &&
+        !window.confirm(`Item ini melebihi sisa pagu sebesar Rp ${Math.abs(sisa).toLocaleString('id-ID')}.\nTetap simpan?`)) return
+    }
     setSaving(true)
     const payload = { sekolah_id: sekolahId, jenis: slug, tanggal: form.tanggal || null, data: form.data }
     const { error } = form.id
@@ -224,6 +273,48 @@ export default function AdministrasiKepsekItem() {
     const { error } = await supabase.from(TABEL).delete().eq('id', r.id)
     if (error) return alert('Gagal menghapus: ' + error.message)
     muat()
+  }
+
+  // ---- Pagu anggaran (halaman RKAS) ----
+  const bukaPagu = (p) => setFormPagu(p
+    ? { id: p.id, data: { ...p.data } }
+    : { data: { tahun: String(new Date().getFullYear()), sumber: cfg.fields.find((x) => x.k === 'sumber')?.o?.[0] || 'BOS Reguler' } })
+
+  const setPaguField = (k, v) => setFormPagu((p) => {
+    const data = { ...p.data, [k]: v }
+    if (k === 'jumlah_siswa' || k === 'pagu_per_siswa') {
+      const total = angka(data.jumlah_siswa) * angka(data.pagu_per_siswa)
+      if (total > 0) { data.pagu_tahun = total; data.tahap1 = Math.round(total / 2) }
+    }
+    if (k === 'pagu_tahun') data.tahap1 = Math.round(angka(v) / 2)
+    return { ...p, data }
+  })
+
+  const simpanPagu = async (e) => {
+    e.preventDefault()
+    const d = formPagu.data
+    if (!bersih(d.tahun) || !bersih(d.sumber)) return alert('Tahun dan sumber dana wajib diisi.')
+    if (angka(d.pagu_tahun) <= 0) return alert('Pagu tahunan harus lebih dari 0.')
+    if (angka(d.tahap1) > angka(d.pagu_tahun)) return alert('Pagu tahap 1 tidak boleh melebihi pagu tahunan.')
+    const kembar = paguList.find((x) => x.id !== formPagu.id && String(x.data?.tahun) === String(d.tahun) && x.data?.sumber === d.sumber)
+    if (kembar) return alert(`Pagu ${d.sumber} tahun ${d.tahun} sudah ada. Ubah yang sudah ada.`)
+    setSavingPagu(true)
+    const payload = { sekolah_id: sekolahId, jenis: 'pagu', tanggal: new Date().toISOString().slice(0, 10), data: d }
+    const { error } = formPagu.id
+      ? await supabase.from(TABEL).update(payload).eq('id', formPagu.id)
+      : await supabase.from(TABEL).insert(payload)
+    setSavingPagu(false)
+    if (error) return alert('Gagal menyimpan pagu: ' + error.message)
+    setFormPagu(null)
+    muatPagu()
+  }
+
+  const hapusPagu = async () => {
+    if (!formPagu?.id || !window.confirm('Hapus pagu ini? Item RKAS tidak ikut terhapus.')) return
+    const { error } = await supabase.from(TABEL).delete().eq('id', formPagu.id)
+    if (error) return alert('Gagal menghapus: ' + error.message)
+    setFormPagu(null)
+    muatPagu()
   }
 
   // Impor Buku Induk Siswa. Tabel siswa tidak punya sekolah_id, jadi sekolahnya
@@ -590,6 +681,12 @@ export default function AdministrasiKepsekItem() {
               </button>
             </>
           )}
+          {slug === 'rkas' && (
+            <button onClick={() => bukaPagu(null)}
+              className={`${tombol} bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 col-span-2 sm:col-span-1`}>
+              <Wallet size={16} /> Atur Pagu Anggaran
+            </button>
+          )}
           {slug === 'rkt' && (
             <button onClick={tarikRKT} disabled={menarik || loading}
               className={`${tombol} bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-60 col-span-2 sm:col-span-1`}>
@@ -609,6 +706,42 @@ export default function AdministrasiKepsekItem() {
       {err && (
         <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
           Gagal memuat data: {err}
+        </div>
+      )}
+
+      {slug === 'rkas' && (
+        <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+          {ringkasPagu.length === 0 ? (
+            <div className="md:col-span-2 rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
+              Pagu belum diatur. Tekan "Atur Pagu Anggaran" untuk mengisi pagu BOS per tahun; sisa pagu akan berkurang otomatis setiap item ditambahkan.
+            </div>
+          ) : ringkasPagu.map((pg) => {
+            const persen = pg.pagu > 0 ? Math.min(100, Math.round((pg.terpakai / pg.pagu) * 100)) : 0
+            const lebih = pg.sisa < 0
+            return (
+              <div key={pg.id} className="bg-white rounded-2xl border border-slate-200 p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-semibold text-slate-900 text-sm">{pg.data.sumber} - {pg.data.tahun}</p>
+                    <p className="text-xs text-slate-500">
+                      {angka(pg.data.jumlah_siswa) > 0 && `${pg.data.jumlah_siswa} siswa | `}
+                      Tahap 1 {rupiah(angka(pg.data.tahap1))} | Tahap 2 {rupiah(pg.pagu - angka(pg.data.tahap1))}
+                    </p>
+                  </div>
+                  <button onClick={() => bukaPagu(pg)} aria-label="Ubah pagu" className="p-2 rounded-lg hover:bg-slate-100 text-slate-600"><Pencil size={15} /></button>
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                  <div><p className="text-slate-500">Pagu tahunan</p><p className="font-semibold text-slate-900">{rupiah(pg.pagu)}</p></div>
+                  <div><p className="text-slate-500">Terpakai</p><p className="font-semibold text-slate-900">{rupiah(pg.terpakai)}</p></div>
+                  <div><p className="text-slate-500">Sisa pagu</p><p className={`font-semibold ${lebih ? 'text-rose-600' : 'text-emerald-700'}`}>{rupiah(pg.sisa)}</p></div>
+                </div>
+                <div className="mt-3 h-2 rounded-full bg-slate-100 overflow-hidden">
+                  <div className={`h-full ${lebih ? 'bg-rose-500' : 'bg-blue-600'}`} style={{ width: `${persen}%` }} />
+                </div>
+                {lebih && <p className="mt-2 text-xs text-rose-600">Anggaran melebihi pagu sebesar {rupiah(Math.abs(pg.sisa))}.</p>}
+              </div>
+            )
+          })}
         </div>
       )}
 
@@ -732,11 +865,74 @@ export default function AdministrasiKepsekItem() {
                   </label>
                 )
               })}
+              {slug === 'rkas' && (() => {
+                const sisa = sisaPaguUntuk(form.data, form.id)
+                if (sisa === null) return <p className="sm:col-span-2 text-xs text-slate-500">Pagu untuk tahun dan sumber dana ini belum diatur.</p>
+                return (
+                  <p className={`sm:col-span-2 text-xs ${sisa < 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
+                    Sisa pagu setelah item ini: {rupiah(sisa)}{sisa < 0 ? ' (melebihi pagu)' : ''}
+                  </p>
+                )
+              })()}
             </div>
             <div className="sticky bottom-0 bg-white border-t border-slate-100 p-3 grid grid-cols-2 gap-2 sm:flex sm:justify-end">
               <button type="button" onClick={() => setForm(null)} className={`${tombol} border border-slate-200 text-slate-700`}>Batal</button>
               <button type="submit" disabled={saving} className={`${tombol} bg-blue-700 text-white disabled:opacity-60`}>
                 {saving ? 'Menyimpan...' : 'Simpan'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {formPagu && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40" onClick={() => setFormPagu(null)}>
+          <form onSubmit={simpanPagu} onClick={(e) => e.stopPropagation()}
+            className="bg-white w-full sm:max-w-lg max-h-[92vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl">
+            <div className="sticky top-0 bg-white flex items-center justify-between px-4 py-3 border-b border-slate-100">
+              <h2 className="font-display font-semibold text-slate-900">{formPagu.id ? 'Ubah' : 'Atur'} Pagu Anggaran</h2>
+              <button type="button" onClick={() => setFormPagu(null)} aria-label="Tutup" className="p-2 -mr-2 text-slate-500"><X size={18} /></button>
+            </div>
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="block text-sm">
+                <span className="text-slate-600">Tahun Anggaran <span className="text-rose-500">*</span></span>
+                <input type="text" value={formPagu.data.tahun ?? ''} onChange={(e) => setPaguField('tahun', e.target.value)} className={`${inputCls} mt-1`} />
+              </label>
+              <label className="block text-sm">
+                <span className="text-slate-600">Sumber Dana <span className="text-rose-500">*</span></span>
+                <select value={formPagu.data.sumber ?? ''} onChange={(e) => setPaguField('sumber', e.target.value)} className={`${inputCls} mt-1`}>
+                  {(cfg.fields.find((x) => x.k === 'sumber')?.o || []).map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </label>
+              <label className="block text-sm">
+                <span className="text-slate-600">Jumlah Siswa</span>
+                <input type="number" inputMode="numeric" value={formPagu.data.jumlah_siswa ?? ''} onChange={(e) => setPaguField('jumlah_siswa', e.target.value)} className={`${inputCls} mt-1`} />
+              </label>
+              <label className="block text-sm">
+                <span className="text-slate-600">Pagu per Siswa (Rp)</span>
+                <input type="number" inputMode="numeric" value={formPagu.data.pagu_per_siswa ?? ''} onChange={(e) => setPaguField('pagu_per_siswa', e.target.value)} className={`${inputCls} mt-1`} />
+              </label>
+              <label className="block text-sm sm:col-span-2">
+                <span className="text-slate-600">Pagu Tahunan (Rp) <span className="text-rose-500">*</span></span>
+                <input type="number" inputMode="numeric" value={formPagu.data.pagu_tahun ?? ''} onChange={(e) => setPaguField('pagu_tahun', e.target.value)} className={`${inputCls} mt-1`} />
+                <span className="text-xs text-slate-500">Terisi otomatis dari siswa x pagu per siswa, dan boleh diubah langsung.</span>
+              </label>
+              <label className="block text-sm">
+                <span className="text-slate-600">Pagu Tahap 1 (Rp)</span>
+                <input type="number" inputMode="numeric" value={formPagu.data.tahap1 ?? ''} onChange={(e) => setPaguField('tahap1', e.target.value)} className={`${inputCls} mt-1`} />
+              </label>
+              <div className="text-sm">
+                <span className="text-slate-600">Pagu Tahap 2 (Rp)</span>
+                <div className={`${inputCls} mt-1 bg-slate-50`}>{Math.max(0, angka(formPagu.data.pagu_tahun) - angka(formPagu.data.tahap1)).toLocaleString('id-ID')}</div>
+              </div>
+            </div>
+            <div className="sticky bottom-0 bg-white border-t border-slate-100 p-3 flex gap-2 justify-end">
+              {formPagu.id && (
+                <button type="button" onClick={hapusPagu} className={`${tombol} border border-rose-200 text-rose-600 mr-auto`}>Hapus</button>
+              )}
+              <button type="button" onClick={() => setFormPagu(null)} className={`${tombol} border border-slate-200 text-slate-700`}>Batal</button>
+              <button type="submit" disabled={savingPagu} className={`${tombol} bg-blue-700 text-white disabled:opacity-60`}>
+                {savingPagu ? 'Menyimpan...' : 'Simpan'}
               </button>
             </div>
           </form>
