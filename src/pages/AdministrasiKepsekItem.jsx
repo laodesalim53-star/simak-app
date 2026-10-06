@@ -107,6 +107,7 @@ export default function AdministrasiKepsekItem() {
   const [importing, setImporting] = useState(false)
   const [memuatKosp, setMemuatKosp] = useState(false)
   const [sinkron, setSinkron] = useState(false)
+  const [menarik, setMenarik] = useState(false)
 
   const kolom = useMemo(() => (cfg ? cfg.fields.filter((x) => x.tab) : []), [cfg])
 
@@ -330,6 +331,127 @@ export default function AdministrasiKepsekItem() {
     }
   }
 
+  // Susun draf RKT dari RKAS, Kalender Pendidikan, Inventaris, Evaluasi Diri, data siswa, dan guru.
+  // Baris yang sudah ada (sumber + program + kegiatan + tahun sama) dilewati, jadi aman ditekan berulang.
+  // Jenjang (SD/SMP) dibaca dari profil sekolah.
+  const tarikRKT = async () => {
+    const nama = bersih(profil?.nama_sekolah || profil?.nama)
+    const jenjang = /smp|sltp/i.test(nama) || bersih(profil?.jenjang).toUpperCase().includes('SMP') ? 'SMP' : 'SD'
+    const tahunIn = window.prompt(`Tarik data untuk RKT ${jenjang}. Tahun anggaran?`, String(new Date().getFullYear()))
+    if (!tahunIn) return
+    const tahun = tahunIn.trim()
+
+    setMenarik(true)
+    try {
+      const [src, gr, kl] = await Promise.all([
+        supabase.from(TABEL).select('jenis, tanggal, data').eq('sekolah_id', sekolahId)
+          .in('jenis', ['rkas', 'kalender-pendidikan', 'inventaris', 'evaluasi-diri']),
+        supabase.from('guru').select('jenis_ptk, status').eq('sekolah_id', sekolahId),
+        supabase.from('kelas').select('id, nama_kelas').eq('sekolah_id', sekolahId),
+      ])
+      if (src.error) throw new Error('Data sumber: ' + src.error.message)
+      if (gr.error) throw new Error('Data guru: ' + gr.error.message)
+      if (kl.error) throw new Error('Data kelas: ' + kl.error.message)
+
+      const per = (j) => (src.data || []).filter((r) => r.jenis === j)
+      const dasar = { jenjang, tahun, status: 'Rencana' }
+      const draf = []
+
+      // 1) RKAS -> kegiatan + anggaran
+      per('rkas').filter((r) => String(r.data?.tahun) === tahun).forEach(({ data: d }) => {
+        draf.push({
+          ...dasar, sumber_data: 'RKAS', program: d.sumber || 'RKAS', kegiatan: d.uraian,
+          sasaran: d.volume ? `${d.volume} ${d.satuan || ''}`.trim() : '',
+          pj: 'Kepala Sekolah / Bendahara', waktu: tahun,
+          anggaran: Number(d.jumlah) || (Number(d.volume) || 0) * (Number(d.harga) || 0) || '',
+        })
+      })
+
+      // 2) Kalender Pendidikan -> waktu pelaksanaan (ujian & kegiatan sekolah)
+      per('kalender-pendidikan')
+        .filter((r) => ['Ujian', 'Kegiatan Sekolah'].includes(r.data?.jenis) && r.tanggal && String(new Date(r.tanggal).getFullYear()) === tahun)
+        .forEach((r) => {
+          const d = r.data
+          draf.push({
+            ...dasar, sumber_data: 'Kalender',
+            program: d.jenis === 'Ujian' ? 'Penilaian dan Ujian' : 'Kegiatan Sekolah',
+            kegiatan: d.kegiatan, sasaran: `Seluruh warga ${jenjang}`, pj: 'Wakil Kepala Sekolah / Panitia',
+            waktu: d.selesai && d.selesai !== r.tanggal ? `${tgl(r.tanggal)} s.d. ${tgl(d.selesai)}` : tgl(r.tanggal),
+            anggaran: '',
+          })
+        })
+
+      // 3) Inventaris rusak -> sarana prasarana
+      per('inventaris').filter((r) => r.data?.kondisi && r.data.kondisi !== 'Baik').forEach(({ data: d }) => {
+        draf.push({
+          ...dasar, sumber_data: 'Inventaris', program: 'Sarana dan Prasarana',
+          kegiatan: `${d.kondisi === 'Rusak Berat' ? 'Penggantian' : 'Perbaikan'} ${d.nama}${d.lokasi ? ` (${d.lokasi})` : ''}`,
+          sasaran: `${d.jumlah || 1} unit`, pj: 'Wakil Sarana Prasarana', waktu: tahun, anggaran: '',
+        })
+      })
+
+      // 4) Evaluasi Diri yang belum tercapai -> peningkatan mutu
+      per('evaluasi-diri').filter((r) => r.data?.status !== 'Tercapai' && r.data?.rencana).forEach(({ data: d }) => {
+        draf.push({
+          ...dasar, sumber_data: 'Evaluasi Diri', program: `Peningkatan Mutu - ${d.standar}`,
+          kegiatan: d.rencana, sasaran: 'Tercapainya standar', pj: 'Kepala Sekolah / Tim Pengembang Sekolah',
+          waktu: tahun, anggaran: '',
+        })
+      })
+
+      // 5) Siswa aktif -> sasaran layanan peserta didik
+      const kelas = kl.data || []
+      if (kelas.length) {
+        const { data: sw, error: es } = await supabase.from('siswa').select('kelas_id')
+          .in('kelas_id', kelas.map((k) => k.id)).eq('status', 'aktif')
+        if (es) throw new Error('Data siswa: ' + es.message)
+        const rombel = new Set((sw || []).map((s) => s.kelas_id)).size
+        if (sw?.length) {
+          draf.push({
+            ...dasar, sumber_data: 'Data Siswa', program: 'Layanan Peserta Didik',
+            kegiatan: `Pelaksanaan pembelajaran dan layanan peserta didik ${jenjang}`,
+            sasaran: `${sw.length} peserta didik dalam ${rombel} rombongan belajar`,
+            pj: 'Kepala Sekolah dan Guru', waktu: tahun, anggaran: '',
+          })
+        }
+      }
+
+      // 6) Guru aktif -> pengembangan kompetensi
+      const jmlGuru = (gr.data || []).filter((g) => bersih(g.status).toLowerCase() === 'aktif' && /guru/i.test(g.jenis_ptk || '')).length
+      if (jmlGuru) {
+        draf.push({
+          ...dasar, sumber_data: 'Data Guru', program: 'Pengembangan Pendidik dan Tenaga Kependidikan',
+          kegiatan: 'Peningkatan kompetensi guru melalui KKG/MGMP, pelatihan, dan supervisi akademik',
+          sasaran: `${jmlGuru} guru`, pj: 'Kepala Sekolah', waktu: tahun, anggaran: '',
+        })
+      }
+
+      // Lewati yang sudah ada
+      const kunci = (d) => `${d.sumber_data}|${d.program}|${d.kegiatan}|${d.tahun}`
+      const ada = new Set(rows.map((r) => kunci(r.data || {})))
+      const baru = draf.filter((d) => d.kegiatan && !ada.has(kunci(d)))
+
+      if (baru.length === 0) {
+        return alert(draf.length === 0
+          ? `Belum ada data sumber untuk tahun ${tahun}. Isi dulu RKAS / Kalender Pendidikan / Inventaris.`
+          : 'Semua baris draf sudah ada di RKT.')
+      }
+      if (!window.confirm(`Tambahkan ${baru.length} baris draf RKT ${jenjang} tahun ${tahun}?`)) return
+
+      const tanggal = new Date().toISOString().slice(0, 10)
+      const { error } = await supabase.from(TABEL).insert(
+        baru.map((d) => ({ sekolah_id: sekolahId, jenis: slug, tanggal, data: d }))
+      )
+      if (error) throw new Error('Gagal menyimpan: ' + error.message)
+      alert(`${baru.length} baris draf RKT berhasil ditambahkan. Lengkapi penanggung jawab dan anggaran bila perlu.`)
+      muat()
+    } catch (e) {
+      alert('Gagal menarik data: ' + e.message)
+    } finally {
+      setMenarik(false)
+    }
+  }
+
   const inputCls = 'w-full px-3 py-2.5 text-base sm:text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400'
   const namaSekolah = profil?.nama_sekolah || profil?.nama || ''
   const tombol = 'inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors'
@@ -374,6 +496,12 @@ export default function AdministrasiKepsekItem() {
                 <RefreshCw size={16} /> {sinkron ? 'Menyinkronkan...' : 'Sinkronkan Data Sekolah'}
               </button>
             </>
+          )}
+          {slug === 'rkt' && (
+            <button onClick={tarikRKT} disabled={menarik || loading}
+              className={`${tombol} bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-60 col-span-2 sm:col-span-1`}>
+              <Download size={16} /> {menarik ? 'Menarik data...' : 'Tarik Data Otomatis'}
+            </button>
           )}
           <button onClick={() => window.print()} disabled={rows.length === 0}
             className={`${tombol} bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40`}>
