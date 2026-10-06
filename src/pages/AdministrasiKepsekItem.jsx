@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Plus, Search, Pencil, Trash2, Printer, X, Download, FileText } from 'lucide-react'
+import { ArrowLeft, Plus, Search, Pencil, Trash2, Printer, X, Download, FileText, RefreshCw } from 'lucide-react'
 import Layout from '../components/Layout'
 // SESUAIKAN dua impor ini dengan lokasi di repo Anda:
 import { useAuth } from '../lib/AuthContext'
@@ -28,6 +28,69 @@ const gayaPotong = {
   overflow: 'hidden',
 }
 
+const bersih = (v) => String(v ?? '').trim()
+
+// Mengganti placeholder [ ... ] pada teks KOSP dengan data sekolah.
+// Hanya placeholder yang datanya tersedia yang diganti; sisanya dibiarkan agar diisi manual.
+function isiTemplate(teks, c) {
+  let t = teks
+  const ganti = (dari, ke) => { if (ke) t = t.split(dari).join(ke) }
+  const gantiRegex = (re, ke) => { if (ke) t = t.replace(re, () => ke) }
+
+  ganti('[NAMA SD]', c.nama)
+  ganti('[NPSN]', c.npsn)
+  ganti('[PERINGKAT/TAHUN]', c.akreditasi)
+  ganti('[ALAMAT LENGKAP]', c.alamat)
+  ganti('[NEGERI/SWASTA]', c.status)
+  ganti('[DESA/KELURAHAN, KECAMATAN, KABUPATEN]', c.wilayah)
+  ganti('[NAMA KEPALA SEKOLAH]', c.kepsek)
+  ganti('[KOTA/ KABUPATEN]', c.tempat)
+
+  // Peserta didik dan rombongan belajar
+  gantiRegex(
+    /Jumlah peserta didik: \[JUMLAH\] siswa dalam \[JUMLAH\] rombongan belajar \(kelas 1 s\.d\. 6\)\./,
+    c.kalimatSiswa
+  )
+
+  // Guru: seluruh mata pelajaran diampu guru kelas
+  if (c.jumlahGuru > 0) {
+    gantiRegex(
+      /Pendidik dan tenaga kependidikan: \[JUMLAH GURU KELAS\], \[JUMLAH GURU MAPEL \(PAI, PJOK, dll\)\], \[JUMLAH TENDIK\]\./,
+      `Pendidik dan tenaga kependidikan: ${c.jumlahGuru} guru kelas (seluruh mata pelajaran, termasuk PAI dan PJOK, diampu guru kelas), [JUMLAH TENDIK].`
+    )
+    ganti(
+      'Sistem guru kelas untuk kelas 1-6; guru mata pelajaran untuk PAI dan PJOK dan [LAINNYA].',
+      'Sistem guru kelas untuk kelas 1-6; seluruh mata pelajaran, termasuk PAI dan PJOK, diampu oleh guru kelas.'
+    )
+  }
+
+  // Visi dan misi dari profil sekolah
+  if (c.visi) {
+    gantiRegex(/"\[RUMUSAN VISI SEKOLAH\]"\nContoh arah rumusan:[^\n]*/, `"${c.visi}"`)
+  }
+  if (c.misi) {
+    gantiRegex(
+      /B\. Misi Satuan Pendidikan\n[\s\S]*?\[Sesuaikan jumlah dan redaksi misi dengan dokumen visi misi sekolah yang sudah ditetapkan\.\]/,
+      `B. Misi Satuan Pendidikan\n${c.misi}`
+    )
+  }
+
+  // Tim pengembang dan pengesahan
+  if (c.namaGuru) {
+    ganti('Anggota: [NAMA GURU/ KOMITE SEKOLAH]', `Anggota: ${c.namaGuru}; [UNSUR KOMITE SEKOLAH]`)
+  }
+  if (c.kepsek) {
+    gantiRegex(/Kepala Sekolah, \[NAMA\] NIP\. \[NIP\]/, `Kepala Sekolah, ${c.kepsek} NIP. ${c.nipKepsek || '-'}`)
+  }
+  if (c.pengawas) {
+    gantiRegex(
+      /Mengetahui\/ Mengesahkan: Pengawas Sekolah atau Dinas Pendidikan setempat \[NAMA\/ NIP\]\./,
+      `Mengetahui/ Mengesahkan: Pengawas Sekolah, ${c.pengawas} NIP. ${c.nipPengawas || '-'}.`
+    )
+  }
+  return t
+}
+
 export default function AdministrasiKepsekItem() {
   const { slug } = useParams()
   const cfg = CONFIG[slug]
@@ -43,6 +106,7 @@ export default function AdministrasiKepsekItem() {
   const [profil, setProfil] = useState(null)
   const [importing, setImporting] = useState(false)
   const [memuatKosp, setMemuatKosp] = useState(false)
+  const [sinkron, setSinkron] = useState(false)
 
   const kolom = useMemo(() => (cfg ? cfg.fields.filter((x) => x.tab) : []), [cfg])
 
@@ -65,11 +129,12 @@ export default function AdministrasiKepsekItem() {
   useEffect(() => {
     if (!sekolahId || !cfg) return
     if (cfg.fields.some((x) => x.t === 'guru')) {
-      supabase.from('guru').select('nama').eq('sekolah_id', sekolahId).order('nama')
-        .then(({ data }) => setGuruList((data || []).map((g) => g.nama).filter(Boolean)))
+      supabase.from('guru').select('nama_lengkap').eq('sekolah_id', sekolahId).order('nama_lengkap')
+        .then(({ data }) => setGuruList((data || []).map((g) => g.nama_lengkap).filter(Boolean)))
     }
-    // Data kop cetak; abaikan jika kolom berbeda.
-    supabase.from('profil_sekolah').select('*').eq('id', sekolahId).maybeSingle()
+    // Data kop cetak: cocokkan lewat sekolah_id (atau id, untuk data lama).
+    supabase.from('profil_sekolah').select('*')
+      .or(`sekolah_id.eq.${sekolahId},id.eq.${sekolahId}`).limit(1).maybeSingle()
       .then(({ data }) => setProfil(data || null))
   }, [sekolahId, cfg])
 
@@ -114,25 +179,42 @@ export default function AdministrasiKepsekItem() {
     muat()
   }
 
+  // Impor Buku Induk Siswa. Tabel siswa tidak punya sekolah_id, jadi sekolahnya
+  // ditentukan lewat tabel kelas. Hanya siswa berstatus aktif yang diimpor.
   const imporSiswa = async () => {
-    const { tabel, peta, tanggal } = cfg.impor
+    const { peta } = cfg.impor
     setImporting(true)
-    const { data: siswa, error } = await supabase.from(tabel).select('*').eq('sekolah_id', sekolahId)
-    if (error) { setImporting(false); return alert('Gagal membaca data siswa: ' + error.message) }
-    const ada = new Set(rows.map((r) => `${r.data.nama}|${r.data.nis || ''}`))
-    const baru = (siswa || [])
-      .map((s) => {
-        const data = { status: 'Aktif' }
-        Object.entries(peta).forEach(([k, kol]) => { if (s[kol] != null) data[k] = s[kol] })
-        return { sekolah_id: sekolahId, jenis: slug, tanggal: s[tanggal] || null, data }
-      })
-      .filter((x) => x.data.nama && !ada.has(`${x.data.nama}|${x.data.nis || ''}`))
-    if (baru.length === 0) { setImporting(false); return alert('Tidak ada siswa baru untuk diimpor.') }
-    const { error: e2 } = await supabase.from(TABEL).insert(baru)
-    setImporting(false)
-    if (e2) return alert('Gagal impor: ' + e2.message)
-    alert(`${baru.length} siswa berhasil diimpor.`)
-    muat()
+    try {
+      const { data: kls, error: ek } = await supabase.from('kelas').select('id, nama_kelas').eq('sekolah_id', sekolahId)
+      if (ek) throw new Error('Gagal membaca data kelas: ' + ek.message)
+      const namaKelas = Object.fromEntries((kls || []).map((k) => [k.id, k.nama_kelas]))
+      const ids = Object.keys(namaKelas)
+      if (ids.length === 0) throw new Error('Belum ada data kelas untuk sekolah ini.')
+
+      const { data: siswa, error } = await supabase.from('siswa').select('*').in('kelas_id', ids).eq('status', 'aktif')
+      if (error) throw new Error('Gagal membaca data siswa: ' + error.message)
+
+      const ada = new Set(rows.map((r) => `${r.data.nama}|${r.data.nis || ''}`))
+      const baru = (siswa || [])
+        .map((s) => {
+          const data = { status: 'Aktif', kelas: namaKelas[s.kelas_id] || '' }
+          Object.entries(peta).forEach(([k, kol]) => { if (s[kol] != null && s[kol] !== '') data[k] = s[kol] })
+          if (data.jk === 'L') data.jk = 'Laki-laki'
+          if (data.jk === 'P') data.jk = 'Perempuan'
+          return { sekolah_id: sekolahId, jenis: slug, tanggal: null, data }
+        })
+        .filter((x) => x.data.nama && !ada.has(`${x.data.nama}|${x.data.nis || ''}`))
+
+      if (baru.length === 0) throw new Error('Tidak ada siswa baru untuk diimpor.')
+      const { error: e2 } = await supabase.from(TABEL).insert(baru)
+      if (e2) throw new Error('Gagal impor: ' + e2.message)
+      alert(`${baru.length} siswa berhasil diimpor.`)
+      muat()
+    } catch (e) {
+      alert(e.message)
+    } finally {
+      setImporting(false)
+    }
   }
 
   // Muat template KOSP SD. Bagian yang sudah ada (bagian + tahun ajaran sama) dilewati,
@@ -150,8 +232,102 @@ export default function AdministrasiKepsekItem() {
     )
     setMemuatKosp(false)
     if (error) return alert('Gagal memuat template: ' + error.message)
-    alert(`${baru.length} bagian KOSP SD berhasil dimuat. Lengkapi bagian [dalam kurung siku] lalu ubah status ke Final.`)
+    alert(`${baru.length} bagian KOSP SD berhasil dimuat. Klik "Sinkronkan Data Sekolah" untuk mengisi otomatis, lalu lengkapi sisanya.`)
     muat()
+  }
+
+  // Isi placeholder KOSP dari profil sekolah, data guru, dan data siswa.
+  // Hanya menyentuh bagian berstatus Draf, dan hanya kolom Uraian.
+  const sinkronkan = async () => {
+    const draf = rows.filter((r) => r.data?.status === 'Draf')
+    if (draf.length === 0) return alert('Tidak ada bagian berstatus Draf untuk disinkronkan.')
+    if (!window.confirm(`Isi otomatis ${draf.length} bagian berstatus Draf dari data sekolah, guru, dan siswa?\nBagian berstatus Final tidak diubah.`)) return
+    setSinkron(true)
+    try {
+      const [pr, gr, kl] = await Promise.all([
+        supabase.from('profil_sekolah').select('*').or(`sekolah_id.eq.${sekolahId},id.eq.${sekolahId}`).limit(1).maybeSingle(),
+        supabase.from('guru').select('nama_lengkap, jenis_ptk, status').eq('sekolah_id', sekolahId),
+        supabase.from('kelas').select('id, nama_kelas').eq('sekolah_id', sekolahId),
+      ])
+      if (pr.error) throw new Error('Profil sekolah: ' + pr.error.message)
+      if (gr.error) throw new Error('Data guru: ' + gr.error.message)
+      if (kl.error) throw new Error('Data kelas: ' + kl.error.message)
+
+      const p = pr.data || {}
+
+      // Guru kelas: jenis_ptk mengandung kata "guru" (Kepala Sekolah dan yang kosong tidak dihitung)
+      const guru = (gr.data || []).filter(
+        (g) => bersih(g.status).toLowerCase() === 'aktif' && /guru/i.test(g.jenis_ptk || '')
+      )
+
+      // Siswa aktif per kelas
+      const kelas = kl.data || []
+      const idKelas = kelas.map((k) => k.id)
+      let hitung = {}
+      if (idKelas.length) {
+        const { data: sw, error: es } = await supabase
+          .from('siswa').select('kelas_id').in('kelas_id', idKelas).eq('status', 'aktif')
+        if (es) throw new Error('Data siswa: ' + es.message)
+        ;(sw || []).forEach((s) => { hitung[s.kelas_id] = (hitung[s.kelas_id] || 0) + 1 })
+      }
+      const perKelas = kelas
+        .filter((k) => hitung[k.id] > 0)
+        .sort((a, b) => String(a.nama_kelas).localeCompare(String(b.nama_kelas), 'id', { numeric: true }))
+      const totalSiswa = perKelas.reduce((n, k) => n + hitung[k.id], 0)
+
+      const nama = bersih(p.nama_sekolah)
+      const ctx = {
+        nama,
+        npsn: bersih(p.npsn),
+        akreditasi: bersih(p.akreditasi),
+        alamat: [p.alamat, p.kelurahan_desa, p.kecamatan, p.kabupaten, p.provinsi].map(bersih).filter(Boolean).join(', '),
+        wilayah: [p.kelurahan_desa, p.kecamatan, p.kabupaten].map(bersih).filter(Boolean).join(', '),
+        status: /negeri/i.test(nama) ? 'Negeri' : /swasta/i.test(nama) ? 'Swasta' : '',
+        kepsek: bersih(p.kepala_sekolah),
+        nipKepsek: bersih(p.nip_kepala_sekolah),
+        tempat: bersih(p.tempat_ttd) || bersih(p.kabupaten),
+        pengawas: bersih(p.pengawas),
+        nipPengawas: bersih(p.nip_pengawas),
+        visi: bersih(p.visi),
+        misi: bersih(p.misi),
+        jumlahGuru: guru.length,
+        namaGuru: guru.map((g) => bersih(g.nama_lengkap)).filter(Boolean).join(', '),
+        kalimatSiswa: totalSiswa
+          ? `Jumlah peserta didik: ${totalSiswa} siswa dalam ${perKelas.length} rombongan belajar (${perKelas.map((k) => `${k.nama_kelas}: ${hitung[k.id]}`).join(', ')}).`
+          : '',
+      }
+
+      let berubah = 0
+      for (const r of draf) {
+        const lama = r.data?.uraian || ''
+        const baru = isiTemplate(lama, ctx)
+        if (baru !== lama) {
+          const { error } = await supabase.from(TABEL).update({ data: { ...r.data, uraian: baru } }).eq('id', r.id)
+          if (error) throw new Error('Gagal menyimpan: ' + error.message)
+          berubah++
+        }
+      }
+
+      const kosong = []
+      if (!ctx.npsn) kosong.push('NPSN')
+      if (!ctx.visi) kosong.push('visi')
+      if (!ctx.misi) kosong.push('misi')
+      if (!ctx.kepsek) kosong.push('kepala sekolah')
+      if (!totalSiswa) kosong.push('data siswa aktif')
+      const pesan = berubah === 0
+        ? 'Tidak ada placeholder yang bisa diisi (mungkin sudah tersinkron sebelumnya).'
+        : `${berubah} bagian berhasil diisi otomatis.`
+      alert(
+        pesan
+        + (kosong.length ? `\nData belum tersedia di sistem: ${kosong.join(', ')}.` : '')
+        + '\nLengkapi sisa [dalam kurung siku] secara manual.'
+      )
+      muat()
+    } catch (e) {
+      alert('Gagal sinkronisasi: ' + e.message)
+    } finally {
+      setSinkron(false)
+    }
   }
 
   const inputCls = 'w-full px-3 py-2.5 text-base sm:text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400'
@@ -188,10 +364,16 @@ export default function AdministrasiKepsekItem() {
             </button>
           )}
           {slug === 'kosp' && (
-            <button onClick={muatTemplateKosp} disabled={memuatKosp || loading}
-              className={`${tombol} bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-60 col-span-2 sm:col-span-1`}>
-              <FileText size={16} /> {memuatKosp ? 'Memuat...' : 'Muat Template KOSP SD'}
-            </button>
+            <>
+              <button onClick={muatTemplateKosp} disabled={memuatKosp || loading}
+                className={`${tombol} bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-60 col-span-2 sm:col-span-1`}>
+                <FileText size={16} /> {memuatKosp ? 'Memuat...' : 'Muat Template KOSP SD'}
+              </button>
+              <button onClick={sinkronkan} disabled={sinkron || loading || rows.length === 0}
+                className={`${tombol} bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-60 col-span-2 sm:col-span-1`}>
+                <RefreshCw size={16} /> {sinkron ? 'Menyinkronkan...' : 'Sinkronkan Data Sekolah'}
+              </button>
+            </>
           )}
           <button onClick={() => window.print()} disabled={rows.length === 0}
             className={`${tombol} bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40`}>
