@@ -17,6 +17,9 @@ import { susunKertasKerja, KODE_PENERIMAAN } from '../lib/kertasKerja'
 
 const TABEL = 'administrasi_kepsek'
 
+// Jenis mutasi -> status siswa di Data Siswa (pilihan status di halaman Siswa: aktif, lulus, pindah)
+const STATUS_MUTASI = { Masuk: 'aktif', Pindah: 'pindah', Keluar: 'pindah', Lulus: 'lulus' }
+
 const tgl = (v) => (v ? new Date(v).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '')
 const tampil = (fld, v) => {
   if (v === undefined || v === null || v === '') return '-'
@@ -200,6 +203,9 @@ export default function AdministrasiKepsekItem() {
   const [ref, setRef] = useState({ kegiatan: [], rekening: [], penerimaan: [] }) // referensi ARKAS
   const [lembar, setLembar] = useState(null) // { tahun, sumber } -> Lembar Kerja ARKAS
   const [tampilKal, setTampilKal] = useState('tahunan') // 'tahunan' | 'daftar' (halaman Kalender Pendidikan)
+  const [siswaList, setSiswaList] = useState([]) // untuk Mutasi Siswa dan Buku Tamu
+  const [cariSiswa, setCariSiswa] = useState('')
+  const pakaiSiswa = slug === 'mutasi-siswa' || slug === 'buku-tamu'
 
   const kolom = useMemo(() => (cfg ? cfg.fields.filter((x) => x.tab) : []), [cfg])
 
@@ -264,6 +270,15 @@ export default function AdministrasiKepsekItem() {
       .then(({ data }) => setProfil(data || null))
   }, [sekolahId, cfg])
 
+  // Daftar siswa untuk kotak cari di Mutasi Siswa dan Buku Tamu
+  useEffect(() => {
+    if (!sekolahId || !pakaiSiswa) { setSiswaList([]); return }
+    supabase.from('siswa')
+      .select('id, nama_lengkap, nis, nisn, jenis_kelamin, tempat_lahir, tanggal_lahir, nama_ayah, nama_ibu, nama_wali, nama_orang_tua, no_hp_orang_tua, hp, status, kelas(nama_kelas)')
+      .eq('sekolah_id', sekolahId).order('nama_lengkap')
+      .then(({ data }) => setSiswaList(data || []))
+  }, [sekolahId, pakaiSiswa])
+
   const tersaring = useMemo(() => {
     const kata = q.trim().toLowerCase()
     if (!kata) return rows
@@ -290,6 +305,50 @@ export default function AdministrasiKepsekItem() {
 
   const bukaBaru = () => setForm({ tanggal: new Date().toISOString().slice(0, 10), data: {} })
   const bukaEdit = (r) => setForm({ id: r.id, tanggal: r.tanggal || '', data: { ...r.data } })
+
+  // ---- Isi otomatis dari Data Siswa (Mutasi Siswa dan Buku Tamu) ----
+  const waliMode = slug === 'buku-tamu' && form?.data?.kategori === 'Orang Tua/Wali Siswa'
+  const hasilCari = (() => {
+    const k = cariSiswa.trim().toLowerCase()
+    if (k.length < 2) return []
+    return siswaList.filter((s) => `${s.nama_lengkap} ${s.nis} ${s.nisn}`.toLowerCase().includes(k)).slice(0, 6)
+  })()
+
+  const pilihSiswa = (s) => {
+    const kelas = s.kelas?.nama_kelas || ''
+    const jk = s.jenis_kelamin === 'L' ? 'Laki-laki' : s.jenis_kelamin === 'P' ? 'Perempuan' : ''
+    const ortu = [s.nama_wali, s.nama_ayah, s.nama_ibu, s.nama_orang_tua].map(bersih).find(Boolean) || ''
+    setForm((p) => {
+      const data = { ...p.data, siswa_id: s.id }
+      if (slug === 'mutasi-siswa') {
+        Object.assign(data, {
+          nama: s.nama_lengkap || '', nis: s.nis || '', nisn: s.nisn || '', kelas, jk,
+          tempat_lahir: s.tempat_lahir || '', tanggal_lahir: s.tanggal_lahir || '', nama_ortu: ortu,
+        })
+      } else {
+        Object.assign(data, {
+          nama: ortu,
+          nama_siswa: s.nama_lengkap || '',
+          instansi: `Orang tua/wali dari ${s.nama_lengkap}${kelas ? ` (kelas ${kelas})` : ''}`,
+          no_hp: bersih(s.no_hp_orang_tua) || bersih(s.hp),
+        })
+      }
+      return { ...p, data }
+    })
+    setCariSiswa('')
+  }
+
+  // Mutasi disimpan -> tawarkan menyamakan status siswa di Data Siswa
+  const ubahStatusSiswa = async (d) => {
+    const baru = STATUS_MUTASI[d.jenis]
+    const s = siswaList.find((x) => x.id === d.siswa_id)
+    if (!baru || !s || s.status === baru) return
+    if (!window.confirm(`Ubah status ${s.nama_lengkap} di Data Siswa dari "${s.status}" menjadi "${baru}"?\nSiswa yang tidak aktif tidak ikut dihitung sebagai siswa aktif.`)) return
+    const { error } = await supabase.from('siswa').update({ status: baru }).eq('id', s.id).eq('sekolah_id', sekolahId)
+    if (error) return alert('Mutasi tersimpan, tetapi status siswa gagal diubah: ' + error.message)
+    setSiswaList((prev) => prev.map((x) => (x.id === s.id ? { ...x, status: baru } : x)))
+  }
+
   // ---- Isi otomatis form RKAS: kode kegiatan, kode rekening, dan jumlah ----
   const punyaKode = slug === 'rkas' || slug === 'rkt' // halaman dengan isian kode kegiatan/rekening ARKAS
   const adaField = (k) => cfg.fields.some((x) => x.k === k)
@@ -362,6 +421,7 @@ export default function AdministrasiKepsekItem() {
       : await supabase.from(TABEL).insert(payload)
     setSaving(false)
     if (error) return alert('Gagal menyimpan: ' + error.message)
+    if (slug === 'mutasi-siswa' && form.data.siswa_id) await ubahStatusSiswa(form.data)
     setForm(null)
     muat()
   }
@@ -1246,6 +1306,46 @@ export default function AdministrasiKepsekItem() {
                 <span className="text-slate-600">{cfg.tanggalLabel}</span>
                 <input type="date" value={form.tanggal} onChange={(e) => setForm((p) => ({ ...p, tanggal: e.target.value }))} className={`${inputCls} mt-1`} />
               </label>
+              {pakaiSiswa && (
+                <div className="sm:col-span-2 rounded-xl border border-blue-100 bg-blue-50/60 p-3 space-y-2">
+                  {slug === 'buku-tamu' && (
+                    <label className="flex items-center gap-2 text-sm text-slate-700">
+                      <input type="checkbox" checked={waliMode}
+                        onChange={(e) => setForm((p) => {
+                          const data = { ...p.data }
+                          if (e.target.checked) data.kategori = 'Orang Tua/Wali Siswa'
+                          else { delete data.kategori; delete data.siswa_id; delete data.nama_siswa }
+                          return { ...p, data }
+                        })} />
+                      Tamu adalah orang tua/wali siswa
+                    </label>
+                  )}
+                  {(slug === 'mutasi-siswa' || waliMode) && (
+                    <>
+                      <input type="search" value={cariSiswa} onChange={(e) => setCariSiswa(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
+                        placeholder="Cari siswa: nama, NIS, atau NISN" className={inputCls} />
+                      {hasilCari.length > 0 && (
+                        <div className="rounded-xl border border-slate-200 bg-white divide-y divide-slate-100 overflow-hidden">
+                          {hasilCari.map((s) => (
+                            <button type="button" key={s.id} onClick={() => pilihSiswa(s)}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50">
+                              <span className="font-medium text-slate-900">{s.nama_lengkap}</span>
+                              <span className="text-xs text-slate-500"> · {s.kelas?.nama_kelas || 'tanpa kelas'} · NIS {s.nis || '-'} · {s.status}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {cariSiswa.trim().length >= 2 && hasilCari.length === 0 && (
+                        <p className="text-xs text-amber-700">Siswa tidak ditemukan di Data Siswa. Isi manual di bawah.</p>
+                      )}
+                      {form.data.siswa_id && (
+                        <p className="text-xs text-emerald-700">Terhubung ke Data Siswa. Kolom di bawah terisi otomatis dan masih bisa diubah.</p>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
               {cfg.fields.map((fld) => {
                 const v = form.data[fld.k] ?? ''
                 const lebar = fld.t === 'textarea' ? 'sm:col-span-2' : ''
