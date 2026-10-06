@@ -513,6 +513,37 @@ export default function AdministrasiKepsekItem() {
     }
   }
 
+  // Impor generik dari tabel lain (Inventaris, Surat). Yang sudah ada dilewati,
+  // jadi aman ditekan berulang.
+  const imporTabel = async () => {
+    const { tabel, ubah, kunci } = cfg.imporTabel
+    setImporting(true)
+    try {
+      const { data: sumber, error } = await supabase.from(tabel).select('*')
+      if (error) throw new Error(`Gagal membaca data ${tabel}: ` + error.message)
+
+      // Jaga-jaga bila tabel punya kolom sekolah_id dan akun melihat banyak sekolah
+      const milikSekolah = (sumber || []).filter(
+        (s) => !('sekolah_id' in s) || s.sekolah_id == null || String(s.sekolah_id) === String(sekolahId)
+      )
+      const ada = new Set(rows.map((r) => kunci(r.data || {}, r.tanggal)))
+      const baru = milikSekolah
+        .map(ubah)
+        .filter((x) => !ada.has(kunci(x.data, x.tanggal)))
+        .map((x) => ({ sekolah_id: sekolahId, jenis: slug, tanggal: x.tanggal, data: x.data }))
+
+      if (baru.length === 0) throw new Error('Tidak ada data baru untuk diimpor.')
+      const { error: e2 } = await supabase.from(TABEL).insert(baru)
+      if (e2) throw new Error('Gagal impor: ' + e2.message)
+      alert(`${baru.length} data berhasil diimpor.`)
+      muat()
+    } catch (e) {
+      alert(e.message)
+    } finally {
+      setImporting(false)
+    }
+  }
+
   // Muat template KOSP SD. Bagian yang sudah ada (bagian + tahun ajaran sama) dilewati,
   // jadi aman jika tombol tertekan lebih dari sekali.
   const muatTemplateKosp = async () => {
@@ -1111,6 +1142,12 @@ export default function AdministrasiKepsekItem() {
             <button onClick={imporSiswa} disabled={importing}
               className={`${tombol} bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 col-span-2 sm:col-span-1`}>
               <Download size={16} /> {importing ? 'Mengimpor...' : 'Impor dari Data Siswa'}
+            </button>
+          )}
+          {cfg.imporTabel && (
+            <button onClick={imporTabel} disabled={importing}
+              className={`${tombol} bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 col-span-2 sm:col-span-1`}>
+              <Download size={16} /> {importing ? 'Mengimpor...' : cfg.imporTabel.label}
             </button>
           )}
           {slug === 'kosp' && (
