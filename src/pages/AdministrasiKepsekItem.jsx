@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Plus, Search, Pencil, Trash2, Printer, X, Download } from 'lucide-react'
+import { ArrowLeft, Plus, Search, Pencil, Trash2, Printer, X, Download, FileText } from 'lucide-react'
 import Layout from '../components/Layout'
 // SESUAIKAN dua impor ini dengan lokasi di repo Anda:
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import { CONFIG } from '../lib/administrasiKepsekConfig'
+// Template isi KOSP jenjang SD (file kosp-sd.js diletakkan di folder yang sama dengan file ini)
+import { KOSP_SD } from './kosp-sd'
 
 const TABEL = 'administrasi_kepsek'
 
@@ -15,6 +17,15 @@ const tampil = (fld, v) => {
   if (fld.t === 'date') return tgl(v)
   if (fld.t === 'rp') return 'Rp ' + Number(v).toLocaleString('id-ID')
   return String(v)
+}
+
+// Teks panjang (textarea) dipotong 4 baris di layar, tetapi tampil penuh saat cetak.
+const gayaPotong = {
+  whiteSpace: 'pre-line',
+  display: '-webkit-box',
+  WebkitLineClamp: 4,
+  WebkitBoxOrient: 'vertical',
+  overflow: 'hidden',
 }
 
 export default function AdministrasiKepsekItem() {
@@ -31,6 +42,7 @@ export default function AdministrasiKepsekItem() {
   const [guruList, setGuruList] = useState([])
   const [profil, setProfil] = useState(null)
   const [importing, setImporting] = useState(false)
+  const [memuatKosp, setMemuatKosp] = useState(false)
 
   const kolom = useMemo(() => (cfg ? cfg.fields.filter((x) => x.tab) : []), [cfg])
 
@@ -123,6 +135,25 @@ export default function AdministrasiKepsekItem() {
     muat()
   }
 
+  // Muat template KOSP SD. Bagian yang sudah ada (bagian + tahun ajaran sama) dilewati,
+  // jadi aman jika tombol tertekan lebih dari sekali.
+  const muatTemplateKosp = async () => {
+    const baru = KOSP_SD.filter(
+      (d) => !rows.some((r) => r.data?.bagian === d.bagian && r.data?.tahun_ajaran === d.tahun_ajaran)
+    )
+    if (baru.length === 0) return alert('Semua bagian template KOSP SD sudah ada.')
+    if (!window.confirm(`Muat ${baru.length} bagian template KOSP SD ke halaman ini?`)) return
+    setMemuatKosp(true)
+    const tanggal = new Date().toISOString().slice(0, 10)
+    const { error } = await supabase.from(TABEL).insert(
+      baru.map((d) => ({ sekolah_id: sekolahId, jenis: slug, tanggal, data: { ...d } }))
+    )
+    setMemuatKosp(false)
+    if (error) return alert('Gagal memuat template: ' + error.message)
+    alert(`${baru.length} bagian KOSP SD berhasil dimuat. Lengkapi bagian [dalam kurung siku] lalu ubah status ke Final.`)
+    muat()
+  }
+
   const inputCls = 'w-full px-3 py-2.5 text-base sm:text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400'
   const namaSekolah = profil?.nama_sekolah || profil?.nama || ''
   const tombol = 'inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors'
@@ -154,6 +185,12 @@ export default function AdministrasiKepsekItem() {
             <button onClick={imporSiswa} disabled={importing}
               className={`${tombol} bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 col-span-2 sm:col-span-1`}>
               <Download size={16} /> {importing ? 'Mengimpor...' : 'Impor dari Data Siswa'}
+            </button>
+          )}
+          {slug === 'kosp' && (
+            <button onClick={muatTemplateKosp} disabled={memuatKosp || loading}
+              className={`${tombol} bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-60 col-span-2 sm:col-span-1`}>
+              <FileText size={16} /> {memuatKosp ? 'Memuat...' : 'Muat Template KOSP SD'}
             </button>
           )}
           <button onClick={() => window.print()} disabled={rows.length === 0}
@@ -196,7 +233,13 @@ export default function AdministrasiKepsekItem() {
                   <tr key={r.id} className="border-t border-slate-100 align-top">
                     <td className="px-3 py-2.5">{i + 1}</td>
                     <td className="px-3 py-2.5 whitespace-nowrap">{tgl(r.tanggal) || '-'}</td>
-                    {kolom.map((c) => <td key={c.k} className="px-3 py-2.5 max-w-xs break-words">{tampil(c, r.data[c.k])}</td>)}
+                    {kolom.map((c) => (
+                      <td key={c.k} className="px-3 py-2.5 max-w-xs break-words">
+                        {c.t === 'textarea'
+                          ? <div style={gayaPotong}>{tampil(c, r.data[c.k])}</div>
+                          : tampil(c, r.data[c.k])}
+                      </td>
+                    ))}
                     <td className="px-3 py-2.5">
                       <div className="flex gap-1">
                         <button onClick={() => bukaEdit(r)} aria-label="Ubah" className="p-2 rounded-lg hover:bg-slate-100 text-slate-600"><Pencil size={15} /></button>
@@ -228,7 +271,11 @@ export default function AdministrasiKepsekItem() {
                     r.data[c.k] ? (
                       <div key={c.k} className="flex gap-2 text-xs">
                         <dt className="w-24 shrink-0 text-slate-500">{c.l}</dt>
-                        <dd className="min-w-0 break-words text-slate-800">{tampil(c, r.data[c.k])}</dd>
+                        <dd className="min-w-0 break-words text-slate-800">
+                          {c.t === 'textarea'
+                            ? <div style={gayaPotong}>{tampil(c, r.data[c.k])}</div>
+                            : tampil(c, r.data[c.k])}
+                        </dd>
                       </div>
                     ) : null
                   ))}
@@ -260,7 +307,7 @@ export default function AdministrasiKepsekItem() {
                   <label key={fld.k} className={`block text-sm ${lebar}`}>
                     <span className="text-slate-600">{fld.l}{fld.req && <span className="text-rose-500"> *</span>}</span>
                     {fld.t === 'textarea' ? (
-                      <textarea rows={3} value={v} onChange={(e) => setField(fld.k, e.target.value)} className={`${inputCls} mt-1`} />
+                      <textarea rows={String(v).length > 300 ? 14 : 3} value={v} onChange={(e) => setField(fld.k, e.target.value)} className={`${inputCls} mt-1`} />
                     ) : fld.t === 'select' || fld.t === 'guru' ? (
                       <select value={v} onChange={(e) => setField(fld.k, e.target.value)} className={`${inputCls} mt-1`}>
                         <option value="">Pilih...</option>
@@ -306,7 +353,7 @@ export default function AdministrasiKepsekItem() {
                 <td style={{ border: '1px solid #000', padding: '4px 6px', textAlign: 'center' }}>{i + 1}</td>
                 <td style={{ border: '1px solid #000', padding: '4px 6px' }}>{tgl(r.tanggal)}</td>
                 {kolom.map((c) => (
-                  <td key={c.k} style={{ border: '1px solid #000', padding: '4px 6px', verticalAlign: 'top' }}>{tampil(c, r.data[c.k])}</td>
+                  <td key={c.k} style={{ border: '1px solid #000', padding: '4px 6px', verticalAlign: 'top', whiteSpace: 'pre-line' }}>{tampil(c, r.data[c.k])}</td>
                 ))}
               </tr>
             ))}
