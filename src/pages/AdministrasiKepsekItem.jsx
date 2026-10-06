@@ -132,9 +132,9 @@ export default function AdministrasiKepsekItem() {
       supabase.from('guru').select('nama_lengkap').eq('sekolah_id', sekolahId).order('nama_lengkap')
         .then(({ data }) => setGuruList((data || []).map((g) => g.nama_lengkap).filter(Boolean)))
     }
-    // Data kop cetak: cocokkan lewat sekolah_id (atau id, untuk data lama).
+    // Data kop cetak: cocokkan lewat sekolah_id (kolom id di profil_sekolah bertipe angka).
     supabase.from('profil_sekolah').select('*')
-      .or(`sekolah_id.eq.${sekolahId},id.eq.${sekolahId}`).limit(1).maybeSingle()
+      .eq('sekolah_id', sekolahId).limit(1).maybeSingle()
       .then(({ data }) => setProfil(data || null))
   }, [sekolahId, cfg])
 
@@ -245,7 +245,7 @@ export default function AdministrasiKepsekItem() {
     setSinkron(true)
     try {
       const [pr, gr, kl] = await Promise.all([
-        supabase.from('profil_sekolah').select('*').or(`sekolah_id.eq.${sekolahId},id.eq.${sekolahId}`).limit(1).maybeSingle(),
+        supabase.from('profil_sekolah').select('*').eq('sekolah_id', sekolahId).limit(1).maybeSingle(),
         supabase.from('guru').select('nama_lengkap, jenis_ptk, status').eq('sekolah_id', sekolahId),
         supabase.from('kelas').select('id, nama_kelas').eq('sekolah_id', sekolahId),
       ])
