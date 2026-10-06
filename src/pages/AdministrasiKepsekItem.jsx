@@ -8,6 +8,8 @@ import { supabase } from '../lib/supabaseClient'
 import { CONFIG } from '../lib/administrasiKepsekConfig'
 // Template isi KOSP jenjang SD (file kosp-sd.js diletakkan di folder yang sama dengan file ini)
 import { KOSP_SD } from './kosp-sd'
+// Template isi KOSP jenjang SMP (file kosp-smp.js di folder yang sama)
+import { KOSP_SMP } from './kosp-smp'
 
 const TABEL = 'administrasi_kepsek'
 
@@ -30,6 +32,44 @@ const gayaPotong = {
 
 const bersih = (v) => String(v ?? '').trim()
 
+// Jenjang sekolah (SD/SMP) dibaca dari profil sekolah.
+const deteksiJenjang = (p) =>
+  /smp|sltp/i.test(bersih(p?.nama_sekolah || p?.nama)) || bersih(p?.jenjang).toUpperCase().includes('SMP') ? 'SMP' : 'SD'
+
+// Program kerja turunan KOSP. Baris RKT dibuat hanya jika bagian KOSP-nya sudah ada di halaman KOSP.
+// `bagian` = nilai "Bagian Dokumen" di KOSP. {awal} diganti sesuai jenjang.
+const PROGRAM_KOSP = [
+  { bagian: 'Pengorganisasian Pembelajaran', program: 'Pembelajaran Intrakurikuler', kegiatan: 'Pelaksanaan pembelajaran intrakurikuler sesuai struktur kurikulum dan pembagian tugas guru', sasaran: 'Seluruh peserta didik', pj: 'Kepala Sekolah dan Guru', waktu: 'Sepanjang tahun ajaran' },
+  { bagian: 'Pengorganisasian Pembelajaran', program: 'Penguatan Literasi dan Numerasi', kegiatan: 'Gerakan membaca 15 menit sebelum pembelajaran dan pembiasaan berhitung', sasaran: 'Seluruh peserta didik', pj: 'Guru Kelas / Guru Mapel', waktu: 'Setiap hari belajar' },
+  { bagian: 'Pengorganisasian Pembelajaran', program: 'Pembiasaan Karakter', kegiatan: 'Pembiasaan ibadah, 5S (senyum, sapa, salam, sopan, santun), piket kebersihan, dan upacara bendera', sasaran: 'Seluruh peserta didik', pj: 'Wali Kelas', waktu: 'Setiap hari / setiap pekan' },
+  { bagian: 'Pengorganisasian Pembelajaran', program: 'Ekstrakurikuler', kegiatan: 'Pelaksanaan ekstrakurikuler Pramuka dan ekstrakurikuler pilihan', sasaran: 'Peserta didik', pj: 'Pembina Ekstrakurikuler', waktu: 'Setiap pekan' },
+  { bagian: 'Pengorganisasian Pembelajaran', program: 'Pengenalan Lingkungan Sekolah', kegiatan: 'Masa pengenalan lingkungan sekolah dan transisi bagi peserta didik {awal}', sasaran: 'Peserta didik {awal}', pj: 'Wali Kelas {awal}', waktu: 'Awal tahun ajaran' },
+  { bagian: 'Perencanaan Pembelajaran', program: 'Perencanaan Pembelajaran', kegiatan: 'Penyusunan dan verifikasi ATP serta modul ajar oleh guru', sasaran: 'Seluruh guru', pj: 'Kepala Sekolah', waktu: 'Awal semester' },
+  { bagian: 'Perencanaan Pembelajaran', program: 'Asesmen Pembelajaran', kegiatan: 'Asesmen diagnostik, formatif, dan sumatif', sasaran: 'Seluruh peserta didik', pj: 'Guru', waktu: 'Awal tahun ajaran dan setiap akhir semester' },
+  { bagian: 'Perencanaan Pembelajaran', program: 'Pembelajaran Berdiferensiasi', kegiatan: 'Pembelajaran berdiferensiasi, remedial, dan pengayaan berdasarkan hasil asesmen', sasaran: 'Seluruh peserta didik', pj: 'Guru', waktu: 'Sepanjang tahun ajaran' },
+  { bagian: 'Perencanaan Pembelajaran', program: 'Pelaporan Hasil Belajar', kegiatan: 'Penyusunan dan pembagian rapor peserta didik', sasaran: 'Seluruh peserta didik', pj: 'Wali Kelas', waktu: 'Akhir semester' },
+  { bagian: 'Pendampingan dan Evaluasi', program: 'Supervisi dan Pendampingan Guru', kegiatan: 'Supervisi akademik oleh kepala sekolah beserta refleksi dan tindak lanjut', sasaran: 'Seluruh guru', pj: 'Kepala Sekolah', waktu: 'Setiap semester' },
+  { bagian: 'Pendampingan dan Evaluasi', program: 'Komunitas Belajar', kegiatan: 'Komunitas belajar sekolah dan KKG/MGMP untuk berbagi praktik baik dan menyusun perangkat bersama', sasaran: 'Seluruh guru', pj: 'Kepala Sekolah', waktu: 'Setiap bulan' },
+  { bagian: 'Pendampingan dan Evaluasi', program: 'Bimbingan Belajar Peserta Didik', kegiatan: 'Bimbingan belajar tambahan literasi dan numerasi serta pembinaan karakter', sasaran: 'Peserta didik yang membutuhkan', pj: 'Wali Kelas', waktu: 'Sepanjang tahun ajaran' },
+  { bagian: 'Pendampingan dan Evaluasi', program: 'Evaluasi Pelaksanaan Kurikulum', kegiatan: 'Rapat evaluasi dewan guru, evaluasi tahunan, dan revisi KOSP', sasaran: 'Seluruh warga sekolah', pj: 'Kepala Sekolah dan Tim Pengembang Kurikulum', waktu: 'Akhir semester dan akhir tahun ajaran' },
+]
+
+// Ambil butir misi dari uraian KOSP. Baris yang masih berisi [placeholder] dilewati.
+const ambilMisi = (uraian = '') => {
+  const m = String(uraian).match(/B\. Misi Satuan Pendidikan\n([\s\S]*?)(?=\n\s*C\. |$)/)
+  if (!m) return []
+  return m[1].split('\n')
+    .map((s) => s.replace(/^\s*(\d+[.)]|[-•*])\s*/, '').trim())
+    .filter((s) => s && !s.includes('['))
+    .slice(0, 10)
+}
+
+// Ambil tema projek P5 dari uraian KOSP (kosong jika masih placeholder).
+const ambilTemaP5 = (uraian = '') => {
+  const m = String(uraian).match(/dengan tema:\s*([^\n]+?)\.?\s*(?:\n|$)/)
+  return m && !m[1].includes('[') ? m[1].trim() : ''
+}
+
 // Mengganti placeholder [ ... ] pada teks KOSP dengan data sekolah.
 // Hanya placeholder yang datanya tersedia yang diganti; sisanya dibiarkan agar diisi manual.
 function isiTemplate(teks, c) {
@@ -38,6 +78,7 @@ function isiTemplate(teks, c) {
   const gantiRegex = (re, ke) => { if (ke) t = t.replace(re, () => ke) }
 
   ganti('[NAMA SD]', c.nama)
+  ganti('[NAMA SMP]', c.nama)
   ganti('[NPSN]', c.npsn)
   ganti('[PERINGKAT/TAHUN]', c.akreditasi)
   ganti('[ALAMAT LENGKAP]', c.alamat)
@@ -48,7 +89,7 @@ function isiTemplate(teks, c) {
 
   // Peserta didik dan rombongan belajar
   gantiRegex(
-    /Jumlah peserta didik: \[JUMLAH\] siswa dalam \[JUMLAH\] rombongan belajar \(kelas 1 s\.d\. 6\)\./,
+    /Jumlah peserta didik: \[JUMLAH\] siswa dalam \[JUMLAH\] rombongan belajar \(kelas (?:1 s\.d\. 6|7 s\.d\. 9)\)\./,
     c.kalimatSiswa
   )
 
@@ -57,6 +98,10 @@ function isiTemplate(teks, c) {
     gantiRegex(
       /Pendidik dan tenaga kependidikan: \[JUMLAH GURU KELAS\], \[JUMLAH GURU MAPEL \(PAI, PJOK, dll\)\], \[JUMLAH TENDIK\]\./,
       `Pendidik dan tenaga kependidikan: ${c.jumlahGuru} guru kelas (seluruh mata pelajaran, termasuk PAI dan PJOK, diampu guru kelas), [JUMLAH TENDIK].`
+    )
+    gantiRegex(
+      /Pendidik dan tenaga kependidikan: \[JUMLAH GURU MAPEL\], \[JUMLAH GURU BK\], \[JUMLAH TENDIK\]\./,
+      `Pendidik dan tenaga kependidikan: ${c.jumlahGuru} guru (guru mata pelajaran dan guru BK), [JUMLAH TENDIK].`
     )
     ganti(
       'Sistem guru kelas untuk kelas 1-6; guru mata pelajaran untuk PAI dan PJOK dan [LAINNYA].',
@@ -221,11 +266,13 @@ export default function AdministrasiKepsekItem() {
   // Muat template KOSP SD. Bagian yang sudah ada (bagian + tahun ajaran sama) dilewati,
   // jadi aman jika tombol tertekan lebih dari sekali.
   const muatTemplateKosp = async () => {
-    const baru = KOSP_SD.filter(
+    const jenjangKosp = deteksiJenjang(profil)
+    const TEMPLATE = jenjangKosp === 'SMP' ? KOSP_SMP : KOSP_SD
+    const baru = TEMPLATE.filter(
       (d) => !rows.some((r) => r.data?.bagian === d.bagian && r.data?.tahun_ajaran === d.tahun_ajaran)
     )
-    if (baru.length === 0) return alert('Semua bagian template KOSP SD sudah ada.')
-    if (!window.confirm(`Muat ${baru.length} bagian template KOSP SD ke halaman ini?`)) return
+    if (baru.length === 0) return alert(`Semua bagian template KOSP ${jenjangKosp} sudah ada.`)
+    if (!window.confirm(`Muat ${baru.length} bagian template KOSP ${jenjangKosp} ke halaman ini?`)) return
     setMemuatKosp(true)
     const tanggal = new Date().toISOString().slice(0, 10)
     const { error } = await supabase.from(TABEL).insert(
@@ -233,7 +280,7 @@ export default function AdministrasiKepsekItem() {
     )
     setMemuatKosp(false)
     if (error) return alert('Gagal memuat template: ' + error.message)
-    alert(`${baru.length} bagian KOSP SD berhasil dimuat. Klik "Sinkronkan Data Sekolah" untuk mengisi otomatis, lalu lengkapi sisanya.`)
+    alert(`${baru.length} bagian KOSP ${jenjangKosp} berhasil dimuat. Klik "Sinkronkan Data Sekolah" untuk mengisi otomatis, lalu lengkapi sisanya.`)
     muat()
   }
 
@@ -335,8 +382,7 @@ export default function AdministrasiKepsekItem() {
   // Baris yang sudah ada (sumber + program + kegiatan + tahun sama) dilewati, jadi aman ditekan berulang.
   // Jenjang (SD/SMP) dibaca dari profil sekolah.
   const tarikRKT = async () => {
-    const nama = bersih(profil?.nama_sekolah || profil?.nama)
-    const jenjang = /smp|sltp/i.test(nama) || bersih(profil?.jenjang).toUpperCase().includes('SMP') ? 'SMP' : 'SD'
+    const jenjang = deteksiJenjang(profil)
     const tahunIn = window.prompt(`Tarik data untuk RKT ${jenjang}. Tahun anggaran?`, String(new Date().getFullYear()))
     if (!tahunIn) return
     const tahun = tahunIn.trim()
@@ -345,7 +391,7 @@ export default function AdministrasiKepsekItem() {
     try {
       const [src, gr, kl] = await Promise.all([
         supabase.from(TABEL).select('jenis, tanggal, data').eq('sekolah_id', sekolahId)
-          .in('jenis', ['rkas', 'kalender-pendidikan', 'inventaris', 'evaluasi-diri']),
+          .in('jenis', ['rkas', 'kalender-pendidikan', 'inventaris', 'evaluasi-diri', 'kosp']),
         supabase.from('guru').select('jenis_ptk, status').eq('sekolah_id', sekolahId),
         supabase.from('kelas').select('id, nama_kelas').eq('sekolah_id', sekolahId),
       ])
@@ -426,6 +472,43 @@ export default function AdministrasiKepsekItem() {
         })
       }
 
+      // 7) KOSP -> program kerja turunan KOSP (tahun ajaran diawali tahun anggaran, mis. 2026/2027)
+      const kosp = per('kosp').filter((r) => String(r.data?.tahun_ajaran || '').trim().startsWith(tahun))
+      if (kosp.length) {
+        const awal = jenjang === 'SMP' ? 'kelas 7' : 'kelas 1'
+        const bagianAda = new Set(kosp.map((r) => r.data?.bagian))
+
+        // Misi sekolah -> satu baris per butir misi
+        const misi = kosp.filter((r) => r.data?.bagian === 'Visi, Misi, Tujuan').flatMap((r) => ambilMisi(r.data?.uraian))
+        misi.forEach((m) => {
+          draf.push({
+            ...dasar, sumber_data: 'KOSP', program: 'Pelaksanaan Misi Sekolah', kegiatan: m,
+            sasaran: 'Seluruh warga sekolah', pj: 'Kepala Sekolah', waktu: tahun, anggaran: '',
+          })
+        })
+
+        // Program kerja per bagian KOSP
+        PROGRAM_KOSP.filter((p) => bagianAda.has(p.bagian)).forEach((p) => {
+          draf.push({
+            ...dasar, sumber_data: 'KOSP', program: p.program,
+            kegiatan: p.kegiatan.replace('{awal}', awal),
+            sasaran: p.sasaran.replace('{awal}', awal),
+            pj: p.pj.replace('{awal}', awal), waktu: p.waktu, anggaran: '',
+          })
+        })
+
+        // Projek penguatan profil pelajar Pancasila (tema diambil dari KOSP bila sudah diisi)
+        const tema = kosp.filter((r) => r.data?.bagian === 'Pengorganisasian Pembelajaran')
+          .map((r) => ambilTemaP5(r.data?.uraian)).find(Boolean)
+        if (bagianAda.has('Pengorganisasian Pembelajaran')) {
+          draf.push({
+            ...dasar, sumber_data: 'KOSP', program: 'Projek Penguatan Profil Pelajar Pancasila',
+            kegiatan: `Pelaksanaan projek penguatan profil pelajar Pancasila${tema ? ` dengan tema ${tema}` : ''}`,
+            sasaran: 'Seluruh peserta didik', pj: 'Tim Fasilitator Projek', waktu: 'Sesuai jadwal projek', anggaran: '',
+          })
+        }
+      }
+
       // Lewati yang sudah ada
       const kunci = (d) => `${d.sumber_data}|${d.program}|${d.kegiatan}|${d.tahun}`
       const ada = new Set(rows.map((r) => kunci(r.data || {})))
@@ -489,7 +572,7 @@ export default function AdministrasiKepsekItem() {
             <>
               <button onClick={muatTemplateKosp} disabled={memuatKosp || loading}
                 className={`${tombol} bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-60 col-span-2 sm:col-span-1`}>
-                <FileText size={16} /> {memuatKosp ? 'Memuat...' : 'Muat Template KOSP SD'}
+                <FileText size={16} /> {memuatKosp ? 'Memuat...' : `Muat Template KOSP ${deteksiJenjang(profil)}`}
               </button>
               <button onClick={sinkronkan} disabled={sinkron || loading || rows.length === 0}
                 className={`${tombol} bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-60 col-span-2 sm:col-span-1`}>
