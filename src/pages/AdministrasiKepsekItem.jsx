@@ -55,6 +55,25 @@ const gayaBaris = {
 const geser = { standar: 0, komponen: 6, kegiatan: 12, rekening: 18, uraian: 24 }
 const angkaId = (n) => (n ? Number(n).toLocaleString('id-ID') : '0')
 const POLA_KEG = /^\d{2}\.\d{2}\.\d{2}$/
+const BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
+const KATA_UMUM = new Set(['pada', 'dengan', 'yang', 'untuk', 'dari', 'dan', 'atau', 'belanja', 'kegiatan', 'pelaksanaan', 'sekolah', 'dalam', 'serta', 'oleh'])
+const kataKunci = (t) => bersih(t).toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/)
+  .filter((w) => w.length > 3 && !KATA_UMUM.has(w))
+// Cari kode referensi ARKAS yang namanya paling mirip dengan teks (kemiripan kata, ambang 0,35).
+const cariRef = (daftar, teks, saring) => {
+  const tk = new Set(kataKunci(teks))
+  if (!tk.size) return ''
+  let terbaik = ''
+  let skor = 0
+  daftar.forEach((x) => {
+    if (saring && !saring(x)) return
+    const tn = kataKunci(x.nama)
+    if (!tn.length) return
+    const s = tn.filter((w) => tk.has(w)).length / Math.sqrt(tn.length * tk.size)
+    if (s > skor) { skor = s; terbaik = x.kode }
+  })
+  return skor >= 0.35 ? terbaik : ''
+}
 
 // Program kerja turunan KOSP. Baris RKT dibuat hanya jika bagian KOSP-nya sudah ada di halaman KOSP.
 // `bagian` = nilai "Bagian Dokumen" di KOSP. {awal} diganti sesuai jenjang.
@@ -210,7 +229,7 @@ export default function AdministrasiKepsekItem() {
 
   // Referensi kode kegiatan, rekening, dan penerimaan ARKAS (khusus halaman RKAS)
   useEffect(() => {
-    if (slug !== 'rkas') return
+    if (slug !== 'rkas' && slug !== 'rkt') return
     Promise.all([
       supabase.from('ref_arkas_kegiatan').select('kode, tingkat, induk, nama').order('kode'),
       supabase.from('ref_arkas_rekening').select('kode, nama').order('kode'),
@@ -263,6 +282,7 @@ export default function AdministrasiKepsekItem() {
   const bukaBaru = () => setForm({ tanggal: new Date().toISOString().slice(0, 10), data: {} })
   const bukaEdit = (r) => setForm({ id: r.id, tanggal: r.tanggal || '', data: { ...r.data } })
   // ---- Isi otomatis form RKAS: kode kegiatan, kode rekening, dan jumlah ----
+  const punyaKode = slug === 'rkas' || slug === 'rkt' // halaman dengan isian kode kegiatan/rekening ARKAS
   const adaField = (k) => cfg.fields.some((x) => x.k === k)
   const namaKeg = (kode) => ref.kegiatan.find((x) => x.kode === kode)?.nama || ''
   const namaRek = (kode) => ref.rekening.find((x) => x.kode === kode)?.nama || ''
@@ -273,13 +293,13 @@ export default function AdministrasiKepsekItem() {
 
   const setField = (k, v) => setForm((p) => {
     const data = { ...p.data, [k]: v }
-    if (slug === 'rkas') {
-      // jumlah = volume x harga satuan (tetap bisa diubah manual setelahnya)
-      if (k === 'volume' || k === 'harga') hitungJumlah(data)
+    if (punyaKode) {
+      // RKAS: jumlah = volume x harga satuan (tetap bisa diubah manual setelahnya)
+      if (slug === 'rkas' && (k === 'volume' || k === 'harga')) hitungJumlah(data)
       // kode kegiatan -> nama kegiatan dan komponen (bila field-nya ada di form)
       if (k === 'kode_kegiatan' && POLA_KEG.test(bersih(v))) {
         const kode = bersih(v)
-        if (adaField('kegiatan') && namaKeg(kode)) data.kegiatan = namaKeg(kode)
+        if (slug === 'rkas' && adaField('kegiatan') && namaKeg(kode)) data.kegiatan = namaKeg(kode)
         if (adaField('komponen') && namaKeg(kode.slice(0, 5))) data.komponen = namaKeg(kode.slice(0, 5))
       }
       // kode rekening -> nama rekening
@@ -721,8 +741,12 @@ export default function AdministrasiKepsekItem() {
   const opsiSumber = cfg.fields.find((x) => x.k === 'sumber')?.o || Object.keys(KODE_PENERIMAAN)
 
   // ---- Tarik otomatis dari RKT -> item RKAS ----
-  // Baris RKT yang punya anggaran (selain yang berasal dari RKAS sendiri) dijadikan draf item RKAS.
-  // Item yang sudah ada (tahun + sumber dana + uraian sama) dilewati, jadi aman ditekan berulang.
+  // RKT jadi sumber utama. Baris RKT yang punya anggaran (selain yang berasal dari RKAS sendiri):
+  //  - belum ada di RKAS  -> dibuat sebagai item baru, lengkap (komponen, kode kegiatan, kode rekening,
+  //                          volume, satuan, harga, jumlah, bulan, tahap)
+  //  - sudah ada di RKAS  -> item itu dilengkapi: hanya kolom yang masih kosong yang diisi.
+  //                          Jumlah ikut disamakan dengan RKT bila item itu dulu hasil tarikan (asal RKT).
+  // Kecocokan: tahun + sumber dana + uraian sama. Aman ditekan berulang.
   const tebakKode = (teks) => {
     const t = bersih(teks).toLowerCase()
     if (!t) return ''
@@ -750,47 +774,127 @@ export default function AdministrasiKepsekItem() {
       const berAnggaran = rkt.filter((d) => angka(d.anggaran) > 0 && bersih(d.kegiatan))
       const tanpaAnggaran = rkt.length - berAnggaran.length
 
-      const kunci = (t, s, u) => `${t}|${s}|${bersih(u).toLowerCase()}`
-      const ada = new Set(rows.map((r) => kunci(r.data?.tahun, r.data?.sumber, r.data?.uraian)))
-      const baru = []
+      const kunci = (u) => bersih(u).toLowerCase()
+      const sama = rows.filter((r) => String(r.data?.tahun) === tahun && r.data?.sumber === sumber)
+      const petaAda = new Map(sama.map((r) => [kunci(r.data?.uraian), r]))
+      const pg = ringkasPagu.find((x) => String(x.data?.tahun) === tahun && x.data?.sumber === sumber)
+      const batasT1 = pg ? angka(pg.data?.tahap1) : Infinity
+      const opsiBulan = cfg.fields.find((x) => x.k === 'bulan')?.o || BULAN
+      const kanonBulan = (nama) => opsiBulan.find((o) => o.toLowerCase() === String(nama).toLowerCase()) || nama
+      let t1 = sama.filter((r) => r.data?.tahap === 'Tahap 1').reduce((n, r) => n + nilaiRkas(r.data), 0)
+
+      const tambah = []
+      const ubah = []
+      let selisihTotal = 0
+      let ditebak = 0
+      const sudah = new Set()
+
       berAnggaran.forEach((d) => {
-        const k = kunci(tahun, sumber, d.kegiatan)
-        if (ada.has(k)) return
-        ada.add(k)
-        baru.push(d)
+        const uraian = bersih(d.kegiatan)
+        const k = kunci(uraian)
+        if (sudah.has(k)) return
+        sudah.add(k)
+        const anggaran = angka(d.anggaran)
+        const ada = petaAda.get(k)
+        const lama = ada?.data || {}
+        const pinjam = rows.find((r) => r !== ada && kunci(r.data?.uraian) === k
+          && (bersih(r.data?.kode_kegiatan) || bersih(r.data?.kode_rekening)))?.data
+
+        // Kode kegiatan dan rekening: isian RKT -> item RKAS lain yang uraiannya sama -> tebakan dari nama referensi
+        let kodeKeg = [d.kode_kegiatan, pinjam?.kode_kegiatan].map(bersih).find((x) => POLA_KEG.test(x)) || ''
+        let kodeRek = [d.kode_rekening, pinjam?.kode_rekening].map(bersih).find(Boolean) || ''
+        let tebak = false
+        if (!kodeKeg) {
+          kodeKeg = tebakKode(uraian) || tebakKode(d.program)
+            || cariRef(ref.kegiatan, `${uraian} ${bersih(d.program)}`, (x) => POLA_KEG.test(x.kode))
+          if (kodeKeg) tebak = true
+        }
+        if (!kodeRek) {
+          kodeRek = cariRef(ref.rekening, uraian)
+          if (kodeRek) tebak = true
+        }
+        const komponen = bersih(d.komponen) || (kodeKeg ? namaKeg(kodeKeg.slice(0, 5)) : '')
+
+        // Volume, satuan, harga: isian RKT, atau sasaran berbentuk "3 unit"; selain itu 1 paket
+        let volume = angka(d.volume) || 1
+        let satuan = bersih(d.satuan) || 'Paket'
+        let harga = Math.round(anggaran / volume)
+        const m = bersih(d.sasaran).match(/^(\d+)\s+([^\d]{1,20})$/)
+        if (!angka(d.volume) && m && !/dalam/i.test(m[2]) && Number(m[1]) > 0 && anggaran % Number(m[1]) === 0) {
+          volume = Number(m[1]); satuan = m[2].trim(); harga = anggaran / volume
+        }
+
+        // Bulan dan tahap: isian RKT, atau bulan yang disebut di kolom waktu; selain itu dibagi mengikuti pagu tahap 1
+        const idxB = BULAN.findIndex((b) => (bersih(d.bulan) || bersih(d.waktu)).toLowerCase().includes(b.toLowerCase()))
+        let bulan = bersih(d.bulan) || (idxB >= 0 ? kanonBulan(BULAN[idxB]) : '')
+        let tahap = bersih(d.tahap) || (idxB >= 0 ? (idxB < 6 ? 'Tahap 1' : 'Tahap 2') : '')
+
+        if (ada) {
+          const patch = {}
+          const isi = (kol, nilai) => { if (!bersih(lama[kol]) && nilai) patch[kol] = nilai }
+          isi('komponen', komponen); isi('kode_kegiatan', kodeKeg); isi('kode_rekening', kodeRek); isi('satuan', satuan)
+          if (!tahap && !bersih(lama.tahap)) tahap = t1 + anggaran <= batasT1 ? 'Tahap 1' : 'Tahap 2'
+          isi('tahap', tahap)
+          const tahapAkhir = bersih(lama.tahap) || patch.tahap
+          if (!bersih(lama.tahap) && patch.tahap === 'Tahap 1') t1 += anggaran
+          isi('bulan', bulan || kanonBulan(tahapAkhir === 'Tahap 2' ? 'Juli' : 'Januari'))
+          if (!angka(lama.jumlah)) {
+            patch.volume = volume; patch.harga = harga; patch.jumlah = anggaran
+            selisihTotal += anggaran
+          } else if (lama.asal === 'RKT' && angka(lama.volume) <= 1 && angka(lama.jumlah) !== anggaran) {
+            selisihTotal += anggaran - angka(lama.jumlah)
+            patch.volume = 1; patch.harga = anggaran; patch.jumlah = anggaran
+          }
+          if (Object.keys(patch).length) {
+            if (tebak && (patch.kode_kegiatan || patch.kode_rekening)) ditebak++
+            ubah.push({ id: ada.id, data: { ...lama, ...patch } })
+          }
+        } else {
+          if (!tahap) tahap = t1 + anggaran <= batasT1 ? 'Tahap 1' : 'Tahap 2'
+          if (tahap === 'Tahap 1') t1 += anggaran
+          if (!bulan) bulan = kanonBulan(tahap === 'Tahap 2' ? 'Juli' : 'Januari')
+          if (tebak) ditebak++
+          selisihTotal += anggaran
+          const item = { tahun, sumber, uraian, volume, satuan, harga, jumlah: anggaran, bulan, tahap, asal: 'RKT' }
+          if (komponen) item.komponen = komponen
+          if (kodeKeg) item.kode_kegiatan = kodeKeg
+          if (kodeRek) item.kode_rekening = kodeRek
+          tambah.push(item)
+        }
       })
 
-      if (baru.length === 0) {
+      if (tambah.length === 0 && ubah.length === 0) {
         return alert(rkt.length === 0
           ? `Belum ada baris RKT tahun ${tahun} yang bisa ditarik (baris yang berasal dari RKAS tidak ikut ditarik).`
           : berAnggaran.length === 0
             ? `Ada ${rkt.length} baris RKT tahun ${tahun}, tetapi belum ada yang diisi anggarannya. Isi kolom anggaran di RKT dulu.`
-            : 'Semua baris RKT sudah ada di RKAS.')
+            : 'Semua item RKAS sudah lengkap dan sesuai RKT.')
       }
 
-      const total = baru.reduce((n, d) => n + angka(d.anggaran), 0)
-      const pg = ringkasPagu.find((x) => String(x.data?.tahun) === tahun && x.data?.sumber === sumber)
-      const sisaSetelah = pg ? pg.sisa - total : null
+      const sisaSetelah = pg ? pg.sisa - selisihTotal : null
       const catatan = [
         tanpaAnggaran > 0 ? `${tanpaAnggaran} baris RKT tanpa anggaran dilewati.` : '',
+        ditebak > 0 ? `${ditebak} item memakai kode hasil tebakan otomatis, mohon diperiksa.` : '',
         sisaSetelah === null ? 'Pagu belum diatur untuk tahun dan sumber dana ini.'
           : sisaSetelah < 0 ? `PERHATIAN: melebihi sisa pagu sebesar ${rupiah(Math.abs(sisaSetelah))}.`
           : `Sisa pagu setelah ditarik: ${rupiah(sisaSetelah)}.`,
       ].filter(Boolean).join('\n')
-      if (!window.confirm(`Tambahkan ${baru.length} item RKAS ${sumber} ${tahun} dari RKT?\nTotal ${rupiah(total)}.\n${catatan}`)) return
+      if (!window.confirm(`${sumber} ${tahun}:\n- ${tambah.length} item baru ditambahkan\n- ${ubah.length} item yang sudah ada dilengkapi\nPerubahan total anggaran: ${rupiah(selisihTotal)}.\n${catatan}\n\nLanjutkan?`)) return
 
       const tanggal = new Date().toISOString().slice(0, 10)
-      const { error: e2 } = await supabase.from(TABEL).insert(baru.map((d) => {
-        const item = {
-          tahun, sumber, uraian: bersih(d.kegiatan), volume: 1, satuan: 'Paket',
-          harga: angka(d.anggaran), jumlah: angka(d.anggaran), asal: 'RKT',
-        }
-        const kode = tebakKode(d.kegiatan) || tebakKode(d.program)
-        if (kode) item.kode_kegiatan = kode
-        return { sekolah_id: sekolahId, jenis: slug, tanggal, data: item }
-      }))
-      if (e2) throw new Error('Gagal menyimpan: ' + e2.message)
-      alert(`${baru.length} item RKAS berhasil ditarik dari RKT. Lengkapi kode kegiatan, kode rekening, volume, dan tahap bila perlu.`)
+      if (tambah.length) {
+        const { error: e2 } = await supabase.from(TABEL).insert(
+          tambah.map((item) => ({ sekolah_id: sekolahId, jenis: slug, tanggal, data: item }))
+        )
+        if (e2) throw new Error('Gagal menyimpan item baru: ' + e2.message)
+      }
+      for (const u of ubah) {
+        const { error: e3 } = await supabase.from(TABEL).update({ data: u.data }).eq('id', u.id)
+        if (e3) throw new Error('Gagal melengkapi item: ' + e3.message)
+      }
+      const tanpaRek = [...tambah, ...ubah.map((u) => u.data)].filter((x) => !bersih(x.kode_rekening)).length
+      alert(`${tambah.length} item baru dan ${ubah.length} item dilengkapi dari RKT.`
+        + (tanpaRek ? `\n${tanpaRek} item belum punya kode rekening (tidak ada yang cocok otomatis). Isi lewat tombol ubah.` : ''))
       muat()
     } catch (e) {
       alert('Gagal menarik dari RKT: ' + e.message)
@@ -1139,15 +1243,15 @@ export default function AdministrasiKepsekItem() {
                       <input
                         type={fld.t === 'rp' ? 'number' : fld.t}
                         inputMode={fld.t === 'number' || fld.t === 'rp' ? 'numeric' : undefined}
-                        list={slug === 'rkas' && fld.k === 'kode_kegiatan' ? 'dl-keg' : slug === 'rkas' && fld.k === 'kode_rekening' ? 'dl-rek' : undefined}
-                        autoComplete={slug === 'rkas' && (fld.k === 'kode_kegiatan' || fld.k === 'kode_rekening') ? 'off' : undefined}
+                        list={punyaKode && fld.k === 'kode_kegiatan' ? 'dl-keg' : punyaKode && fld.k === 'kode_rekening' ? 'dl-rek' : undefined}
+                        autoComplete={punyaKode && (fld.k === 'kode_kegiatan' || fld.k === 'kode_rekening') ? 'off' : undefined}
                         onBlur={fld.k === 'uraian' ? sarankanDariUraian : undefined}
                         value={v} onChange={(e) => setField(fld.k, e.target.value)} className={`${inputCls} mt-1`} />
                     )}
                   </label>
                 )
               })}
-              {slug === 'rkas' && (
+              {punyaKode && (
                 <>
                   <datalist id="dl-keg">
                     {ref.kegiatan.filter((x) => POLA_KEG.test(x.kode)).map((x) => <option key={x.kode} value={x.kode}>{x.nama}</option>)}
@@ -1157,7 +1261,7 @@ export default function AdministrasiKepsekItem() {
                   </datalist>
                 </>
               )}
-              {slug === 'rkas' && (() => {
+              {punyaKode && (() => {
                 const kk = bersih(form.data.kode_kegiatan)
                 const kr = bersih(form.data.kode_rekening)
                 if (!kk && !kr) return null
