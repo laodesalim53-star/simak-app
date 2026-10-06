@@ -173,6 +173,7 @@ export default function AdministrasiKepsekItem() {
   const [memuatKosp, setMemuatKosp] = useState(false)
   const [sinkron, setSinkron] = useState(false)
   const [menarik, setMenarik] = useState(false)
+  const [menarikRkt, setMenarikRkt] = useState(false)
   const [paguList, setPaguList] = useState([]) // baris jenis 'pagu' (khusus halaman RKAS)
   const [formPagu, setFormPagu] = useState(null) // { id?, data }
   const [savingPagu, setSavingPagu] = useState(false)
@@ -719,6 +720,85 @@ export default function AdministrasiKepsekItem() {
   }
   const opsiSumber = cfg.fields.find((x) => x.k === 'sumber')?.o || Object.keys(KODE_PENERIMAAN)
 
+  // ---- Tarik otomatis dari RKT -> item RKAS ----
+  // Baris RKT yang punya anggaran (selain yang berasal dari RKAS sendiri) dijadikan draf item RKAS.
+  // Item yang sudah ada (tahun + sumber dana + uraian sama) dilewati, jadi aman ditekan berulang.
+  const tebakKode = (teks) => {
+    const t = bersih(teks).toLowerCase()
+    if (!t) return ''
+    return ref.kegiatan.find((x) => POLA_KEG.test(x.kode) && x.nama && x.nama.length >= 8
+      && (t === x.nama.toLowerCase() || t.includes(x.nama.toLowerCase())))?.kode || ''
+  }
+
+  const tarikDariRKT = async () => {
+    const tahunIn = window.prompt('Tarik item RKAS dari RKT. Tahun anggaran?', String(new Date().getFullYear()))
+    if (!tahunIn) return
+    const tahun = tahunIn.trim()
+    const sumberIn = window.prompt(`Sumber dana untuk item yang ditarik?\n(${opsiSumber.join(' / ')})`, opsiSumber[0])
+    if (!sumberIn) return
+    const sumber = opsiSumber.find((o) => o.toLowerCase() === sumberIn.trim().toLowerCase())
+    if (!sumber) return alert('Sumber dana tidak dikenali.')
+
+    setMenarikRkt(true)
+    try {
+      const { data, error } = await supabase.from(TABEL).select('data')
+        .eq('sekolah_id', sekolahId).eq('jenis', 'rkt')
+      if (error) throw new Error('Data RKT: ' + error.message)
+
+      const rkt = (data || []).map((r) => r.data || {})
+        .filter((d) => String(d.tahun) === tahun && d.sumber_data !== 'RKAS')
+      const berAnggaran = rkt.filter((d) => angka(d.anggaran) > 0 && bersih(d.kegiatan))
+      const tanpaAnggaran = rkt.length - berAnggaran.length
+
+      const kunci = (t, s, u) => `${t}|${s}|${bersih(u).toLowerCase()}`
+      const ada = new Set(rows.map((r) => kunci(r.data?.tahun, r.data?.sumber, r.data?.uraian)))
+      const baru = []
+      berAnggaran.forEach((d) => {
+        const k = kunci(tahun, sumber, d.kegiatan)
+        if (ada.has(k)) return
+        ada.add(k)
+        baru.push(d)
+      })
+
+      if (baru.length === 0) {
+        return alert(rkt.length === 0
+          ? `Belum ada baris RKT tahun ${tahun} yang bisa ditarik (baris yang berasal dari RKAS tidak ikut ditarik).`
+          : berAnggaran.length === 0
+            ? `Ada ${rkt.length} baris RKT tahun ${tahun}, tetapi belum ada yang diisi anggarannya. Isi kolom anggaran di RKT dulu.`
+            : 'Semua baris RKT sudah ada di RKAS.')
+      }
+
+      const total = baru.reduce((n, d) => n + angka(d.anggaran), 0)
+      const pg = ringkasPagu.find((x) => String(x.data?.tahun) === tahun && x.data?.sumber === sumber)
+      const sisaSetelah = pg ? pg.sisa - total : null
+      const catatan = [
+        tanpaAnggaran > 0 ? `${tanpaAnggaran} baris RKT tanpa anggaran dilewati.` : '',
+        sisaSetelah === null ? 'Pagu belum diatur untuk tahun dan sumber dana ini.'
+          : sisaSetelah < 0 ? `PERHATIAN: melebihi sisa pagu sebesar ${rupiah(Math.abs(sisaSetelah))}.`
+          : `Sisa pagu setelah ditarik: ${rupiah(sisaSetelah)}.`,
+      ].filter(Boolean).join('\n')
+      if (!window.confirm(`Tambahkan ${baru.length} item RKAS ${sumber} ${tahun} dari RKT?\nTotal ${rupiah(total)}.\n${catatan}`)) return
+
+      const tanggal = new Date().toISOString().slice(0, 10)
+      const { error: e2 } = await supabase.from(TABEL).insert(baru.map((d) => {
+        const item = {
+          tahun, sumber, uraian: bersih(d.kegiatan), volume: 1, satuan: 'Paket',
+          harga: angka(d.anggaran), jumlah: angka(d.anggaran), asal: 'RKT',
+        }
+        const kode = tebakKode(d.kegiatan) || tebakKode(d.program)
+        if (kode) item.kode_kegiatan = kode
+        return { sekolah_id: sekolahId, jenis: slug, tanggal, data: item }
+      }))
+      if (e2) throw new Error('Gagal menyimpan: ' + e2.message)
+      alert(`${baru.length} item RKAS berhasil ditarik dari RKT. Lengkapi kode kegiatan, kode rekening, volume, dan tahap bila perlu.`)
+      muat()
+    } catch (e) {
+      alert('Gagal menarik dari RKT: ' + e.message)
+    } finally {
+      setMenarikRkt(false)
+    }
+  }
+
   const hitungLembar = (lb) => {
     const items = rows.filter((r) => String(r.data?.tahun) === String(lb.tahun) && r.data?.sumber === lb.sumber)
     const kk = susunKertasKerja(
@@ -878,6 +958,10 @@ export default function AdministrasiKepsekItem() {
               <button onClick={bukaLembar}
                 className={`${tombol} bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 col-span-2 sm:col-span-1`}>
                 <FileText size={16} /> Lembar Kerja ARKAS
+              </button>
+              <button onClick={tarikDariRKT} disabled={menarikRkt || loading}
+                className={`${tombol} bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-60 col-span-2 sm:col-span-1`}>
+                <Download size={16} /> {menarikRkt ? 'Menarik data...' : 'Tarik dari RKT'}
               </button>
             </>
           )}
