@@ -14,13 +14,19 @@ import { KOSP_SD } from './kosp-sd'
 import { KOSP_SMP } from './kosp-smp'
 // Kertas Kerja ARKAS (src/lib/kertasKerja.js; file ini mengimpor nilaiItem dari src/lib/aturanBos.js)
 import { susunKertasKerja, KODE_PENERIMAAN } from '../lib/kertasKerja'
+// Template otomatis: penilaian (guru/tendik) dan notulen rapat (src/lib/templatePenilaian.js)
+import { autoIsiPenilaian, autoIsiNotulen } from '../lib/templatePenilaian'
 
 const TABEL = 'administrasi_kepsek'
+
+// Halaman yang memakai isi otomatis predikat/nilai
+const PENILAIAN = ['evaluasi-kinerja-guru', 'kinerja-tendik']
 
 // Jenis mutasi -> status siswa di Data Siswa (pilihan status di halaman Siswa: aktif, lulus, pindah)
 const STATUS_MUTASI = { Masuk: 'aktif', Pindah: 'pindah', Keluar: 'pindah', Lulus: 'lulus' }
 
 const tgl = (v) => (v ? new Date(v).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '')
+const hariTgl = (v) => (v ? new Date(v).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '')
 const tampil = (fld, v) => {
   if (v === undefined || v === null || v === '') return '-'
   if (fld.t === 'date') return tgl(v)
@@ -205,6 +211,7 @@ export default function AdministrasiKepsekItem() {
   const [tampilKal, setTampilKal] = useState('tahunan') // 'tahunan' | 'daftar' (halaman Kalender Pendidikan)
   const [siswaList, setSiswaList] = useState([]) // untuk Mutasi Siswa dan Buku Tamu
   const [cariSiswa, setCariSiswa] = useState('')
+  const [notulenCetak, setNotulenCetak] = useState(null) // baris notulen yang sedang dicetak
   const pakaiSiswa = slug === 'mutasi-siswa' || slug === 'buku-tamu'
 
   const kolom = useMemo(() => (cfg ? cfg.fields.filter((x) => x.tab) : []), [cfg])
@@ -223,7 +230,7 @@ export default function AdministrasiKepsekItem() {
     setLoading(false)
   }, [sekolahId, slug, cfg])
 
-  useEffect(() => { setQ(''); setForm(null); setLembar(null); muat() }, [muat])
+  useEffect(() => { setQ(''); setForm(null); setLembar(null); setNotulenCetak(null); muat() }, [muat])
 
   const muatPagu = useCallback(async () => {
     if (!sekolahId || slug !== 'rkas') { setPaguList([]); return }
@@ -257,6 +264,20 @@ export default function AdministrasiKepsekItem() {
     document.body.classList.toggle('cetak-kalender', kalTahunan)
     return () => document.body.classList.remove('cetak-kalender')
   }, [kalTahunan])
+
+  // Cetak satu notulen rapat: area cetak notulen dirender, jendela cetak dibuka, lalu dibersihkan.
+  useEffect(() => {
+    if (!notulenCetak) return undefined
+    document.body.classList.add('cetak-notulen')
+    const selesai = () => setNotulenCetak(null)
+    window.addEventListener('afterprint', selesai)
+    const t = setTimeout(() => window.print(), 200)
+    return () => {
+      clearTimeout(t)
+      window.removeEventListener('afterprint', selesai)
+      document.body.classList.remove('cetak-notulen')
+    }
+  }, [notulenCetak])
 
   useEffect(() => {
     if (!sekolahId || !cfg) return
@@ -360,6 +381,14 @@ export default function AdministrasiKepsekItem() {
   }
 
   const setField = (k, v) => setForm((p) => {
+    // Evaluasi Kinerja Guru dan Kinerja Tendik: predikat/nilai mengisi catatan dan tindak lanjut otomatis
+    if (PENILAIAN.includes(slug)) {
+      return { ...p, data: autoIsiPenilaian(p.data, k, v, { tindak: adaField('tindak_lanjut'), tendik: slug === 'kinerja-tendik' }) }
+    }
+    // Notulen Rapat: jenis rapat mengisi format pembahasan, keputusan, dan tindak lanjut
+    if (slug === 'notulen-rapat') {
+      return { ...p, data: autoIsiNotulen(p.data, k, v) }
+    }
     const data = { ...p.data, [k]: v }
     if (punyaKode) {
       // RKAS: jumlah = volume x harga satuan (tetap bisa diubah manual setelahnya)
@@ -1109,6 +1138,102 @@ export default function AdministrasiKepsekItem() {
     )
   }
 
+  // ---- Format cetak Notulen Rapat ----
+  const tempatTtd = bersih(profil?.tempat_ttd || profil?.kabupaten)
+  const barisNotulen = (teks) => String(teks ?? '').split('\n').map((s) => s.trim()).filter(Boolean)
+  const tabelNotulen = (r) => {
+    const d = r.data || {}
+    const jam = [d.jam_mulai, d.jam_selesai].map(bersih).filter(Boolean)
+    const waktu = jam.length === 2 ? `${jam[0]} s.d. ${jam[1]} WIB` : jam.length === 1 ? `${jam[0]} WIB` : '-'
+    const info = [
+      ['Hari / Tanggal', hariTgl(r.tanggal) || '-'],
+      ['Waktu', waktu],
+      ['Tempat', bersih(d.tempat) || '-'],
+      ['Agenda Rapat', bersih(d.agenda) || '-'],
+      ['Pimpinan Rapat', bersih(d.pimpinan) || '-'],
+      ['Notulis', bersih(d.notulis) || '-'],
+      ['Jumlah Peserta', d.peserta ? `${d.peserta} orang` : '-'],
+    ]
+    const hadir = barisNotulen(d.daftar_hadir)
+    const bagian = (judul, teks) => (barisNotulen(teks).length > 0 && (
+      <div style={{ marginTop: 12 }}>
+        <p style={{ fontWeight: 700, margin: '0 0 4px' }}>{judul}</p>
+        <div style={{ whiteSpace: 'pre-line', textAlign: 'justify', lineHeight: 1.5 }}>{String(teks).trim()}</div>
+      </div>
+    ))
+    return (
+      <>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11pt' }}>
+          <tbody>
+            {info.map(([lbl, isi]) => (
+              <tr key={lbl}>
+                <td style={{ padding: '2px 4px', width: '28%', verticalAlign: 'top' }}>{lbl}</td>
+                <td style={{ padding: '2px 4px', width: 12, verticalAlign: 'top' }}>:</td>
+                <td style={{ padding: '2px 4px', verticalAlign: 'top' }}>{isi}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <hr style={{ border: 0, borderTop: '1px solid #000', margin: '10px 0 0' }} />
+        {bagian('URAIAN PEMBAHASAN', d.pembahasan)}
+        {bagian('KEPUTUSAN / KESEPAKATAN RAPAT', d.keputusan)}
+        {bagian('TINDAK LANJUT', d.tindak_lanjut)}
+
+        <div style={{ marginTop: 28, pageBreakInside: 'avoid' }}>
+          <div style={{ textAlign: 'right', marginBottom: 8 }}>
+            {tempatTtd}{tempatTtd ? ', ' : ''}{tgl(r.tanggal)}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', textAlign: 'center' }}>
+            {[
+              ['Notulis', bersih(d.notulis) || '........................', ''],
+              ['Pimpinan Rapat', bersih(d.pimpinan) || '........................', ''],
+            ].map(([jabatan, nama]) => (
+              <div key={jabatan} style={{ width: '42%' }}>
+                <div style={{ minHeight: '1.3em' }} />
+                <div>{jabatan}</div>
+                <div style={{ height: 64 }} />
+                <div style={{ fontWeight: 700, textDecoration: 'underline' }}>{nama}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ textAlign: 'center', marginTop: 20 }}>
+            <div>Mengetahui,</div>
+            <div>Kepala Sekolah</div>
+            <div style={{ height: 64 }} />
+            <div style={{ fontWeight: 700, textDecoration: 'underline' }}>{profil?.kepala_sekolah || '........................'}</div>
+            <div>NIP. {nipKepsek || '........................'}</div>
+          </div>
+        </div>
+
+        {hadir.length > 0 && (
+          <div style={{ pageBreakBefore: 'always' }}>
+            <p style={{ fontWeight: 700, textAlign: 'center', margin: '0 0 8px' }}>DAFTAR HADIR RAPAT</p>
+            <p style={{ margin: '0 0 8px' }}>
+              Agenda: {bersih(d.agenda) || '-'}<br />
+              Hari / Tanggal: {hariTgl(r.tanggal) || '-'}
+            </p>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11pt' }}>
+              <thead>
+                <tr>{['No', 'Nama', 'Tanda Tangan'].map((h) => (
+                  <th key={h} style={{ ...sel, background: '#eee', textAlign: 'center' }}>{h}</th>
+                ))}</tr>
+              </thead>
+              <tbody>
+                {hadir.map((nama, i) => (
+                  <tr key={i} style={{ pageBreakInside: 'avoid' }}>
+                    <td style={{ ...sel, textAlign: 'center', width: 40 }}>{i + 1}</td>
+                    <td style={{ ...sel, height: 30 }}>{nama}</td>
+                    <td style={{ ...sel, width: '30%', textAlign: i % 2 === 0 ? 'left' : 'center' }}>{i + 1}.</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </>
+    )
+  }
+
   return (
     <Layout title={cfg.judul} subtitle={cfg.ket}>
       <style>{`
@@ -1118,13 +1243,18 @@ export default function AdministrasiKepsekItem() {
           #cetak-area { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
           body.cetak-lembar #cetak-area { display: none !important; }
           body.cetak-kalender #cetak-area { display: none !important; }
+          body.cetak-notulen #cetak-area { display: none !important; }
           #cetak-kalender, #cetak-kalender * { visibility: visible; }
           #cetak-kalender { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
           #cetak-lembar, #cetak-lembar * { visibility: visible; }
           #cetak-lembar { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
+          #cetak-notulen, #cetak-notulen * { visibility: visible; }
+          #cetak-notulen { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
           @page { size: A4 landscape; margin: 12mm; }
         }
       `}</style>
+      {/* Notulen dicetak tegak (portrait) */}
+      {notulenCetak && <style>{'@media print { @page { size: A4 portrait; margin: 15mm; } }'}</style>}
 
       <Link to="/administrasi-kepsek" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 mb-3">
         <ArrowLeft size={15} /> Administrasi Kepala Sekolah
@@ -1261,7 +1391,7 @@ export default function AdministrasiKepsekItem() {
                   <th className="px-3 py-2.5 w-10">No</th>
                   <th className="px-3 py-2.5 whitespace-nowrap">{cfg.tanggalLabel}</th>
                   {kolom.map((c) => <th key={c.k} className="px-3 py-2.5">{c.l}</th>)}
-                  <th className="px-3 py-2.5 w-24" />
+                  <th className="px-3 py-2.5 w-28" />
                 </tr>
               </thead>
               <tbody>
@@ -1278,6 +1408,9 @@ export default function AdministrasiKepsekItem() {
                     ))}
                     <td className="px-3 py-2.5">
                       <div className="flex gap-1">
+                        {cfg.cetakNotulen && (
+                          <button onClick={() => setNotulenCetak(r)} aria-label="Cetak notulen" title="Cetak notulen" className="p-2 rounded-lg hover:bg-blue-50 text-blue-700"><Printer size={15} /></button>
+                        )}
                         <button onClick={() => bukaEdit(r)} aria-label="Ubah" className="p-2 rounded-lg hover:bg-slate-100 text-slate-600"><Pencil size={15} /></button>
                         <button onClick={() => hapus(r)} aria-label="Hapus" className="p-2 rounded-lg hover:bg-rose-50 text-rose-600"><Trash2 size={15} /></button>
                       </div>
@@ -1298,6 +1431,9 @@ export default function AdministrasiKepsekItem() {
                     <p className="text-xs text-slate-500">{tgl(r.tanggal) || '-'}</p>
                   </div>
                   <div className="flex shrink-0">
+                    {cfg.cetakNotulen && (
+                      <button onClick={() => setNotulenCetak(r)} aria-label="Cetak notulen" className="p-2.5 rounded-lg text-blue-700 active:bg-blue-50"><Printer size={16} /></button>
+                    )}
                     <button onClick={() => bukaEdit(r)} aria-label="Ubah" className="p-2.5 rounded-lg text-slate-600 active:bg-slate-100"><Pencil size={16} /></button>
                     <button onClick={() => hapus(r)} aria-label="Hapus" className="p-2.5 rounded-lg text-rose-600 active:bg-rose-50"><Trash2 size={16} /></button>
                   </div>
@@ -1382,6 +1518,16 @@ export default function AdministrasiKepsekItem() {
                     </>
                   )}
                 </div>
+              )}
+              {PENILAIAN.includes(slug) && (
+                <p className="sm:col-span-2 rounded-xl border border-blue-100 bg-blue-50/60 p-2.5 text-xs text-blue-800">
+                  Pilih Predikat atau isi Nilai: catatan{adaField('tindak_lanjut') ? ' dan tindak lanjut' : ''} terisi otomatis. Teks yang sudah Anda ketik sendiri tidak akan ditimpa.
+                </p>
+              )}
+              {slug === 'notulen-rapat' && (
+                <p className="sm:col-span-2 rounded-xl border border-blue-100 bg-blue-50/60 p-2.5 text-xs text-blue-800">
+                  Pilih Jenis Rapat: format pembahasan, keputusan, dan tindak lanjut terisi otomatis. Ubah sesuai isi rapat yang sebenarnya, lalu cetak dengan ikon printer di daftar.
+                </p>
               )}
               {cfg.fields.map((fld) => {
                 const v = form.data[fld.k] ?? ''
@@ -1592,6 +1738,17 @@ export default function AdministrasiKepsekItem() {
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Area cetak Notulen Rapat (hanya tampil saat print) */}
+      {notulenCetak && (
+        <div id="cetak-notulen" className="hidden" style={{ color: '#000', fontSize: '11pt' }}>
+          <KopSurat />
+          <div style={{ textAlign: 'center', margin: '4px 0 12px', fontWeight: 700, fontSize: '13pt' }}>
+            NOTULEN RAPAT{namaSekolah ? <><br />{namaSekolah.toUpperCase()}</> : null}
+          </div>
+          {tabelNotulen(notulenCetak)}
         </div>
       )}
 
