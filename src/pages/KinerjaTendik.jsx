@@ -41,8 +41,7 @@ const bawaan = () => ({
 })
 
 export default function KinerjaTendik() {
-  const { profile } = useAuth()
-  const sekolahId = profile?.sekolah_id
+  const { sekolahId } = useAuth()
   const [tab, setTab] = useState('daftar')
   const [pilihManual, setPilihManual] = useState('')
 
