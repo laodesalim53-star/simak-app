@@ -93,7 +93,7 @@ const CSS = `
 .pip .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0}
 .pip button,.pip .file{border:1px solid #bbb;background:#fff;border-radius:6px;padding:7px 12px;font-size:13px;cursor:pointer}
 .pip button.on{background:#1f4e79;color:#fff;border-color:#1f4e79}.pip button:focus-visible,.pip input:focus-visible,.pip select:focus-visible{outline:2px solid #1f4e79;outline-offset:2px}
-.pip .tabs{display:flex;border-bottom:2px solid #ddd;margin-top:14px}.pip .tabs button{border:0;border-radius:6px 6px 0 0;background:none;padding:10px 16px;font-size:14px}
+.pip .tabs{display:flex;border-bottom:2px solid #ddd;margin-top:14px;flex-wrap:wrap}.pip .tabs button{border:0;border-radius:6px 6px 0 0;background:none;padding:10px 16px;font-size:14px}
 .pip .tabs button.on{background:#1f4e79}
 .pip details{border:1px solid #ddd;border-radius:6px;padding:8px 12px;margin:8px 0}.pip summary{cursor:pointer;font-size:14px}
 .pip .fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;margin-top:10px}
@@ -318,13 +318,36 @@ export default function DokumenPIP() {
         <div>Pemberi Kuasa<br />Orang Tua Siswa,<div className="gap" /><b><u>{e.pemberi}</u></b></div></div>
     </div>); };
 
+  // Surat Kuasa Pelaksanaan Aktivasi Rekening SimPel (orang tua/wali -> kepala sekolah).
+  const KuasaAktivasi = ({ x }) => { const e = ex(x); return (
+    <div className="sheet">
+      <div className="jd"><u>SURAT KUASA</u><span style={{ fontWeight: "normal" }}>Pelaksanaan Aktivasi Rekening SimPel</span></div>
+      <p>Yang bertanda tangan di bawah ini :</p>
+      <table className="k"><tbody>{[["Nama", e.pemberi], ["NIK", e.ktp || "-"], ["Alamat", e.alamat], ["No. Telepon/HP", e.hp]].map(([a, b]) => <tr key={a}><td width="220">{a}</td><td>: {b}</td></tr>)}</tbody></table>
+      <p style={{ marginTop: 8 }}>Adalah Orang Tua/Wali dari peserta didik :</p>
+      <table className="k"><tbody>{[["Nama", x.nama], ["Nama Satuan Pendidikan", s.namaSekolah]].map(([a, b]) => <tr key={a}><td width="220">{a}</td><td>: {b}</td></tr>)}</tbody></table>
+      <p>Selanjutnya disebut <b>PEMBERI KUASA</b></p>
+      <p>Dengan ini memberi kuasa kepada :</p>
+      <table className="k"><tbody>{[["Nama", s.kepsek], ["NIK", s.ktpKepsek || "-"], ["Alamat", s.alamatKepsek], ["Jabatan", "Kepala " + s.namaSekolah], ["Nama Satuan Pendidikan", s.namaSekolah]].map(([a, b]) => <tr key={a}><td width="220">{a}</td><td>: {b}</td></tr>)}</tbody></table>
+      <p>Selanjutnya disebut <b>PENERIMA KUASA</b></p>
+      <div className="jd" style={{ margin: "8px 0" }}>KHUSUS</div>
+      <p>Untuk dan atas nama serta mewakili <b>PEMBERI KUASA</b> dalam melaksanakan proses Aktivasi Rekening SimPel atas nama <b>PEMBERI KUASA</b>.</p>
+      <p>Untuk itu <b>PENERIMA KUASA</b> berhak menghadap di Bank Penyalur, melaksanakan penyerahan persyaratan dokumen aktivasi rekening SimPel atas nama peserta didik <b>PEMBERI KUASA</b> kepada Bank Penyalur, menerima Buku Tabungan SimPel dan kartu Debit atas nama peserta didik <b>PEMBERI KUASA</b> dari Bank Penyalur, dan melakukan segala sesuatu tindakan yang diperbolehkan hukum guna kepentingan Aktivasi Rekening SimPel <b>PEMBERI KUASA</b>.</p>
+      <p>Demikian Surat Kuasa ini saya buat untuk digunakan sebagaimana mestinya.</p>
+      <p style={{ textAlign: "right" }}>{s.kotaKuasa}, {tanggal}</p>
+      <div className="ttd"><div>PEMBERI KUASA<div className="gap" /><b><u>{e.pemberi}</u></b></div>
+        <div>PENERIMA KUASA<div className="gap" /><b><u>{s.kepsek}</u></b><br />NIP. {s.nip}</div></div>
+    </div>); };
+
   const x = siswa[cur];
   const daftarKuasa = semua ? terpilih : x ? [x] : [];
-  const daftarTab = ["Surat Keterangan Aktivasi", "SPTJM", "Surat Kuasa", ...(isAdmin ? ["Lampiran KK & KTP"] : [])];
+  // Tab 0 Aktivasi, 1 SPTJM, 2 Surat Kuasa, 3 Kuasa Aktivasi SimPel, 4 Lampiran KK & KTP (admin).
+  const perSiswa = tab === 2 || tab === 3;
+  const daftarTab = ["Surat Keterangan Aktivasi", "SPTJM", "Surat Kuasa", "Kuasa Aktivasi SimPel", ...(isAdmin ? ["Lampiran KK & KTP"] : [])];
 
   return (
-    <Layout title="Dokumen PIP" subtitle="Surat aktivasi rekening, SPTJM, surat kuasa, dan lampiran KK & KTP dari data siswa">
-    <div className="pip"><style>{CSS}</style>{tab !== 3 && <style>{CSS_CETAK}</style>}
+    <Layout title="Dokumen PIP" subtitle="Surat aktivasi rekening, SPTJM, surat kuasa, kuasa aktivasi SimPel, dan lampiran KK & KTP dari data siswa">
+    <div className="pip"><style>{CSS}</style>{tab !== 4 && <style>{CSS_CETAK}</style>}
       <div className="bar">
         {isAdmin && <label className="file">Isi rekening dari Excel PIP<input type="file" accept=".xls,.xlsx" onChange={impor} hidden /></label>}
         {siswa.length > 0 && <span style={{ fontSize: 13 }}>{terpilih.length} dari {siswa.length} siswa dipilih · total {rp(total)}</span>}
@@ -350,20 +373,20 @@ export default function DokumenPIP() {
       <div className="tabs" role="tablist">{daftarTab.map((t, i) => <button key={t} role="tab" aria-selected={tab === i} className={tab === i ? "on" : ""} onClick={() => setTab(i)}>{t}</button>)}</div>
 
       {loading ? <p className="sub" style={{ marginTop: 16 }}>Memuat data siswa...</p> : !sekolahId ? <p className="sub" style={{ marginTop: 16 }}>Belum ada sekolah aktif.</p> : siswa.length === 0 ? <p className="sub" style={{ marginTop: 16 }}>Belum ada siswa aktif di sekolah ini.</p> : (<>
-        {tab === 3 && isAdmin && <LampiranKKKTP sekolahId={sekolahId} siswa={siswa} />}
-        {tab !== 3 && (<>
-          {tab === 2 && x && (<div style={{ marginTop: 12 }}>
+        {tab === 4 && isAdmin && <LampiranKKKTP sekolahId={sekolahId} siswa={siswa} />}
+        {tab !== 4 && (<>
+          {perSiswa && x && (<div style={{ marginTop: 12 }}>
             <div className="fgrid">
               <label className="f">Siswa<select value={cur} onChange={(e) => setCur(+e.target.value)}>{siswa.map((a, i) => <option key={a.id} value={i}>{a.nama}</option>)}</select></label>
-              {[["pemberi", "Nama pemberi kuasa (orang tua)"], ["ttl", "Tempat, tanggal lahir"], ["ktp", "No. KTP"], ["hp", "No. HP"], ["alamat", "Alamat"]].map(([k, l]) => <label className="f" key={k}>{l}<input type="text" value={ex(x)[k]} onChange={(e) => setEx(x, k, e.target.value)} /></label>)}
+              {[["pemberi", "Nama pemberi kuasa (orang tua/wali)"], ["ttl", "Tempat, tanggal lahir"], ["ktp", "No. KTP / NIK"], ["hp", "No. HP"], ["alamat", "Alamat"]].map(([k, l]) => <label className="f" key={k}>{l}<input type="text" value={ex(x)[k]} onChange={(e) => setEx(x, k, e.target.value)} /></label>)}
             </div>
             {isAdmin && <div className="bar"><button className="on" onClick={() => simpanKuasa(x)} disabled={menyimpanKuasa}>{menyimpanKuasa ? "Menyimpan..." : "Simpan data orang tua"}</button></div>}
           </div>)}
           <div className="bar">
-            <button className="on" onClick={() => cetak(false)} disabled={tab !== 2 ? !terpilih.length : !x}>{tab === 2 ? "Cetak surat ini" : "Cetak"}</button>
-            {tab === 2 && <button onClick={() => cetak(true)} disabled={!terpilih.length}>Cetak semua siswa terpilih ({terpilih.length})</button>}
+            <button className="on" onClick={() => cetak(false)} disabled={!perSiswa ? !terpilih.length : !x}>{perSiswa ? "Cetak surat ini" : "Cetak"}</button>
+            {perSiswa && <button onClick={() => cetak(true)} disabled={!terpilih.length}>Cetak semua siswa terpilih ({terpilih.length})</button>}
           </div>
-          <div className="paper pip-print">{tab === 0 && Aktivasi()}{tab === 1 && Sptjm()}{tab === 2 && daftarKuasa.map((a) => <Kuasa key={a.id} x={a} />)}</div>
+          <div className="paper pip-print">{tab === 0 && Aktivasi()}{tab === 1 && Sptjm()}{tab === 2 && daftarKuasa.map((a) => <Kuasa key={a.id} x={a} />)}{tab === 3 && daftarKuasa.map((a) => <KuasaAktivasi key={a.id} x={a} />)}</div>
         </>)}
       </>)}
     </div>
