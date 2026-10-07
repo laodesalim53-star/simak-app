@@ -40,6 +40,29 @@
 //   terbawa ke sekolah lain). Nama dipilih dari data guru sekolah yang sedang login
 //   (tabel `guru`, difilter sekolah_id), diisi otomatis lewat tombol, atau diketik manual.
 //
+// SIMPAN DATA (baru):
+// - Setiap tab punya tombol "Simpan" (dan "Simpan semua tab"). Data disimpan ke tabel
+//   Supabase `laporan_asesmen_tersimpan`: satu baris per (sekolah_id, tab). Isian umum
+//   (kop, tanda tangan, tahun pelajaran, KKM, dst) disimpan di baris tab `umum` dan ikut
+//   tersimpan setiap kali tombol Simpan ditekan di tab mana pun.
+// - Saat halaman dibuka, data tersimpan dimuat otomatis SEBELUM data lain diisi dari
+//   profil sekolah/jadwal/nilai, jadi isian yang sudah disimpan tidak perlu diimpor ulang.
+// - Lembar 1-3 yang sudah pernah disimpan TIDAK ditimpa oleh penarikan nilai otomatis
+//   saat halaman dibuka. Tombol "Tarik ulang nilai" tetap memperbarui dari Nilai Asesmen.
+// - Tabel yang dibutuhkan (jalankan sekali di Supabase SQL Editor, lalu atur RLS sama
+//   seperti tabel lain milik sekolah, mis. profil_sekolah):
+//
+//     create table if not exists public.laporan_asesmen_tersimpan (
+//       id uuid primary key default gen_random_uuid(),
+//       sekolah_id uuid not null,
+//       tab text not null,
+//       data jsonb not null default '{}'::jsonb,
+//       updated_at timestamptz not null default now(),
+//       unique (sekolah_id, tab)
+//     );
+//     alter table public.laporan_asesmen_tersimpan enable row level security;
+//     -- Ganti tipe sekolah_id (uuid/bigint/text) sesuai kolom sekolah_id di tabel lain.
+//
 // CATATAN:
 // - Kolom `jenis_kelamin` di tabel siswa dicoba dibaca terpisah. Kalau nama
 //   kolomnya berbeda / tidak ada, jumlah L/P tidak terisi otomatis (isi manual),
@@ -52,7 +75,7 @@
 //   lembar" untuk mencetak semuanya (satu lembar per halaman).
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Loader2, Printer, RefreshCw, Wand2 } from 'lucide-react'
+import { Check, Loader2, Printer, RefreshCw, Save, Wand2 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { muatJadwalPengawas, ratakanSesiJadwal } from '../lib/jadwalPengawasStore'
@@ -613,6 +636,102 @@ const barisAnggaran = () =>
     biaya: String(biaya),
   }))
 
+// --- Simpan / muat data tab (Supabase) ---
+
+const TABEL_SIMPAN = 'laporan_asesmen_tersimpan'
+
+const adaIsi = (v) => v !== '' && v !== null && v !== undefined
+const hanyaTerisi = (o) => Object.fromEntries(Object.entries(o || {}).filter(([, v]) => adaIsi(v)))
+const sebagaiObjek = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {})
+
+// Gabungkan array tersimpan ke array bawaan per indeks (jumlah baris mengikuti bawaan).
+function gabungBaris(cur, s, buat) {
+  if (!Array.isArray(s)) return cur
+  return cur.map((r, i) => (s[i] && typeof s[i] === 'object' ? buat(r, s[i]) : r))
+}
+
+// Penggabung per tab: data tersimpan ditimpakan ke bentuk bawaan, jadi kolom baru yang
+// ditambahkan di kode kelak tetap punya nilai awal walaupun data lama belum memilikinya.
+// Kunci = id tab (+ 'umum' untuk isian kop/tanda tangan/tahun pelajaran/KKM).
+const GABUNG = {
+  umum: (cur, s) => ({ ...cur, ...hanyaTerisi(sebagaiObjek(s)) }),
+  laporan: (cur, s0) => {
+    const s = sebagaiObjek(s0)
+    return {
+      ...cur,
+      ...s,
+      teks: { ...cur.teks, ...sebagaiObjek(s.teks) },
+      butir: gabungBaris(cur.butir, s.butir, (r, x) => ({ ...r, ...x })),
+    }
+  },
+  nilai: (cur, s) => gabungBaris(cur, s, (r, x) => ({ ...r, ...x })),
+  klasifikasi: (cur, s) =>
+    gabungBaris(cur, s, (r, x) => ({
+      ...r,
+      ...x,
+      k: KLASIFIKASI.map((_, j) => (Array.isArray(x.k) ? x.k[j] ?? '' : r.k[j])),
+    })),
+  kelulusan: (cur, s) => gabungBaris(cur, s, (r, x) => ({ ...r, ...x })),
+  penyelenggara: (cur, s0) => {
+    const s = sebagaiObjek(s0)
+    return {
+      ...cur,
+      ...s,
+      penyelenggara: { ...cur.penyelenggara, ...sebagaiObjek(s.penyelenggara) },
+      bergabung: { ...cur.bergabung, ...sebagaiObjek(s.bergabung) },
+      masalah: gabungBaris(cur.masalah, s.masalah, (r, x) => ({ ...r, ...x })),
+    }
+  },
+  skpanitia: (cur, s0) => {
+    const s = sebagaiObjek(s0)
+    return {
+      ...cur,
+      ...s,
+      teks: { ...cur.teks, ...sebagaiObjek(s.teks) },
+      baris:
+        Array.isArray(s.baris) && s.baris.length > 0
+          ? s.baris.map((r) => ({ tugas: '', nama: '', nip: '', dinas: '', ...sebagaiObjek(r) }))
+          : cur.baris,
+    }
+  },
+  anggaran: (cur, s0) => {
+    const s = sebagaiObjek(s0)
+    return {
+      ...cur,
+      ...s,
+      baris:
+        Array.isArray(s.baris) && s.baris.length > 0
+          ? s.baris.map((r) => ({ uraian: '', kegiatan: '1', volume: '', satuan: '', biaya: '', ...sebagaiObjek(r) }))
+          : cur.baris,
+    }
+  },
+  pengesahan: (cur, s0) => {
+    const s = sebagaiObjek(s0)
+    return {
+      ...cur,
+      ...s,
+      teks: { ...cur.teks, ...sebagaiObjek(s.teks) },
+      ket: { ...sebagaiObjek(s.ket) },
+    }
+  },
+}
+
+function pesanGalatSimpan(e, aksi) {
+  const m = String(e?.message || '')
+  const kata = aksi === 'memuat' ? 'dimuat' : 'disimpan'
+  if (e?.code === '42P01' || /does not exist|schema cache|could not find the table/i.test(m)) {
+    return `Tabel ${TABEL_SIMPAN} belum ada di Supabase, jadi data belum bisa ${kata}. Jalankan SQL pembuatan tabel (lihat komentar di bagian atas file ini) lalu muat ulang halaman.`
+  }
+  return `Data belum bisa ${kata} (${m || 'galat tidak diketahui'}).`
+}
+
+function labelWaktu(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })
+}
+
 export default function LaporanAsesmenSekolah() {
   const { sekolahId: sekolahIdCtx, profil } = useAuth()
   const sekolahId = sekolahIdCtx || profil?.sekolah_id
@@ -645,6 +764,18 @@ export default function LaporanAsesmenSekolah() {
   const [sesiJadwal, setSesiJadwal] = useState([])
   const [sesiTerpilih, setSesiTerpilih] = useState('')
   const sudahOtomatis = useRef(false)
+
+  // --- Status simpan data ---
+  // memuatTersimpan: true sampai data tersimpan selesai dimuat (efek pengisi otomatis menunggu).
+  // snap: JSON data per tab saat terakhir dimuat/disimpan (dasar penanda "ada perubahan").
+  // waktuSimpan: waktu terakhir disimpan per tab. tersimpanRef: tab yang sudah punya data tersimpan.
+  const [memuatTersimpan, setMemuatTersimpan] = useState(true)
+  const [snap, setSnap] = useState({})
+  const [waktuSimpan, setWaktuSimpan] = useState({})
+  const [menyimpan, setMenyimpan] = useState(false)
+  const [pesanSimpan, setPesanSimpan] = useState(null)
+  const tersimpanRef = useRef(new Set())
+  const autoPertama = useRef(false)
 
   const [form, setForm] = useState({
     kabupaten: '',
@@ -734,6 +865,146 @@ export default function LaporanAsesmenSekolah() {
     teks: { ...TEKS_AWAL },
     butir: BUTIR_AWAL(),
   }))
+
+  // Data yang disimpan per tab. `umum` = isian kop/tanda tangan/tahun pelajaran/KKM yang
+  // dipakai semua lembar; ikut disimpan setiap kali tombol Simpan di tab mana pun ditekan.
+  const dataPerTab = {
+    umum: form,
+    laporan: lap,
+    nilai,
+    klasifikasi: klas,
+    kelulusan: lulus,
+    penyelenggara: pen,
+    skpanitia: skp,
+    anggaran: ang,
+    pengesahan: pgs,
+  }
+  const stateRef = useRef(dataPerTab)
+  stateRef.current = dataPerTab
+  const SETTER = {
+    umum: setForm,
+    laporan: setLap,
+    nilai: setNilai,
+    klasifikasi: setKlas,
+    kelulusan: setLulus,
+    penyelenggara: setPen,
+    skpanitia: setSkp,
+    anggaran: setAng,
+    pengesahan: setPgs,
+  }
+
+  const jsonPerTab = useMemo(
+    () => Object.fromEntries(Object.entries(dataPerTab).map(([k, v]) => [k, JSON.stringify(v)])),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [form, lap, nilai, klas, lulus, pen, skp, ang, pgs]
+  )
+
+  // 'belum' = tab ini belum pernah disimpan; 'berubah' = ada perubahan sejak simpan/muat
+  // terakhir (termasuk isian umum); 'tersimpan' = sama dengan yang tersimpan.
+  const statusTab = (id) => {
+    if (snap[id] === undefined) return 'belum'
+    const umumBerubah = snap.umum !== undefined && jsonPerTab.umum !== snap.umum
+    return jsonPerTab[id] !== snap[id] || umumBerubah ? 'berubah' : 'tersimpan'
+  }
+  const adaPerubahan = TAB.some((t) => statusTab(t.id) === 'berubah')
+
+  // Peringatan bila halaman ditutup padahal ada tab tersimpan yang berubah.
+  useEffect(() => {
+    if (!adaPerubahan) return undefined
+    const tahan = (e) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', tahan)
+    return () => window.removeEventListener('beforeunload', tahan)
+  }, [adaPerubahan])
+
+  // Muat data tersimpan SEBELUM data lain diisi otomatis (profil sekolah, jadwal, nilai),
+  // supaya isian yang sudah disimpan tidak tertimpa. Memakai state bawaan (stateRef) sebagai
+  // dasar penggabungan, dan menyimpan JSON hasil gabungan sebagai pembanding "ada perubahan".
+  async function muatTersimpan() {
+    if (!sekolahId) return
+    setMemuatTersimpan(true)
+    autoPertama.current = false
+    try {
+      const { data, error } = await supabase
+        .from(TABEL_SIMPAN)
+        .select('tab, data, updated_at')
+        .eq('sekolah_id', sekolahId)
+      if (error) throw error
+
+      const dasar = stateRef.current
+      const snapBaru = {}
+      const waktuBaru = {}
+      const ada = new Set()
+      ;(data || []).forEach((r) => {
+        if (!GABUNG[r.tab]) return
+        const hasil = GABUNG[r.tab](dasar[r.tab], r.data)
+        SETTER[r.tab](hasil)
+        snapBaru[r.tab] = JSON.stringify(hasil)
+        waktuBaru[r.tab] = r.updated_at
+        ada.add(r.tab)
+      })
+      tersimpanRef.current = ada
+      setSnap(snapBaru)
+      setWaktuSimpan(waktuBaru)
+      setPesanSimpan(
+        ada.size > 0 ? { tipe: 'info', teks: 'Data yang sudah disimpan dimuat otomatis.' } : null
+      )
+    } catch (e) {
+      console.error('Gagal memuat data tersimpan Laporan Asesmen:', e)
+      setPesanSimpan({ tipe: 'galat', teks: pesanGalatSimpan(e, 'memuat') })
+    } finally {
+      setMemuatTersimpan(false)
+    }
+  }
+
+  // Simpan satu atau beberapa tab (isian umum selalu ikut disimpan).
+  async function simpanTab(ids) {
+    if (!sekolahId) {
+      setPesanSimpan({ tipe: 'galat', teks: 'Data sekolah belum terbaca, belum bisa menyimpan.' })
+      return
+    }
+    setMenyimpan(true)
+    setPesanSimpan(null)
+    try {
+      const sekarang = new Date().toISOString()
+      const daftar = Array.from(new Set(['umum', ...ids]))
+      const baris = daftar.map((tab) => ({
+        sekolah_id: sekolahId,
+        tab,
+        data: dataPerTab[tab],
+        updated_at: sekarang,
+      }))
+      const { error } = await supabase.from(TABEL_SIMPAN).upsert(baris, { onConflict: 'sekolah_id,tab' })
+      if (error) throw error
+
+      setSnap((s) => {
+        const n = { ...s }
+        daftar.forEach((t) => {
+          n[t] = jsonPerTab[t]
+        })
+        return n
+      })
+      setWaktuSimpan((w) => {
+        const n = { ...w }
+        daftar.forEach((t) => {
+          n[t] = sekarang
+        })
+        return n
+      })
+      ids.forEach((t) => tersimpanRef.current.add(t))
+      tersimpanRef.current.add('umum')
+
+      const nama = ids.length > 1 ? 'semua tab' : `tab ${TAB.find((t) => t.id === ids[0])?.label || ''}`
+      setPesanSimpan({ tipe: 'ok', teks: `Berhasil menyimpan ${nama}.` })
+    } catch (e) {
+      console.error('Gagal menyimpan data Laporan Asesmen:', e)
+      setPesanSimpan({ tipe: 'galat', teks: pesanGalatSimpan(e, 'menyimpan') })
+    } finally {
+      setMenyimpan(false)
+    }
+  }
 
   async function muat() {
     if (!sekolahId) {
@@ -924,10 +1195,18 @@ export default function LaporanAsesmenSekolah() {
     setSkp((s) => ({ ...s, baris: [...s.baris, { tugas: 'Anggota', nama: '', nip: '', dinas: '' }] }))
   const hapusBarisSk = () => setSkp((s) => ({ ...s, baris: s.baris.length > 1 ? s.baris.slice(0, -1) : s.baris }))
 
+  // Urutan awal: data tersimpan dimuat dulu, baru profil sekolah / siswa / guru. Dengan begitu
+  // isian yang sudah disimpan menang atas isian otomatis (yang hanya mengisi kolom kosong).
   useEffect(() => {
-    muat()
-    muatSiswa()
-    muatGuru()
+    let batal = false
+    ;(async () => {
+      await muatTersimpan()
+      if (batal) return
+      muat()
+      muatSiswa()
+      muatGuru()
+    })()
+    return () => { batal = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sekolahId])
 
@@ -952,8 +1231,10 @@ export default function LaporanAsesmenSekolah() {
   }
 
   useEffect(() => {
-    if (sudahOtomatis.current || sesiJadwal.length === 0) return
+    if (memuatTersimpan || sudahOtomatis.current || sesiJadwal.length === 0) return
     sudahOtomatis.current = true
+    // Lembar 4 yang sudah pernah disimpan: tanggal & mapel tidak diganti otomatis.
+    if (tersimpanRef.current.has('penyelenggara')) return
     const hariIni = isoHariIni()
     const pilih =
       sesiJadwal.find((s) => s.tanggal === hariIni) ||
@@ -961,16 +1242,16 @@ export default function LaporanAsesmenSekolah() {
       sesiJadwal[0]
     setSesiTerpilih(pilih.key)
     terapkanSesi(pilih, { timpa: false })
-  }, [sesiJadwal])
+  }, [sesiJadwal, memuatTersimpan])
 
   // Rentang tanggal Ujian Sekolah (tab Laporan) diambil dari jadwal pengawas
   // kalau belum diisi: tanggal paling awal s.d. paling akhir.
   useEffect(() => {
-    if (sesiJadwal.length === 0) return
+    if (memuatTersimpan || sesiJadwal.length === 0) return
     const tgl = sesiJadwal.map((s) => s.tanggal).filter(Boolean).sort()
     if (tgl.length === 0) return
     setLap((l) => ({ ...l, usMulai: l.usMulai || tgl[0], usSelesai: l.usSelesai || tgl[tgl.length - 1] }))
-  }, [sesiJadwal])
+  }, [sesiJadwal, memuatTersimpan])
 
   const pilihSesi = (e) => {
     const key = e.target.value
@@ -980,10 +1261,23 @@ export default function LaporanAsesmenSekolah() {
   }
 
   // --- Tarik nilai dari Nilai Asesmen (tabel nilai_ijazah) ---
-  async function tarikNilai() {
+  // hormatiTersimpan = true (dipakai penarikan otomatis saat halaman dibuka): lembar yang
+  // sudah pernah disimpan tidak ditimpa. Tombol "Tarik ulang nilai" selalu menimpa.
+  async function tarikNilai({ hormatiTersimpan = false } = {}) {
     setMemuatNilai(true)
     setInfoNilai('')
     try {
+      const lewati = hormatiTersimpan ? tersimpanRef.current : new Set()
+      const lewatiNilai = lewati.has('nilai')
+      const lewatiKlas = lewati.has('klasifikasi')
+      const lewatiLulus = lewati.has('kelulusan')
+      if (lewatiNilai && lewatiKlas && lewatiLulus) {
+        setInfoNilai(
+          'Lembar 1–3 memakai data yang sudah disimpan. Tekan "Tarik ulang nilai" bila ingin memperbarui dari Nilai Asesmen.'
+        )
+        return
+      }
+
       const tp = String(form.tapel || '').trim()
       const { data, error } = await supabase.from('nilai_ijazah').select('*').eq('tahun_pelajaran', tp)
       if (error) throw error
@@ -1045,14 +1339,21 @@ export default function LaporanAsesmenSekolah() {
           : {}
       })
 
-      setNilai((arr) => arr.map((r, i) => (updNilai[i] ? { ...r, ...updNilai[i] } : r)))
-      setKlas((arr) => arr.map((r, i) => (updKlas[i] ? { ...r, k: updKlas[i] } : r)))
-      setLulus((arr) => arr.map((r, i) => (updLulus[i] ? { ...r, ...updLulus[i] } : r)))
+      if (!lewatiNilai) setNilai((arr) => arr.map((r, i) => (updNilai[i] ? { ...r, ...updNilai[i] } : r)))
+      if (!lewatiKlas) setKlas((arr) => arr.map((r, i) => (updKlas[i] ? { ...r, k: updKlas[i] } : r)))
+      if (!lewatiLulus) setLulus((arr) => arr.map((r, i) => (updLulus[i] ? { ...r, ...updLulus[i] } : r)))
+
+      const dilewati = [
+        lewatiNilai && 'Lembar 1',
+        lewatiKlas && 'Lembar 2',
+        lewatiLulus && 'Lembar 3',
+      ].filter(Boolean)
 
       setInfoNilai(
         `Tertarik dari Nilai Asesmen: ${baris.length} siswa, ${cocok.length} mapel terisi.` +
           (belum.length ? ` Belum ada nilainya (isi manual bila perlu): ${belum.join(', ')}.` : '') +
-          (adaJk ? '' : ' Jumlah L/P belum terbaca dari data siswa, jadi Lembar 3 isi manual.')
+          (adaJk ? '' : ' Jumlah L/P belum terbaca dari data siswa, jadi Lembar 3 isi manual.') +
+          (dilewati.length ? ` ${dilewati.join(', ')} memakai data yang sudah disimpan.` : '')
       )
     } catch (e) {
       console.error('Gagal menarik nilai asesmen:', e)
@@ -1064,12 +1365,18 @@ export default function LaporanAsesmenSekolah() {
 
   // Otomatis: begitu data siswa termuat (dan tiap kali tahun pelajaran / KKM
   // berubah), tarik nilai terbaru. Ditunda sebentar supaya tidak jalan per ketikan.
+  // Penarikan PERTAMA (saat halaman dibuka) menghormati lembar yang sudah tersimpan;
+  // penarikan berikutnya (karena tahun pelajaran / KKM diubah) memperbarui seperti biasa.
   useEffect(() => {
-    if (memuatSiswa || siswaK6.length === 0) return undefined
-    const t = setTimeout(() => { tarikNilai() }, 600)
+    if (memuatTersimpan || memuatSiswa || siswaK6.length === 0) return undefined
+    const t = setTimeout(() => {
+      const pertama = !autoPertama.current
+      autoPertama.current = true
+      tarikNilai({ hormatiTersimpan: pertama })
+    }, 600)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [memuatSiswa, siswaK6, form.tapel, form.kkm])
+  }, [memuatTersimpan, memuatSiswa, siswaK6, form.tapel, form.kkm])
 
   const ubah = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
@@ -1342,6 +1649,20 @@ export default function LaporanAsesmenSekolah() {
     </div>
   )
 
+  // --- Kotak Simpan untuk tab yang sedang aktif ---
+  const tabAktifInfo = TAB.find((t) => t.id === tabAktif)
+  const statusAktif = statusTab(tabAktif)
+  const waktuAktif = labelWaktu(waktuSimpan[tabAktif])
+  const teksStatusAktif = memuatTersimpan
+    ? 'Memuat data tersimpan…'
+    : statusAktif === 'belum'
+    ? 'Belum pernah disimpan.'
+    : statusAktif === 'berubah'
+    ? `Ada perubahan yang belum disimpan${waktuAktif ? ` (terakhir disimpan ${waktuAktif})` : ''}.`
+    : `Tersimpan${waktuAktif ? ` ${waktuAktif}` : ''}.`
+  const warnaStatusAktif =
+    statusAktif === 'berubah' ? 'text-amber-700' : statusAktif === 'tersimpan' ? 'text-emerald-700' : 'text-slate-500'
+
   return (
     <Layout
       title="Laporan Asesmen Sekolah"
@@ -1463,7 +1784,7 @@ export default function LaporanAsesmenSekolah() {
 
         <Bagian
           judul="Nilai dari halaman Nilai Asesmen"
-          keterangan="Lembar 1–3 terisi otomatis dari nilai siswa Kelas 6 (tahun pelajaran sesuai isian di atas). Isian manual di tabel akan tertimpa saat nilai ditarik ulang."
+          keterangan="Lembar 1–3 terisi otomatis dari nilai siswa Kelas 6 (tahun pelajaran sesuai isian di atas). Lembar yang sudah disimpan tidak ditimpa saat halaman dibuka; tombol Tarik ulang nilai akan menimpa isian manual dengan nilai terbaru."
         >
           <div className="flex flex-wrap items-end gap-3">
             <div className="w-32">
@@ -1473,7 +1794,7 @@ export default function LaporanAsesmenSekolah() {
             </div>
             <button
               type="button"
-              onClick={tarikNilai}
+              onClick={() => tarikNilai()}
               disabled={memuatNilai || memuatSiswa}
               className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
             >
@@ -1848,6 +2169,7 @@ export default function LaporanAsesmenSekolah() {
         <div role="tablist" className="mt-2 mb-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
           {TAB.map((t) => {
             const aktif = tabAktif === t.id
+            const st = statusTab(t.id)
             return (
               <button
                 key={t.id}
@@ -1861,11 +2183,74 @@ export default function LaporanAsesmenSekolah() {
                     : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                 }`}
               >
-                <span className="block text-sm font-semibold">{t.label}</span>
+                <span className="flex items-center justify-between gap-2">
+                  <span className="block text-sm font-semibold">{t.label}</span>
+                  {st === 'tersimpan' && (
+                    <Check
+                      size={14}
+                      aria-label="Tersimpan"
+                      className={aktif ? 'text-emerald-300' : 'text-emerald-600'}
+                    />
+                  )}
+                  {st === 'berubah' && (
+                    <span
+                      role="img"
+                      aria-label="Ada perubahan belum disimpan"
+                      title="Ada perubahan belum disimpan"
+                      className={`inline-block h-2 w-2 rounded-full ${aktif ? 'bg-amber-300' : 'bg-amber-500'}`}
+                    />
+                  )}
+                </span>
                 <span className={`block text-xs ${aktif ? 'text-blue-200' : 'text-slate-500'}`}>{t.sub}</span>
               </button>
             )
           })}
+        </div>
+
+        {/* Simpan data tab yang sedang aktif */}
+        <div className="mb-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0 text-sm">
+              <p className="font-medium text-slate-800">
+                Simpan data {tabAktifInfo?.label}
+                {tabAktifInfo?.sub ? <span className="font-normal text-slate-500"> — {tabAktifInfo.sub}</span> : null}
+              </p>
+              <p className={`text-xs ${warnaStatusAktif}`}>{teksStatusAktif}</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => simpanTab([tabAktif])}
+                disabled={menyimpan || memuatTersimpan || !sekolahId}
+                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {menyimpan ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                {menyimpan ? 'Menyimpan…' : `Simpan ${tabAktifInfo?.label || ''}`}
+              </button>
+              <button
+                type="button"
+                onClick={() => simpanTab(TAB.map((t) => t.id))}
+                disabled={menyimpan || memuatTersimpan || !sekolahId}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Simpan semua tab
+              </button>
+            </div>
+          </div>
+          {pesanSimpan && (
+            <p
+              role="status"
+              className={`mt-2 text-xs ${
+                pesanSimpan.tipe === 'galat'
+                  ? 'text-red-700'
+                  : pesanSimpan.tipe === 'ok'
+                  ? 'text-emerald-700'
+                  : 'text-slate-600'
+              }`}
+            >
+              {pesanSimpan.teks}
+            </p>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
