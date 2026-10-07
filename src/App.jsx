@@ -67,6 +67,9 @@ const LaporanBulanan = lazy(() => import('./pages/LaporanBulanan'))
 const AdministrasiKepalaSekolah = lazy(() => import('./pages/AdministrasiKepalaSekolah'))
 const AdministrasiKepsekItem = lazy(() => import('./pages/AdministrasiKepsekItem'))
 const BukuIndukSiswa = lazy(() => import('./pages/BukuIndukSiswa'))
+const BukuKerjaKepsek = lazy(() => import('./pages/BukuKerjaKepsek'))        // BARU
+const SupervisiAkademik = lazy(() => import('./pages/SupervisiAkademik'))    // BARU
+const KinerjaTendik = lazy(() => import('./pages/KinerjaTendik'))   
 const LaporanDaftarHadirGuru = lazy(() => import('./pages/LaporanDaftarHadirGuru'))
 const PusatLaporanGuru = lazy(() => import('./pages/PusatLaporanGuru'))
 const GudangSK = lazy(() => import('./pages/GudangSK'))                    
@@ -406,12 +409,15 @@ export default function App() {
           <Route path="/presensi-puskesmas" element={<ProtectedRoute adminOnly><PresensiPuskesmas /></ProtectedRoute>} />
           <Route path="/daftar-hadir-puskesmas" element={<ProtectedRoute adminOnly><DaftarHadirPuskesmas /></ProtectedRoute>} />
           
-          {/* ============================================================
-          ADMINISTRASI KEPALA SEKOLAH (hub + 15 halaman dokumen)
-          ============================================================ */}
-          <Route path="/administrasi-kepsek" element={<ProtectedRoute adminOnly><AdministrasiKepalaSekolah /></ProtectedRoute>} />
-          <Route path="/administrasi-kepsek/buku-induk-siswa" element={<ProtectedRoute adminOnly><BukuIndukSiswa /></ProtectedRoute>} />
-          <Route path="/administrasi-kepsek/:slug" element={<ProtectedRoute adminOnly><AdministrasiKepsekItem /></ProtectedRoute>} />
+         {/* ============================================================
+         ADMINISTRASI KEPALA SEKOLAH (hub + 15 halaman dokumen)
+         ============================================================ */}
+         <Route path="/administrasi-kepsek" element={<ProtectedRoute adminOnly><AdministrasiKepalaSekolah /></ProtectedRoute>} />
+         <Route path="/administrasi-kepsek/buku-induk-siswa" element={<ProtectedRoute adminOnly><BukuIndukSiswa /></ProtectedRoute>} />
+         <Route path="/administrasi-kepsek/buku-kerja" element={<ProtectedRoute adminOnly><BukuKerjaKepsek /></ProtectedRoute>} />
+         <Route path="/administrasi-kepsek/supervisi-akademik" element={<ProtectedRoute adminOnly><SupervisiAkademik /></ProtectedRoute>} />
+         <Route path="/administrasi-kepsek/kinerja-tendik" element={<ProtectedRoute adminOnly><KinerjaTendik /></ProtectedRoute>} />
+         <Route path="/administrasi-kepsek/:slug" element={<ProtectedRoute adminOnly><AdministrasiKepsekItem /></ProtectedRoute>} />
 
           {/* ============================================================
               3. LAPORAN GURU & SAMPUL LAPORAN
