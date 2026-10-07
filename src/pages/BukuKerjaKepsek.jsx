@@ -35,8 +35,7 @@ const bawaan = () => ({
 })
 
 export default function BukuKerjaKepsek() {
-  const { profile } = useAuth()
-  const sekolahId = profile?.sekolah_id
+  const { sekolahId } = useAuth()
   const [tab, setTab] = useState('jurnal')
 
   const { info, guruList, memuat: memuatGuru, galat, muatUlang } = useDataSekolah(sekolahId)
