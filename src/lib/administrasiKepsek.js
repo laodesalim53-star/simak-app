@@ -169,19 +169,29 @@ export function useDataSekolah(sekolahId) {
       ])
       const prof = profRes?.data || {}
       const s = ps.sekolah || {}
+      const barisGuru = guruRes.error ? [] : guruRes.data || []
+
+      // Kepala Sekolah dicari di SEMUA kolom teks tabel guru (nama kolom jabatan bisa berbeda-beda).
+      const barisKepsek = barisGuru.find((r) =>
+        Object.values(r).some((v) => typeof v === 'string' && /^kepala\s+(sekolah|madrasah)$|^kepsek$/i.test(v.trim()))
+      )
+      const kepsek = barisKepsek ? petaGuru(barisKepsek) : null
+
       setInfo({
         sekolah: s,
         kabupaten: prof.kabupaten || '',
         dinas: prof.dinas_pendidikan || INFO_KOSONG.dinas,
         kecamatan: prof.kecamatan || '',
         alamat: prof.alamat || '',
-        kepalaNama: prof.kepala_sekolah || s.kepala_sekolah || s.nama_kepala_sekolah || s.kepala || '',
+        kepalaNama:
+          prof.kepala_sekolah || s.kepala_sekolah || s.nama_kepala_sekolah || s.kepala || kepsek?.nama || '',
         kepalaNip:
           prof.nip_kepala_sekolah ||
           cariKolomTeks(prof, /nip.*(kepala|kepsek)|(kepala|kepsek).*nip/i) ||
           s.nip_kepala_sekolah ||
           s.nip_kepala ||
           s.nip_kepsek ||
+          kepsek?.nip ||
           '',
         tempat: prof.tempat_ttd || '',
         logoSekolahUrl: urlLogo(prof.logo_path),
@@ -191,7 +201,7 @@ export function useDataSekolah(sekolahId) {
         setGuruList([])
         setGalat(`Data guru belum bisa dibaca (${guruRes.error.message || 'galat tidak diketahui'}).`)
       } else {
-        setGuruList((guruRes.data || []).map(petaGuru).filter((g) => g.nama).sort(urutNama))
+        setGuruList(barisGuru.map(petaGuru).filter((g) => g.nama).sort(urutNama))
       }
     } catch (e) {
       console.error('Gagal memuat data sekolah/guru:', e)
