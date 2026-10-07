@@ -11,10 +11,11 @@
 //                                  "ada perubahan belum disimpan"
 //   pembantu baris guru         -> tarik, tambah, dan segarkan baris dari data guru
 //
-// Tabel yang dibutuhkan: lihat SQL di akhir jawaban / bagian bawah file ini.
+// Tabel yang dibutuhkan: lihat SQL di bagian bawah file ini.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabaseClient'
+import { useAuth } from './AuthContext'
 import { SEKOLAH_KOSONG, ambilProfilSekolah } from '../components/CetakSK'
 
 export const TABEL_DOKUMEN = 'administrasi_kepsek_tersimpan'
@@ -133,6 +134,42 @@ export const tambahBaris = (setData, kunci, barisBaru) =>
 export const hapusBarisTerakhir = (setData, kunci) =>
   setData((d) => ({ ...d, [kunci]: d[kunci].length > 1 ? d[kunci].slice(0, -1) : d[kunci] }))
 
+// ---------- Cari Kepala Sekolah ----------
+
+// Nilai teks "Kepala Sekolah" / "Kepala Madrasah" / "Kepsek" persis (bukan "Wakil Kepala ...").
+const POLA_KEPSEK_PERSIS = /^(kepala\s*(sekolah|madrasah)|kepsek)$/i
+// Cadangan: memuat kata itu di dalam teks (mis. "Guru - Kepala Sekolah"), selain wakil/plt.
+const POLA_KEPSEK_LONGGAR = /kepala\s*(sekolah|madrasah)|kepsek/i
+const POLA_BUKAN_KEPSEK = /wakil|wakasek|waka\b|\bplt\b|\bplh\b/i
+
+function nilaiTeks(r) {
+  return Object.entries(r || {})
+    .filter(([k, v]) => typeof v === 'string' && !/(^|_)id$/i.test(k))
+    .map(([, v]) => v.trim())
+}
+
+export function cariBarisKepsek(barisGuru) {
+  const persis = barisGuru.find((r) => nilaiTeks(r).some((v) => POLA_KEPSEK_PERSIS.test(v)))
+  if (persis) return persis
+  return barisGuru.find((r) =>
+    nilaiTeks(r).some((v) => POLA_KEPSEK_LONGGAR.test(v) && !POLA_BUKAN_KEPSEK.test(v))
+  )
+}
+
+// Cadangan terakhir: akun yang sedang login, bila peran/jabatannya kepala sekolah.
+// Nama field dicoba beberapa kemungkinan karena bentuk data useAuth() tidak diketahui pasti.
+function kepsekDariAkun(auth) {
+  const akun = auth?.profile || auth?.profil || auth?.user || auth || {}
+  const peran = [akun.role, akun.peran, akun.jabatan, auth?.role, auth?.peran]
+    .filter(Boolean)
+    .join(' ')
+  if (!/kepsek|kepala/i.test(peran)) return { nama: '', nip: '' }
+  return {
+    nama: String(akun.nama_lengkap || akun.nama || akun.full_name || akun.name || '').trim(),
+    nip: String(akun.nip || '').trim(),
+  }
+}
+
 // ---------- Hook: data sekolah & guru ----------
 
 const INFO_KOSONG = {
@@ -149,6 +186,7 @@ const INFO_KOSONG = {
 }
 
 export function useDataSekolah(sekolahId) {
+  const auth = useAuth()
   const [info, setInfo] = useState(INFO_KOSONG)
   const [guruList, setGuruList] = useState([])
   const [memuat, setMemuat] = useState(true)
@@ -171,11 +209,39 @@ export function useDataSekolah(sekolahId) {
       const s = ps.sekolah || {}
       const barisGuru = guruRes.error ? [] : guruRes.data || []
 
-      // Kepala Sekolah dicari di SEMUA kolom teks tabel guru (nama kolom jabatan bisa berbeda-beda).
-      const barisKepsek = barisGuru.find((r) =>
-        Object.values(r).some((v) => typeof v === 'string' && /^kepala\s+(sekolah|madrasah)$|^kepsek$/i.test(v.trim()))
-      )
-      const kepsek = barisKepsek ? petaGuru(barisKepsek) : null
+      const barisKepsek = cariBarisKepsek(barisGuru)
+      const kepsek = barisKepsek ? petaGuru(barisKepsek) : { nama: '', nip: '' }
+      const akun = kepsekDariAkun(auth)
+
+      const kepalaNama =
+        prof.kepala_sekolah ||
+        cariKolomTeks(prof, /(nama.*(kepala|kepsek))|((kepala|kepsek).*nama)|^kepala_sekolah$/i) ||
+        s.kepala_sekolah ||
+        s.nama_kepala_sekolah ||
+        s.kepala ||
+        kepsek.nama ||
+        akun.nama ||
+        ''
+      const kepalaNip =
+        prof.nip_kepala_sekolah ||
+        cariKolomTeks(prof, /nip.*(kepala|kepsek)|(kepala|kepsek).*nip/i) ||
+        s.nip_kepala_sekolah ||
+        s.nip_kepala ||
+        s.nip_kepsek ||
+        kepsek.nip ||
+        akun.nip ||
+        ''
+
+      // Bantu diagnosis: tampil di Console (F12) bila nama/NIP Kepala Sekolah masih kosong.
+      if (!kepalaNama || !kepalaNip) {
+        console.info('[useDataSekolah] Kepala Sekolah belum ditemukan.', {
+          kolomProfilSekolah: Object.keys(prof),
+          kolomSekolah: Object.keys(s),
+          kolomGuru: Object.keys(barisGuru[0] || {}),
+          jumlahGuru: barisGuru.length,
+          adaBarisKepsekDiGuru: Boolean(barisKepsek),
+        })
+      }
 
       setInfo({
         sekolah: s,
@@ -183,16 +249,8 @@ export function useDataSekolah(sekolahId) {
         dinas: prof.dinas_pendidikan || INFO_KOSONG.dinas,
         kecamatan: prof.kecamatan || '',
         alamat: prof.alamat || '',
-        kepalaNama:
-          prof.kepala_sekolah || s.kepala_sekolah || s.nama_kepala_sekolah || s.kepala || kepsek?.nama || '',
-        kepalaNip:
-          prof.nip_kepala_sekolah ||
-          cariKolomTeks(prof, /nip.*(kepala|kepsek)|(kepala|kepsek).*nip/i) ||
-          s.nip_kepala_sekolah ||
-          s.nip_kepala ||
-          s.nip_kepsek ||
-          kepsek?.nip ||
-          '',
+        kepalaNama,
+        kepalaNip,
         tempat: prof.tempat_ttd || '',
         logoSekolahUrl: urlLogo(prof.logo_path),
         logoKabupatenUrl: urlLogo(prof.logo_kabupaten_path),
