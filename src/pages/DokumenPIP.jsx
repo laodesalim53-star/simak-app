@@ -53,11 +53,17 @@ const pick = (d, keys) => {
   for (const k of keys) if (d?.[k] && typeof d[k] === "string" && d[k].trim()) return d[k].trim();
   return "";
 };
-// Petakan baris profil_sekolah ke field surat. Sesuaikan nama kolom bila perlu.
+// Buang awalan "PEMERINTAH", "KABUPATEN", "KOTA" dari nama wilayah.
+const bersihWilayah = (v) =>
+  String(v || "").replace(/^\s*pemerintah\s+/i, "").replace(/^\s*(kabupaten|kab\.?|kota)\s+/i, "").trim();
+
 const dariProfil = (d) => {
   if (!d) return {};
   const nama = pick(d, ["nama_sekolah", "nama", "sekolah"]);
-  const kab = pick(d, ["kabupaten", "kab_kota", "kota"]);
+  const kabRaw = pick(d, ["kabupaten", "kab_kota", "kota"]);
+  const kab = bersihWilayah(kabRaw);
+  const jenis = /^\s*(pemerintah\s+)?kota\b/i.test(kabRaw) ? "KOTA" : "KABUPATEN";
+  const tempat = pick(d, ["kecamatan"]) || kab; // tempat surat: kecamatan, kalau kosong kabupaten bersih
   const out = {
     namaSekolah: nama,
     sekolah: nama.toUpperCase(),
@@ -65,12 +71,11 @@ const dariProfil = (d) => {
     kepsek: pick(d, ["nama_kepala_sekolah", "kepala_sekolah", "nama_kepsek"]),
     nip: pick(d, ["nip_kepala_sekolah", "nip_kepsek", "nip"]),
     pangkat: pick(d, ["pangkat_kepala_sekolah", "pangkat_golongan", "pangkat"]),
-    kota: pick(d, ["kecamatan", "kabupaten", "kota"]),
-    kotaKuasa: kab,
+    kota: tempat,
+    kotaKuasa: tempat,
     provinsi: pick(d, ["provinsi"]),
-    kabupaten: kab ? (/^kabupaten/i.test(kab) ? kab : "KABUPATEN " + kab).toUpperCase() : "",
+    kabupaten: kab ? `${jenis} ${kab}`.toUpperCase() : "",
   };
-  // buang field kosong supaya tidak menimpa nilai lain
   return Object.fromEntries(Object.entries(out).filter(([, v]) => v));
 };
 
