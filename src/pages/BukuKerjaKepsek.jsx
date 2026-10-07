@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { Printer } from 'lucide-react'
 import Layout from '../components/Layout'
-import { useAuth } from '../contexts/AuthContext' // SESUAIKAN: sumber sekolah_id akun yang login
+import { useAuth } from '../lib/AuthContext'
 import {
   KopSurat, TandaTanganKepsek, BilahTab, KotakSimpan, Th, Td, Baris, cssCetak, tombolKecil,
 } from '../components/AdministrasiKepsekKomponen'
