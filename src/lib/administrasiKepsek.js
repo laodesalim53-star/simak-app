@@ -75,10 +75,13 @@ export function petaGuru(g) {
     id: g.id,
     nama: String(g.nama_lengkap || g.nama || cariKolomTeks(g, /^nama/i) || '').trim(),
     nip: String(g.nip || cariKolomTeks(g, /(^|_)nip($|_)/i) || '').trim(),
-    gol: cariKolomTeks(g, /golongan|pangkat|(^|_)gol($|_)/i),
-    jabatan: cariKolomTeks(g, /jabatan|jenis_ptk|jenis_guru|tugas/i),
-    mapel: cariKolomTeks(g, /mapel|mata_pelajaran|bidang_studi/i),
+    gol: String(g.pangkat_golongan || cariKolomTeks(g, /golongan|pangkat|(^|_)gol($|_)/i) || '').trim(),
+    // Tabel guru: jenis_ptk (mis. "Guru Kelas", "Tenaga Administrasi Sekolah", "Kepala Sekolah").
+    jabatan: String(g.jenis_ptk || cariKolomTeks(g, /jabatan|jenis_guru/i) || g.tugas_tambahan || '').trim(),
+    tugasTambahan: String(g.tugas_tambahan || '').trim(),
+    mapel: String(g.mata_pelajaran || cariKolomTeks(g, /mapel|mata_pelajaran|bidang_studi/i) || '').trim(),
     kelas: cariKolomTeks(g, /kelas|wali_kelas|mengajar/i),
+    status: g.status || '',
   }
 }
 
@@ -149,6 +152,15 @@ function nilaiTeks(r) {
 }
 
 export function cariBarisKepsek(barisGuru) {
+  // 1) Kolom yang memang menyimpan jabatan: jenis_ptk dan tugas_tambahan.
+  const kolomJabatan = (r) => [r.jenis_ptk, r.tugas_tambahan, r.jabatan].filter((v) => typeof v === 'string').map((v) => v.trim())
+  const utama = barisGuru.find((r) => kolomJabatan(r).some((v) => POLA_KEPSEK_PERSIS.test(v)))
+  if (utama) return utama
+  const utamaLonggar = barisGuru.find((r) =>
+    kolomJabatan(r).some((v) => POLA_KEPSEK_LONGGAR.test(v) && !POLA_BUKAN_KEPSEK.test(v))
+  )
+  if (utamaLonggar) return utamaLonggar
+  // 2) Cadangan: kolom teks mana pun.
   const persis = barisGuru.find((r) => nilaiTeks(r).some((v) => POLA_KEPSEK_PERSIS.test(v)))
   if (persis) return persis
   return barisGuru.find((r) =>
@@ -259,7 +271,7 @@ export function useDataSekolah(sekolahId) {
         setGuruList([])
         setGalat(`Data guru belum bisa dibaca (${guruRes.error.message || 'galat tidak diketahui'}).`)
       } else {
-        setGuruList(barisGuru.map(petaGuru).filter((g) => g.nama).sort(urutNama))
+        setGuruList(barisGuru.map(petaGuru).filter((g) => g.nama && g.status !== 'nonaktif').sort(urutNama))
       }
     } catch (e) {
       console.error('Gagal memuat data sekolah/guru:', e)
