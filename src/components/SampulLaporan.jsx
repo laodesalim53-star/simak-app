@@ -1,8 +1,270 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Printer, Loader2, AlertTriangle, RectangleHorizontal, RectangleVertical } from 'lucide-react'
+import { supabase } from '../lib/supabase'
 import { useIdentitasInstansi } from '../lib/identitasInstansi'
 import { useAuth } from '../lib/AuthContext'
+
+// =============================================================================
+// Tema 21 — Sampul Laporan Pendidikan (latar putih polos, huruf & bingkai emas)
+// Meniru sampul raport bergaya "Hasil Capaian Kompetensi Peserta Didik", tetapi
+// warna merah marun diganti putih polos supaya hemat tinta. Data sekolah diambil
+// dari identitas tenant, data peserta didik (nama, NISN, NIS) dipanggil dari
+// tabel `siswa` yang sama dengan halaman Data Siswa.
+//
+// Warna emas ada di satu tempat (EMAS) — ganti di sini kalau mau lebih
+// terang/gelap. Emas tua (#b8860b) dipilih karena emas terang (#ffd700) hampir
+// tidak terbaca di atas kertas putih.
+// =============================================================================
+const TEMA_RAPORT_ID = 'raport-pendidikan'
+const EMAS = '#b8860b'
+const FONT = '"Times New Roman", Times, serif'
+
+// ------------------------------- DATA SISWA --------------------------------
+// Dipanggil dari komponen utama. Hanya mengambil data saat tema ini aktif.
+function useSiswaSampul(sekolahId, aktif) {
+  const [kelasList, setKelasList] = useState([])
+  const [siswaList, setSiswaList] = useState([])
+  const [kelasId, setKelasId] = useState('')
+  const [siswaId, setSiswaId] = useState('*') // '*' = semua siswa di kelas
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!aktif || !sekolahId) return
+    let batal = false
+    async function muat() {
+      setLoading(true)
+      setError('')
+      const [{ data: kelas, error: eK }, { data: siswa, error: eS }] = await Promise.all([
+        supabase.from('kelas').select('id, nama_kelas').eq('sekolah_id', sekolahId).order('nama_kelas'),
+        supabase
+          .from('siswa')
+          .select('id, nama_lengkap, nis, nisn, kelas_id')
+          .eq('sekolah_id', sekolahId)
+          .eq('status', 'aktif')
+          .order('nama_lengkap'),
+      ])
+      if (batal) return
+      if (eK || eS) setError((eK || eS).message)
+      setKelasList(kelas || [])
+      setSiswaList(siswa || [])
+      setLoading(false)
+    }
+    muat()
+    return () => { batal = true }
+  }, [aktif, sekolahId])
+
+  const siswaKelas = useMemo(
+    () => (kelasId ? siswaList.filter((s) => s.kelas_id === kelasId) : []),
+    [siswaList, kelasId]
+  )
+
+  const terpilih = useMemo(() => {
+    if (!kelasId) return []
+    if (siswaId === '*') return siswaKelas
+    return siswaKelas.filter((s) => s.id === siswaId)
+  }, [kelasId, siswaId, siswaKelas])
+
+  function pilihKelas(id) {
+    setKelasId(id)
+    setSiswaId('*')
+  }
+
+  return { kelasList, siswaKelas, kelasId, pilihKelas, siswaId, setSiswaId, terpilih, loading, error }
+}
+
+// ------------------------- PANEL PILIH SISWA (FORM) -------------------------
+function PanelPilihSiswaSampul({ data }) {
+  const { kelasList, siswaKelas, kelasId, pilihKelas, siswaId, setSiswaId, terpilih, loading, error } = data
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+      <p className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+        Data Peserta Didik {loading && <Loader2 size={12} className="animate-spin" />}
+      </p>
+
+      <label className="text-xs text-slate-500 block">
+        Kelas
+        <select
+          value={kelasId}
+          onChange={(e) => pilihKelas(e.target.value)}
+          className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5 bg-white"
+        >
+          <option value="">— Pilih kelas —</option>
+          {kelasList.map((k) => (
+            <option key={k.id} value={k.id}>{k.nama_kelas}</option>
+          ))}
+        </select>
+      </label>
+
+      {kelasId && (
+        <label className="text-xs text-slate-500 block">
+          Peserta Didik
+          <select
+            value={siswaId}
+            onChange={(e) => setSiswaId(e.target.value)}
+            className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5 bg-white"
+          >
+            <option value="*">Semua siswa di kelas ini ({siswaKelas.length})</option>
+            {siswaKelas.map((s) => (
+              <option key={s.id} value={s.id}>{s.nama_lengkap}</option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      <p className="text-[11px] text-slate-500">
+        {terpilih.length > 0
+          ? `${terpilih.length} sampul akan dicetak (1 siswa = 1 halaman). Pratinjau menampilkan halaman pertama.`
+          : 'Pilih kelas untuk mengisi nama, NISN, dan NIS otomatis. Sebelum dipilih, pratinjau memakai nama contoh.'}
+      </p>
+      {error && <p className="text-[11px] text-red-600">Gagal memuat siswa: {error}</p>}
+    </div>
+  )
+}
+
+// ----------------------------- LEMBAR SAMPUL -------------------------------
+function Sudut({ style }) {
+  return (
+    <svg viewBox="0 0 32 32" style={{ position: 'absolute', width: '14mm', height: '14mm', ...style }} aria-hidden="true">
+      <path d="M1 1 H30 V5 H5 V30 H1 Z" fill="none" stroke={EMAS} strokeWidth="0.7" />
+      <path d="M8 8 H22 V10.5 H10.5 V22 H8 Z" fill="none" stroke={EMAS} strokeWidth="0.5" />
+    </svg>
+  )
+}
+
+function satuLembar({ siswa, identitas, logoUrl, jenisWilayah, email, judulAtas, subJudul, orientasi, terakhir }) {
+  const landscape = orientasi === 'landscape'
+  const lebar = landscape ? '297mm' : '210mm'
+  const tinggi = landscape ? '210mm' : '297mm'
+
+  const baris1 = [
+    identitas.alamat,
+    identitas.desa && `Ds. ${identitas.desa}`,
+    identitas.kecamatan && `Kec. ${identitas.kecamatan}`,
+  ].filter(Boolean).join(' ')
+  const baris2 = [
+    identitas.kabupaten && `${jenisWilayah} ${identitas.kabupaten}`,
+    [identitas.provinsi, identitas.kodePos].filter(Boolean).join(' '),
+  ].filter(Boolean).join(' - ')
+
+  const nama = (siswa?.nama_lengkap || 'NAMA PESERTA DIDIK').toUpperCase()
+  const nisn = siswa?.nisn || '..........'
+  const nis = siswa?.nis || '..........'
+
+  return (
+    <div
+      key={siswa?.id || 'contoh'}
+      className="lembar-cetak print-only mx-auto my-6 relative overflow-hidden"
+      style={{
+        width: lebar,
+        height: tinggi,
+        padding: '12mm',
+        background: '#ffffff',
+        fontFamily: FONT,
+        color: EMAS,
+        pageBreakAfter: terakhir ? 'auto' : 'always',
+        breakAfter: terakhir ? 'auto' : 'page',
+        boxSizing: 'border-box',
+      }}
+    >
+      <div style={{ position: 'relative', height: '100%', border: `0.7mm solid ${EMAS}`, padding: '2mm', boxSizing: 'border-box' }}>
+        <div
+          style={{
+            position: 'relative',
+            height: '100%',
+            border: `0.3mm solid ${EMAS}`,
+            padding: landscape ? '6mm 20mm' : '12mm 14mm',
+            boxSizing: 'border-box',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            textAlign: 'center',
+          }}
+        >
+          <Sudut style={{ top: '-0.3mm', left: '-0.3mm' }} />
+          <Sudut style={{ top: '-0.3mm', right: '-0.3mm', transform: 'scaleX(-1)' }} />
+          <Sudut style={{ bottom: '-0.3mm', left: '-0.3mm', transform: 'scaleY(-1)' }} />
+          <Sudut style={{ bottom: '-0.3mm', right: '-0.3mm', transform: 'scale(-1,-1)' }} />
+
+          <p style={{ margin: 0, fontWeight: 700, fontSize: '26pt', letterSpacing: '1.2mm' }}>
+            {judulAtas}
+          </p>
+          <p style={{ margin: '1mm 0 0', fontWeight: 700, fontSize: '14pt', lineHeight: 1.25, maxWidth: '150mm' }}>
+            {subJudul}
+          </p>
+
+          <p style={{ margin: '5mm 0 0', fontWeight: 700, fontSize: '30pt', lineHeight: 1.1 }}>
+            {(identitas.nama || 'NAMA SEKOLAH').toUpperCase()}
+          </p>
+          {identitas.kode && (
+            <p style={{ margin: '2mm 0 0', fontWeight: 700, fontSize: '14pt' }}>NPSN. {identitas.kode}</p>
+          )}
+          <div style={{ margin: '3mm 0 0', fontWeight: 700, fontSize: '11pt', lineHeight: 1.4, maxWidth: '150mm' }}>
+            {baris1 && <div>{baris1}</div>}
+            {baris2 && <div>{baris2}</div>}
+            {email && <div>Email : {email}</div>}
+          </div>
+
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', minHeight: 0 }}>
+            {logoUrl ? (
+              <img src={logoUrl} alt="Logo" style={{ width: '48mm', height: '48mm', objectFit: 'contain' }} />
+            ) : (
+              <div style={{ width: '48mm', height: '48mm', border: `0.4mm dashed ${EMAS}`, borderRadius: '50%', opacity: 0.5 }} />
+            )}
+          </div>
+
+          <div style={{ width: '100%', maxWidth: '130mm', border: `0.5mm solid ${EMAS}`, padding: '3.5mm 4mm', boxSizing: 'border-box' }}>
+            <div style={{ fontWeight: 700, fontSize: '15pt', lineHeight: 1.2 }}>{nama}</div>
+            <div style={{ fontWeight: 700, fontSize: '10pt', marginTop: '1mm' }}>NISN {nisn} / NIS {nis}</div>
+          </div>
+
+          <p style={{ margin: '12mm 0 0', fontWeight: 700, fontSize: '14pt', lineHeight: 1.35 }}>
+            KEMENTERIAN PENDIDIKAN DAN KEBUDAYAAN
+            <br />
+            REPUBLIK INDONESIA
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Satu halaman per siswa terpilih. Pratinjau di layar hanya menampilkan
+ * halaman pertama (wadah pratinjau memotong tinggi satu lembar); saat dicetak
+ * semua halaman ikut keluar.
+ */
+function SampulRaportPendidikan({
+  identitas,
+  logoUrl,
+  daftarSiswa = [],
+  jenisWilayah = 'Kabupaten',
+  email = '',
+  judulAtas = 'LAPORAN',
+  subJudul = '',
+  orientasi = 'portrait',
+}) {
+  const daftar = daftarSiswa.length > 0 ? daftarSiswa : [null]
+  const sub = subJudul || 'HASIL CAPAIAN KOMPETENSI PESERTA DIDIK'
+  return (
+    <>
+      {daftar.map((siswa, i) =>
+        satuLembar({
+          siswa,
+          identitas,
+          logoUrl,
+          jenisWilayah,
+          email: email || identitas.email,
+          judulAtas,
+          subJudul: sub,
+          orientasi,
+          terakhir: i === daftar.length - 1,
+        })
+      )}
+    </>
+  )
+}
 
 // Daftar jenis laporan untuk tenant SEKOLAH. Dipakai CetakSampulHub.jsx lewat
 // indeks. Untuk kantor/puskesmas/polres, daftar jenis laporan ada di
@@ -42,6 +304,8 @@ export const TEMA_SAMPUL = [
   { id: 'pendidikan-biru', label: 'Tema 18 — Pendidikan Biru Emas (Sekolah)' },
   { id: 'kua-hijau-emas', label: 'Tema 19 — Mihrab Hijau Emas (KUA)' },
   { id: 'polres-tribrata', label: 'Tema 20 — Tribrata Biru Emas (Polres)' },
+  // Tema 21: sampul per peserta didik (data dari tabel siswa), putih huruf emas.
+  { id: TEMA_RAPORT_ID, label: 'Tema 21 — Sampul Laporan Pendidikan (Putih, Huruf Emas)' },
 ]
 
 // Tema 17-20 dikaitkan ke jenis bingkainya. Dipakai untuk menentukan tema
@@ -1439,6 +1703,8 @@ const KOMPONEN_TEMA = {
   'pendidikan-biru': (props) => <SampulTenant jenis="pendidikan" {...props} />,
   'kua-hijau-emas': (props) => <SampulTenant jenis="kua" {...props} />,
   'polres-tribrata': (props) => <SampulTenant jenis="polres" {...props} />,
+  // Tema 21 (TEMA_RAPORT_ID) tidak lewat tabel ini — dirender langsung di
+  // komponen utama karena butuh data identitas & daftar siswa.
 }
 
 // ---------------------------------------------------------------------------
@@ -1578,6 +1844,10 @@ function useSkalaPratinjau(lebarMm, aktif) {
  * (Kesehatan), polres -> Tema 20 (Tribrata), selain itu -> Tema 18
  * (Pendidikan). Pengguna tetap bebas memilih tema lain lewat dropdown.
  *
+ * Tema 21 (Sampul Laporan Pendidikan) khusus sekolah: satu halaman per siswa
+ * dengan nama/NISN/NIS dari tabel `siswa`. Tema ini memakai tata letaknya
+ * sendiri, jadi pilihan Pola Sampul (Dekoratif/Kop Resmi) tidak berpengaruh.
+ *
  * Khusus tenant Polres: baris Desa/Kelurahan, Kecamatan, Nama Bank dan Nomor
  * Rekening disembunyikan, diganti baris Polda. Pilihan Kabupaten/Kota di
  * Kop Resmi juga disembunyikan (kop Polres mengikuti struktur Polri).
@@ -1611,7 +1881,8 @@ export default function SampulLaporan({
 }) {
   const navigate = useNavigate()
   const { cfg, identitas, loading, error: errorMuat } = useIdentitasInstansi()
-  const { isKantor, isPuskesmas, isPolres } = useAuth()
+  // PERIKSA: nama field id sekolah di AuthContext (di sini diasumsikan `sekolahId`).
+  const { isKantor, isPuskesmas, isPolres, sekolahId } = useAuth()
 
   // Polres tidak memakai baris rekening bank di sampul
   const tampilkanBank = tampilkanBankProp && !isPolres
@@ -1653,6 +1924,10 @@ export default function SampulLaporan({
   useEffect(() => {
     if (!temaDipilihManual) setTema(temaTenant)
   }, [temaTenant, temaDipilihManual])
+
+  // Tema 21 aktif? (data siswa hanya dimuat saat tema ini dipilih)
+  const temaRaport = tema === TEMA_RAPORT_ID
+  const dataSiswa = useSiswaSampul(sekolahId, temaRaport)
 
   // Skala pratinjau dinamis (harus dipanggil SEBELUM return awal `if (loading)`)
   const lebarMm = orientasi === 'landscape' ? 297 : 210
@@ -1737,6 +2012,23 @@ export default function SampulLaporan({
     dibuatOleh,
     orientasi,
   }
+
+  // Props khusus Tema 21: identitas sudah dibersihkan & memakai isian form.
+  const propsRaport = {
+    identitas: {
+      ...identitas,
+      desa: desaKelurahan,
+      kecamatan: bersihkanWilayah(identitas.kecamatan, 'kecamatan'),
+      kabupaten: kabupatenBersih,
+    },
+    logoUrl: identitas.logoUrl,
+    daftarSiswa: dataSiswa.terpilih,
+    jenisWilayah,
+    email: emailSekolah,
+    subJudul,
+    orientasi,
+  }
+
   const KomponenAktif = KOMPONEN_TEMA[tema] || SampulGelombang
   const dimensi = dimensiHalaman(orientasi)
 
@@ -1805,30 +2097,32 @@ export default function SampulLaporan({
               )}
             </div>
 
-            <div className="text-xs text-slate-500">
-              Pola Sampul
-              <div className="mt-1 grid grid-cols-2 gap-2">
-                {POLA_SAMPUL.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => setPolaSampul(p.id)}
-                    className={`text-sm rounded px-2 py-1.5 border font-medium transition-colors ${
-                      polaSampul === p.id
-                        ? 'bg-blue-50 border-blue-400 text-blue-700'
-                        : 'border-slate-300 text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    {p.id === 'dekoratif' ? 'Dekoratif' : 'Kop Resmi'}
-                  </button>
-                ))}
+            {!temaRaport && (
+              <div className="text-xs text-slate-500">
+                Pola Sampul
+                <div className="mt-1 grid grid-cols-2 gap-2">
+                  {POLA_SAMPUL.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setPolaSampul(p.id)}
+                      className={`text-sm rounded px-2 py-1.5 border font-medium transition-colors ${
+                        polaSampul === p.id
+                          ? 'bg-blue-50 border-blue-400 text-blue-700'
+                          : 'border-slate-300 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {p.id === 'dekoratif' ? 'Dekoratif' : 'Kop Resmi'}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1 text-[11px] text-slate-400">
+                  {polaSampul === 'dekoratif'
+                    ? `Logo bulat kecil + tabel identitas ${cfg.labelInstansi.toLowerCase()} lengkap.`
+                    : 'Kop 3 baris + logo besar di tengah, seperti kop surat resmi.'}
+                </p>
               </div>
-              <p className="mt-1 text-[11px] text-slate-400">
-                {polaSampul === 'dekoratif'
-                  ? `Logo bulat kecil + tabel identitas ${cfg.labelInstansi.toLowerCase()} lengkap.`
-                  : 'Kop 3 baris + logo besar di tengah, seperti kop surat resmi.'}
-              </p>
-            </div>
+            )}
 
             <label className="text-xs text-slate-500">
               Tema Sampul
@@ -1848,7 +2142,9 @@ export default function SampulLaporan({
               </select>
             </label>
 
-            {kunciJenisLaporan ? (
+            {temaRaport && <PanelPilihSiswaSampul data={dataSiswa} />}
+
+            {!temaRaport && (kunciJenisLaporan ? (
               <div className="text-xs text-slate-500">
                 Jenis Laporan
                 <div className="mt-0.5 w-full text-sm border border-slate-200 bg-slate-50 rounded px-2 py-1.5 text-slate-700 font-medium">
@@ -1868,9 +2164,9 @@ export default function SampulLaporan({
                   ))}
                 </select>
               </label>
-            )}
+            ))}
 
-            {!kunciJenisLaporan && jenisLaporan === 'Lainnya (isi bebas)' && (
+            {!temaRaport && !kunciJenisLaporan && jenisLaporan === 'Lainnya (isi bebas)' && (
               <label className="text-xs text-slate-500">
                 Judul Laporan
                 <input
@@ -1883,7 +2179,7 @@ export default function SampulLaporan({
               </label>
             )}
 
-            {polaSampul === 'kop-resmi' && (
+            {!temaRaport && polaSampul === 'kop-resmi' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {!isPolres && (
                   <label className="text-xs text-slate-500">
@@ -1917,12 +2213,16 @@ export default function SampulLaporan({
                 type="text"
                 value={subJudul}
                 onChange={(e) => setSubJudul(e.target.value)}
-                placeholder={isPolres ? 'mis. BAGIAN PERENCANAAN' : 'mis. BANTUAN OPERASIONAL SEKOLAH (BOS)'}
+                placeholder={
+                  temaRaport
+                    ? 'kosong = HASIL CAPAIAN KOMPETENSI PESERTA DIDIK'
+                    : isPolres ? 'mis. BAGIAN PERENCANAAN' : 'mis. BANTUAN OPERASIONAL SEKOLAH (BOS)'
+                }
                 className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
               />
             </label>
 
-            {tampilkanKelas && (
+            {tampilkanKelas && !temaRaport && (
               <label className="text-xs text-slate-500">
                 Kelas
                 <input
@@ -1935,32 +2235,34 @@ export default function SampulLaporan({
               </label>
             )}
 
-            <div className="grid grid-cols-[auto_1fr] gap-2 items-end">
-              <label className="text-xs text-slate-500">
-                Label
-                <select
-                  value={labelTahunPilihan}
-                  onChange={(e) => setLabelTahunPilihan(e.target.value)}
-                  className="mt-0.5 text-sm border border-slate-300 rounded px-2 py-1.5 font-medium"
-                >
-                  {PILIHAN_LABEL_TAHUN.map((opsi) => (
-                    <option key={opsi} value={opsi}>{opsi}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-xs text-slate-500">
-                Isi Tahun
-                <input
-                  type="text"
-                  value={tahunAnggaran}
-                  onChange={(e) => setTahunAnggaran(e.target.value)}
-                  placeholder="mis. 2026 / 2027"
-                  className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
-                />
-              </label>
-            </div>
+            {!temaRaport && (
+              <div className="grid grid-cols-[auto_1fr] gap-2 items-end">
+                <label className="text-xs text-slate-500">
+                  Label
+                  <select
+                    value={labelTahunPilihan}
+                    onChange={(e) => setLabelTahunPilihan(e.target.value)}
+                    className="mt-0.5 text-sm border border-slate-300 rounded px-2 py-1.5 font-medium"
+                  >
+                    {PILIHAN_LABEL_TAHUN.map((opsi) => (
+                      <option key={opsi} value={opsi}>{opsi}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs text-slate-500">
+                  Isi Tahun
+                  <input
+                    type="text"
+                    value={tahunAnggaran}
+                    onChange={(e) => setTahunAnggaran(e.target.value)}
+                    placeholder="mis. 2026 / 2027"
+                    className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
+                  />
+                </label>
+              </div>
+            )}
 
-            {polaSampul === 'dekoratif' && (
+            {(polaSampul === 'dekoratif' || temaRaport) && (
               <>
                 {!isPolres && (
                   <label className="text-xs text-slate-500">
@@ -1975,7 +2277,7 @@ export default function SampulLaporan({
                   </label>
                 )}
 
-                {tampilkanBank && (
+                {tampilkanBank && !temaRaport && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <label className="text-xs text-slate-500">
                       Nama Bank
@@ -2011,16 +2313,18 @@ export default function SampulLaporan({
                   />
                 </label>
 
-                <label className="text-xs text-slate-500">
-                  Dibuat Oleh
-                  <input
-                    type="text"
-                    value={dibuatOleh}
-                    onChange={(e) => setDibuatOleh(e.target.value)}
-                    placeholder={isPolres ? 'mis. AKP Budi Santoso' : 'mis. LD.SALIM, S.Pd'}
-                    className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
-                  />
-                </label>
+                {!temaRaport && (
+                  <label className="text-xs text-slate-500">
+                    Dibuat Oleh
+                    <input
+                      type="text"
+                      value={dibuatOleh}
+                      onChange={(e) => setDibuatOleh(e.target.value)}
+                      placeholder={isPolres ? 'mis. AKP Budi Santoso' : 'mis. LD.SALIM, S.Pd'}
+                      className="mt-0.5 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
+                    />
+                  </label>
+                )}
               </>
             )}
           </div>
@@ -2068,7 +2372,9 @@ export default function SampulLaporan({
                 transformOrigin: 'top left',
               }}
             >
-              {polaSampul === 'kop-resmi' ? (
+              {temaRaport ? (
+                <SampulRaportPendidikan {...propsRaport} />
+              ) : polaSampul === 'kop-resmi' ? (
                 <SampulKopResmi {...propsKopResmi} />
               ) : (
                 <KomponenAktif {...propsSampul} />
