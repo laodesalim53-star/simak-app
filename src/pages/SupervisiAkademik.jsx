@@ -69,8 +69,7 @@ const bawaan = () => ({
 const skorGuru = (data, uid) => SEMUA_BUTIR.map((_, i) => data.skor?.[uid]?.[i])
 
 export default function SupervisiAkademik() {
-  const { profile } = useAuth()
-  const sekolahId = profile?.sekolah_id
+  const { sekolahId } = useAuth()
   const [tab, setTab] = useState('jadwal')
 
   const { info, guruList, memuat: memuatGuru, galat, muatUlang } = useDataSekolah(sekolahId)
