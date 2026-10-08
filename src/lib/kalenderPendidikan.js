@@ -158,3 +158,34 @@ export function getStatusTanggal(isoDate, overrides = {}) {
 export function jumlahHariDalamBulan(tahun, bulan) {
   return new Date(tahun, bulan, 0).getDate()
 }
+
+// ---------- Helper libur (dipakai Hari Libur & Daftar Hadir) ----------
+
+// Kode yang dianggap hari libur. Untuk guru saja bisa dipersempit jadi ['LU', 'CB'].
+export const KODE_LIBUR = ['LU', 'CB', 'LS']
+
+export function isKodeLibur(kode) {
+  return KODE_LIBUR.includes(kode)
+}
+
+// true kalau tanggal itu Minggu / LU / CB / LS (memperhitungkan override admin)
+export function isHariLibur(isoDate, overrides = {}) {
+  const s = getStatusTanggal(isoDate, overrides)
+  return !!s && (s.kode === 'M' || isKodeLibur(s.kode))
+}
+
+// Daftar semua tanggal libur (selain Minggu) sepanjang tahun pelajaran,
+// gabungan data bawaan + override admin. manual=true → berasal dari tabel Supabase.
+export function getDaftarLibur(overrides = {}) {
+  const hasil = []
+  const d = new Date('2026-07-01T00:00:00')
+  const akhir = new Date('2027-07-11T00:00:00')
+  for (; d <= akhir; d.setDate(d.getDate() + 1)) {
+    const iso = toISODate(d.getFullYear(), d.getMonth() + 1, d.getDate())
+    const s = getStatusTanggal(iso, overrides)
+    if (s && isKodeLibur(s.kode)) {
+      hasil.push({ tanggal: iso, kode: s.kode, keterangan: s.keterangan, manual: !!overrides[iso] })
+    }
+  }
+  return hasil
+}
