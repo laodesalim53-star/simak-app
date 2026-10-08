@@ -5,6 +5,7 @@ import { Printer, Pencil } from 'lucide-react'
 import Layout from '../components/Layout'
 import KopSurat from '../components/KopSurat'
 import { susunDaftarHadir } from '../lib/daftarHadirUtils'
+import { getStatusTanggal, isKodeLibur, toISODate } from '../lib/kalenderPendidikan'
 
 const NAMA_BULAN = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -189,10 +190,9 @@ const KOLOM_KETERANGAN = 'keterangan'      // text, opsional
 const KOLOM_JAM_MASUK = 'jam_masuk'        // time/text, opsional — kolom "Kedatangan"
 const KOLOM_JAM_PULANG = 'jam_pulang'      // time/text, opsional — kolom "Kepulangan"
 
-// Tabel hari libur — DIASUMSIKAN nama tabelnya `hari_libur` dengan kolom
-// `tanggal` (date), sama seperti yang dipakai menu "Hari Libur" di sidebar.
-const TABEL_HARI_LIBUR = 'hari_libur'
-const KOLOM_TANGGAL_LIBUR = 'tanggal'
+// Hari libur disinkronkan dengan halaman Kalender Pendidikan & Hari Libur:
+// sumber datanya tabel `kalender_overrides` (tanggal, kode, keterangan) +
+// data bawaan di src/lib/kalenderPendidikan.js (LU / CB / LS, lihat KODE_LIBUR).
 
 // Singkatan status yang ditampilkan di kolom tanggal (mode Kolektif)
 const SINGKATAN_STATUS = {
@@ -239,6 +239,11 @@ function normalisasiJabatan(jabatan) {
   return /^G\.?\s?P\.?$/i.test(String(jabatan || '').trim()) ? 'G.K' : jabatan
 }
 
+// Kepala Sekolah: "KS", "K.S", "K.S.", atau jabatan yang diawali "Kepala"
+function apakahKepala(p) {
+  return /^(K\.?\s?S\.?$|KEPALA)/i.test(String(p?.jabatan || '').trim())
+}
+
 export default function DaftarHadirPegawai() {
   const { profil, sekolahId, isKantor, isPolres, isAdmin } = useAuth()
 
@@ -254,7 +259,8 @@ export default function DaftarHadirPegawai() {
   const [profilMentah, setProfilMentah] = useState(null)
   const [pegawaiList, setPegawaiList] = useState([])
   const [presensiMap, setPresensiMap] = useState({})
-  const [tanggalLibur, setTanggalLibur] = useState(new Set()) // angka tanggal (1-31) yang libur bulan ini
+  // Map: angka tanggal (1-31) -> keterangan libur, khusus libur non-Minggu bulan ini
+  const [tanggalLibur, setTanggalLibur] = useState(new Map())
   const [loading, setLoading] = useState(true)
 
   const now = new Date()
@@ -297,7 +303,7 @@ export default function DaftarHadirPegawai() {
     const h = hariKe(hari)
     if (h === 0) return K.namaHariMinggu || 'MINGGU'
     if (h === 6 && K.sabtuLibur) return K.namaHariSabtu || 'SABTU'
-    if (tanggalLibur.has(hari)) return 'LIBUR'
+    if (tanggalLibur.has(hari)) return String(tanggalLibur.get(hari) || 'LIBUR').toUpperCase()
     return null
   }
 
@@ -394,9 +400,8 @@ export default function DaftarHadirPegawai() {
             ...p,
             jabatan: petaJabatan.get(String(p.id)) || normalisasiJabatan(p.jabatan),
           }))
-          // Kepala Sekolah (KS) selalu di urutan paling atas; sisanya tetap
-          // urut nama seperti hasil query (sort di JS bersifat stabil).
-          const apakahKepala = (p) => /^(KS|KEPALA)/i.test(String(p.jabatan || '').trim())
+          // Kepala Sekolah (KS / K.S) selalu di urutan paling atas (no 1);
+          // sisanya tetap urut nama seperti hasil query (sort di JS bersifat stabil).
           denganJabatan.sort((a, b) => Number(apakahKepala(b)) - Number(apakahKepala(a)))
           setPegawaiList(denganJabatan)
         } catch (e) {
@@ -423,25 +428,36 @@ export default function DaftarHadirPegawai() {
       }
       setPresensiMap(map)
 
-      // Ambil daftar hari libur bulan ini (di luar Sabtu/Minggu yang
-      // otomatis dihitung dari tanggal).
+      // Hari libur bulan ini, disinkronkan dengan Kalender Pendidikan:
+      // data bawaan (LU/CB/LS) + penyesuaian admin di tabel kalender_overrides.
+      // Hari Minggu tetap otomatis dihitung dari tanggal.
       try {
-        const { data: libur, error: errorLibur } = await supabase
-          .from(TABEL_HARI_LIBUR)
-          .select(KOLOM_TANGGAL_LIBUR)
-          .gte(KOLOM_TANGGAL_LIBUR, tanggalAwal)
-          .lte(KOLOM_TANGGAL_LIBUR, tanggalAkhir)
+        const { data: overrideRows, error: errorLibur } = await supabase
+          .from('kalender_overrides')
+          .select('tanggal, kode, keterangan')
+          .gte('tanggal', tanggalAwal)
+          .lte('tanggal', tanggalAkhir)
 
         if (errorLibur) {
-          console.error('Gagal memuat hari libur — cek nama tabel/kolom TABEL_HARI_LIBUR:', errorLibur)
-          setTanggalLibur(new Set())
-        } else {
-          const set = new Set((libur || []).map((b) => new Date(b[KOLOM_TANGGAL_LIBUR]).getDate()))
-          setTanggalLibur(set)
+          console.error('Gagal memuat kalender_overrides — memakai data bawaan kalender saja:', errorLibur)
         }
+
+        const overrides = {}
+        ;(overrideRows || []).forEach((r) => {
+          overrides[r.tanggal] = { kode: r.kode, keterangan: r.keterangan }
+        })
+
+        const peta = new Map()
+        for (let h = 1; h <= jumlahHari; h++) {
+          const status = getStatusTanggal(toISODate(tahun, bulan, h), overrides)
+          if (status && isKodeLibur(status.kode)) {
+            peta.set(h, status.keterangan || 'Libur')
+          }
+        }
+        setTanggalLibur(peta)
       } catch (e) {
         console.error('Gagal memuat hari libur:', e)
-        setTanggalLibur(new Set())
+        setTanggalLibur(new Map())
       }
 
       setLoading(false)
@@ -467,8 +483,8 @@ export default function DaftarHadirPegawai() {
   const jabatanKepala = P?.jabatanKepala || K.petakanProfil({}).jabatanKepala
   const barisNomorKepala = P?.barisNomorKepala ?? K.petakanProfil({}).barisNomorKepala
   const tempatTtd = P?.tempatTtd || P?.kabupaten || ''
-  const tanggalCetak = formatTanggalIndonesia(new Date())
-  // Daftar hadir manual ditandatangani per akhir bulan berjalan
+  // Tanggal pada tanda tangan = hari terakhir bulan yang dicetak
+  // (mis. Februari 2026 -> 28 Februari 2026), bukan tanggal hari ini.
   const tanggalAkhirBulan = formatTanggalIndonesia(new Date(tahun, bulan - 1, jumlahHari))
 
   const unitKerja = P?.namaUnit || '-'
@@ -770,7 +786,7 @@ export default function DaftarHadirPegawai() {
                 <span className="text-red-600"> Angka tanggal merah</span> = hari Minggu/libur.
               </p>
               <div className="ttd-block text-center w-52 shrink-0 text-[11px] leading-tight text-slate-700">
-                <p>{tempatTtd ? `${tempatTtd}, ${tanggalCetak}` : '\u00A0'}</p>
+                <p>{tempatTtd ? `${tempatTtd}, ${tanggalAkhirBulan}` : tanggalAkhirBulan}</p>
                 <p>{jabatanKepala}</p>
                 <div className="h-10 flex items-end justify-center">
                   {ttdKepalaUrl && (
@@ -809,7 +825,7 @@ export default function DaftarHadirPegawai() {
                   </p>
                 </div>
                 <div className="text-center w-48">
-                  <p>{tempatTtd ? `${tempatTtd}, ${tanggalCetak}` : '\u00A0'}</p>
+                  <p>{tempatTtd ? `${tempatTtd}, ${tanggalAkhirBulan}` : tanggalAkhirBulan}</p>
                   <p>Dibuat oleh</p>
                   <div className="h-20" />
                   <p className="font-semibold border-t border-slate-400 pt-1">
