@@ -79,8 +79,14 @@ const STAR_WATERMARK_STYLE = {
  * Props:
  *  - sekolah: { nama, alamat, kota } (disediakan untuk pemakaian di masa depan)
  *  - data: baris dari tabel `kuitansi`
+ *  - tanpaWatermark: (opsional, default false) kalau true, watermark bintang
+ *    tidak dirender — dipakai untuk tab "Kwitansi (Tanpa Watermark)".
+ *    Default false supaya kwitansi bawaan tetap tampil dengan watermark.
  */
-const KuitansiPrintTemplate = forwardRef(function KuitansiPrintTemplate({ sekolah, data }, ref) {
+const KuitansiPrintTemplate = forwardRef(function KuitansiPrintTemplate(
+  { sekolah, data, tanpaWatermark = false },
+  ref
+) {
   const total = Number(data?.jumlah_total) || 0
 
   return (
@@ -96,8 +102,10 @@ const KuitansiPrintTemplate = forwardRef(function KuitansiPrintTemplate({ sekola
         colorAdjust: 'exact',
       }}
     >
-      {/* Watermark bintang */}
-      <div className="absolute inset-0" style={STAR_WATERMARK_STYLE} aria-hidden="true" />
+      {/* Watermark bintang — hanya untuk kwitansi bawaan */}
+      {!tanpaWatermark && (
+        <div className="absolute inset-0" style={STAR_WATERMARK_STYLE} aria-hidden="true" />
+      )}
 
       {/* Konten di atas watermark */}
       <div className="relative">
