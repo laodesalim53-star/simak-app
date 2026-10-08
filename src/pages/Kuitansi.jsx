@@ -17,6 +17,15 @@ function formatTanggal(tgl) {
   return new Date(tgl).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+// Dua tab di halaman ini:
+//  - 'kuitansi' : kwitansi bawaan (dengan watermark bintang)
+//  - 'kwitansi' : kwitansi polos (tanpa watermark bintang)
+// Keduanya disimpan di tabel `kuitansi` yang sama, dibedakan lewat kolom `jenis`.
+const TABS = [
+  { key: 'kuitansi', label: 'Kuitansi' },
+  { key: 'kwitansi', label: 'Kwitansi (Tanpa Watermark)' },
+]
+
 // Kolom template Excel untuk impor massal Kuitansi.
 // Satu baris Excel = satu kuitansi. Nominal diisi langsung lewat kolom jumlah_total
 // (tidak ada lagi rincian barang — itu khusus Nota).
@@ -65,13 +74,13 @@ function tanggalDariNilaiImpor(nilai) {
   return teks
 }
 
-function mapRowKuitansi(row) {
+function mapRowKuitansi(row, jenis = 'kuitansi') {
   const diterimaDari = String(row['diterima_dari'] || '').trim()
   const jumlahTotal = Number(row['jumlah_total']) || 0
   if (!diterimaDari && !jumlahTotal) return null
 
   return {
-    jenis: 'kuitansi',
+    jenis,
     no_bukti: String(row['no_bukti'] || '').trim(),
     lembar: String(row['lembar'] || 'I/II/III/IV/V').trim(),
     mata_anggaran: String(row['mata_anggaran'] || '').trim(),
@@ -93,6 +102,7 @@ function mapRowKuitansi(row) {
 export default function Kuitansi() {
   const { profil } = useAuth()
   const sekolahId = profil?.sekolah_id
+  const [tab, setTab] = useState('kuitansi') // 'kuitansi' (bawaan, ada watermark) | 'kwitansi' (polos)
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
   const [pencarian, setPencarian] = useState('')
@@ -107,20 +117,28 @@ export default function Kuitansi() {
   const [cetakUlang, setCetakUlang] = useState(null)
   const printRef = useRef(null)
 
+  const tanpaWatermark = tab === 'kwitansi'
+  const labelJenis = tanpaWatermark ? 'Kwitansi' : 'Kuitansi'
+
   async function loadData() {
     setLoading(true)
     const { data: rows, error } = await supabase
       .from('kuitansi')
       .select('*')
-      .eq('jenis', 'kuitansi')
+      .eq('jenis', tab)
       .order('tanggal', { ascending: false })
       .order('id', { ascending: false })
     if (!error) setData(rows || [])
     setLoading(false)
   }
 
+  // Muat ulang data setiap kali tab berganti.
   useEffect(() => {
     loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab])
+
+  useEffect(() => {
     if (!sekolahId) return
     supabase.from('profil_sekolah').select('*').eq('sekolah_id', sekolahId).maybeSingle().then(({ data }) => {
       if (data) {
@@ -160,7 +178,7 @@ export default function Kuitansi() {
   }, [cetakUlang])
 
   async function handleHapus(row) {
-    if (!confirm(`Hapus kuitansi nomor "${row.nomor || '-'}"? Tindakan ini tidak bisa dibatalkan.`)) return
+    if (!confirm(`Hapus ${labelJenis.toLowerCase()} nomor "${row.nomor || '-'}"? Tindakan ini tidak bisa dibatalkan.`)) return
     setMenghapus(row.id)
     const { error } = await supabase.from('kuitansi').delete().eq('id', row.id)
     setMenghapus(null)
@@ -203,11 +221,11 @@ export default function Kuitansi() {
     const gagal = []
     for (const row of rows) {
       try {
-        const { data: nomorData, error: nomorErr } = await supabase.rpc('next_nomor_kuitansi', { p_jenis: 'kuitansi' })
+        const { data: nomorData, error: nomorErr } = await supabase.rpc('next_nomor_kuitansi', { p_jenis: tab })
         if (nomorErr) throw nomorErr
 
         const payload = {
-          jenis: 'kuitansi',
+          jenis: tab,
           nomor: nomorData,
           no_bukti: row.no_bukti,
           lembar: row.lembar,
@@ -243,8 +261,8 @@ export default function Kuitansi() {
 
   return (
     <Layout
-      title="Kuitansi"
-      subtitle="Riwayat semua kuitansi yang pernah dibuat"
+      title={labelJenis}
+      subtitle={`Riwayat semua ${labelJenis.toLowerCase()} yang pernah dibuat`}
       actions={
         <>
           <button className="btn-secondary" onClick={() => setShowImport(true)}>
@@ -254,11 +272,29 @@ export default function Kuitansi() {
             <Wallet size={16} /> Tarik Data dari BKU
           </button>
           <button className="btn-primary" onClick={() => setShowBuat(true)}>
-            <Plus size={16} /> Buat Kuitansi Baru
+            <Plus size={16} /> Buat {labelJenis} Baru
           </button>
         </>
       }
     >
+      {/* Tab: Kuitansi (bawaan, ada watermark) | Kwitansi (tanpa watermark) */}
+      <div className="flex gap-1 mb-4 border-b border-ink-700/10 no-print">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => { setTab(t.key); setPencarian('') }}
+            className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 transition-colors ${
+              tab === t.key
+                ? 'border-brass-500 text-ink-950'
+                : 'border-transparent text-ink-700/60 hover:text-ink-900'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       <div className="card p-4 mb-4 flex flex-wrap gap-3 items-end">
         <div className="flex-1 min-w-[220px]">
           <label className="label-field">Cari</label>
@@ -295,7 +331,7 @@ export default function Kuitansi() {
                 <td colSpan={6} className="text-center py-10 text-ink-700/50">
                   <div className="flex flex-col items-center gap-2">
                     <Receipt size={28} className="text-ink-700/25" />
-                    <span>Belum ada kuitansi yang cocok.</span>
+                    <span>Belum ada {labelJenis.toLowerCase()} yang cocok.</span>
                   </div>
                 </td>
               </tr>
@@ -334,6 +370,7 @@ export default function Kuitansi() {
 
       {showBuat && (
         <KuitansiModal
+          jenis={tab}
           keuanganRow={bkuTerpilih}
           sekolah={sekolah}
           sekolahId={sekolahId}
@@ -351,9 +388,9 @@ export default function Kuitansi() {
       <BulkImportModal
         open={showImport}
         onClose={() => { setShowImport(false); loadData() }}
-        title="Impor Kuitansi"
+        title={`Impor ${labelJenis}`}
         templateHeaders={TEMPLATE_HEADERS}
-        mapRow={mapRowKuitansi}
+        mapRow={(row) => mapRowKuitansi(row, tab)}
         onImport={handleImportKuitansi}
       />
 
@@ -364,6 +401,7 @@ export default function Kuitansi() {
           ref={printRef}
           sekolah={sekolah}
           data={cetakUlang}
+          tanpaWatermark={cetakUlang.jenis === 'kwitansi'}
         />
       )}
     </Layout>
