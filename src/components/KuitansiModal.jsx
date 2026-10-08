@@ -89,11 +89,15 @@ function cariGuruBerdasarkanPeran(daftarGuru, kataKunci) {
  *
  * Dipanggil dari Keuangan.jsx atau Kuitansi.jsx:
  *   <KuitansiModal
+ *     jenis="kuitansi"           // 'kuitansi' (bawaan, ada watermark bintang) | 'kwitansi' (polos, tanpa watermark)
  *     keuanganRow={row}          // baris transaksi keuangan yang mau dibuatkan kuitansi (boleh null)
  *     sekolah={{ nama, alamat, kota }}
  *     sekolahId={sekolahId}      // dipakai untuk cari Kepala Sekolah/Bendahara di tabel guru
  *     onClose={() => setKuitansiFor(null)}
  *   />
+ *
+ * Prop `jenis` bersifat opsional dan default-nya 'kuitansi', jadi pemanggil
+ * lama (mis. Keuangan.jsx) tetap berfungsi persis seperti semula.
  *
  * keuanganRow juga dipakai untuk prefill dari alur "Tarik Data dari BKU" di
  * Kuitansi.jsx — baris bku_kas dipetakan ke bentuk yang sama di sana
@@ -120,13 +124,15 @@ function cariGuruBerdasarkanPeran(daftarGuru, kataKunci) {
  *
  * PENOMORAN: untuk kuitansi biasa (dibuat manual, keuanganRow?.id terisi
  * atau kosong total), nomor kuitansi tetap otomatis lewat RPC
- * next_nomor_kuitansi seperti semula. KHUSUS untuk kuitansi hasil "Tarik
- * Data dari BKU" (keuanganRow tanpa id, tapi No. Bukti terisi dari baris
- * BKU), nomor kuitansi LANGSUNG memakai No. Bukti BKU apa adanya (mis.
- * "BNU02"), bukan format auto "0008/BNU/2026" — supaya nomor kuitansi
- * selalu mengikuti nomor bukti aslinya di BKU. Lihat handleSimpan.
+ * next_nomor_kuitansi seperti semula (p_jenis mengikuti prop `jenis`).
+ * KHUSUS untuk kuitansi hasil "Tarik Data dari BKU" (keuanganRow tanpa id,
+ * tapi No. Bukti terisi dari baris BKU), nomor kuitansi LANGSUNG memakai
+ * No. Bukti BKU apa adanya (mis. "BNU02"), bukan format auto
+ * "0008/BNU/2026" — supaya nomor kuitansi selalu mengikuti nomor bukti
+ * aslinya di BKU. Lihat handleSimpan.
  */
-export default function KuitansiModal({ keuanganRow, sekolah, sekolahId, onClose }) {
+export default function KuitansiModal({ keuanganRow, sekolah, sekolahId, jenis = 'kuitansi', onClose }) {
+  const tanpaWatermark = jenis === 'kwitansi'
   const [form, setForm] = useState(emptyForm(keuanganRow))
   const [saving, setSaving] = useState(false)
   const [savedData, setSavedData] = useState(null) // { ...kuitansi row } setelah tersimpan, siap dicetak
@@ -188,7 +194,7 @@ export default function KuitansiModal({ keuanganRow, sekolah, sekolahId, onClose
       if (dariBku) {
         nomorFinal = form.no_bukti
       } else {
-        const { data: nomorData, error: nomorErr } = await supabase.rpc('next_nomor_kuitansi', { p_jenis: 'kuitansi' })
+        const { data: nomorData, error: nomorErr } = await supabase.rpc('next_nomor_kuitansi', { p_jenis: jenis })
         if (nomorErr) throw nomorErr
         nomorFinal = nomorData
       }
@@ -200,7 +206,7 @@ export default function KuitansiModal({ keuanganRow, sekolah, sekolahId, onClose
         // menyertakan field `id`, jadi keuanganRow?.id otomatis undefined -> null.
         // Jangan pernah oper id baris bku_kas ke sini, nanti FK violation lagi.
         keuangan_id: keuanganRow?.id || null,
-        jenis: 'kuitansi',
+        jenis,
         nomor: nomorFinal,
         no_bukti: form.no_bukti,
         lembar: form.lembar,
@@ -248,7 +254,9 @@ export default function KuitansiModal({ keuanganRow, sekolah, sekolahId, onClose
       <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 no-print">
         <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-display text-lg font-semibold">Buat Kuitansi</h2>
+            <h2 className="font-display text-lg font-semibold">
+              {tanpaWatermark ? 'Buat Kwitansi (Tanpa Watermark)' : 'Buat Kuitansi'}
+            </h2>
             <button className="icon-btn" onClick={onClose}><X size={18} /></button>
           </div>
 
@@ -419,6 +427,7 @@ export default function KuitansiModal({ keuanganRow, sekolah, sekolahId, onClose
           ref={printRef}
           sekolah={sekolah}
           data={savedData}
+          tanpaWatermark={tanpaWatermark}
         />
       )}
     </>
