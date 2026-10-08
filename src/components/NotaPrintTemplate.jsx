@@ -52,9 +52,16 @@ const MIN_ROWS = 6
  * horizontal tanpa garis vertikal antar kolom), baris "Jumlah Rp." di kanan
  * bawah tabel, lalu "Tanda Terima" (kiri) & "Hormat kami," (kanan).
  *
- * Posisi cetak: pakai class "print-anchor-bottom" (bersama "print-only")
- * supaya nota selalu didorong ke bagian PALING BAWAH kertas A4 saat
- * dicetak — beda dari KuitansiPrintTemplate yang tetap di atas.
+ * POSISI CETAK — ada dua mode (prop `modeCetak`):
+ *  - 'standar' (default): pakai class "print-anchor-bottom" (bersama
+ *    "print-only") supaya nota didorong ke bagian PALING BAWAH kertas A4
+ *    saat dicetak. Ini perilaku bawaan seperti semula (nota ditaruh di
+ *    ruang kosong di bawah Kuitansi pada lembar yang sama).
+ *  - 'atas': class "print-anchor-bottom" TIDAK dipasang, jadi nota mulai
+ *    dari bagian ATAS kertas — sama seperti KuitansiPrintTemplate yang
+ *    hanya memakai "print-only".
+ * Isi dan ukuran nota sama persis di kedua mode; hanya posisi di kertas
+ * yang berbeda.
  *
  * Props:
  *  - sekolah: { nama, alamat, kota } (opsional, dipakai untuk keterangan toko/pengirim)
@@ -65,8 +72,12 @@ const MIN_ROWS = 6
  *        jumlah_total,
  *      }
  *    Sesuaikan nama field di bawah kalau skema Supabase kamu berbeda.
+ *  - modeCetak: 'standar' | 'atas' (default 'standar')
  */
-const NotaPrintTemplate = forwardRef(function NotaPrintTemplate({ sekolah, data }, ref) {
+const NotaPrintTemplate = forwardRef(function NotaPrintTemplate(
+  { sekolah, data, modeCetak = 'standar' },
+  ref
+) {
   const items = Array.isArray(data?.items) ? data.items : []
   const total = data?.jumlah_total != null
     ? Number(data.jumlah_total) || 0
@@ -75,10 +86,12 @@ const NotaPrintTemplate = forwardRef(function NotaPrintTemplate({ sekolah, data 
   const rows = [...items]
   while (rows.length < MIN_ROWS) rows.push(null)
 
+  const dariAtas = modeCetak === 'atas'
+
   return (
     <div
       ref={ref}
-      className="print-only print-anchor-bottom relative bg-white text-black p-6 text-xs"
+      className={`print-only ${dariAtas ? '' : 'print-anchor-bottom'} relative bg-white text-black p-6 text-xs`}
       style={{
         width: '210mm',
         minHeight: '148mm',
