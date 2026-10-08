@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import Layout from '../components/Layout'
 import {
@@ -16,8 +16,9 @@ import {
   Printer,
   Lightbulb,
   BookOpen,
+  BookOpenCheck,
 } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 const TEMPLATE_DESKRIPSI = [
   {
@@ -265,14 +266,24 @@ const DAFTAR_TAHUN_AJARAN = Array.from({ length: 5 }, (_, i) => {
 export default function Rapor() {
   const navigate = useNavigate()
 
+  // Pintasan dari halaman Nilai Siswa: /rapor?siswaId=..&semester=..&tahunAjaran=..&tab=..
+  // Dipakai untuk mengisi filter & tab awal, lalu siswa dipilih otomatis
+  // begitu daftar siswa selesai dimuat (lihat effect "pintasan" di bawah).
+  const [searchParams] = useSearchParams()
+  const paramSiswaId = searchParams.get('siswaId')
+  const paramTab = searchParams.get('tab')
+  const sudahTerapkanParam = useRef(false)
+
   const [kelasList, setKelasList] = useState([])
   const [kelasId, setKelasId] = useState('')
 
   const [siswaList, setSiswaList] = useState([])
   const [siswaId, setSiswaId] = useState('')
-  const [semester, setSemester] = useState('Ganjil')
-  const [tahunAjaran, setTahunAjaran] = useState('')
-  const [activeTab, setActiveTab] = useState('ringkasan')
+  const [semester, setSemester] = useState(searchParams.get('semester') || 'Ganjil')
+  const [tahunAjaran, setTahunAjaran] = useState(searchParams.get('tahunAjaran') || '')
+  const [activeTab, setActiveTab] = useState(
+    TABS.some((t) => t.key === paramTab) ? paramTab : 'ringkasan'
+  )
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -411,6 +422,19 @@ export default function Rapor() {
     }
     muatSiswaGuru()
   }, [kelasList])
+
+  // Datang dari pintasan halaman Nilai Siswa: otomatis pilih kelas & siswa
+  // yang dituju, lalu langsung muat rapornya. Hanya dijalankan sekali.
+  useEffect(() => {
+    if (!paramSiswaId || sudahTerapkanParam.current || siswaList.length === 0) return
+    const s = siswaList.find((x) => x.id === paramSiswaId)
+    if (!s) return
+    sudahTerapkanParam.current = true
+    setKelasId(s.kelas_id)
+    setSiswaId(s.id)
+    if (tahunAjaran) muatRapor(s.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [siswaList])
 
   async function muatRapor(idOverride) {
     const idSiswa = idOverride || siswaId
@@ -986,6 +1010,12 @@ export default function Rapor() {
     navigate(`/rapor/cetak?${params.toString()}`)
   }
 
+  // Pintasan kembali ke halaman Nilai Siswa. Pastikan route di App.jsx
+  // sesuai: '/nilai'.
+  function bukaHalamanNilai() {
+    navigate('/nilai')
+  }
+
   return (
     <Layout title="Rapor Siswa" subtitle="Kelola nilai, deskripsi capaian, P5, ekstrakurikuler & catatan wali kelas">
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#4a0e0e] to-[#7a1515] p-6 mb-6">
@@ -1065,6 +1095,9 @@ export default function Rapor() {
               <Printer size={16} /> Buka Halaman Cetak
             </button>
           )}
+          <button className="btn-secondary" onClick={bukaHalamanNilai} title="Kembali ke halaman Nilai Siswa untuk mengoreksi nilai mentah">
+            <BookOpenCheck size={16} /> Ke Nilai Siswa
+          </button>
         </div>
         {kelasList.length === 0 && (
           <p className="text-sm text-ink-700/50 mt-3">
@@ -1256,6 +1289,9 @@ export default function Rapor() {
                   <button className="btn-primary" onClick={simpanRekapNilai} disabled={saving || capaianList.length === 0}>
                     {saving && <Loader2 size={16} className="animate-spin" />}
                     <Save size={16} /> Simpan Rekap Nilai
+                  </button>
+                  <button className="btn-secondary" onClick={bukaHalamanNilai} title="Koreksi nilai mentah di halaman Nilai Siswa">
+                    <BookOpenCheck size={16} /> Ke Nilai Siswa
                   </button>
                 </div>
               </>
