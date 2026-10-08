@@ -1,11 +1,12 @@
 // src/pages/Nilai.jsx
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
 import {
   Loader2, Save, BookOpenCheck, Trash2, ListChecks, Download, AlertTriangle, CheckCircle2,
-  FileBadge, Wand2,
+  FileBadge, Wand2, ArrowLeft, NotebookPen, Printer, ExternalLink,
 } from 'lucide-react'
 import { MAPEL_IJAZAH } from '../components/IjazahPrintTemplate'
 import { kanonikkanOpsiMapel, TOKEN_IPAS_GABUNGAN } from '../utils/mapelIjazahAlias'
@@ -99,6 +100,7 @@ function CircuitBackdrop({ patternId }) {
 
 export default function Nilai() {
   const { profil, isAdmin } = useAuth()
+  const navigate = useNavigate()
   const [activeSubTab, setActiveSubTab] = useState('input')
   const [kelasList, setKelasList] = useState([])
   const [kelasId, setKelasId] = useState('')
@@ -514,6 +516,20 @@ export default function Nilai() {
       })
     }
     await loadRekapRapor()
+  }
+
+  // ---------- Pintasan ke halaman Rapor ----------
+  // Membawa siswa, semester & tahun ajaran yang sedang dipilih, supaya guru
+  // tidak perlu memilih ulang di halaman Rapor. Pastikan route di App.jsx
+  // sesuai: '/rapor' dan '/rapor/cetak'.
+  function bukaRapor(siswaId, tab = 'rekap') {
+    const params = new URLSearchParams({ siswaId, semester, tahunAjaran, tab })
+    navigate(`/rapor?${params.toString()}`)
+  }
+
+  function bukaCetakRapor(siswaId) {
+    const params = new URLSearchParams({ siswaId, semester, tahunAjaran })
+    navigate(`/rapor/cetak?${params.toString()}`)
   }
 
   const kelasAktif = kelasList.find((k) => k.id === kelasId)
@@ -932,17 +948,18 @@ export default function Nilai() {
                   <th className="w-24 text-center">Otomatis</th>
                   <th className="w-36">Nilai Rapor</th>
                   <th className="w-24">Predikat</th>
+                  <th className="w-28 text-center">Pintasan</th>
                 </tr>
               </thead>
               <tbody>
                 {(raporLoading || loading) && (
-                  <tr><td colSpan={8} className="text-center py-8 nilai-muted">Memuat...</td></tr>
+                  <tr><td colSpan={9} className="text-center py-8 nilai-muted">Memuat...</td></tr>
                 )}
                 {!raporLoading && !loading && mapelOpts.length === 0 && (
-                  <tr><td colSpan={8} className="text-center py-8 nilai-muted">Belum ada mapel dikenali di profil guru.</td></tr>
+                  <tr><td colSpan={9} className="text-center py-8 nilai-muted">Belum ada mapel dikenali di profil guru.</td></tr>
                 )}
                 {!raporLoading && !loading && mapelOpts.length > 0 && siswaList.length === 0 && (
-                  <tr><td colSpan={8} className="text-center py-8 nilai-muted">Belum ada siswa aktif di kelas ini.</td></tr>
+                  <tr><td colSpan={9} className="text-center py-8 nilai-muted">Belum ada siswa aktif di kelas ini.</td></tr>
                 )}
                 {!raporLoading && !loading && rekapRapor.map((r) => {
                   const final = nilaiFinalRapor(r)
@@ -977,6 +994,34 @@ export default function Nilai() {
                           <span className="text-xs nilai-muted">—</span>
                         )}
                       </td>
+                      <td>
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => bukaRapor(r.siswaId, 'capaian')}
+                            title="Isi Deskripsi Capaian siswa ini"
+                            className="p-1.5 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+                          >
+                            <NotebookPen size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => bukaRapor(r.siswaId, 'rekap')}
+                            title="Buka Rapor siswa ini"
+                            className="p-1.5 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+                          >
+                            <ExternalLink size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => bukaCetakRapor(r.siswaId)}
+                            title="Cetak rapor siswa ini"
+                            className="p-1.5 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+                          >
+                            <Printer size={14} />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   )
                 })}
@@ -998,6 +1043,14 @@ export default function Nilai() {
                 title="Isi kolom Nilai Rapor dengan hitungan otomatis (dibulatkan)"
               >
                 <Wand2 size={15} /> Isi dari hitungan otomatis
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSubTab('input')}
+                className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 flex items-center gap-1.5 hover:bg-gray-50"
+                title="Kembali ke Input Nilai (mapel & kompetensi tetap sama)"
+              >
+                <ArrowLeft size={15} /> Kembali ke Input Nilai
               </button>
             </div>
           )}
