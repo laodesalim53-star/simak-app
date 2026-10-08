@@ -11,10 +11,13 @@
 //   * satu lembar manual (isi sendiri).
 //   Saat dibuka, tanggal yang dipilih adalah hari ini (atau tanggal jadwal
 //   terdekat berikutnya, atau yang pertama).
-// - Jumlah terdaftar per lembar: dari tabel `siswa` (Kelas 6, sudah punya
-//   no_peserta_ujian, dikelompokkan per `ruang_ujian`) — logika sama dengan
-//   DaftarHadirSiswaUjian.jsx. Hadir dianggap = terdaftar. Di mode lembar manual,
-//   angka hadir bisa diketik bila ada yang tidak hadir.
+// - Peserta per lembar: dari tabel `siswa` (Kelas 6, sudah punya no_peserta_ujian,
+//   dikelompokkan per `ruang_ujian`) — logika sama dengan DaftarHadirSiswaUjian.jsx.
+//   Nama ruang dinormalkan (kunciRuang) supaya "I", "1", "01", "Ruang I", dan
+//   "Ruang 1" dianggap ruang yang sama. Hadir dianggap = terdaftar. Di mode lembar
+//   manual, angka hadir bisa diketik bila ada yang tidak hadir.
+// - Daftar peserta (No, No. Peserta, Nama) bisa ditampilkan di tiap lembar
+//   (centang "Tampilkan daftar peserta").
 // - Kop surat: sama dengan DaftarHadirSiswaUjian.jsx (Pemerintah Kabupaten > Dinas >
 //   Nama Sekolah > Kecamatan, logo kabupaten kiri & logo sekolah kanan) dari
 //   `profil_sekolah`. Tampil di setiap lembar.
@@ -61,6 +64,20 @@ function isKelas6(namaKelas) {
 function sudahTerdaftarPeserta(siswa) {
   const nilai = siswa?.no_peserta_ujian
   return nilai !== null && nilai !== undefined && String(nilai).trim() !== ''
+}
+
+const ROMAWI = { I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9, X: 10 }
+
+// Samakan penulisan nama ruang: "Ruang I", "I", "1", " ruang 01 " -> "1".
+function kunciRuang(v) {
+  const t = String(v ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/^RUANG(AN)?\s*/, '')
+    .replace(/\s+/g, '')
+  if (ROMAWI[t]) return String(ROMAWI[t])
+  if (/^\d+$/.test(t)) return String(Number(t))
+  return t
 }
 
 // Path file di bucket 'profil-sekolah' -> URL publik (kosong kalau tidak ada).
@@ -119,6 +136,7 @@ export default function BeritaAcaraUjian() {
   const [siswaSemua, setSiswaSemua] = useState([])
   const [memuatSiswa, setMemuatSiswa] = useState(true)
   const [galatSiswa, setGalatSiswa] = useState('')
+  const [tampilDaftar, setTampilDaftar] = useState(true)
 
   // --- Jadwal pengawas (dari halaman Jadwal Pengawas Ruang) ---
   const [sesiJadwal, setSesiJadwal] = useState([])
@@ -196,15 +214,22 @@ export default function BeritaAcaraUjian() {
     setMemuatSiswa(true)
     setGalatSiswa('')
     try {
+      // Kalau kolom nama siswa di tabelmu bukan `nama_lengkap`, sesuaikan di sini.
       const { data, error } = await supabase
         .from('siswa')
-        .select('id, no_peserta_ujian, ruang_ujian, kelas(nama_kelas)')
+        .select('id, nama_lengkap, no_peserta_ujian, ruang_ujian, kelas(nama_kelas)')
         .eq('sekolah_id', sekolahId)
       if (error) throw error
       const peserta = (data || [])
         .filter((s) => isKelas6(s.kelas?.nama_kelas))
         .filter(sudahTerdaftarPeserta)
-        .map((s) => ({ id: s.id, ruangUjian: s.ruang_ujian || '' }))
+        .map((s) => ({
+          id: s.id,
+          nama: s.nama_lengkap || '',
+          noPeserta: s.no_peserta_ujian,
+          ruangUjian: s.ruang_ujian || '',
+          ruangKey: kunciRuang(s.ruang_ujian),
+        }))
       setSiswaSemua(peserta)
     } catch (e) {
       console.error('Gagal memuat data peserta untuk Berita Acara:', e)
@@ -249,14 +274,34 @@ export default function BeritaAcaraUjian() {
     return m
   }, [guru])
 
-  // Daftar ruang = nilai ruang_ujian unik yang sudah diisi lewat Pengaturan Ruang.
-  const daftarRuang = useMemo(
-    () =>
-      [...new Set(siswaSemua.map((s) => s.ruangUjian).filter(Boolean))].sort((a, b) =>
-        String(a).localeCompare(String(b), undefined, { numeric: true })
-      ),
-    [siswaSemua]
-  )
+  // Peserta dikelompokkan per kunci ruang (sudah dinormalkan), urut No. Peserta.
+  const pesertaPerRuang = useMemo(() => {
+    const m = {}
+    siswaSemua.forEach((s) => {
+      if (!s.ruangKey) return
+      ;(m[s.ruangKey] ||= []).push(s)
+    })
+    Object.values(m).forEach((arr) =>
+      arr.sort((a, b) =>
+        String(a.noPeserta).localeCompare(String(b.noPeserta), undefined, { numeric: true })
+      )
+    )
+    return m
+  }, [siswaSemua])
+
+  // Satu pintu pemanggil peserta: terima nama ruang dalam bentuk apa pun.
+  const ambilPeserta = (ruang) => pesertaPerRuang[kunciRuang(ruang)] || []
+
+  // Daftar ruang = nilai ruang_ujian unik (menurut kunciRuang) yang sudah diisi lewat Pengaturan Ruang.
+  const daftarRuang = useMemo(() => {
+    const unik = new Map()
+    siswaSemua.forEach((s) => {
+      if (s.ruangUjian && !unik.has(s.ruangKey)) unik.set(s.ruangKey, s.ruangUjian)
+    })
+    return [...unik.values()].sort((a, b) =>
+      String(a).localeCompare(String(b), undefined, { numeric: true })
+    )
+  }, [siswaSemua])
 
   // Tanggal unik yang punya jadwal, untuk pilihan "Cetak untuk".
   const tanggalJadwal = useMemo(
@@ -278,14 +323,16 @@ export default function BeritaAcaraUjian() {
   // timpa=true (pilihan manual di dropdown): menggantikan isian sebelumnya.
   function terapkanSesi(s, { timpa }) {
     const pakai = (lama, baru) => (timpa ? baru : lama || baru)
+    // Ruang "I" di jadwal bisa cocok dengan "1" di data siswa.
+    const ruangCocok = daftarRuang.find((r) => kunciRuang(r) === kunciRuang(s.ruang))
     setForm((f) => ({
       ...f,
       tanggal: s.tanggal || f.tanggal,
       mataPelajaran: pakai(f.mataPelajaran === 'Asesmen Sumatif' ? '' : f.mataPelajaran, s.mapel) || f.mataPelajaran,
       pengawas1Id: pakai(f.pengawas1Id, guruPerId[s.guru1Id] ? s.guru1Id : ''),
       pengawas2Id: pakai(f.pengawas2Id, guruPerId[s.guru2Id] ? s.guru2Id : ''),
-      ruang: daftarRuang.includes(s.ruang) ? s.ruang : f.ruang,
-      ...(timpa && daftarRuang.includes(s.ruang) && s.ruang !== f.ruang
+      ruang: ruangCocok ?? f.ruang,
+      ...(timpa && ruangCocok && ruangCocok !== f.ruang
         ? { jumlahPesertaManual: '', jumlahHadirManual: '' }
         : {}),
     }))
@@ -321,8 +368,9 @@ export default function BeritaAcaraUjian() {
 
   // Terdaftar otomatis (mode manual) = jumlah peserta di ruang terpilih; hadir otomatis = terdaftar.
   const terdaftarOtomatis = useMemo(
-    () => (form.ruang ? siswaSemua.filter((s) => s.ruangUjian === form.ruang).length : 0),
-    [siswaSemua, form.ruang]
+    () => (form.ruang ? ambilPeserta(form.ruang).length : 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pesertaPerRuang, form.ruang]
   )
   const jumlahPeserta = form.jumlahPesertaManual !== '' ? form.jumlahPesertaManual : String(terdaftarOtomatis)
   const jumlahHadir = form.jumlahHadirManual !== '' ? form.jumlahHadirManual : jumlahPeserta
@@ -356,7 +404,8 @@ export default function BeritaAcaraUjian() {
             String(a.ruang).localeCompare(String(b.ruang), undefined, { numeric: true })
         )
         .map((s) => {
-          const terdaftar = s.ruang ? siswaSemua.filter((x) => x.ruangUjian === s.ruang).length : 0
+          const peserta = s.ruang ? ambilPeserta(s.ruang) : []
+          const terdaftar = peserta.length
           return {
             key: s.key,
             tanggal: s.tanggal,
@@ -367,6 +416,7 @@ export default function BeritaAcaraUjian() {
             terdaftar: String(terdaftar),
             hadir: String(terdaftar),
             tidak: '0',
+            peserta,
           }
         })
     }
@@ -382,10 +432,12 @@ export default function BeritaAcaraUjian() {
         terdaftar: jumlahPeserta,
         hadir: jumlahHadir,
         tidak: tidakHadir,
+        peserta: form.ruang ? ambilPeserta(form.ruang) : [],
       },
     ]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    cetak, sesiJadwal, siswaSemua, guruPerId, form.mataPelajaran, form.tanggal, form.ruang,
+    cetak, sesiJadwal, pesertaPerRuang, guruPerId, form.mataPelajaran, form.tanggal, form.ruang,
     form.pengawas1Id, form.pengawas2Id, jumlahPeserta, jumlahHadir, tidakHadir,
   ])
 
@@ -421,6 +473,9 @@ export default function BeritaAcaraUjian() {
           #area-cetak-ba .catatan-kejadian { background: #fff !important; border-color: #000 !important; }
           #area-cetak-ba .garis-nama { text-decoration-color: #000 !important; }
           #area-cetak-ba .ttd-blok { page-break-inside: avoid; }
+          #area-cetak-ba .daftar-peserta th,
+          #area-cetak-ba .daftar-peserta td { border-color: #000 !important; }
+          #area-cetak-ba .daftar-peserta tr { page-break-inside: avoid; }
         }
         /* Kunci gambar kop supaya tidak kebawa aturan CSS global (position:fixed dll). */
         #area-cetak-ba .kop-logo img {
@@ -443,6 +498,18 @@ export default function BeritaAcaraUjian() {
         {!memuatSiswa && galatSiswa && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 mb-4">
             Data peserta belum bisa dibaca ({galatSiswa}). Jumlah peserta bisa diisi manual.
+          </div>
+        )}
+        {!memuatSiswa && !galatSiswa && siswaSemua.length === 0 && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 mb-4">
+            Belum ada peserta Kelas 6 dengan No. Peserta Ujian terisi, jadi jumlah terdaftar 0. Isi No. Peserta
+            Ujian dan Ruang Ujian siswa dulu.
+          </div>
+        )}
+        {!memuatSiswa && !galatSiswa && siswaSemua.length > 0 && daftarRuang.length === 0 && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 mb-4">
+            Peserta sudah ada ({siswaSemua.length}), tetapi belum ada yang punya Ruang Ujian. Atur dulu lewat
+            Pengaturan Ruang.
           </div>
         )}
 
@@ -470,6 +537,14 @@ export default function BeritaAcaraUjian() {
               })}
             </select>
           </Field>
+          <label className="mt-3 flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={tampilDaftar}
+              onChange={(e) => setTampilDaftar(e.target.checked)}
+            />
+            Tampilkan daftar peserta (No. Peserta dan Nama) di tiap lembar
+          </label>
         </Bagian>
 
         <Bagian
@@ -714,6 +789,30 @@ export default function BeritaAcaraUjian() {
                   <Baris label="Pengawas ruang" nilai={`${pengawas1} & ${pengawas2}`} />
                 </tbody>
               </table>
+
+              {tampilDaftar && l.peserta?.length > 0 && (
+                <>
+                  <p className="mb-1 font-medium">Daftar peserta ujian Ruang {namaRuang}:</p>
+                  <table className="daftar-peserta w-full mb-4 text-[12px] border-collapse">
+                    <thead>
+                      <tr>
+                        <th className="border border-slate-400 px-2 py-0.5 w-10">No</th>
+                        <th className="border border-slate-400 px-2 py-0.5 w-40">No. Peserta</th>
+                        <th className="border border-slate-400 px-2 py-0.5 text-left">Nama</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {l.peserta.map((p, i) => (
+                        <tr key={p.id}>
+                          <td className="border border-slate-400 px-2 py-0.5 text-center">{i + 1}</td>
+                          <td className="border border-slate-400 px-2 py-0.5 text-center">{p.noPeserta}</td>
+                          <td className="border border-slate-400 px-2 py-0.5">{p.nama}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              )}
 
               <p className="mb-1 font-medium">Catatan kejadian selama ujian:</p>
               <p className="catatan-kejadian mb-6 rounded-lg border border-slate-200 bg-slate-50 p-3">
