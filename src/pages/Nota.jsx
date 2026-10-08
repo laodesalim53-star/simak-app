@@ -8,6 +8,44 @@ import Layout from '../components/Layout'
 import { ArrowDownToLine } from 'lucide-react'
 
 // -----------------------------------------------------------------
+// Mode cetak
+//  - 'standar' : cetak seperti semula (tidak diubah sama sekali)
+//  - 'atas'    : cetak dimulai dari bagian paling atas kertas, seperti
+//                Kwitansi (lembar menempel ke tepi atas, sisa kertas
+//                di bawahnya dibiarkan kosong).
+// Pilihan terakhir diingat lewat localStorage.
+// -----------------------------------------------------------------
+const MODE_CETAK_KEY = 'nota_mode_cetak'
+
+function ambilModeCetakTersimpan() {
+  try {
+    const v = localStorage.getItem(MODE_CETAK_KEY)
+    return v === 'atas' ? 'atas' : 'standar'
+  } catch {
+    return 'standar'
+  }
+}
+
+// CSS khusus mode "atas": hanya aktif saat print DAN hanya untuk pembungkus
+// .nota-cetak-atas, jadi mode standar tidak terpengaruh.
+const CSS_MODE_ATAS = `
+@media print {
+  .nota-cetak-atas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .nota-cetak-atas > * {
+    margin-top: 0 !important;
+    min-height: 0 !important;
+  }
+}
+`
+
+// -----------------------------------------------------------------
 // Baris item kosong untuk form manual
 // -----------------------------------------------------------------
 function itemKosong() {
@@ -124,9 +162,19 @@ export default function Nota({ sekolah }) {
   const [importRingkasan, setImportRingkasan] = useState(null)
   const [menghapusSemua, setMenghapusSemua] = useState(false)
   const [showPilihBku, setShowPilihBku] = useState(false) // modal "Tarik dari BKU"
+  const [modeCetak, setModeCetak] = useState(ambilModeCetakTersimpan) // 'standar' | 'atas'
 
   const printRef = useRef(null)
   const fileInputRef = useRef(null)
+
+  function ubahModeCetak(mode) {
+    setModeCetak(mode)
+    try {
+      localStorage.setItem(MODE_CETAK_KEY, mode)
+    } catch {
+      // localStorage tidak tersedia — abaikan, mode tetap berlaku selama halaman terbuka.
+    }
+  }
 
   async function muatDaftar() {
     setLoading(true)
@@ -407,7 +455,17 @@ export default function Nota({ sekolah }) {
         title="Nota Belanja"
         subtitle="Daftar semua nota belanja yang tersimpan"
         actions={
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            {/* Pilihan mode cetak: Standar (seperti semula) atau Dari Atas (seperti Kwitansi) */}
+            <select
+              value={modeCetak}
+              onChange={(e) => ubahModeCetak(e.target.value)}
+              className="px-2 py-2 rounded border text-sm bg-white"
+              title="Mode cetak"
+            >
+              <option value="standar">Cetak: Standar</option>
+              <option value="atas">Cetak: Dari Atas (seperti Kwitansi)</option>
+            </select>
             <button
               onClick={() => setShowPilihBku(true)}
               className="px-3 py-2 rounded bg-teal-600 text-white text-sm flex items-center gap-1.5"
@@ -624,9 +682,21 @@ export default function Nota({ sekolah }) {
         )}
       </Layout>
 
-      {/* Wajib DI LUAR Layout — ini yang tampil saat window.print() */}
+      {/* Wajib DI LUAR Layout — ini yang tampil saat window.print().
+          Mode "atas": dibungkus .nota-cetak-atas supaya lembar menempel ke
+          tepi atas kertas saat dicetak (lihat CSS_MODE_ATAS di atas). Mode
+          "standar": dirender persis seperti semula, tanpa pembungkus. */}
       {notaCetak && (
-        <NotaPrintTemplate ref={printRef} sekolah={sekolah} data={notaCetak} />
+        modeCetak === 'atas' ? (
+          <>
+            <style>{CSS_MODE_ATAS}</style>
+            <div className="nota-cetak-atas">
+              <NotaPrintTemplate ref={printRef} sekolah={sekolah} data={notaCetak} modeCetak="atas" />
+            </div>
+          </>
+        ) : (
+          <NotaPrintTemplate ref={printRef} sekolah={sekolah} data={notaCetak} modeCetak="standar" />
+        )
       )}
     </>
   )
