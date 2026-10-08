@@ -1,9 +1,12 @@
 // src/pages/Nilai.jsx
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
-import { Loader2, Save, BookOpenCheck, Trash2, ListChecks, Download, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import {
+  Loader2, Save, BookOpenCheck, Trash2, ListChecks, Download, AlertTriangle, CheckCircle2,
+  FileBadge, Wand2,
+} from 'lucide-react'
 import { MAPEL_IJAZAH } from '../components/IjazahPrintTemplate'
 import { kanonikkanOpsiMapel, TOKEN_IPAS_GABUNGAN } from '../utils/mapelIjazahAlias'
 import './Nilai.css'
@@ -11,6 +14,31 @@ import './Nilai.css'
 const JENIS_OPTS = ['Tugas', 'UH', 'UTS', 'UAS']
 const IMPOR_UJIAN_JENIS_OPTS = ['UTS', 'UAS', 'Tugas']
 const KOMPETENSI_OPTS = ['Pengetahuan', 'Keterampilan']
+
+// Sama persis dengan Rapor.jsx: Nilai Akhir = Tugas 20% + UTS 30% + UAS 50%.
+// UH tidak ikut dihitung. Jenis yang belum ada nilainya ditiadakan dan bobot
+// sisanya dinormalisasi ulang.
+const BOBOT_JENIS_NILAI = { Tugas: 0.2, UTS: 0.3, UAS: 0.5 }
+
+function nilaiAkhirTertimbang(perJenis) {
+  let totalNilaiBerbobot = 0
+  let totalBobotTerpakai = 0
+  for (const [jenis, bobot] of Object.entries(BOBOT_JENIS_NILAI)) {
+    const arr = perJenis[jenis]
+    if (arr && arr.length > 0) {
+      const rataJenis = arr.reduce((a, b) => a + b, 0) / arr.length
+      totalNilaiBerbobot += rataJenis * bobot
+      totalBobotTerpakai += bobot
+    }
+  }
+  if (totalBobotTerpakai === 0) return null
+  return (totalNilaiBerbobot / totalBobotTerpakai).toFixed(1)
+}
+
+function rataJenis(arr) {
+  if (!arr || arr.length === 0) return null
+  return (arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1)
+}
 
 function predikatDariNilai(nilai) {
   if (nilai === '' || nilai === undefined || nilai === null) return null
@@ -103,6 +131,15 @@ export default function Nilai() {
   const [importLoading, setImportLoading] = useState(false)
   const [importSaving, setImportSaving] = useState(false)
 
+  // --- Nilai Rapor (finalisasi nilai langsung dari halaman Nilai) ---
+  // Tiap baris: { siswaId, nama, rata: {Tugas, UH, UTS, UAS}, otomatis, manual }
+  const [rekapRapor, setRekapRapor] = useState([])
+  const [raporLoading, setRaporLoading] = useState(false)
+  const [raporSaving, setRaporSaving] = useState(false)
+  const [raporPesan, setRaporPesan] = useState(null) // { tipe: 'ok' | 'galat', teks }
+  // Kunci `${siswaId}|${mataPelajaranResmi}` -> id baris capaian_mapel yang sudah ada.
+  const capaianIdRef = useRef({})
+
   useEffect(() => {
     if (profil === undefined) return
     let query = supabase.from('kelas').select('id, nama_kelas').order('nama_kelas')
@@ -158,6 +195,17 @@ export default function Nilai() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSubTab, siswaList, semester, tahunAjaran])
+
+  // Tab Nilai Rapor: muat ulang tiap filter berubah.
+  useEffect(() => {
+    if (activeSubTab !== 'rapor') return
+    if (!mataPelajaran || siswaList.length === 0) {
+      setRekapRapor([])
+      return
+    }
+    loadRekapRapor()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSubTab, mataPelajaran, siswaList, kompetensi, semester, tahunAjaran])
 
   async function loadSiswa() {
     setLoading(true)
@@ -285,6 +333,187 @@ export default function Nilai() {
       return
     }
     setKelolaData((prev) => prev.filter((d) => d.id !== row.id))
+  }
+
+  // ---------- Nilai Rapor ----------
+  // Membaca nilai mentah (Tugas/UH/UTS/UAS) untuk mapel + kompetensi terpilih,
+  // menghitung Nilai Akhir otomatis dengan bobot yang sama seperti di halaman
+  // Rapor, lalu menampilkan nilai final yang sudah tersimpan di capaian_mapel
+  // (kalau ada) sebagai isian manual.
+  async function loadRekapRapor() {
+    const labelList = labelResmiUntukPilihan(mataPelajaran)
+    const labelUtama = labelList[0]
+    if (!labelUtama || siswaList.length === 0) return
+    setRaporLoading(true)
+    setRaporPesan(null)
+    const ids = siswaList.map((s) => s.id)
+
+    const [nilaiRes, capRes] = await Promise.all([
+      supabase.from('nilai').select('siswa_id, jenis, nilai')
+        .eq('mata_pelajaran', labelUtama).eq('kompetensi', kompetensi)
+        .eq('semester', semester).eq('tahun_ajaran', tahunAjaran)
+        .in('siswa_id', ids),
+      supabase.from('capaian_mapel').select('id, siswa_id, mata_pelajaran, nilai_akhir')
+        .in('mata_pelajaran', labelList).eq('jenis', kompetensi)
+        .eq('semester', semester).eq('tahun_ajaran', tahunAjaran)
+        .in('siswa_id', ids),
+    ])
+
+    if (nilaiRes.error || capRes.error) {
+      setRaporPesan({ tipe: 'galat', teks: 'Gagal memuat data: ' + (nilaiRes.error || capRes.error).message })
+      setRekapRapor([])
+      setRaporLoading(false)
+      return
+    }
+
+    const idMap = {}
+    const finalMap = {}
+    ;(capRes.data || []).forEach((c) => {
+      idMap[`${c.siswa_id}|${c.mata_pelajaran}`] = c.id
+      if (c.mata_pelajaran === labelUtama) finalMap[c.siswa_id] = c.nilai_akhir
+    })
+    capaianIdRef.current = idMap
+
+    const perSiswa = {}
+    ;(nilaiRes.data || []).forEach((n) => {
+      if (!perSiswa[n.siswa_id]) perSiswa[n.siswa_id] = { Tugas: [], UH: [], UTS: [], UAS: [] }
+      // Jenis yang tidak dikenal dianggap Tugas, sama seperti di halaman Rapor.
+      const jj = JENIS_OPTS.includes(n.jenis) ? n.jenis : 'Tugas'
+      perSiswa[n.siswa_id][jj].push(Number(n.nilai))
+    })
+
+    setRekapRapor(
+      siswaList.map((s) => {
+        const pj = perSiswa[s.id] || { Tugas: [], UH: [], UTS: [], UAS: [] }
+        const tersimpan = finalMap[s.id]
+        return {
+          siswaId: s.id,
+          nama: s.nama_lengkap,
+          rata: {
+            Tugas: rataJenis(pj.Tugas),
+            UH: rataJenis(pj.UH),
+            UTS: rataJenis(pj.UTS),
+            UAS: rataJenis(pj.UAS),
+          },
+          otomatis: nilaiAkhirTertimbang(pj),
+          manual: tersimpan === null || tersimpan === undefined ? '' : String(tersimpan),
+        }
+      })
+    )
+    setRaporLoading(false)
+  }
+
+  function ubahManualRapor(siswaId, value) {
+    setRaporPesan(null)
+    setRekapRapor((prev) => prev.map((r) => (r.siswaId === siswaId ? { ...r, manual: value } : r)))
+  }
+
+  // Isi semua kolom "Nilai Rapor" dengan hitungan otomatis (hanya yang sudah punya nilai).
+  function isiSemuaOtomatis() {
+    setRaporPesan(null)
+    setRekapRapor((prev) =>
+      prev.map((r) => (r.otomatis !== null ? { ...r, manual: String(Math.round(Number(r.otomatis))) } : r))
+    )
+  }
+
+  function nilaiFinalRapor(r) {
+    if (r.manual !== '' && r.manual !== null && r.manual !== undefined) return Number(r.manual)
+    if (r.otomatis !== null) return Number(r.otomatis)
+    return null
+  }
+
+  // Simpan ke capaian_mapel (tabel yang sama dengan tab Rekap Nilai di halaman
+  // Rapor), jadi nilainya langsung muncul di Rapor dan halaman cetak.
+  // Isian manual dipakai kalau ada; kalau kosong, dipakai hitungan otomatis.
+  async function simpanKeRapor() {
+    const labelList = labelResmiUntukPilihan(mataPelajaran)
+    if (labelList.length === 0) return alert('Pilih mata pelajaran terlebih dahulu.')
+
+    const barisSimpan = []
+    for (const r of rekapRapor) {
+      const nilaiFinal = nilaiFinalRapor(r)
+      if (nilaiFinal === null) continue
+      if (isNaN(nilaiFinal) || nilaiFinal < 0 || nilaiFinal > 100) {
+        return alert(`Nilai rapor ${r.nama} harus berupa angka 0–100.`)
+      }
+      barisSimpan.push({ siswaId: r.siswaId, nilaiFinal })
+    }
+    if (barisSimpan.length === 0) {
+      return alert('Belum ada nilai yang bisa disimpan ke rapor. Isi nilai mentah dulu, atau ketik nilai rapor manual.')
+    }
+
+    setRaporSaving(true)
+    setRaporPesan(null)
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    const inserts = []
+    const updates = []
+    barisSimpan.forEach(({ siswaId, nilaiFinal }) => {
+      labelList.forEach((label) => {
+        const id = capaianIdRef.current[`${siswaId}|${label}`]
+        const predikat = predikatDariNilai(nilaiFinal)
+        if (id) {
+          updates.push({ id, nilai_akhir: nilaiFinal, predikat, label, siswaId })
+        } else {
+          inserts.push({
+            siswa_id: siswaId,
+            mata_pelajaran: label,
+            jenis: kompetensi,
+            semester,
+            tahun_ajaran: tahunAjaran,
+            nilai_akhir: nilaiFinal,
+            predikat,
+            diisi_oleh: user?.id,
+          })
+        }
+      })
+    })
+
+    const gagal = []
+    let berhasil = 0
+
+    if (inserts.length > 0) {
+      const { data, error } = await supabase.from('capaian_mapel').insert(inserts).select()
+      if (error) gagal.push(error.message)
+      else {
+        berhasil += data?.length || 0
+        if (!data || data.length !== inserts.length) {
+          gagal.push(
+            `Hanya ${data?.length || 0} dari ${inserts.length} baris baru yang tersimpan — kemungkinan kebijakan RLS pada tabel capaian_mapel belum mengizinkan INSERT.`
+          )
+        }
+      }
+    }
+
+    const hasilUpdate = await Promise.all(
+      updates.map((u) =>
+        supabase
+          .from('capaian_mapel')
+          .update({ nilai_akhir: u.nilai_akhir, predikat: u.predikat })
+          .eq('id', u.id)
+          .select()
+      )
+    )
+    hasilUpdate.forEach((res) => {
+      if (res.error) gagal.push(res.error.message)
+      else if (!res.data || res.data.length === 0) {
+        gagal.push('Sebagian baris tidak ter-update — kemungkinan kebijakan RLS pada tabel capaian_mapel belum mengizinkan UPDATE.')
+      } else berhasil += res.data.length
+    })
+
+    setRaporSaving(false)
+
+    if (gagal.length > 0) {
+      setRaporPesan({ tipe: 'galat', teks: [...new Set(gagal)].join(' ') })
+    } else {
+      setRaporPesan({
+        tipe: 'ok',
+        teks: `Tersimpan ke Rapor untuk ${barisSimpan.length} siswa (${kompetensi}, Semester ${semester} ${tahunAjaran}).`,
+      })
+    }
+    await loadRekapRapor()
   }
 
   const kelasAktif = kelasList.find((k) => k.id === kelasId)
@@ -470,6 +699,11 @@ export default function Nilai() {
     ? kelolaData.filter((d) => d.mata_pelajaran.toLowerCase().includes(kelolaFilterMapel.trim().toLowerCase()))
     : kelolaData
 
+  const tabClass = (key) =>
+    `px-3 py-1.5 rounded-lg border text-sm font-medium flex items-center gap-1.5 transition-colors ${
+      activeSubTab === key ? 'bg-sage-500 text-white border-sage-500' : 'bg-white text-gray-600 border-gray-200'
+    }`
+
   return (
     <Layout title="Nilai Siswa" subtitle="Input nilai per kelas dan mata pelajaran">
       <div className="relative overflow-hidden rounded-2xl nilai-banner p-6 mb-6">
@@ -495,29 +729,17 @@ export default function Nilai() {
         </div>
       )}
 
-      <div className="flex items-center gap-2 mb-5">
-        <button
-          onClick={() => setActiveSubTab('input')}
-          className={`px-3 py-1.5 rounded-lg border text-sm font-medium flex items-center gap-1.5 transition-colors ${
-            activeSubTab === 'input' ? 'bg-sage-500 text-white border-sage-500' : 'bg-white text-gray-600 border-gray-200'
-          }`}
-        >
+      <div className="flex flex-wrap items-center gap-2 mb-5">
+        <button onClick={() => setActiveSubTab('input')} className={tabClass('input')}>
           <Save size={14} /> Input Nilai
         </button>
-        <button
-          onClick={() => setActiveSubTab('kelola')}
-          className={`px-3 py-1.5 rounded-lg border text-sm font-medium flex items-center gap-1.5 transition-colors ${
-            activeSubTab === 'kelola' ? 'bg-sage-500 text-white border-sage-500' : 'bg-white text-gray-600 border-gray-200'
-          }`}
-        >
+        <button onClick={() => setActiveSubTab('rapor')} className={tabClass('rapor')}>
+          <FileBadge size={14} /> Nilai Rapor
+        </button>
+        <button onClick={() => setActiveSubTab('kelola')} className={tabClass('kelola')}>
           <ListChecks size={14} /> Lihat &amp; Hapus Nilai
         </button>
-        <button
-          onClick={() => setActiveSubTab('impor')}
-          className={`px-3 py-1.5 rounded-lg border text-sm font-medium flex items-center gap-1.5 transition-colors ${
-            activeSubTab === 'impor' ? 'bg-sage-500 text-white border-sage-500' : 'bg-white text-gray-600 border-gray-200'
-          }`}
-        >
+        <button onClick={() => setActiveSubTab('impor')} className={tabClass('impor')}>
           <Download size={14} /> Impor dari Ujian &amp; Kuis
         </button>
       </div>
@@ -529,7 +751,7 @@ export default function Nilai() {
             {kelasList.map((k) => <option key={k.id} value={k.id}>{k.nama_kelas}</option>)}
           </select>
         </div>
-        {activeSubTab === 'input' && (
+        {(activeSubTab === 'input' || activeSubTab === 'rapor') && (
           <div>
             <label className="nilai-label">Mata Pelajaran</label>
             <select
@@ -551,7 +773,7 @@ export default function Nilai() {
             </select>
           </div>
         )}
-        {activeSubTab === 'input' && (
+        {(activeSubTab === 'input' || activeSubTab === 'rapor') && (
           <div>
             <label className="nilai-label">Kompetensi</label>
             <select className="nilai-input" value={kompetensi} onChange={(e) => setKompetensi(e.target.value)}>
@@ -658,12 +880,125 @@ export default function Nilai() {
           </div>
 
           {siswaList.length > 0 && (
-            <div className="mt-4 flex items-center gap-3">
+            <div className="mt-4 flex flex-wrap items-center gap-3">
               <button onClick={handleSave} disabled={saving} className="nilai-btn-primary">
                 {saving ? <Loader2 size={16} className="nilai-spin" /> : <Save size={16} />}
                 Simpan Nilai
               </button>
+              <button
+                type="button"
+                onClick={() => setActiveSubTab('rapor')}
+                className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 flex items-center gap-1.5 hover:bg-gray-50"
+                title="Lanjut ke Nilai Rapor untuk mapel & kompetensi yang sama"
+              >
+                <FileBadge size={15} /> Lanjut ke Nilai Rapor
+              </button>
               {saved && <span className="text-sm nilai-saved">Tersimpan.</span>}
+            </div>
+          )}
+        </>
+      )}
+
+      {activeSubTab === 'rapor' && (
+        <>
+          <p className="text-xs nilai-muted mb-3">
+            Nilai Akhir otomatis = Tugas 20% + UTS 30% + UAS 50% (UH tidak ikut dihitung; komponen yang belum
+            ada nilainya dilewati dan bobotnya dinormalisasi). Kolom &quot;Nilai Rapor&quot; boleh diketik
+            manual; kalau dikosongkan, yang disimpan adalah hitungan otomatis. Hasilnya langsung tersimpan di
+            Rapor (tab Rekap Nilai) dan dipakai saat cetak.
+          </p>
+
+          {raporPesan && (
+            <div
+              className={`mb-3 rounded-lg border px-3 py-2 text-sm ${
+                raporPesan.tipe === 'ok'
+                  ? 'border-green-200 bg-green-50 text-green-800'
+                  : 'border-amber-200 bg-amber-50 text-amber-800'
+              }`}
+            >
+              {raporPesan.teks}
+            </div>
+          )}
+
+          <div className="nilai-card overflow-x-auto">
+            <table className="nilai-table">
+              <thead>
+                <tr>
+                  <th>Nama Siswa</th>
+                  <th className="w-20 text-center">Tugas</th>
+                  <th className="w-20 text-center">UH</th>
+                  <th className="w-20 text-center">UTS</th>
+                  <th className="w-20 text-center">UAS</th>
+                  <th className="w-24 text-center">Otomatis</th>
+                  <th className="w-36">Nilai Rapor</th>
+                  <th className="w-24">Predikat</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(raporLoading || loading) && (
+                  <tr><td colSpan={8} className="text-center py-8 nilai-muted">Memuat...</td></tr>
+                )}
+                {!raporLoading && !loading && mapelOpts.length === 0 && (
+                  <tr><td colSpan={8} className="text-center py-8 nilai-muted">Belum ada mapel dikenali di profil guru.</td></tr>
+                )}
+                {!raporLoading && !loading && mapelOpts.length > 0 && siswaList.length === 0 && (
+                  <tr><td colSpan={8} className="text-center py-8 nilai-muted">Belum ada siswa aktif di kelas ini.</td></tr>
+                )}
+                {!raporLoading && !loading && rekapRapor.map((r) => {
+                  const final = nilaiFinalRapor(r)
+                  const predikat = predikatDariNilai(final)
+                  const manualTerisi = r.manual !== ''
+                  return (
+                    <tr key={r.siswaId}>
+                      <td className="font-medium">{r.nama}</td>
+                      <td className="text-center">{r.rata.Tugas ?? '—'}</td>
+                      <td className="text-center">{r.rata.UH ?? '—'}</td>
+                      <td className="text-center">{r.rata.UTS ?? '—'}</td>
+                      <td className="text-center">{r.rata.UAS ?? '—'}</td>
+                      <td className="text-center font-medium">{r.otomatis ?? '—'}</td>
+                      <td>
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          className="nilai-input"
+                          placeholder={r.otomatis ?? '-'}
+                          value={r.manual}
+                          onChange={(e) => ubahManualRapor(r.siswaId, e.target.value)}
+                        />
+                        <p className="text-[10px] nilai-muted mt-0.5">
+                          {manualTerisi ? 'Manual / tersimpan' : r.otomatis !== null ? 'Pakai otomatis' : 'Belum ada nilai'}
+                        </p>
+                      </td>
+                      <td>
+                        {predikat ? (
+                          <span className={`badge ${WARNA_PREDIKAT[predikat]}`}>{predikat}</span>
+                        ) : (
+                          <span className="text-xs nilai-muted">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {rekapRapor.length > 0 && (
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button onClick={simpanKeRapor} disabled={raporSaving || raporLoading} className="nilai-btn-primary">
+                {raporSaving ? <Loader2 size={16} className="nilai-spin" /> : <FileBadge size={16} />}
+                Simpan ke Rapor
+              </button>
+              <button
+                type="button"
+                onClick={isiSemuaOtomatis}
+                disabled={raporSaving || raporLoading}
+                className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 flex items-center gap-1.5 hover:bg-gray-50"
+                title="Isi kolom Nilai Rapor dengan hitungan otomatis (dibulatkan)"
+              >
+                <Wand2 size={15} /> Isi dari hitungan otomatis
+              </button>
             </div>
           )}
         </>
