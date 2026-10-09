@@ -1,4 +1,4 @@
-// Edge Function pendaftaran akun (mode 'baru' & 'gabung', sekolah, kantor, puskesmas & polres).
+// Edge Function pendaftaran akun (mode 'baru' & 'gabung', sekolah, kantor, puskesmas, polres & umum).
 // Publik (dipanggil orang yang belum punya akun), jadi SEMUA validasi di sini.
 // Role & status ditentukan server, tidak pernah dipercaya dari request.
 
@@ -16,6 +16,14 @@ function json(body: unknown, status: number) {
   })
 }
 
+function escapeHtml(s: string) {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
 // Jabatan yang BOLEH dipilih lewat pendaftaran mandiri.
 // Ini hanya LABEL jabatan, bukan role. Role sebenarnya ditentukan server
 // di bagian 3 di bawah, dan admin yang menaikkannya saat persetujuan.
@@ -24,12 +32,19 @@ const JABATAN_SEKOLAH = ['guru', 'orang_tua', 'admin', 'kepala_sekolah']
 const JABATAN_KANTOR = ['pegawai', 'kepala_kantor', 'admin']
 const JABATAN_PUSKESMAS = ['pegawai', 'kepala_puskesmas', 'admin']
 const JABATAN_POLRES = ['pegawai', 'kepala_polres', 'admin']
+const JABATAN_UMUM = ['umum']
 const HUBUNGAN_VALID = ['ayah', 'ibu', 'wali'] // sesuaikan dengan pilihan di form
 
-type JenisOrganisasi = 'sekolah' | 'kantor' | 'puskesmas' | 'polres'
+type JenisOrganisasi = 'sekolah' | 'kantor' | 'puskesmas' | 'polres' | 'umum'
 
-// Tenant non-sekolah memakai struktur pegawai (bukan guru).
+// Status awal akun UMUM (chat global).
+// 'menunggu' = harus disetujui dulu (lebih aman dari spam).
+// 'aktif'    = langsung bisa masuk dan chat.
+const STATUS_AKUN_UMUM: 'menunggu' | 'aktif' = 'menunggu'
+
+// Tenant pegawai (kantor, puskesmas, polres) memakai struktur pegawai (bukan guru).
 // Polres sementara memakai pegawai_kantor, sama dengan AuthContext.
+// Akun 'umum' TIDAK punya data pegawai.
 const TABEL_PEGAWAI: Record<string, string> = {
   kantor: 'pegawai_kantor',
   puskesmas: 'pegawai_puskesmas',
@@ -84,7 +99,9 @@ async function kirimNotifikasiSuperadmin(
           ? 'Puskesmas'
           : info.jenisOrganisasi === 'polres'
             ? 'Polres'
-            : 'Sekolah'
+            : info.jenisOrganisasi === 'umum'
+              ? 'Umum (chat global)'
+              : 'Sekolah'
     const judul =
       info.mode === 'baru'
         ? `Pendaftar baru: ${labelJenis} "${info.namaOrganisasi}" (organisasi baru)`
@@ -103,10 +120,10 @@ async function kirimNotifikasiSuperadmin(
         html: `
           <p>Ada pendaftaran akun baru yang menunggu persetujuan Anda.</p>
           <ul>
-            <li><b>Nama:</b> ${info.namaLengkap}</li>
-            <li><b>Email:</b> ${info.email}</li>
+            <li><b>Nama:</b> ${escapeHtml(info.namaLengkap)}</li>
+            <li><b>Email:</b> ${escapeHtml(info.email)}</li>
             <li><b>Jenis:</b> ${labelJenis}</li>
-            <li><b>${info.mode === 'baru' ? 'Organisasi baru yang didaftarkan' : 'Bergabung ke'}:</b> ${info.namaOrganisasi}</li>
+            <li><b>${info.mode === 'baru' ? 'Organisasi baru yang didaftarkan' : 'Bergabung ke'}:</b> ${escapeHtml(info.namaOrganisasi)}</li>
           </ul>
           <p>Silakan buka halaman Persetujuan Akun untuk meninjau.</p>
         `,
@@ -148,14 +165,17 @@ Deno.serve(async (req) => {
     const hubungan = body.hubungan ?? null
     const nip = String(body.nip ?? '').trim()
 
-    // Jenis organisasi yang valid: 'sekolah' | 'kantor' | 'puskesmas' | 'polres'.
+    // Jenis organisasi yang valid: 'sekolah' | 'kantor' | 'puskesmas' | 'polres' | 'umum'.
     // Default tetap 'sekolah' bila tidak dikenali.
     const jenisOrganisasi: JenisOrganisasi =
       body.jenisOrganisasi === 'kantor' ? 'kantor'
       : body.jenisOrganisasi === 'puskesmas' ? 'puskesmas'
       : body.jenisOrganisasi === 'polres' ? 'polres'
+      : body.jenisOrganisasi === 'umum' ? 'umum'
       : 'sekolah'
-    const nonSekolah = jenisOrganisasi !== 'sekolah'
+    const isUmum = jenisOrganisasi === 'umum'
+    // Tenant pegawai = kantor, puskesmas, polres (butuh NIP + data pegawai).
+    const tenantPegawai = jenisOrganisasi === 'kantor' || jenisOrganisasi === 'puskesmas' || jenisOrganisasi === 'polres'
 
     // ---------- Validasi dasar ----------
     if (!['baru', 'gabung'].includes(mode)) throw new HttpError(400, 'Mode pendaftaran tidak valid.')
@@ -163,22 +183,37 @@ Deno.serve(async (req) => {
     if (password.length < 6) throw new HttpError(400, 'Password minimal 6 karakter.')
     if (!namaLengkap) throw new HttpError(400, 'Nama lengkap wajib diisi.')
 
+    // Akun umum hanya boleh bergabung ke ruang umum yang sudah ada.
+    // Mode 'baru' ditolak supaya tidak ada yang bisa membuat ruang umum
+    // sendiri dan otomatis menjadi admin_utama.
+    if (isUmum && mode !== 'gabung') {
+      throw new HttpError(400, 'Akun umum hanya dapat bergabung ke ruang umum yang sudah tersedia.')
+    }
+
     const jabatanBoleh =
       jenisOrganisasi === 'kantor' ? JABATAN_KANTOR
       : jenisOrganisasi === 'puskesmas' ? JABATAN_PUSKESMAS
       : jenisOrganisasi === 'polres' ? JABATAN_POLRES
+      : isUmum ? JABATAN_UMUM
       : JABATAN_SEKOLAH
-    const jabatan = body.jabatan || (nonSekolah ? 'pegawai' : 'guru')
+    const jabatan = body.jabatan || (isUmum ? 'umum' : tenantPegawai ? 'pegawai' : 'guru')
     if (!jabatanBoleh.includes(jabatan)) throw new HttpError(400, 'Jabatan tidak valid.')
 
-    if (nonSekolah && !nip) throw new HttpError(400, 'NIP/NRP wajib diisi untuk akun ' + jenisOrganisasi + '.')
+    if (tenantPegawai && !nip) throw new HttpError(400, 'NIP/NRP wajib diisi untuk akun ' + jenisOrganisasi + '.')
 
     const isOrangTua = jabatan === 'orang_tua'
     if (isOrangTua && mode !== 'gabung') {
       throw new HttpError(400, 'Akun orang tua/wali hanya dapat bergabung ke sekolah yang sudah terdaftar.')
     }
     if (mode === 'baru' && !namaSekolah) throw new HttpError(400, 'Nama organisasi wajib diisi.')
-    if (mode === 'gabung' && !sekolahId) throw new HttpError(400, 'Silakan pilih sekolah/kantor/puskesmas/polres terlebih dahulu.')
+    if (mode === 'gabung' && !sekolahId) {
+      throw new HttpError(
+        400,
+        isUmum
+          ? 'Ruang chat umum belum tersedia. Hubungi admin.'
+          : 'Silakan pilih sekolah/kantor/puskesmas/polres terlebih dahulu.'
+      )
+    }
     if (isOrangTua) {
       if (!siswaId) throw new HttpError(400, 'Silakan pilih siswa yang merupakan anak/wali Anda.')
       if (!hubungan || !HUBUNGAN_VALID.includes(hubungan)) {
@@ -196,7 +231,7 @@ Deno.serve(async (req) => {
         .eq('id', sekolahId)
         .maybeSingle()
       if (error) throw new HttpError(500, 'Gagal memeriksa organisasi: ' + error.message)
-      if (!sekolah) throw new HttpError(404, 'Sekolah/kantor/puskesmas/polres tidak ditemukan.')
+      if (!sekolah) throw new HttpError(404, 'Sekolah/kantor/puskesmas/polres/ruang umum tidak ditemukan.')
       if ((sekolah.jenis_organisasi ?? 'sekolah') !== jenisOrganisasi) {
         throw new HttpError(400, 'Jenis organisasi tidak sesuai.')
       }
@@ -249,18 +284,22 @@ Deno.serve(async (req) => {
         ? 'admin_utama'
         : isOrangTua
           ? 'orang_tua'
-          : nonSekolah
-            ? 'pegawai'
-            : 'guru'
+          : isUmum
+            ? 'umum'
+            : tenantPegawai
+              ? 'pegawai'
+              : 'guru'
 
-    // Semua pendaftaran (baru maupun gabung) menunggu persetujuan superadmin.
-    const statusAkun = 'menunggu'
+    // Pendaftaran sekolah/kantor/puskesmas/polres selalu menunggu persetujuan.
+    // Akun umum mengikuti konstanta STATUS_AKUN_UMUM di atas.
+    const statusAkun: 'menunggu' | 'aktif' = isUmum ? STATUS_AKUN_UMUM : 'menunggu'
 
-    // ---------- 4. pegawai_kantor / pegawai_puskesmas (khusus tenant non-sekolah) ----------
+    // ---------- 4. pegawai_kantor / pegawai_puskesmas (khusus tenant pegawai) ----------
     // CATATAN: tabel 'pegawai_puskesmas' diasumsikan sudah ada dengan struktur
     // yang sama seperti 'pegawai_kantor' (sekolah_id, nama_lengkap, jabatan, nip,
     // email, status). Polres sementara memakai 'pegawai_kantor' (lihat TABEL_PEGAWAI).
-    if (nonSekolah) {
+    // Akun umum dilewati: tidak punya data pegawai.
+    if (tenantPegawai) {
       const namaTabelPegawai = TABEL_PEGAWAI[jenisOrganisasi]
       const { data: pegawai, error } = await adminClient
         .from(namaTabelPegawai)
@@ -279,6 +318,7 @@ Deno.serve(async (req) => {
     }
 
     // ---------- 5. Profil ----------
+    // CATATAN: constraint profil_role_check harus sudah memuat 'umum'.
     const { error: profilErr } = await adminClient.from('profil').insert({
       id: userId,
       role,
@@ -317,15 +357,18 @@ Deno.serve(async (req) => {
     }
 
     // ---------- 7. Notifikasi email ke superadmin (best-effort) ----------
-    await kirimNotifikasiSuperadmin(adminClient, {
-      namaLengkap,
-      email,
-      jenisOrganisasi,
-      namaOrganisasi: namaOrganisasiTampil,
-      mode,
-    })
+    // Dilewati bila akun sudah langsung aktif (tidak ada yang perlu disetujui).
+    if (statusAkun === 'menunggu') {
+      await kirimNotifikasiSuperadmin(adminClient, {
+        namaLengkap,
+        email,
+        jenisOrganisasi,
+        namaOrganisasi: namaOrganisasiTampil,
+        mode,
+      })
+    }
 
-    return json({ success: true }, 200)
+    return json({ success: true, status_akun: statusAkun }, 200)
   } catch (e) {
     // Rollback urutan terbalik, supaya tidak ada data yatim.
     // Setiap langkah dibungkus try agar satu kegagalan tidak menghentikan yang lain.
