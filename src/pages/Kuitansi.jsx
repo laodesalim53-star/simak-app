@@ -4,7 +4,9 @@ import Layout from '../components/Layout'
 import { useAuth } from '../lib/AuthContext'
 import KuitansiModal from '../components/KuitansiModal'
 import PilihBkuModal from '../components/PilihBkuModal'
+import PilihanTampilanCetak from '../components/PilihanTampilanCetak'
 import KuitansiPrintTemplate from '../lib/KuitansiPrintTemplate'
+import { muatTemaKuitansi, simpanTemaKuitansi, PRESET_WARNA_KUITANSI } from '../lib/kuitansiTema'
 import BulkImportModal from '../components/BulkImportModal'
 import { Plus, Printer, Search, Loader2, Receipt, Trash2, FileSpreadsheet, Wallet } from 'lucide-react'
 
@@ -113,12 +115,22 @@ export default function Kuitansi() {
   const [sekolah, setSekolah] = useState(null)
   const [menghapus, setMenghapus] = useState(null) // id yang sedang dihapus
 
+  // Preferensi tampilan cetak (warna & tata letak), disimpan di localStorage
+  // dan dipakai untuk Cetak Ulang di kedua tab. Modal "Buat Kuitansi" memakai
+  // preferensi yang sama.
+  const [tema, setTema] = useState(() => muatTemaKuitansi())
+
   // Baris yang sedang dicetak ulang
   const [cetakUlang, setCetakUlang] = useState(null)
   const printRef = useRef(null)
 
   const tanpaWatermark = tab === 'kwitansi'
   const labelJenis = tanpaWatermark ? 'Kwitansi' : 'Kuitansi'
+
+  function ubahTema(temaBaru) {
+    setTema(temaBaru)
+    simpanTemaKuitansi(temaBaru)
+  }
 
   async function loadData() {
     setLoading(true)
@@ -213,6 +225,7 @@ export default function Kuitansi() {
   function handleTutupBuat() {
     setShowBuat(false)
     setBkuTerpilih(null)
+    setTema(muatTemaKuitansi()) // modal bisa saja mengubah preferensi tampilan cetak
     loadData()
   }
 
@@ -310,6 +323,22 @@ export default function Kuitansi() {
         </div>
       </div>
 
+      <details className="card p-4 mb-4 no-print">
+        <summary className="cursor-pointer text-sm font-medium">
+          Tampilan Cetak (warna & tata letak)
+        </summary>
+        <div className="mt-3">
+          <PilihanTampilanCetak
+            value={tema}
+            onChange={ubahTema}
+            presetWarna={PRESET_WARNA_KUITANSI}
+          />
+          <p className="text-xs text-ink-700/50 mt-3">
+            Berlaku untuk Kuitansi dan Kwitansi, baik Cetak Ulang maupun yang baru dibuat, di perangkat ini.
+          </p>
+        </div>
+      </details>
+
       <div className="card overflow-x-auto">
         <table className="table-shell">
           <thead>
@@ -402,6 +431,7 @@ export default function Kuitansi() {
           sekolah={sekolah}
           data={cetakUlang}
           tanpaWatermark={cetakUlang.jenis === 'kwitansi'}
+          tema={tema}
         />
       )}
     </Layout>
