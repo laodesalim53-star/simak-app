@@ -19,6 +19,15 @@ const emptyForm = {
   nip_dokter_penanggung_jawab: '',
   tempat_ttd: '',
   logo_path: '',
+  logo_kabupaten_path: '',
+}
+
+const BUCKET = 'profil-puskesmas'
+
+function getLogoUrl(path) {
+  if (!path) return ''
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path)
+  return data.publicUrl
 }
 
 // Satu puskesmas = satu baris, di-scope lewat sekolah_id (tenant), sama
@@ -31,8 +40,10 @@ export default function ProfilPuskesmas() {
   const [loading, setLoading] = useState(profilPuskesmas === undefined)
   const [saving, setSaving] = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
+  const [uploadingLogoKab, setUploadingLogoKab] = useState(false)
   const [tersimpan, setTersimpan] = useState(false)
   const [logoUrl, setLogoUrl] = useState('')
+  const [logoKabUrl, setLogoKabUrl] = useState('')
 
   // Isi form dari data yang sudah dimuat di AuthContext, bukan fetch sendiri.
   useEffect(() => {
@@ -44,16 +55,13 @@ export default function ProfilPuskesmas() {
 
     if (profilPuskesmas) {
       setForm({ ...emptyForm, ...profilPuskesmas })
-      if (profilPuskesmas.logo_path) {
-        const { data: pub } = supabase.storage.from('profil-puskesmas').getPublicUrl(profilPuskesmas.logo_path)
-        setLogoUrl(pub.publicUrl)
-      } else {
-        setLogoUrl('')
-      }
+      setLogoUrl(getLogoUrl(profilPuskesmas.logo_path))
+      setLogoKabUrl(getLogoUrl(profilPuskesmas.logo_kabupaten_path))
     } else {
       // Puskesmas ini belum punya baris profil_puskesmas sama sekali — normal untuk tenant baru
       setForm(emptyForm)
       setLogoUrl('')
+      setLogoKabUrl('')
     }
   }, [profilPuskesmas])
 
@@ -79,43 +87,68 @@ export default function ProfilPuskesmas() {
     }
   }
 
-  async function handleLogoChange(e) {
+  // Upload generik dipakai untuk logo puskesmas & logo kabupaten.
+  //  - field   : nama kolom di tabel (logo_path / logo_kabupaten_path)
+  //  - prefix  : awalan nama file di storage
+  //  - setUrl / setUploading : setter state untuk preview & status loading
+  async function uploadLogo(e, { field, prefix, label, setUrl, setUploading }) {
     const file = e.target.files?.[0]
     if (!file || !sekolahId) return
-    setUploadingLogo(true)
+    setUploading(true)
 
     const ext = file.name.split('.').pop()
-    const path = `${sekolahId}/logo-${Date.now()}.${ext}`
+    const path = `${sekolahId}/${prefix}-${Date.now()}.${ext}`
 
-    const { error: uploadError } = await supabase.storage.from('profil-puskesmas').upload(path, file, {
+    const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, file, {
       upsert: true,
     })
 
     if (uploadError) {
-      alert('Gagal upload logo: ' + uploadError.message)
-      setUploadingLogo(false)
+      alert(`Gagal upload ${label}: ` + uploadError.message)
+      setUploading(false)
+      e.target.value = ''
       return
     }
 
-    const { data: pub } = supabase.storage.from('profil-puskesmas').getPublicUrl(path)
-    setLogoUrl(pub.publicUrl)
-    setForm((f) => ({ ...f, logo_path: path }))
+    setUrl(getLogoUrl(path))
+    setForm((f) => ({ ...f, [field]: path }))
 
     // Langsung simpan ke DB supaya logo tidak hilang kalau lupa klik "Simpan Perubahan"
     const { error: saveError } = await supabase
       .from('profil_puskesmas')
       .upsert(
-        { sekolah_id: sekolahId, logo_path: path, diperbarui_pada: new Date().toISOString() },
+        { sekolah_id: sekolahId, [field]: path, diperbarui_pada: new Date().toISOString() },
         { onConflict: 'sekolah_id' }
       )
 
     if (saveError) {
-      alert('Logo terunggah tapi gagal disimpan ke profil: ' + saveError.message)
+      alert(`${label} terunggah tapi gagal disimpan ke profil: ` + saveError.message)
     } else {
       await refreshProfilPuskesmas()
     }
 
-    setUploadingLogo(false)
+    setUploading(false)
+    e.target.value = ''
+  }
+
+  function handleLogoChange(e) {
+    return uploadLogo(e, {
+      field: 'logo_path',
+      prefix: 'logo',
+      label: 'logo puskesmas',
+      setUrl: setLogoUrl,
+      setUploading: setUploadingLogo,
+    })
+  }
+
+  function handleLogoKabChange(e) {
+    return uploadLogo(e, {
+      field: 'logo_kabupaten_path',
+      prefix: 'logo-kabupaten',
+      label: 'logo kabupaten',
+      setUrl: setLogoKabUrl,
+      setUploading: setUploadingLogoKab,
+    })
   }
 
   function ubah(field, value) {
@@ -137,20 +170,60 @@ export default function ProfilPuskesmas() {
     >
       <form onSubmit={handleSubmit} className="space-y-5 max-w-3xl">
         <div className="card p-6">
-          <h3 className="font-display font-semibold text-ink-950 mb-4">Logo Puskesmas</h3>
-          <div className="flex items-center gap-4">
-            <div className="w-20 h-20 rounded-lg border border-ink-900/[0.1] flex items-center justify-center overflow-hidden bg-ink-900/[0.02] shrink-0">
-              {logoUrl ? (
-                <img src={logoUrl} alt="Logo puskesmas" className="w-full h-full object-contain" />
-              ) : (
-                <ImagePlus size={24} className="text-ink-700/30" />
-              )}
+          <h3 className="font-display font-semibold text-ink-950 mb-1">Logo Kop Surat</h3>
+          <p className="text-xs text-ink-700/60 mb-4">
+            Logo kabupaten tampil di sisi kiri kop, logo puskesmas di sisi kanan.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-6">
+            {/* Logo Kabupaten */}
+            <div>
+              <p className="label-field mb-2">Logo Kabupaten/Kota</p>
+              <div className="flex items-center gap-4">
+                <div className="w-20 h-20 rounded-lg border border-ink-900/[0.1] flex items-center justify-center overflow-hidden bg-ink-900/[0.02] shrink-0">
+                  {logoKabUrl ? (
+                    <img src={logoKabUrl} alt="Logo kabupaten" className="w-full h-full object-contain" />
+                  ) : (
+                    <ImagePlus size={24} className="text-ink-700/30" />
+                  )}
+                </div>
+                <label className="btn-secondary cursor-pointer inline-flex">
+                  {uploadingLogoKab ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />}
+                  {uploadingLogoKab ? 'Mengunggah...' : 'Upload Logo'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleLogoKabChange}
+                    disabled={uploadingLogoKab}
+                  />
+                </label>
+              </div>
             </div>
-            <label className="btn-secondary cursor-pointer inline-flex">
-              {uploadingLogo ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />}
-              {uploadingLogo ? 'Mengunggah...' : 'Upload Logo'}
-              <input type="file" accept="image/*" className="hidden" onChange={handleLogoChange} disabled={uploadingLogo} />
-            </label>
+
+            {/* Logo Puskesmas */}
+            <div>
+              <p className="label-field mb-2">Logo Puskesmas</p>
+              <div className="flex items-center gap-4">
+                <div className="w-20 h-20 rounded-lg border border-ink-900/[0.1] flex items-center justify-center overflow-hidden bg-ink-900/[0.02] shrink-0">
+                  {logoUrl ? (
+                    <img src={logoUrl} alt="Logo puskesmas" className="w-full h-full object-contain" />
+                  ) : (
+                    <ImagePlus size={24} className="text-ink-700/30" />
+                  )}
+                </div>
+                <label className="btn-secondary cursor-pointer inline-flex">
+                  {uploadingLogo ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />}
+                  {uploadingLogo ? 'Mengunggah...' : 'Upload Logo'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleLogoChange}
+                    disabled={uploadingLogo}
+                  />
+                </label>
+              </div>
+            </div>
           </div>
         </div>
 
