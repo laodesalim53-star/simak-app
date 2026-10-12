@@ -20,11 +20,7 @@ function formatTanggal(tgl) {
 // bersinggungan, menghasilkan efek jalinan garis khas kertas berharga.
 function GuillocheField({ patternId, p, opacity = 1 }) {
   return (
-    <svg
-      aria-hidden="true"
-      className="absolute inset-0 w-full h-full"
-      style={{ opacity }}
-    >
+    <svg aria-hidden="true" className="absolute inset-0 w-full h-full" style={{ opacity }}>
       <defs>
         <pattern id={patternId} width="15" height="15" patternUnits="userSpaceOnUse">
           <rect width="15" height="15" fill={p.paper} />
@@ -90,14 +86,14 @@ const RATA_H = { kiri: 'flex-start', tengah: 'center', kanan: 'flex-end' }
 // SATU KWITANSI = SATU LEMBAR A4 SENDIRI (dicetak terpisah dari Nota).
 //
 // Props:
-//   sekolah: { nama, alamat, kota }
+//   sekolah: { nama, alamat, kota }  (nama sekolah ATAU puskesmas)
 //   data: { no_kwitansi, tanggal, dari, uang_sejumlah, untuk_pembayaran, jumlah, alamat, nama_penerima }
 //   tema (opsional): preferensi tampilan cetak — { warna, warnaKustom, posisiV,
-//     posisiH, ukuran }. Bila kosong dipakai bawaan (biru, bawah, tengah, penuh)
-//     yang sama persis dengan tampilan sebelumnya. Lihat lib/kuitansiJasaTema.js.
+//     posisiH, ukuran }. Bila kosong dipakai bawaan (biru, bawah, tengah, penuh).
+//     Lihat lib/kuitansiJasaTema.js.
 //
-// `data.alamat` (kotak "Alamat Penerima" di KuitansiJasaModal) dipakai untuk
-// baris "<kota>, <tanggal>" — BUKAN `sekolah.kota`.
+// Baris "<tempat>, <tanggal>": memakai `data.alamat` (alamat penerima) bila
+// diisi; bila kosong, memakai `sekolah.kota` sebagai cadangan.
 // `data.nama_penerima` dicetak tepat di atas garis tanda tangan.
 const KuitansiJasaPrintTemplate = forwardRef(function KuitansiJasaPrintTemplate(
   { sekolah, data, tema },
@@ -107,6 +103,7 @@ const KuitansiJasaPrintTemplate = forwardRef(function KuitansiJasaPrintTemplate(
   const bodyPatternId = `guilloche-body-${reactId}`
   const stubPatternId = `guilloche-stub-${reactId}`
   const tanggal = formatTanggal(data?.tanggal)
+  const tempat = data?.alamat || sekolah?.kota || ''
 
   const t = normalisasiTema(tema)
   const p = bangunPalet(t)
@@ -175,10 +172,7 @@ const KuitansiJasaPrintTemplate = forwardRef(function KuitansiJasaPrintTemplate(
         />
 
         {/* Slip utama */}
-        <div
-          className="relative flex-1 overflow-hidden"
-          style={{ ...doubleFrame, padding: '2.5mm 4mm' }}
-        >
+        <div className="relative flex-1 overflow-hidden" style={{ ...doubleFrame, padding: '2.5mm 4mm' }}>
           <GuillocheField patternId={bodyPatternId} p={p} opacity={0.55} />
           {/* Watermark rosette besar di tengah */}
           <div
@@ -203,28 +197,36 @@ const KuitansiJasaPrintTemplate = forwardRef(function KuitansiJasaPrintTemplate(
                     No.
                   </td>
                   <td className="align-top">:</td>
-                  <td><Blank p={p} value={data?.no_kwitansi} /></td>
+                  <td>
+                    <Blank p={p} value={data?.no_kwitansi} />
+                  </td>
                 </tr>
                 <tr>
                   <td className="align-top whitespace-nowrap" style={{ paddingRight: '2mm' }}>
                     Telah terima dari
                   </td>
                   <td className="align-top">:</td>
-                  <td><Blank p={p} value={data?.dari} /></td>
+                  <td>
+                    <Blank p={p} value={data?.dari} />
+                  </td>
                 </tr>
                 <tr>
                   <td className="align-top whitespace-nowrap" style={{ paddingRight: '2mm' }}>
                     Uang sejumlah
                   </td>
                   <td className="align-top">:</td>
-                  <td><Blank p={p} value={data?.uang_sejumlah} italic /></td>
+                  <td>
+                    <Blank p={p} value={data?.uang_sejumlah} italic />
+                  </td>
                 </tr>
                 <tr>
                   <td className="align-top whitespace-nowrap" style={{ paddingRight: '2mm' }}>
                     Untuk pembayaran
                   </td>
                   <td className="align-top">:</td>
-                  <td><Blank p={p} value={data?.untuk_pembayaran} /></td>
+                  <td>
+                    <Blank p={p} value={data?.untuk_pembayaran} />
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -243,7 +245,11 @@ const KuitansiJasaPrintTemplate = forwardRef(function KuitansiJasaPrintTemplate(
                 Rp {formatRupiah(data?.jumlah || 0)}
               </div>
               <div className="text-center" style={{ fontSize: '9px', color: p.ink }}>
-                <div>{data?.alamat}{data?.alamat ? ', ' : ''}{tanggal}</div>
+                <div>
+                  {tempat}
+                  {tempat ? ', ' : ''}
+                  {tanggal}
+                </div>
                 <div style={{ height: '6mm' }} />
                 {data?.nama_penerima && (
                   <div style={{ fontSize: '9px', fontWeight: 'bold', marginBottom: '0.3mm' }}>
