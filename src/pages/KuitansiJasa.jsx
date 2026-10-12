@@ -4,7 +4,9 @@ import Layout from '../components/Layout'
 import { useAuth } from '../lib/AuthContext'
 import KuitansiJasaModal from '../components/KuitansiJasaModal'
 import PilihKuitansiModal from '../components/PilihKuitansiModal'
+import PilihanTampilanCetak from '../components/PilihanTampilanCetak'
 import KuitansiJasaPrintTemplate from '../lib/KuitansiJasaPrintTemplate'
+import { muatTema, simpanTema } from '../lib/kuitansiJasaTema'
 import { terbilangRupiah } from '../lib/terbilang'
 import { Plus, Printer, Search, Loader2, Receipt, Trash2, ArrowDownToLine } from 'lucide-react'
 
@@ -29,9 +31,19 @@ export default function KuitansiJasa() {
   const [sekolah, setSekolah] = useState(null)
   const [menghapus, setMenghapus] = useState(null) // id yang sedang dihapus
 
+  // Preferensi tampilan cetak (warna & tata letak), disimpan di localStorage
+  // dan dipakai untuk Cetak Ulang. Modal "Buat Kuitansi Jasa" memakai
+  // preferensi yang sama.
+  const [tema, setTema] = useState(() => muatTema())
+
   // Baris yang sedang dicetak ulang
   const [cetakUlang, setCetakUlang] = useState(null)
   const printRef = useRef(null)
+
+  function ubahTema(temaBaru) {
+    setTema(temaBaru)
+    simpanTema(temaBaru)
+  }
 
   async function loadData() {
     setLoading(true)
@@ -100,6 +112,7 @@ export default function KuitansiJasa() {
   function handleTutupBuat() {
     setShowBuat(false)
     setDataAwal(null)
+    setTema(muatTema()) // modal bisa saja mengubah preferensi tampilan cetak
     loadData()
   }
 
@@ -123,6 +136,7 @@ export default function KuitansiJasa() {
         untuk_pembayaran: cetakUlang.untuk_pembayaran,
         jumlah: cetakUlang.jumlah_total,
         nama_penerima: cetakUlang.nama_penerima,
+        alamat: cetakUlang.alamat_penerima,
       }
     : null
 
@@ -155,6 +169,18 @@ export default function KuitansiJasa() {
           </div>
         </div>
       </div>
+
+      <details className="card p-4 mb-4">
+        <summary className="cursor-pointer text-sm font-medium">
+          Tampilan Cetak (warna & tata letak)
+        </summary>
+        <div className="mt-3">
+          <PilihanTampilanCetak value={tema} onChange={ubahTema} />
+          <p className="text-xs text-ink-700/50 mt-3">
+            Berlaku untuk Cetak Ulang dan kuitansi baru di perangkat ini.
+          </p>
+        </div>
+      </details>
 
       <div className="card overflow-x-auto">
         <table className="table-shell">
@@ -236,6 +262,7 @@ export default function KuitansiJasa() {
           ref={printRef}
           sekolah={sekolah}
           data={dataCetakUlang}
+          tema={tema}
         />
       )}
     </Layout>
