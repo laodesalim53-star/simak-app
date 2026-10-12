@@ -29,6 +29,20 @@ const emptyFormKwitansi = {
   potongan_ppn: '',
   nama_penerima: '',
   jabatan_penerima: '',
+  alamat_penerima: '',
+  lembar: 'I/II/III/IV/V',
+  mata_anggaran: '',
+  tahun_anggaran: String(new Date().getFullYear()),
+  disetujui_oleh: '',
+  nip_disetujui: '',
+  dibayar_oleh: '',
+  nip_dibayar: '',
+  catatan: '',
+}
+
+// Bendahara dikenali dari jabatan pegawai (mengandung kata "bendahara").
+function cariBendahara(daftar) {
+  return (daftar || []).find((p) => (p.jabatan || '').toLowerCase().includes('bendahara'))
 }
 
 export default function TabKwitansi() {
@@ -67,39 +81,26 @@ export default function TabKwitansi() {
       Number(k.potongan_pph) > 0 && `PPh ${formatRupiah(k.potongan_pph)}`,
       Number(k.potongan_ppn) > 0 && `PPN ${formatRupiah(k.potongan_ppn)}`,
     ].filter(Boolean)
+    const bendahara = cariBendahara(pegawaiList)
     return {
       no_bukti: k.nomor_kwitansi || '',
+      lembar: k.lembar || 'I/II/III/IV/V',
+      mata_anggaran: k.mata_anggaran || '',
+      tahun_anggaran: k.tahun_anggaran || String(new Date(k.tanggal).getFullYear()),
       tanggal: k.tanggal,
       diterima_dari: k.sudah_terima_dari || profilPuskesmas?.nama_puskesmas || '',
       jumlah_total: k.jumlah_uang,
       untuk_pembayaran: k.untuk_pembayaran,
       jabatan_disetujui: 'Kepala Puskesmas',
-      disetujui_oleh: profilPuskesmas?.kepala_puskesmas || '',
-      nip_disetujui: profilPuskesmas?.nip_kepala_puskesmas || '',
+      disetujui_oleh: k.disetujui_oleh || profilPuskesmas?.kepala_puskesmas || '',
+      nip_disetujui: k.nip_disetujui || profilPuskesmas?.nip_kepala_puskesmas || '',
+      dibayar_oleh: k.dibayar_oleh || bendahara?.nama_lengkap || '',
+      nip_dibayar: k.nip_dibayar || bendahara?.nip || '',
       nama_penerima: k.nama_penerima || '',
-      alamat_penerima: profilPuskesmas?.tempat_ttd || profilPuskesmas?.kabupaten || '',
-      catatan: potongan.length ? `Potongan ${potongan.join(', ')}` : '',
+      alamat_penerima: k.alamat_penerima || profilPuskesmas?.tempat_ttd || profilPuskesmas?.kabupaten || '',
+      catatan: [k.catatan, potongan.length ? `Potongan ${potongan.join(', ')}` : ''].filter(Boolean).join('. '),
     }
   }
-
-  useEffect(() => {
-    if (!sekolahId) return
-    supabase
-      .from('profil_puskesmas')
-      .select('nama_puskesmas, kepala_puskesmas, nip_kepala_puskesmas, tempat_ttd, kabupaten')
-      .eq('sekolah_id', sekolahId)
-      .maybeSingle()
-      .then(({ data: p }) => setProfilPuskesmas(p))
-
-    // Daftar pegawai aktif — untuk menautkan penerima ke Data Pegawai.
-    supabase
-      .from('pegawai_puskesmas')
-      .select('id, nama_lengkap, nip, jabatan')
-      .eq('sekolah_id', sekolahId)
-      .eq('status', 'aktif')
-      .order('nama_lengkap')
-      .then(({ data: pg }) => setPegawaiList(pg || []))
-  }, [sekolahId])
 
   async function loadData() {
     if (!sekolahId) {
@@ -111,7 +112,7 @@ export default function TabKwitansi() {
 
     const { data: daftarBku } = await supabase
       .from('bku_bok')
-      .select('id, tanggal, uraian, pengeluaran')
+      .select('*')
       .eq('sekolah_id', sekolahId)
       .order('tanggal', { ascending: false })
     setBkuList(daftarBku || [])
@@ -133,7 +134,17 @@ export default function TabKwitansi() {
   }, [sekolahId])
 
   function openAdd() {
-    setForm({ ...emptyFormKwitansi, sudah_terima_dari: profilPuskesmas?.nama_puskesmas || '' })
+    const bendahara = cariBendahara(pegawaiList)
+    setForm({
+      ...emptyFormKwitansi,
+      tahun_anggaran: String(new Date().getFullYear()),
+      sudah_terima_dari: profilPuskesmas?.nama_puskesmas || '',
+      disetujui_oleh: profilPuskesmas?.kepala_puskesmas || '',
+      nip_disetujui: profilPuskesmas?.nip_kepala_puskesmas || '',
+      dibayar_oleh: bendahara?.nama_lengkap || '',
+      nip_dibayar: bendahara?.nip || '',
+      alamat_penerima: profilPuskesmas?.tempat_ttd || profilPuskesmas?.kabupaten || '',
+    })
     setEditingId(null)
     setShowForm(true)
   }
@@ -151,6 +162,15 @@ export default function TabKwitansi() {
       potongan_ppn: String(row.potongan_ppn || 0),
       nama_penerima: row.nama_penerima || '',
       jabatan_penerima: row.jabatan_penerima || '',
+      alamat_penerima: row.alamat_penerima || profilPuskesmas?.tempat_ttd || profilPuskesmas?.kabupaten || '',
+      lembar: row.lembar || 'I/II/III/IV/V',
+      mata_anggaran: row.mata_anggaran || '',
+      tahun_anggaran: row.tahun_anggaran || String(new Date().getFullYear()),
+      disetujui_oleh: row.disetujui_oleh || profilPuskesmas?.kepala_puskesmas || '',
+      nip_disetujui: row.nip_disetujui || profilPuskesmas?.nip_kepala_puskesmas || '',
+      dibayar_oleh: row.dibayar_oleh || cariBendahara(pegawaiList)?.nama_lengkap || '',
+      nip_dibayar: row.nip_dibayar || cariBendahara(pegawaiList)?.nip || '',
+      catatan: row.catatan || '',
     })
     setEditingId(row.id)
     setShowForm(true)
@@ -162,6 +182,8 @@ export default function TabKwitansi() {
     setForm((prev) => ({
       ...prev,
       bku_id: bkuId,
+      nomor_kwitansi: bku?.no_bukti || prev.nomor_kwitansi,
+      mata_anggaran: bku?.kode_rekening || prev.mata_anggaran,
       untuk_pembayaran: bku ? bku.uraian : prev.untuk_pembayaran,
       jumlah_uang: bku ? String(bku.pengeluaran) : prev.jumlah_uang,
       tanggal: bku ? bku.tanggal : prev.tanggal,
@@ -196,6 +218,15 @@ export default function TabKwitansi() {
       potongan_ppn: Number(form.potongan_ppn) || 0,
       nama_penerima: form.nama_penerima || null,
       jabatan_penerima: form.jabatan_penerima || null,
+      alamat_penerima: form.alamat_penerima || null,
+      lembar: form.lembar || null,
+      mata_anggaran: form.mata_anggaran || null,
+      tahun_anggaran: form.tahun_anggaran || null,
+      disetujui_oleh: form.disetujui_oleh || null,
+      nip_disetujui: form.nip_disetujui || null,
+      dibayar_oleh: form.dibayar_oleh || null,
+      nip_dibayar: form.nip_dibayar || null,
+      catatan: form.catatan || null,
     }
     const { error } = editingId
       ? await supabase.from('kwitansi_bok').update(payload).eq('id', editingId).eq('sekolah_id', sekolahId)
@@ -311,12 +342,24 @@ export default function TabKwitansi() {
                 </select>
               </div>
               <div>
-                <label className="eyebrow mb-1.5 block">Nomor Kwitansi</label>
+                <label className="eyebrow mb-1.5 block">No. Bukti / Nomor Kwitansi</label>
                 <input className="input-field" value={form.nomor_kwitansi} onChange={(e) => setForm({ ...form, nomor_kwitansi: e.target.value })} />
               </div>
               <div>
                 <label className="eyebrow mb-1.5 block">Tanggal</label>
                 <input type="date" required className="input-field" value={form.tanggal} onChange={(e) => setForm({ ...form, tanggal: e.target.value })} />
+              </div>
+              <div>
+                <label className="eyebrow mb-1.5 block">Lembar</label>
+                <input className="input-field" value={form.lembar} onChange={(e) => setForm({ ...form, lembar: e.target.value })} />
+              </div>
+              <div>
+                <label className="eyebrow mb-1.5 block">Tahun Anggaran</label>
+                <input className="input-field" value={form.tahun_anggaran} onChange={(e) => setForm({ ...form, tahun_anggaran: e.target.value })} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="eyebrow mb-1.5 block">Mata Anggaran</label>
+                <input className="input-field" placeholder="Contoh: 5.1.02.01.01.0055" value={form.mata_anggaran} onChange={(e) => setForm({ ...form, mata_anggaran: e.target.value })} />
               </div>
               <div className="sm:col-span-2">
                 <label className="eyebrow mb-1.5 block">Sudah Terima Dari</label>
@@ -339,6 +382,23 @@ export default function TabKwitansi() {
                 <input type="number" min="0" className="input-field" value={form.potongan_ppn} onChange={(e) => setForm({ ...form, potongan_ppn: e.target.value })} />
               </div>
 
+              <div>
+                <label className="eyebrow mb-1.5 block">Setuju Dibayar (Kepala Puskesmas)</label>
+                <input className="input-field" value={form.disetujui_oleh} onChange={(e) => setForm({ ...form, disetujui_oleh: e.target.value })} />
+              </div>
+              <div>
+                <label className="eyebrow mb-1.5 block">NIP Penyetuju</label>
+                <input className="input-field" value={form.nip_disetujui} onChange={(e) => setForm({ ...form, nip_disetujui: e.target.value })} />
+              </div>
+              <div>
+                <label className="eyebrow mb-1.5 block">Lunas Dibayar (Pemegang Kas)</label>
+                <input className="input-field" value={form.dibayar_oleh} onChange={(e) => setForm({ ...form, dibayar_oleh: e.target.value })} />
+              </div>
+              <div>
+                <label className="eyebrow mb-1.5 block">NIP Pemegang Kas</label>
+                <input className="input-field" value={form.nip_dibayar} onChange={(e) => setForm({ ...form, nip_dibayar: e.target.value })} />
+              </div>
+
               <div className="sm:col-span-2 pt-2 border-t border-ink-900/10">
                 <label className="eyebrow mb-1.5 block text-emerald-700">Pilih Pegawai Penerima (sesuai tugasnya)</label>
                 <select className="input-field" value={form.pegawai_id} onChange={(e) => pilihPegawaiPenerima(e.target.value)}>
@@ -358,6 +418,14 @@ export default function TabKwitansi() {
               <div>
                 <label className="eyebrow mb-1.5 block">Jabatan Penerima</label>
                 <input className="input-field" value={form.jabatan_penerima} onChange={(e) => setForm({ ...form, jabatan_penerima: e.target.value })} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="eyebrow mb-1.5 block">Alamat Penerima / Kota Tanda Tangan</label>
+                <input className="input-field" value={form.alamat_penerima} onChange={(e) => setForm({ ...form, alamat_penerima: e.target.value })} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="eyebrow mb-1.5 block">Catatan (opsional)</label>
+                <input className="input-field" value={form.catatan} onChange={(e) => setForm({ ...form, catatan: e.target.value })} />
               </div>
             </div>
 
