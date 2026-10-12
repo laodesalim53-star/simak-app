@@ -2432,17 +2432,6 @@ export default function SampulLaporan({
     .pratinjau-bungkus { width: auto !important; height: auto !important; overflow: visible !important; box-shadow: none !important; background: transparent !important; }
     .pratinjau-skala { width: auto !important; height: auto !important; transform: none !important; }
 
-    /* ukuran lembar tetap dalam mm, bukan 100% */
-    .lembar-cetak {
-      width: ${lebarMm}mm !important;
-      height: ${tinggiMm - 0.5}mm !important; /* kurang 0,5mm agar tidak muncul halaman kosong tambahan */
-      margin: 0 !important;
-      box-shadow: none !important;
-      overflow: hidden;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-    }
-    .only-print { display: inline !important; }
     .lembar-cetak.print-only {
       position: static !important;
       margin-left: 0 !important;
@@ -2450,3 +2439,6 @@ export default function SampulLaporan({
     }
   }
 `}</style>
+    </div>
+  )
+}
