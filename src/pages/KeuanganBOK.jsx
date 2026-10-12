@@ -12,10 +12,11 @@ import { formatRupiah, formatTanggal } from './bok/utils'
 import TabRKA from './bok/TabRKA'
 import TabBKU from './bok/TabBKU'
 import TabKwitansi from './bok/TabKwitansi'
+import TabKuitansiJasa from './bok/TabKuitansiJasa'
 
 // Halaman "Keuangan BOK" (Bantuan Operasional Kesehatan) — KHUSUS tenant
-// puskesmas. Satu halaman dengan 5 tab: Rincian Kegiatan (RKA), BKU,
-// Kwitansi, Nota Belanja, SK Pengelola BOK.
+// puskesmas. Satu halaman dengan 6 tab: Rincian Kegiatan (RKA), BKU,
+// Kwitansi, Kuitansi Jasa, Nota Belanja, SK Pengelola BOK.
 //
 // File ini sudah dipecah supaya lebih ringan dibuka/diedit:
 // - ./bok/utils.js            → formatRupiah, formatTanggal, terbilang, dst.
@@ -24,12 +25,14 @@ import TabKwitansi from './bok/TabKwitansi'
 // - ./bok/TabRKA.jsx          → Tab 1: Rincian Kegiatan (RKA)
 // - ./bok/TabBKU.jsx          → Tab 2: BKU
 // - ./bok/TabKwitansi.jsx     → Tab 3: Kwitansi
-// Tab 4 (Nota Belanja) & Tab 5 (SK Pengelola) tetap di file ini.
+// - ./bok/TabKuitansiJasa.jsx → Tab 4: Kuitansi Jasa (transport, honor, dst.)
+// Tab 5 (Nota Belanja) & Tab 6 (SK Pengelola) tetap di file ini.
 
 const TABS = [
   { key: 'rka', label: 'Rincian Kegiatan (RKA)', icon: ClipboardList },
   { key: 'bku', label: 'BKU', icon: BookOpen },
   { key: 'kwitansi', label: 'Kwitansi', icon: Receipt },
+  { key: 'kuitansi_jasa', label: 'Kuitansi Jasa', icon: Receipt },
   { key: 'nota', label: 'Nota Belanja', icon: ShoppingCart },
   { key: 'sk', label: 'SK Pengelola', icon: FileSignature },
 ]
@@ -38,7 +41,7 @@ export default function KeuanganBOK() {
   const [tabAktif, setTabAktif] = useState('rka')
 
   return (
-    <Layout title="Keuangan BOK" subtitle="Rincian kegiatan, BKU, kwitansi, nota belanja & SK pengelola dana BOK">
+    <Layout title="Keuangan BOK" subtitle="Rincian kegiatan, BKU, kwitansi, kuitansi jasa, nota belanja & SK pengelola dana BOK">
       <div className="card relative overflow-hidden p-2 mb-5">
         <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 to-blue-700" />
         <div className="flex flex-wrap gap-1">
@@ -64,6 +67,7 @@ export default function KeuanganBOK() {
       {tabAktif === 'rka' && <TabRKA />}
       {tabAktif === 'bku' && <TabBKU />}
       {tabAktif === 'kwitansi' && <TabKwitansi />}
+      {tabAktif === 'kuitansi_jasa' && <TabKuitansiJasa />}
       {tabAktif === 'nota' && <TabNotaBelanja />}
       {tabAktif === 'sk' && <TabSKPengelola />}
     </Layout>
@@ -71,7 +75,7 @@ export default function KeuanganBOK() {
 }
 
 // ============================================================
-// TAB 4: NOTA BELANJA
+// TAB 5: NOTA BELANJA
 // ============================================================
 
 const barisBarangKosong = { nama: '', jumlah: 1, satuan: '', harga_satuan: 0 }
@@ -445,7 +449,7 @@ function TabNotaBelanja() {
 }
 
 // ============================================================
-// TAB 5: SK PENGELOLA BOK
+// TAB 6: SK PENGELOLA BOK
 // ============================================================
 
 const barisTimKosong = { pegawai_id: '', nama: '', nip: '', jabatan_tim: '', jabatan_puskesmas: '' }
