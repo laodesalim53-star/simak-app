@@ -2,6 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { X, Loader2, Printer } from 'lucide-react'
 import KuitansiPrintTemplate from '../lib/KuitansiPrintTemplate'
+import PilihanTampilanCetak from '../components/PilihanTampilanCetak'
+import {
+  muatTemaKuitansi,
+  simpanTemaKuitansi,
+  PRESET_WARNA_KUITANSI,
+} from '../lib/kuitansiTema'
 
 // Kunci localStorage untuk mengingat isian terakhir yang biasanya sama tiap
 // kuitansi dibuat: tanda tangan (Setuju Dibayar/NIP Penyetuju/Lunas
@@ -130,16 +136,28 @@ function cariGuruBerdasarkanPeran(daftarGuru, kataKunci) {
  * No. Bukti BKU apa adanya (mis. "BNU02"), bukan format auto
  * "0008/BNU/2026" — supaya nomor kuitansi selalu mengikuti nomor bukti
  * aslinya di BKU. Lihat handleSimpan.
+ *
+ * TAMPILAN CETAK: warna & tata letak dipilih lewat PilihanTampilanCetak dan
+ * disimpan sebagai preferensi di localStorage (lib/kuitansiTema.js) — tidak
+ * ikut disimpan ke tabel kuitansi, sehingga Cetak Ulang dari halaman riwayat
+ * memakai preferensi yang berlaku saat itu. Berlaku sama untuk 'kuitansi'
+ * dan 'kwitansi'.
  */
 export default function KuitansiModal({ keuanganRow, sekolah, sekolahId, jenis = 'kuitansi', onClose }) {
   const tanpaWatermark = jenis === 'kwitansi'
   const [form, setForm] = useState(emptyForm(keuanganRow))
   const [saving, setSaving] = useState(false)
   const [savedData, setSavedData] = useState(null) // { ...kuitansi row } setelah tersimpan, siap dicetak
+  const [tema, setTema] = useState(() => muatTemaKuitansi())
   const printRef = useRef(null)
 
   function ubah(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
+  }
+
+  function ubahTema(temaBaru) {
+    setTema(temaBaru)
+    simpanTemaKuitansi(temaBaru)
   }
 
   // Sinkronkan nama+NIP Kepala Sekolah & Bendahara dari tabel guru setiap
@@ -408,6 +426,15 @@ export default function KuitansiModal({ keuanganRow, sekolah, sekolahId, jenis =
               </div>
             </div>
 
+            <div className="border border-ink-700/15 rounded-lg p-3">
+              <div className="text-sm font-medium mb-2">Tampilan Cetak</div>
+              <PilihanTampilanCetak
+                value={tema}
+                onChange={ubahTema}
+                presetWarna={PRESET_WARNA_KUITANSI}
+              />
+            </div>
+
             <div className="flex justify-end gap-3 pt-2">
               <button type="button" className="btn-secondary" onClick={onClose}>Batal</button>
               <button type="submit" className="btn-primary" disabled={saving}>
@@ -428,6 +455,7 @@ export default function KuitansiModal({ keuanganRow, sekolah, sekolahId, jenis =
           sekolah={sekolah}
           data={savedData}
           tanpaWatermark={tanpaWatermark}
+          tema={tema}
         />
       )}
     </>
