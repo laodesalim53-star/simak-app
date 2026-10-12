@@ -64,16 +64,15 @@ export default function KeuanganBOK() {
         </div>
       </div>
 
-      {tabAktif === 'rka' && <TabRKA />}
+       {tabAktif === 'rka' && <TabRKA />}
       {tabAktif === 'bku' && <TabBKU />}
       {tabAktif === 'kwitansi' && <TabKwitansi />}
-      {tabAktif === 'kuitansi_jasa' && <TabKuitansiJasa />}
+      {tabAktif === 'kuitansi_jasa' && <TabKuitansiJasa tampilkanTarik />}
       {tabAktif === 'nota' && <TabNotaBelanja />}
       {tabAktif === 'sk' && <TabSKPengelola />}
     </Layout>
   )
 }
-
 // ============================================================
 // TAB 5: NOTA BELANJA
 // ============================================================
