@@ -1931,6 +1931,7 @@ export default function SampulLaporan({
 
   // Skala pratinjau dinamis (harus dipanggil SEBELUM return awal `if (loading)`)
   const lebarMm = orientasi === 'landscape' ? 297 : 210
+  const tinggiMm = orientasi === 'landscape' ? 210 : 297
   const [skalaPratinjau, setWadahPratinjau] = useSkalaPratinjau(lebarMm, loading)
 
   function kePratinjau() {
@@ -2384,66 +2385,68 @@ export default function SampulLaporan({
         </div>
       </div>
 
-      <style>{`
-        .only-print { display: none; }
+    <style>{`
+  .only-print { display: none; }
 
-        html, body {
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
-        }
+  html, body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 
-        /* Android/iOS: input < 16px memicu auto-zoom saat fokus. Area sentuh min. 44px. */
-        @media (max-width: 767px) {
-          .tata-letak-sampul input,
-          .tata-letak-sampul select {
-            font-size: 16px !important;
-            min-height: 44px;
-          }
-          .tata-letak-sampul button { min-height: 44px; }
-        }
+  /* Android/iOS: input < 16px memicu auto-zoom saat fokus. Area sentuh min. 44px. */
+  @media (max-width: 767px) {
+    .tata-letak-sampul input,
+    .tata-letak-sampul select {
+      font-size: 16px !important;
+      min-height: 44px;
+    }
+    .tata-letak-sampul button { min-height: 44px; }
+  }
 
-        /* Margin atas-bawah lembar (my-6) ikut terskala di pratinjau; hilangkan agar tidak ada ruang kosong. */
-        @media screen {
-          .pratinjau-skala .lembar-cetak.print-only { margin-top: 0 !important; margin-bottom: 0 !important; }
-        }
+  /* Margin lembar (my-6) ikut terskala di pratinjau; hilangkan agar tidak ada ruang kosong. */
+  @media screen {
+    .pratinjau-skala .lembar-cetak.print-only { margin-top: 0 !important; margin-bottom: 0 !important; }
+    .lembar-cetak.print-only { display: flex !important; }
+  }
 
-        @media print {
-          .no-print { display: none !important; }
-          .tata-letak-sampul { display: block !important; }
-          .area-pratinjau { display: block !important; padding: 0 !important; background: white !important; height: auto !important; overflow: visible !important; }
-          .pratinjau-bungkus { width: auto !important; height: auto !important; overflow: visible !important; box-shadow: none !important; }
-          .pratinjau-skala { width: auto !important; height: auto !important; transform: none !important; }
+  /* Ukuran kertas dikunci sesuai orientasi yang dipilih */
+  @page {
+    size: ${lebarMm}mm ${tinggiMm}mm;
+    margin: 0;
+  }
 
-          body { background: white; }
-          .lembar-cetak {
-            box-shadow: none !important;
-            margin: 0 !important;
-            width: 100% !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-          .only-print { display: inline !important; }
+  @media print {
+    html, body {
+      width: ${lebarMm}mm !important;
+      height: auto !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      background: #fff !important;
+    }
+    .no-print { display: none !important; }
 
-          .lembar-cetak.print-only {
-            position: static !important;
-            top: auto !important;
-            left: auto !important;
-            right: auto !important;
-            margin-left: auto !important;
-            margin-right: auto !important;
-          }
-        }
+    /* lepas semua pembungkus layar supaya sampul tampil di ukuran aslinya */
+    .tata-letak-sampul { display: block !important; min-height: 0 !important; background: #fff !important; }
+    .area-pratinjau { display: block !important; padding: 0 !important; margin: 0 !important; background: #fff !important; height: auto !important; overflow: visible !important; }
+    .area-pratinjau > div { display: block !important; width: auto !important; }
+    .pratinjau-bungkus { width: auto !important; height: auto !important; overflow: visible !important; box-shadow: none !important; background: transparent !important; }
+    .pratinjau-skala { width: auto !important; height: auto !important; transform: none !important; }
 
-        @media screen {
-          .lembar-cetak.print-only {
-            display: flex !important;
-          }
-        }
-        @page {
-          size: A4 ${orientasi};
-          margin: 0mm;
-        }
-      `}</style>
-    </div>
-  )
-}
+    /* ukuran lembar tetap dalam mm, bukan 100% */
+    .lembar-cetak {
+      width: ${lebarMm}mm !important;
+      height: ${tinggiMm - 0.5}mm !important; /* kurang 0,5mm agar tidak muncul halaman kosong tambahan */
+      margin: 0 !important;
+      box-shadow: none !important;
+      overflow: hidden;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .only-print { display: inline !important; }
+    .lembar-cetak.print-only {
+      position: static !important;
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+    }
+  }
+`}</style>
