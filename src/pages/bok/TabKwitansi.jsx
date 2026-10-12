@@ -2,14 +2,20 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabaseClient'
 import { useAuth } from '../../lib/AuthContext'
 import { Plus, Pencil, Trash2, Search, X, Loader2, Receipt, Printer } from 'lucide-react'
-import { formatRupiah, formatTanggal, terbilang, kapitalKalimat } from './utils'
-import PrintStyle from './PrintStyle'
+import { formatRupiah, formatTanggal } from './utils'
+import KuitansiPrintTemplate from '../../lib/KuitansiPrintTemplate'
+import PilihanTampilanCetak from '../../components/PilihanTampilanCetak'
+import { muatTemaKuitansi, simpanTemaKuitansi, PRESET_WARNA_KUITANSI } from '../../lib/kuitansiTema'
 
 // ============================================================
 // TAB 3: KWITANSI
 // Penerima bisa ditautkan ke pegawai_puskesmas (kolom kwitansi_bok.pegawai_id).
 // Nama/jabatan tetap disimpan sebagai teks untuk histori.
+// Cetak memakai KuitansiPrintTemplate (sama dengan halaman Kwitansi
+// "Tanpa Watermark"). Ubah TANPA_WATERMARK ke false untuk versi berbintang.
 // ============================================================
+
+const TANPA_WATERMARK = true
 
 const emptyFormKwitansi = {
   bku_id: '',
@@ -38,6 +44,43 @@ export default function TabKwitansi() {
   const [form, setForm] = useState(emptyFormKwitansi)
   const [saving, setSaving] = useState(false)
   const [cetak, setCetak] = useState(null) // kwitansi yang sedang dicetak
+  const [tema, setTema] = useState(() => muatTemaKuitansi())
+
+  function ubahTema(temaBaru) {
+    setTema(temaBaru)
+    simpanTemaKuitansi(temaBaru)
+  }
+
+  // Cetak langsung: template dirender (class print-only), lalu window.print().
+  useEffect(() => {
+    if (!cetak) return
+    const t = setTimeout(() => {
+      window.print()
+      setCetak(null)
+    }, 150)
+    return () => clearTimeout(t)
+  }, [cetak])
+
+  // Petakan baris kwitansi_bok ke bentuk yang dibaca KuitansiPrintTemplate.
+  function dataUntukCetak(k) {
+    const potongan = [
+      Number(k.potongan_pph) > 0 && `PPh ${formatRupiah(k.potongan_pph)}`,
+      Number(k.potongan_ppn) > 0 && `PPN ${formatRupiah(k.potongan_ppn)}`,
+    ].filter(Boolean)
+    return {
+      no_bukti: k.nomor_kwitansi || '',
+      tanggal: k.tanggal,
+      diterima_dari: k.sudah_terima_dari || profilPuskesmas?.nama_puskesmas || '',
+      jumlah_total: k.jumlah_uang,
+      untuk_pembayaran: k.untuk_pembayaran,
+      jabatan_disetujui: 'Kepala Puskesmas',
+      disetujui_oleh: profilPuskesmas?.kepala_puskesmas || '',
+      nip_disetujui: profilPuskesmas?.nip_kepala_puskesmas || '',
+      nama_penerima: k.nama_penerima || '',
+      alamat_penerima: profilPuskesmas?.tempat_ttd || profilPuskesmas?.kabupaten || '',
+      catatan: potongan.length ? `Potongan ${potongan.join(', ')}` : '',
+    }
+  }
 
   useEffect(() => {
     if (!sekolahId) return
@@ -197,6 +240,13 @@ export default function TabKwitansi() {
         </div>
       </div>
 
+      <details className="card p-4 mb-4 no-print">
+        <summary className="cursor-pointer text-sm font-medium">Tampilan Cetak (warna & tata letak)</summary>
+        <div className="mt-3">
+          <PilihanTampilanCetak value={tema} onChange={ubahTema} presetWarna={PRESET_WARNA_KUITANSI} />
+        </div>
+      </details>
+
       <div className="card overflow-x-auto">
         <table className="table-shell">
           <thead>
@@ -321,88 +371,14 @@ export default function TabKwitansi() {
         </div>
       )}
 
-      {/* ==== Modal Cetak Kwitansi ==== */}
+      {/* Template cetak dirender di luar elemen "no-print" supaya ikut tercetak. */}
       {cetak && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-2 sm:p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
-            <div className="no-print flex items-center justify-between p-4 border-b border-ink-900/10">
-              <h2 className="font-display font-semibold">Pratinjau Kwitansi</h2>
-              <div className="flex items-center gap-2">
-                <button onClick={() => window.print()} className="btn-primary !py-1.5"><Printer size={14} /> Cetak</button>
-                <button onClick={() => setCetak(null)} className="p-2.5 sm:p-2 hover:bg-ink-900/5 rounded-lg touch-manipulation"><X size={18} /></button>
-              </div>
-            </div>
-
-            <div className="lembar-kwitansi p-4 sm:p-8" style={{ width: '190mm', maxWidth: '100%', margin: '0 auto' }}>
-              <table className="w-full border-collapse border-2 border-slate-800 text-sm">
-                <tbody>
-                  <tr>
-                    <td colSpan={4} className="border-2 border-slate-800 p-3 text-center">
-                      <p className="font-display font-bold text-base uppercase">KWITANSI</p>
-                      <p className="text-xs mt-0.5">No: {cetak.nomor_kwitansi || '-'}</p>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="border border-slate-800 p-2 w-40">Sudah terima dari</td>
-                    <td className="border border-slate-800 p-2" colSpan={3}>: {cetak.sudah_terima_dari || profilPuskesmas?.nama_puskesmas || '-'}</td>
-                  </tr>
-                  <tr>
-                    <td className="border border-slate-800 p-2">Uang sejumlah</td>
-                    <td className="border border-slate-800 p-2 italic" colSpan={3}>
-                      : {kapitalKalimat(terbilang(cetak.jumlah_uang))} rupiah
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="border border-slate-800 p-2">Untuk pembayaran</td>
-                    <td className="border border-slate-800 p-2" colSpan={3}>: {cetak.untuk_pembayaran}</td>
-                  </tr>
-                  {(Number(cetak.potongan_pph) > 0 || Number(cetak.potongan_ppn) > 0) && (
-                    <tr>
-                      <td className="border border-slate-800 p-2">Potongan</td>
-                      <td className="border border-slate-800 p-2" colSpan={3}>
-                        : {[
-                          Number(cetak.potongan_pph) > 0 && `PPh ${formatRupiah(cetak.potongan_pph)}`,
-                          Number(cetak.potongan_ppn) > 0 && `PPN ${formatRupiah(cetak.potongan_ppn)}`,
-                        ].filter(Boolean).join(', ')}
-                      </td>
-                    </tr>
-                  )}
-                  <tr>
-                    <td colSpan={3} className="border border-slate-800 p-2 text-right font-semibold">Jumlah</td>
-                    <td className="border border-slate-800 p-2 font-bold">{formatRupiah(cetak.jumlah_uang)}</td>
-                  </tr>
-                </tbody>
-              </table>
-
-              <div className="flex justify-end mt-8">
-                <div className="text-center w-56">
-                  <p>{profilPuskesmas?.tempat_ttd || profilPuskesmas?.kabupaten || '-'}, {formatTanggal(cetak.tanggal)}</p>
-                  <p className="mt-1">Yang menerima,</p>
-                  <div className="h-16" />
-                  <p className="font-semibold border-t border-slate-800 pt-1">
-                    {cetak.nama_penerima || '..............................'}
-                  </p>
-                  {cetak.jabatan_penerima && <p className="text-xs text-slate-600">{cetak.jabatan_penerima}</p>}
-                </div>
-              </div>
-
-              <div className="flex justify-start mt-4">
-                <div className="text-center w-56">
-                  <p>Mengetahui,</p>
-                  <p>Kepala Puskesmas</p>
-                  <div className="h-16" />
-                  <p className="font-semibold border-t border-slate-800 pt-1">
-                    {profilPuskesmas?.kepala_puskesmas || '..............................'}
-                  </p>
-                  <p className="text-xs text-slate-600">NIP. {profilPuskesmas?.nip_kepala_puskesmas || '..............................'}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <KuitansiPrintTemplate
+          data={dataUntukCetak(cetak)}
+          tanpaWatermark={TANPA_WATERMARK}
+          tema={tema}
+        />
       )}
-
-      <PrintStyle kelas="lembar-kwitansi" />
     </>
   )
 }
