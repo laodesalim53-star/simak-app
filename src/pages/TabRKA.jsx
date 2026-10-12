@@ -15,16 +15,56 @@ import {
 } from './katalogKegiatan'
 
 // ============================================================
-// TAB 1: RINCIAN KEGIATAN (RKA)
+// TAB 1: RINCIAN KEGIATAN (RKA / POA)
 // - kode_rekening diisi sekali per kegiatan, ditarik otomatis ke BKU.
 // - Katalog/Template kegiatan: lihat katalogKegiatan.js.
+// - Kolom disesuaikan dengan format POA Puskesmas (file RPD):
+//   Kode Kegiatan, Tujuan, Sasaran, Target, PJ, Jenis Belanja,
+//   Uraian Belanja, dan Rumus Volume (mis. "3 Org x 1 Hr x 1 Desa x 1 Keg").
 // ============================================================
+
+const JUMLAH_KOEF = 4 // POA memakai maksimal 4 faktor pengali: Org x Hr x Desa x Keg
+
+const koefKosong = () => Array.from({ length: JUMLAH_KOEF }, () => ({ jumlah: '', satuan: '' }))
+
+// "3 Org x 1 Hr x 1 Desa x 1 Keg" -> [{jumlah:'3',satuan:'Org'}, ...]
+function parseRumus(teks) {
+  const hasil = koefKosong()
+  if (!teks) return hasil
+  String(teks)
+    .split(/\s*[xX×]\s*/)
+    .slice(0, JUMLAH_KOEF)
+    .forEach((bagian, i) => {
+      const m = bagian.trim().match(/^([\d.,]+)\s*(.*)$/)
+      if (m) hasil[i] = { jumlah: m[1].replace(',', '.'), satuan: m[2].trim() }
+    })
+  return hasil
+}
+
+// Hitung volume, satuan & teks rumus dari faktor pengali yang terisi.
+function hitungDariKoef(koef) {
+  const terisi = koef.filter((k) => k.jumlah !== '' && Number(k.jumlah) > 0)
+  if (terisi.length === 0) return null
+  return {
+    volume: terisi.reduce((acc, k) => acc * Number(k.jumlah), 1),
+    satuan: terisi.map((k) => k.satuan).filter(Boolean).join('/'),
+    rumus: terisi.map((k) => `${k.jumlah} ${k.satuan}`.trim()).join(' x '),
+  }
+}
 
 const emptyFormRka = {
   tahun_anggaran: new Date().getFullYear(),
+  kode_kegiatan: '',
   komponen: '',
   sub_komponen: '',
   rincian_kegiatan: '',
+  tujuan: '',
+  sasaran: '',
+  target: '',
+  penanggung_jawab: '',
+  jenis_belanja: '',
+  uraian_belanja: '',
+  koef: koefKosong(),
   volume: 1,
   satuan: '',
   harga_satuan: '',
@@ -84,7 +124,7 @@ export default function TabRKA() {
   }, [sekolahId, tahunFilter])
 
   function openAdd() {
-    setForm({ ...emptyFormRka, tahun_anggaran: tahunFilter })
+    setForm({ ...emptyFormRka, koef: koefKosong(), tahun_anggaran: tahunFilter })
     setEditingId(null)
     setShowForm(true)
   }
@@ -93,6 +133,14 @@ export default function TabRKA() {
     setForm({
       ...emptyFormRka,
       ...row,
+      kode_kegiatan: row.kode_kegiatan ?? '',
+      tujuan: row.tujuan ?? '',
+      sasaran: row.sasaran ?? '',
+      target: row.target ?? '',
+      penanggung_jawab: row.penanggung_jawab ?? '',
+      jenis_belanja: row.jenis_belanja ?? '',
+      uraian_belanja: row.uraian_belanja ?? '',
+      koef: parseRumus(row.rumus_volume),
       volume: String(row.volume),
       harga_satuan: String(row.harga_satuan),
     })
@@ -103,6 +151,8 @@ export default function TabRKA() {
   // Isi otomatis Komponen, Sub Komponen, Rincian Kegiatan & Satuan dari
   // katalog kegiatan BOK — Volume, Harga Satuan & Kode Rekening tetap
   // diisi manual karena nilainya spesifik per puskesmas/tahun anggaran.
+  // Kolom POA (kode, tujuan, sasaran, target, PJ, jenis belanja, uraian)
+  // ikut terisi bila katalog menyediakannya.
   function pilihDariKatalog(item) {
     setForm((prev) => ({
       ...prev,
@@ -110,23 +160,54 @@ export default function TabRKA() {
       sub_komponen: item.sub_komponen || '',
       rincian_kegiatan: item.rincian_kegiatan,
       satuan: item.satuan || '',
+      kode_kegiatan: item.kode_kegiatan || prev.kode_kegiatan,
+      tujuan: item.tujuan || prev.tujuan,
+      sasaran: item.sasaran || prev.sasaran,
+      target: item.target || prev.target,
+      penanggung_jawab: item.penanggung_jawab || prev.penanggung_jawab,
+      jenis_belanja: item.jenis_belanja || prev.jenis_belanja,
+      uraian_belanja: item.uraian_belanja || prev.uraian_belanja,
     }))
   }
+
+  function ubahKoef(index, field, value) {
+    setForm((prev) => {
+      const koef = prev.koef.map((k, i) => (i === index ? { ...k, [field]: value } : k))
+      const hitung = hitungDariKoef(koef)
+      return hitung
+        ? { ...prev, koef, volume: String(hitung.volume), satuan: hitung.satuan || prev.satuan }
+        : { ...prev, koef }
+    })
+  }
+
+  // Volume otomatis dari rumus (bila terisi), kalau tidak pakai input Volume manual.
+  const hitungForm = useMemo(() => hitungDariKoef(form.koef), [form.koef])
+  const volumeForm = hitungForm ? hitungForm.volume : Number(form.volume) || 0
 
   async function handleSubmit(e) {
     e.preventDefault()
     if (!sekolahId) return
     setSaving(true)
-    const volume = Number(form.volume) || 0
+    const hitung = hitungDariKoef(form.koef)
+    const volume = hitung ? hitung.volume : Number(form.volume) || 0
+    const satuan = hitung ? (hitung.satuan || form.satuan) : form.satuan
     const hargaSatuan = Number(form.harga_satuan) || 0
     const payload = {
       sekolah_id: sekolahId,
       tahun_anggaran: Number(form.tahun_anggaran),
+      kode_kegiatan: form.kode_kegiatan || null,
       komponen: form.komponen,
       sub_komponen: form.sub_komponen || null,
       rincian_kegiatan: form.rincian_kegiatan,
+      tujuan: form.tujuan || null,
+      sasaran: form.sasaran || null,
+      target: form.target || null,
+      penanggung_jawab: form.penanggung_jawab || null,
+      jenis_belanja: form.jenis_belanja || null,
+      uraian_belanja: form.uraian_belanja || null,
+      rumus_volume: hitung ? hitung.rumus : null,
       volume,
-      satuan: form.satuan || null,
+      satuan: satuan || null,
       harga_satuan: hargaSatuan,
       jumlah_anggaran: volume * hargaSatuan,
       kode_rekening: form.kode_rekening || null,
@@ -193,20 +274,30 @@ export default function TabRKA() {
 
       const hasil = rows
         .map((row, i) => {
-          const volume = Number(ambilKolom(row, 'Volume', 'Vol')) || 0
+          const rumus = String(ambilKolom(row, 'Rumus Volume', 'Rumus', 'Koefisien') || '').trim()
+          const dariRumus = hitungDariKoef(parseRumus(rumus))
+          const volume = Number(ambilKolom(row, 'Volume', 'Vol')) || (dariRumus ? dariRumus.volume : 0)
           const hargaSatuan = Number(ambilKolom(row, 'Harga Satuan', 'Harga')) || 0
-          const komponen = String(ambilKolom(row, 'Komponen') || '').trim()
+          const komponen = String(ambilKolom(row, 'Komponen', 'Upaya Kesehatan') || '').trim()
           const rincianKegiatan = String(ambilKolom(row, 'Rincian Kegiatan', 'Kegiatan') || '').trim()
           const tahun = Number(ambilKolom(row, 'Tahun Anggaran', 'Tahun')) || tahunFilter
 
           return {
             _baris: i + 2, // baris 1 = judul kolom, data mulai baris 2 di Excel
             tahun_anggaran: tahun,
+            kode_kegiatan: String(ambilKolom(row, 'Kode Kegiatan', 'Kode', 'No') || '').trim(),
             komponen,
             sub_komponen: String(ambilKolom(row, 'Sub Komponen') || '').trim(),
             rincian_kegiatan: rincianKegiatan,
+            tujuan: String(ambilKolom(row, 'Tujuan') || '').trim(),
+            sasaran: String(ambilKolom(row, 'Sasaran') || '').trim(),
+            target: String(ambilKolom(row, 'Target') || '').trim(),
+            penanggung_jawab: String(ambilKolom(row, 'PJ', 'Penanggung Jawab') || '').trim(),
+            jenis_belanja: String(ambilKolom(row, 'Jenis Belanja') || '').trim(),
+            uraian_belanja: String(ambilKolom(row, 'Uraian Belanja', 'Uraian') || '').trim(),
+            rumus_volume: dariRumus ? dariRumus.rumus : '',
             volume,
-            satuan: String(ambilKolom(row, 'Satuan') || '').trim(),
+            satuan: String(ambilKolom(row, 'Satuan') || '').trim() || (dariRumus ? dariRumus.satuan : ''),
             harga_satuan: hargaSatuan,
             jumlah_anggaran: volume * hargaSatuan,
             kode_rekening: String(ambilKolom(row, 'Kode Rekening', 'Kode Akun') || '').trim(),
@@ -241,9 +332,17 @@ export default function TabRKA() {
     const payload = barisValid.map((r) => ({
       sekolah_id: sekolahId,
       tahun_anggaran: r.tahun_anggaran,
+      kode_kegiatan: r.kode_kegiatan || null,
       komponen: r.komponen,
       sub_komponen: r.sub_komponen || null,
       rincian_kegiatan: r.rincian_kegiatan,
+      tujuan: r.tujuan || null,
+      sasaran: r.sasaran || null,
+      target: r.target || null,
+      penanggung_jawab: r.penanggung_jawab || null,
+      jenis_belanja: r.jenis_belanja || null,
+      uraian_belanja: r.uraian_belanja || null,
+      rumus_volume: r.rumus_volume || null,
       volume: r.volume,
       satuan: r.satuan || null,
       harga_satuan: r.harga_satuan,
@@ -265,21 +364,40 @@ export default function TabRKA() {
   }
 
   // Template Excel dibuat langsung di browser (tidak perlu file statis di
-  // server) — berisi judul kolom yang sesuai & satu baris contoh.
+  // server) — berisi judul kolom sesuai format POA & satu baris contoh.
   function unduhTemplate() {
     const contoh = [
-      ['Tahun Anggaran', 'Komponen', 'Sub Komponen', 'Rincian Kegiatan', 'Volume', 'Satuan', 'Harga Satuan', 'Kode Rekening', 'Bulan Pelaksanaan', 'Keterangan'],
-      [tahunFilter, 'UKM Esensial', 'Posyandu Balita', 'Transport petugas pendamping posyandu', 12, 'OH', 75000, '5.1.02.xx.xx', 'Januari, Februari, Maret', 'Contoh baris — hapus/ganti sebelum diisi data asli'],
+      [
+        'Tahun Anggaran', 'Kode Kegiatan', 'Komponen', 'Sub Komponen', 'Rincian Kegiatan',
+        'Tujuan', 'Sasaran', 'Target', 'PJ', 'Jenis Belanja', 'Uraian Belanja',
+        'Rumus Volume', 'Volume', 'Satuan', 'Harga Satuan', 'Kode Rekening',
+        'Bulan Pelaksanaan', 'Keterangan',
+      ],
+      [
+        tahunFilter, '2.3.1', 'Peningkatan Layanan Kesehatan Sesuai Siklus Hidup',
+        'Pelaksanaan Kelas ibu Hamil dan Kelas Ibu Balita', 'Pelaksanaan Kelas ibu Hamil',
+        'Meningkatkan persiapan ibu hamil agar melahirkan dengan aman dan selamat',
+        'Masyarakat', 'Ibu Hamil', 'Bidan', 'Belanja Perjalanan Dinas Dalam Daerah', '- Transport Lokal',
+        '3 Org x 1 Hr x 1 Desa x 1 Keg', '', 'Org/Hr/Desa/Keg', 70000, '5.1.02.xx.xx',
+        'Mei', 'Contoh baris — hapus/ganti sebelum diisi data asli',
+      ],
     ]
     const ws = XLSX.utils.aoa_to_sheet(contoh)
-    ws['!cols'] = [{ wch: 14 }, { wch: 26 }, { wch: 20 }, { wch: 36 }, { wch: 9 }, { wch: 9 }, { wch: 15 }, { wch: 16 }, { wch: 24 }, { wch: 30 }]
+    ws['!cols'] = [
+      { wch: 14 }, { wch: 12 }, { wch: 30 }, { wch: 30 }, { wch: 34 },
+      { wch: 36 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 32 }, { wch: 22 },
+      { wch: 30 }, { wch: 9 }, { wch: 16 }, { wch: 15 }, { wch: 16 },
+      { wch: 20 }, { wch: 30 },
+    ]
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, ws, 'RKA BOK')
     XLSX.writeFile(workbook, 'template-rka-bok.xlsx')
   }
 
   const filtered = data.filter((r) =>
-    `${r.komponen} ${r.sub_komponen} ${r.rincian_kegiatan}`.toLowerCase().includes(search.toLowerCase())
+    `${r.kode_kegiatan || ''} ${r.komponen} ${r.sub_komponen} ${r.rincian_kegiatan} ${r.penanggung_jawab || ''} ${r.jenis_belanja || ''} ${r.uraian_belanja || ''}`
+      .toLowerCase()
+      .includes(search.toLowerCase())
   )
 
   const totalAnggaran = useMemo(
@@ -360,9 +478,17 @@ export default function TabRKA() {
     const payload = dipilih.map((item) => ({
       sekolah_id: sekolahId,
       tahun_anggaran: tahunFilter,
+      kode_kegiatan: item.kode_kegiatan || null,
       komponen: item.komponen,
       sub_komponen: item.sub_komponen || null,
       rincian_kegiatan: item.rincian_kegiatan,
+      tujuan: item.tujuan || null,
+      sasaran: item.sasaran || null,
+      target: item.target || null,
+      penanggung_jawab: item.penanggung_jawab || null,
+      jenis_belanja: item.jenis_belanja || null,
+      uraian_belanja: item.uraian_belanja || null,
+      rumus_volume: null,
       volume: 1,
       satuan: item.satuan || null,
       harga_satuan: 0,
@@ -394,7 +520,7 @@ export default function TabRKA() {
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-700/40" />
               <input
                 className="input-field pl-9"
-                placeholder="Cari komponen/kegiatan..."
+                placeholder="Cari kode/komponen/kegiatan/PJ..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -451,8 +577,15 @@ export default function TabRKA() {
           <table className="table-shell">
             <thead>
               <tr>
+                <th>Kode</th>
                 <th>Sub Komponen</th>
                 <th>Rincian Kegiatan</th>
+                <th>Sasaran</th>
+                <th>Target</th>
+                <th>PJ</th>
+                <th>Jenis Belanja</th>
+                <th>Uraian</th>
+                <th>Rumus Volume</th>
                 <th>Vol</th>
                 <th>Satuan</th>
                 <th>Harga Satuan</th>
@@ -465,8 +598,18 @@ export default function TabRKA() {
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id} className="hover:bg-emerald-600/[0.03] transition-colors">
+                  <td className="font-mono text-xs whitespace-nowrap">{r.kode_kegiatan || '-'}</td>
                   <td>{r.sub_komponen || '-'}</td>
-                  <td className="font-medium">{r.rincian_kegiatan}</td>
+                  <td>
+                    <span className="block font-medium">{r.rincian_kegiatan}</span>
+                    {r.tujuan && <span className="block text-xs text-ink-700/50 mt-0.5">Tujuan: {r.tujuan}</span>}
+                  </td>
+                  <td className="text-xs">{r.sasaran || '-'}</td>
+                  <td className="text-xs">{r.target || '-'}</td>
+                  <td className="text-xs">{r.penanggung_jawab || '-'}</td>
+                  <td className="text-xs">{r.jenis_belanja || '-'}</td>
+                  <td className="text-xs">{r.uraian_belanja || '-'}</td>
+                  <td className="text-xs whitespace-nowrap">{r.rumus_volume || '-'}</td>
                   <td>{r.volume}</td>
                   <td>{r.satuan || '-'}</td>
                   <td>{formatRupiah(r.harga_satuan)}</td>
@@ -531,7 +674,16 @@ export default function TabRKA() {
                 <input type="number" required className="input-field" value={form.tahun_anggaran} onChange={(e) => setForm({ ...form, tahun_anggaran: e.target.value })} />
               </div>
               <div>
-                <label className="eyebrow mb-1.5 block">Komponen</label>
+                <label className="eyebrow mb-1.5 block">Kode Kegiatan (opsional)</label>
+                <input
+                  className="input-field"
+                  placeholder="Contoh: 2.3.1"
+                  value={form.kode_kegiatan}
+                  onChange={(e) => setForm({ ...form, kode_kegiatan: e.target.value })}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="eyebrow mb-1.5 block">Komponen (Upaya Kesehatan)</label>
                 <input
                   required
                   list="opsi-komponen-bok"
@@ -552,9 +704,85 @@ export default function TabRKA() {
                 <label className="eyebrow mb-1.5 block">Rincian Kegiatan</label>
                 <textarea required rows={2} className="input-field" value={form.rincian_kegiatan} onChange={(e) => setForm({ ...form, rincian_kegiatan: e.target.value })} />
               </div>
+              <div className="sm:col-span-2">
+                <label className="eyebrow mb-1.5 block">Tujuan (opsional)</label>
+                <textarea rows={2} className="input-field" value={form.tujuan} onChange={(e) => setForm({ ...form, tujuan: e.target.value })} />
+              </div>
+              <div>
+                <label className="eyebrow mb-1.5 block">Sasaran (opsional)</label>
+                <input className="input-field" placeholder="Contoh: Masyarakat" value={form.sasaran} onChange={(e) => setForm({ ...form, sasaran: e.target.value })} />
+              </div>
+              <div>
+                <label className="eyebrow mb-1.5 block">Target (opsional)</label>
+                <input className="input-field" placeholder="Contoh: Ibu Hamil" value={form.target} onChange={(e) => setForm({ ...form, target: e.target.value })} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="eyebrow mb-1.5 block">Penanggung Jawab / PJ (opsional)</label>
+                <input className="input-field" placeholder="Contoh: Bidan, Perawat, Gizi, Kapus" value={form.penanggung_jawab} onChange={(e) => setForm({ ...form, penanggung_jawab: e.target.value })} />
+              </div>
+              <div>
+                <label className="eyebrow mb-1.5 block">Jenis Belanja (opsional)</label>
+                <input
+                  className="input-field"
+                  list="opsi-jenis-belanja"
+                  placeholder="Contoh: Belanja Makan"
+                  value={form.jenis_belanja}
+                  onChange={(e) => setForm({ ...form, jenis_belanja: e.target.value })}
+                />
+                <datalist id="opsi-jenis-belanja">
+                  <option value="Belanja Perjalanan Dinas Dalam Daerah" />
+                  <option value="Belanja Makan" />
+                  <option value="Pemberian Insentif UKM" />
+                </datalist>
+              </div>
+              <div>
+                <label className="eyebrow mb-1.5 block">Uraian Belanja (opsional)</label>
+                <input className="input-field" placeholder="Contoh: - Transport Lokal" value={form.uraian_belanja} onChange={(e) => setForm({ ...form, uraian_belanja: e.target.value })} />
+              </div>
+
+              {/* Rumus volume: faktor pengali ala POA (Org x Hr x Desa x Keg) */}
+              <div className="sm:col-span-2 p-3 rounded-lg bg-emerald-600/[0.06]">
+                <label className="eyebrow mb-1.5 block text-emerald-700">Rumus Volume (opsional)</label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {form.koef.map((k, i) => (
+                    <div key={i} className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        className="input-field w-16"
+                        placeholder="Jml"
+                        value={k.jumlah}
+                        onChange={(e) => ubahKoef(i, 'jumlah', e.target.value)}
+                      />
+                      <input
+                        className="input-field min-w-0"
+                        placeholder={['Org', 'Hr', 'Desa', 'Keg'][i]}
+                        value={k.satuan}
+                        onChange={(e) => ubahKoef(i, 'satuan', e.target.value)}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-ink-700/40 mt-1">
+                  {hitungForm
+                    ? `${hitungForm.rumus} = ${hitungForm.volume} (Volume & Satuan terisi otomatis)`
+                    : 'Contoh: 3 Org x 1 Hr x 1 Desa x 1 Keg. Kosongkan bila Volume ingin diisi langsung.'}
+                </p>
+              </div>
+
               <div>
                 <label className="eyebrow mb-1.5 block">Volume</label>
-                <input type="number" min="0" step="any" required className="input-field" value={form.volume} onChange={(e) => setForm({ ...form, volume: e.target.value })} />
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  required
+                  disabled={!!hitungForm}
+                  className="input-field disabled:opacity-60"
+                  value={hitungForm ? hitungForm.volume : form.volume}
+                  onChange={(e) => setForm({ ...form, volume: e.target.value })}
+                />
               </div>
               <div>
                 <label className="eyebrow mb-1.5 block">Satuan</label>
@@ -570,7 +798,7 @@ export default function TabRKA() {
               <div className="sm:col-span-2 p-3 rounded-lg bg-emerald-600/[0.06] flex items-center justify-between">
                 <span className="text-sm text-ink-700/70">Jumlah Anggaran</span>
                 <span className="font-display font-semibold text-emerald-700">
-                  {formatRupiah((Number(form.volume) || 0) * (Number(form.harga_satuan) || 0))}
+                  {formatRupiah(volumeForm * (Number(form.harga_satuan) || 0))}
                 </span>
               </div>
               <div className="sm:col-span-2">
@@ -608,7 +836,7 @@ export default function TabRKA() {
       {/* ==== Modal Preview Import Excel ==== */}
       {showImport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-2 sm:p-4">
-          <div className="card relative overflow-hidden w-full max-w-4xl p-4 sm:p-6 max-h-[92vh] overflow-y-auto">
+          <div className="card relative overflow-hidden w-full max-w-6xl p-4 sm:p-6 max-h-[92vh] overflow-y-auto">
             <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 to-blue-700" />
             <button
               type="button"
@@ -639,8 +867,15 @@ export default function TabRKA() {
                     <thead>
                       <tr>
                         <th>Baris</th>
+                        <th>Kode</th>
                         <th>Komponen</th>
                         <th>Rincian Kegiatan</th>
+                        <th>Sasaran</th>
+                        <th>Target</th>
+                        <th>PJ</th>
+                        <th>Jenis Belanja</th>
+                        <th>Uraian</th>
+                        <th>Rumus Volume</th>
                         <th>Vol</th>
                         <th>Satuan</th>
                         <th>Harga Satuan</th>
@@ -654,8 +889,15 @@ export default function TabRKA() {
                       {importRows.map((r, i) => (
                         <tr key={i} className={!r._valid ? 'bg-red-900/[0.04]' : 'hover:bg-emerald-600/[0.03]'}>
                           <td className="text-xs">{r._baris}</td>
+                          <td className="font-mono text-xs">{r.kode_kegiatan || '-'}</td>
                           <td>{r.komponen || '-'}</td>
                           <td className="font-medium">{r.rincian_kegiatan || '-'}</td>
+                          <td className="text-xs">{r.sasaran || '-'}</td>
+                          <td className="text-xs">{r.target || '-'}</td>
+                          <td className="text-xs">{r.penanggung_jawab || '-'}</td>
+                          <td className="text-xs">{r.jenis_belanja || '-'}</td>
+                          <td className="text-xs">{r.uraian_belanja || '-'}</td>
+                          <td className="text-xs whitespace-nowrap">{r.rumus_volume || '-'}</td>
                           <td>{r.volume}</td>
                           <td>{r.satuan || '-'}</td>
                           <td>{formatRupiah(r.harga_satuan)}</td>
