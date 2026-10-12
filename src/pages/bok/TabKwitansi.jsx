@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabaseClient'
 import { useAuth } from '../../lib/AuthContext'
-import { Plus, Pencil, Trash2, Search, X, Loader2, Receipt, Printer } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, X, Loader2, Receipt, Printer, Star } from 'lucide-react'
 import { formatRupiah, formatTanggal } from './utils'
 import KuitansiPrintTemplate from '../../lib/KuitansiPrintTemplate'
 import PilihanTampilanCetak from '../../components/PilihanTampilanCetak'
@@ -20,10 +20,9 @@ import {
 // lalu dipakai untuk: dropdown penerima, isian otomatis Kepala Puskesmas
 // & Bendahara, dan data cetak.
 // Warna tema kwitansi (kuitansiTema) ikut mewarnai aksen form dan dipakai
-// template cetak. Ubah TANPA_WATERMARK ke false untuk versi berbintang.
+// template cetak. Setiap baris punya dua tombol cetak: Polos (tanpa bintang)
+// dan Berbintang (watermark bintang). Keduanya memakai tema yang sama.
 // ============================================================
-
-const TANPA_WATERMARK = true
 
 const emptyFormKwitansi = {
   bku_id: '',
@@ -71,7 +70,7 @@ export default function TabKwitansi() {
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState(emptyFormKwitansi)
   const [saving, setSaving] = useState(false)
-  const [cetak, setCetak] = useState(null) // kwitansi yang sedang dicetak
+  const [cetak, setCetak] = useState(null) // { row, berbintang } kwitansi yang sedang dicetak
   const [tema, setTema] = useState(() => muatTemaKuitansi())
 
   // Warna aksen dari tema kwitansi yang dipilih.
@@ -364,8 +363,11 @@ export default function TabKwitansi() {
                 </td>
                 <td>
                   <div className="flex items-center gap-1 justify-end">
-                    <button onClick={() => setCetak(k)} className="p-2.5 sm:p-2 hover:bg-blue-600/10 rounded-lg text-blue-700/70 touch-manipulation" title="Cetak">
+                    <button onClick={() => setCetak({ row: k, berbintang: false })} className="p-2.5 sm:p-2 hover:bg-blue-600/10 rounded-lg text-blue-700/70 touch-manipulation" title="Cetak polos (tanpa bintang)">
                       <Printer size={15} />
+                    </button>
+                    <button onClick={() => setCetak({ row: k, berbintang: true })} className="p-2.5 sm:p-2 hover:bg-amber-500/10 rounded-lg text-amber-600/80 touch-manipulation" title="Cetak berbintang (watermark)">
+                      <Star size={15} />
                     </button>
                     <button onClick={() => openEdit(k)} className="p-2.5 sm:p-2 hover:bg-emerald-600/10 rounded-lg text-emerald-700/70 touch-manipulation">
                       <Pencil size={15} />
@@ -531,8 +533,8 @@ export default function TabKwitansi() {
       {/* Template cetak dirender di luar elemen "no-print" supaya ikut tercetak. */}
       {cetak && (
         <KuitansiPrintTemplate
-          data={dataUntukCetak(cetak)}
-          tanpaWatermark={TANPA_WATERMARK}
+          data={dataUntukCetak(cetak.row)}
+          tanpaWatermark={!cetak.berbintang}
           tema={tema}
         />
       )}
