@@ -1,104 +1,180 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import { X, Search, Loader2, Receipt } from 'lucide-react'
+import { useAuth } from '../lib/AuthContext'
+import { formatRupiah, formatTanggal } from '../pages/bok/utils'
+import { X, Search, Loader2 } from 'lucide-react'
 
-function formatRupiah(angka) {
-  return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(angka || 0)
+const SUMBER = [
+  { key: 'bku', label: 'BKU' },
+  { key: 'kwitansi', label: 'Kwitansi' },
+  { key: 'nota', label: 'Nota Belanja' },
+]
+
+// ---- Pemetaan sumber -> bentuk dataAwal untuk KuitansiJasaModal ----
+function ringkasBarang(daftar = []) {
+  return daftar
+    .filter((b) => b.nama)
+    .map((b) => `${b.nama} (${b.jumlah}${b.satuan ? ' ' + b.satuan : ''})`)
+    .join(', ')
 }
 
-function formatTanggal(tgl) {
-  if (!tgl) return '-'
-  return new Date(tgl).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+function dariBku(b) {
+  return {
+    bku_id: b.id,
+    no_bukti: b.nomor_bukti || '',
+    tanggal: b.tanggal,
+    untuk_pembayaran: b.uraian || '',
+    jumlah_total: b.pengeluaran || 0,
+    mata_anggaran: b.kode_rekening || '',
+  }
 }
 
-/**
- * Modal "Tarik dari Kuitansi" — dipakai di halaman Nota Belanja dan Kuitansi
- * Jasa supaya bisa langsung menarik data dari Kuitansi utama (tabel
- * `kuitansi`, jenis = 'kuitansi') tanpa perlu pindah ke halaman Kuitansi dulu.
- *
- * Dipanggil dari Nota.jsx / KuitansiJasa.jsx:
- *   <PilihKuitansiModal
- *     onPilih={(row) => { ...isi form pakai row...; setShowForm(true) }}
- *     onClose={() => setShowPilih(false)}
- *   />
- */
+function dariKwitansi(k) {
+  return {
+    kwitansi_id: k.id,
+    bku_id: k.bku_id || null,
+    no_bukti: k.nomor_kwitansi || '',
+    tanggal: k.tanggal,
+    diterima_dari: k.sudah_terima_dari || '',
+    untuk_pembayaran: k.untuk_pembayaran || '',
+    jumlah_total: k.jumlah_uang || 0,
+    nama_penerima: k.nama_penerima || '',
+    alamat_penerima: k.alamat_penerima || '',
+    mata_anggaran: k.mata_anggaran || '',
+    tahun_anggaran: k.tahun_anggaran || '',
+    lembar: k.lembar || '',
+    disetujui_oleh: k.disetujui_oleh || '',
+    nip_disetujui: k.nip_disetujui || '',
+    dibayar_oleh: k.dibayar_oleh || '',
+    nip_dibayar: k.nip_dibayar || '',
+    catatan: k.catatan || '',
+  }
+}
+
+function dariNota(n) {
+  const barang = ringkasBarang(n.daftar_barang)
+  return {
+    nota_id: n.id,
+    bku_id: n.bku_id || null,
+    no_bukti: n.nomor_nota || '',
+    tanggal: n.tanggal,
+    untuk_pembayaran: barang ? `Belanja: ${barang}` : 'Belanja',
+    jumlah_total: n.total_belanja || 0,
+    toko: n.nama_toko || '',
+  }
+}
+
 export default function PilihKuitansiModal({ onPilih, onClose }) {
-  const [data, setData] = useState([])
+  const { sekolahId } = useAuth()
+  const [sumber, setSumber] = useState('kwitansi')
+  const [data, setData] = useState({ bku: [], kwitansi: [], nota: [] })
   const [loading, setLoading] = useState(true)
-  const [pencarian, setPencarian] = useState('')
+  const [error, setError] = useState('')
+  const [cari, setCari] = useState('')
 
   useEffect(() => {
-    supabase
-      .from('kuitansi')
-      .select('*')
-      .eq('jenis', 'kuitansi')
-      .order('tanggal', { ascending: false })
-      .order('id', { ascending: false })
-      .then(({ data, error }) => {
-        if (!error) setData(data || [])
-        setLoading(false)
-      })
-  }, [])
+    if (!sekolahId) return
+    let batal = false
+    async function muat() {
+      setLoading(true)
+      setError('')
+      const [bku, kwi, nota] = await Promise.all([
+        supabase.from('bku_bok').select('*').eq('sekolah_id', sekolahId)
+          .gt('pengeluaran', 0).order('tanggal', { ascending: false }).limit(300),
+        supabase.from('kwitansi_bok').select('*').eq('sekolah_id', sekolahId)
+          .order('tanggal', { ascending: false }).limit(300),
+        supabase.from('nota_belanja_bok').select('*').eq('sekolah_id', sekolahId)
+          .order('tanggal', { ascending: false }).limit(300),
+      ])
+      if (batal) return
+      const err = bku.error || kwi.error || nota.error
+      if (err) setError('Gagal memuat data: ' + err.message)
+      setData({ bku: bku.data || [], kwitansi: kwi.data || [], nota: nota.data || [] })
+      setLoading(false)
+    }
+    muat()
+    return () => { batal = true }
+  }, [sekolahId])
 
-  const dataTersaring = useMemo(() => {
-    if (!pencarian.trim()) return data
-    const q = pencarian.toLowerCase()
-    return data.filter((d) =>
-      (d.nomor || '').toLowerCase().includes(q) ||
-      (d.diterima_dari || '').toLowerCase().includes(q) ||
-      (d.untuk_pembayaran || '').toLowerCase().includes(q)
-    )
-  }, [data, pencarian])
+  // Baris seragam untuk ditampilkan: { id, tanggal, judul, ket, jumlah, ambil() }
+  const baris = useMemo(() => {
+    const q = cari.trim().toLowerCase()
+    let list = []
+    if (sumber === 'bku') {
+      list = data.bku.map((b) => ({
+        id: b.id, tanggal: b.tanggal, judul: b.nomor_bukti || '-',
+        ket: b.uraian, jumlah: b.pengeluaran, ambil: () => dariBku(b),
+      }))
+    } else if (sumber === 'kwitansi') {
+      list = data.kwitansi.map((k) => ({
+        id: k.id, tanggal: k.tanggal, judul: k.nomor_kwitansi || '-',
+        ket: `${k.sudah_terima_dari || ''} — ${k.untuk_pembayaran || ''}`,
+        jumlah: k.jumlah_uang, ambil: () => dariKwitansi(k),
+      }))
+    } else {
+      list = data.nota.map((n) => ({
+        id: n.id, tanggal: n.tanggal, judul: n.nomor_nota || '-',
+        ket: `${n.nama_toko || ''} — ${ringkasBarang(n.daftar_barang)}`,
+        jumlah: n.total_belanja, ambil: () => dariNota(n),
+      }))
+    }
+    if (!q) return list
+    return list.filter((r) => `${r.judul} ${r.ket}`.toLowerCase().includes(q))
+  }, [sumber, data, cari])
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl p-6 max-h-[85vh] flex flex-col">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="font-display text-lg font-semibold">Tarik dari Kuitansi</h2>
-            <p className="text-xs text-ink-700/50">Pilih kuitansi yang datanya mau ditarik ke sini.</p>
-          </div>
-          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-2 sm:p-4">
+      <div className="card relative overflow-hidden w-full max-w-2xl p-4 sm:p-6 max-h-[92vh] flex flex-col">
+        <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 to-blue-700" />
+        <button type="button" onClick={onClose} className="absolute top-4 right-4 text-ink-700/40 hover:text-ink-900 p-1 touch-manipulation">
+          <X size={20} />
+        </button>
+        <h2 className="font-display text-xl font-semibold mb-3">Tarik Data untuk Kuitansi Jasa</h2>
+
+        <div className="flex flex-wrap gap-1 mb-3">
+          {SUMBER.map((s) => (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => setSumber(s.key)}
+              className={`px-3 py-2 rounded-lg text-sm font-medium touch-manipulation ${
+                sumber === s.key ? 'bg-emerald-600 text-white' : 'text-ink-700/70 hover:bg-emerald-600/10'
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
         </div>
 
-        <div className="relative mb-3 shrink-0">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-700/40" />
-          <input
-            autoFocus
-            className="input-field pl-9"
-            placeholder="Cari nomor, nama, atau keterangan..."
-            value={pencarian}
-            onChange={(e) => setPencarian(e.target.value)}
-          />
+        <div className="relative mb-3">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-700/40" />
+          <input className="input-field pl-9" placeholder="Cari nomor atau keterangan..." value={cari} onChange={(e) => setCari(e.target.value)} />
         </div>
 
-        <div className="overflow-y-auto -mx-2 px-2">
+        {error && <div className="p-3 mb-3 rounded-lg text-sm text-red-900 bg-red-900/5">{error}</div>}
+
+        <div className="overflow-y-auto space-y-2">
           {loading && (
-            <div className="text-center py-8 text-ink-700/50 text-sm">Memuat data...</div>
-          )}
-          {!loading && dataTersaring.length === 0 && (
-            <div className="flex flex-col items-center gap-2 py-10 text-ink-700/50">
-              <Receipt size={28} className="text-ink-700/25" />
-              <span className="text-sm">Tidak ada kuitansi yang cocok.</span>
+            <div className="flex items-center justify-center gap-2 py-8 text-ink-700/50">
+              <Loader2 size={16} className="animate-spin" /> Memuat data...
             </div>
           )}
-          {!loading && dataTersaring.map((d) => (
+          {!loading && baris.length === 0 && (
+            <p className="text-center py-8 text-ink-700/50">Tidak ada data yang cocok.</p>
+          )}
+          {baris.map((r) => (
             <button
-              key={d.id}
+              key={r.id}
               type="button"
-              onClick={() => onPilih(d)}
-              className="w-full text-left p-3 rounded-lg hover:bg-sage-500/10 border-b border-ink-950/5 flex items-center justify-between gap-3 transition-colors"
+              onClick={() => onPilih(r.ambil())}
+              className="w-full text-left p-3 rounded-lg border border-ink-900/10 hover:bg-emerald-600/[0.06] transition-colors touch-manipulation"
             >
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="font-medium">{d.nomor || '-'}</span>
-                  <span className="text-ink-700/40">•</span>
-                  <span className="text-ink-700/60">{formatTanggal(d.tanggal)}</span>
-                </div>
-                <div className="text-sm text-ink-950 truncate">{d.diterima_dari || '-'}</div>
-                <div className="text-xs text-ink-700/50 truncate">{d.untuk_pembayaran || '-'}</div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-mono text-xs">{r.judul}</span>
+                <span className="text-xs text-ink-700/60">{formatTanggal(r.tanggal)}</span>
               </div>
-              <div className="font-medium text-sm shrink-0">{formatRupiah(d.jumlah_total)}</div>
+              <p className="text-sm mt-0.5 line-clamp-2">{r.ket}</p>
+              <p className="text-sm font-semibold text-emerald-700 mt-0.5">{formatRupiah(r.jumlah)}</p>
             </button>
           ))}
         </div>
