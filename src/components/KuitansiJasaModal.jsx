@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { X, Loader2, Printer } from 'lucide-react'
 import KuitansiJasaPrintTemplate from '../lib/KuitansiJasaPrintTemplate'
+import PilihanTampilanCetak from '../components/PilihanTampilanCetak'
+import { muatTema, simpanTema } from '../lib/kuitansiJasaTema'
 import { terbilangRupiah } from '../lib/terbilang'
 
 const emptyForm = (dataAwal) => ({
@@ -21,20 +23,19 @@ const emptyForm = (dataAwal) => ({
  * (terbilangRupiah), bukan diisi manual.
  *
  * Disimpan ke tabel yang sama dengan kuitansi biasa (`kuitansi`), dibedakan
- * lewat kolom jenis = 'kuitansi_jasa', supaya riwayat & penomoran tetap
- * terpusat di satu tabel.
+ * lewat kolom jenis = 'kuitansi_jasa'.
  *
  * dataAwal (opsional): baris kuitansi (jenis='kuitansi') hasil "Tarik dari
- * Kuitansi" — dipakai untuk mengisi form otomatis. Field yang dipetakan:
- * no_bukti, tanggal, diterima_dari, untuk_pembayaran, jumlah_total,
- * nama_penerima, alamat_penerima.
+ * Kuitansi" — dipakai untuk mengisi form otomatis.
  *
- * PENOMORAN: kuitansi jasa yang dibuat manual (dataAwal kosong) tetap pakai
- * nomor otomatis lewat RPC next_nomor_kuitansi seperti semula. KHUSUS
- * kuitansi jasa hasil "Tarik dari Kuitansi" (dataAwal terisi), nomor
- * LANGSUNG memakai No. Bukti dari kuitansi sumbernya apa adanya (mis.
- * "BNU02"), bukan format auto "0007/BNU/2026" — supaya nomornya selalu
- * konsisten dengan bukti aslinya. Lihat handleSimpan.
+ * PENOMORAN: kuitansi jasa manual (dataAwal kosong) pakai RPC
+ * next_nomor_kuitansi. Hasil "Tarik dari Kuitansi" memakai No. Bukti sumbernya
+ * apa adanya. Lihat handleSimpan.
+ *
+ * TAMPILAN CETAK: warna & tata letak dipilih lewat PilihanTampilanCetak dan
+ * disimpan sebagai preferensi di localStorage (lib/kuitansiJasaTema.js) —
+ * tidak ikut disimpan ke tabel kuitansi, sehingga Cetak Ulang dari halaman
+ * riwayat memakai preferensi yang berlaku saat itu.
  *
  * Dipanggil dari KuitansiJasa.jsx:
  *   <KuitansiJasaModal sekolah={{ nama, alamat, kota }} dataAwal={row} onClose={...} />
@@ -43,10 +44,16 @@ export default function KuitansiJasaModal({ sekolah, dataAwal, onClose }) {
   const [form, setForm] = useState(emptyForm(dataAwal))
   const [saving, setSaving] = useState(false)
   const [savedData, setSavedData] = useState(null) // { ...kuitansi row } setelah tersimpan, siap dicetak
+  const [tema, setTema] = useState(() => muatTema())
   const printRef = useRef(null)
 
   function ubah(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
+  }
+
+  function ubahTema(temaBaru) {
+    setTema(temaBaru)
+    simpanTema(temaBaru)
   }
 
   async function handleSimpan(e) {
@@ -54,9 +61,7 @@ export default function KuitansiJasaModal({ sekolah, dataAwal, onClose }) {
     setSaving(true)
     try {
       // Kuitansi jasa hasil "Tarik dari Kuitansi" (dataAwal terisi) langsung
-      // memakai No. Bukti dari kuitansi sumbernya sebagai nomor — penomoran
-      // otomatis dilewati supaya nomor kuitansi jasa selalu ikut nomor bukti
-      // aslinya, bukan "memakan" urutan nomor auto tersendiri.
+      // memakai No. Bukti dari kuitansi sumbernya sebagai nomor.
       const dariTarik = !!dataAwal && !!form.no_bukti
       let nomorFinal
 
@@ -203,6 +208,11 @@ export default function KuitansiJasaModal({ sekolah, dataAwal, onClose }) {
               />
             </div>
 
+            <div className="border border-ink-700/15 rounded-lg p-3">
+              <div className="text-sm font-medium mb-2">Tampilan Cetak</div>
+              <PilihanTampilanCetak value={tema} onChange={ubahTema} />
+            </div>
+
             <div className="flex justify-end gap-3 pt-2">
               <button type="button" className="btn-secondary" onClick={onClose}>Batal</button>
               <button type="submit" className="btn-primary" disabled={saving}>
@@ -222,6 +232,7 @@ export default function KuitansiJasaModal({ sekolah, dataAwal, onClose }) {
           ref={printRef}
           sekolah={sekolah}
           data={dataCetak}
+          tema={tema}
         />
       )}
     </>
