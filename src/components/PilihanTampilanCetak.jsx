@@ -9,8 +9,11 @@ import {
 // Lokasi: src/components/PilihanTampilanCetak.jsx
 //
 // Props:
-//   value: objek tema (lihat DEFAULT_TEMA di lib/kuitansiJasaTema.js)
+//   value: objek tema (lihat DEFAULT_TEMA di lib/kuitansiJasaTema.js atau
+//          DEFAULT_TEMA_KUITANSI di lib/kuitansiTema.js)
 //   onChange(temaBaru): dipanggil setiap ada perubahan
+//   presetWarna (opsional): daftar warna; bawaan WARNA_PRESET (Kuitansi Jasa).
+//          Kuitansi barang mengoper PRESET_WARNA_KUITANSI (ada "Hitam").
 
 function Segmen({ opsi, nilai, onPilih }) {
   return (
@@ -34,7 +37,7 @@ function Segmen({ opsi, nilai, onPilih }) {
   )
 }
 
-export default function PilihanTampilanCetak({ value, onChange }) {
+export default function PilihanTampilanCetak({ value, onChange, presetWarna = WARNA_PRESET }) {
   const ubah = (field, nilai) => onChange({ ...value, [field]: nilai })
   const kustomAktif = value.warna === 'kustom'
 
@@ -43,7 +46,7 @@ export default function PilihanTampilanCetak({ value, onChange }) {
       <div>
         <label className="label-field">Warna</label>
         <div className="flex flex-wrap items-center gap-2">
-          {WARNA_PRESET.map((w) => (
+          {presetWarna.map((w) => (
             <button
               key={w.key}
               type="button"
