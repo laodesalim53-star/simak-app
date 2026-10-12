@@ -28,8 +28,15 @@ const emptyForm = (dataAwal) => ({
  *
  * Props:
  *   sekolah  : { nama, alamat, kota }  (nama instansi untuk template cetak)
- *   dataAwal : baris kuitansi sumber ("Tarik dari Kuitansi"), opsional
+ *   dataAwal : data sumber hasil "Tarik" (BKU / Kwitansi / Nota Belanja), opsional.
+ *              Bentuk: { bku_id, kwitansi_id, nota_id, no_bukti, tanggal,
+ *              diterima_dari, jumlah_total, untuk_pembayaran, nama_penerima,
+ *              alamat_penerima, mata_anggaran, tahun_anggaran, toko, lembar,
+ *              disetujui_oleh, nip_disetujui, dibayar_oleh, nip_dibayar, catatan }
  *   onClose  : dipanggil saat modal ditutup
+ *
+ * RELASI SUMBER: bku_id / kwitansi_id / nota_id dari dataAwal ikut disimpan
+ * ke tabel `kuitansi` supaya kuitansi jasa tetap terhubung ke sumbernya.
  *
  * PENOMORAN: kuitansi manual memakai RPC next_nomor_kuitansi. Hasil "Tarik"
  * memakai No. Bukti sumbernya apa adanya.
@@ -86,6 +93,22 @@ export default function KuitansiJasaModal({ sekolah, dataAwal, onClose }) {
         jumlah_total: Number(form.jumlah) || 0,
         nama_penerima: form.nama_penerima,
         alamat_penerima: form.alamat_penerima,
+
+        // Relasi ke sumber data (BKU / Kwitansi / Nota Belanja)
+        bku_id: dataAwal?.bku_id || null,
+        kwitansi_id: dataAwal?.kwitansi_id || null,
+        nota_id: dataAwal?.nota_id || null,
+
+        // Data tambahan dari sumber yang tidak tampil di form
+        mata_anggaran: dataAwal?.mata_anggaran || null,
+        tahun_anggaran: dataAwal?.tahun_anggaran || null,
+        toko: dataAwal?.toko || null,
+        lembar: dataAwal?.lembar || null,
+        disetujui_oleh: dataAwal?.disetujui_oleh || null,
+        nip_disetujui: dataAwal?.nip_disetujui || null,
+        dibayar_oleh: dataAwal?.dibayar_oleh || null,
+        nip_dibayar: dataAwal?.nip_dibayar || null,
+        catatan: dataAwal?.catatan || null,
       }
 
       const { data: inserted, error: insertErr } = await supabase
@@ -125,6 +148,8 @@ export default function KuitansiJasaModal({ sekolah, dataAwal, onClose }) {
       }
     : null
 
+  const adaSumber = !!dataAwal && (dataAwal.bku_id || dataAwal.kwitansi_id || dataAwal.nota_id)
+
   return (
     <>
       <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 no-print">
@@ -137,6 +162,14 @@ export default function KuitansiJasaModal({ sekolah, dataAwal, onClose }) {
           </div>
 
           <form onSubmit={handleSimpan} className="space-y-4">
+            {adaSumber && (
+              <div className="text-xs rounded-lg bg-emerald-600/[0.08] text-emerald-800 px-3 py-2">
+                Data ditarik dari{' '}
+                {dataAwal.kwitansi_id ? 'Kwitansi' : dataAwal.nota_id ? 'Nota Belanja' : 'BKU'}
+                {dataAwal.kwitansi_id && dataAwal.bku_id ? ' (tertaut juga ke BKU)' : ''}. Isian masih bisa diubah.
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label-field">No. Bukti (opsional)</label>
@@ -185,7 +218,8 @@ export default function KuitansiJasaModal({ sekolah, dataAwal, onClose }) {
 
             <div>
               <label className="label-field">Untuk Pembayaran / Keterangan</label>
-              <input
+              <textarea
+                rows={2}
                 className="input-field"
                 placeholder="Contoh: Transport kegiatan posyandu"
                 value={form.untuk_pembayaran}
