@@ -13,6 +13,14 @@ import {
   kunciKatalog,
   kelompokkanKatalog,
 } from './katalogKegiatan'
+import {
+  koefKosong,
+  parseRumus,
+  hitungDariKoef,
+  parsePoaSheet,
+  parseFlatSheet,
+  buatWorkbookTemplatePoa,
+} from './importPoa'
 
 // ============================================================
 // TAB 1: RINCIAN KEGIATAN (RKA / POA)
@@ -21,36 +29,8 @@ import {
 // - Kolom disesuaikan dengan format POA Puskesmas (file RPD):
 //   Kode Kegiatan, Tujuan, Sasaran, Target, PJ, Jenis Belanja,
 //   Uraian Belanja, dan Rumus Volume (mis. "3 Org x 1 Hr x 1 Desa x 1 Keg").
+// - Import/Template Excel format POA: lihat importPoa.js.
 // ============================================================
-
-const JUMLAH_KOEF = 4 // POA memakai maksimal 4 faktor pengali: Org x Hr x Desa x Keg
-
-const koefKosong = () => Array.from({ length: JUMLAH_KOEF }, () => ({ jumlah: '', satuan: '' }))
-
-// "3 Org x 1 Hr x 1 Desa x 1 Keg" -> [{jumlah:'3',satuan:'Org'}, ...]
-function parseRumus(teks) {
-  const hasil = koefKosong()
-  if (!teks) return hasil
-  String(teks)
-    .split(/\s*[xX×]\s*/)
-    .slice(0, JUMLAH_KOEF)
-    .forEach((bagian, i) => {
-      const m = bagian.trim().match(/^([\d.,]+)\s*(.*)$/)
-      if (m) hasil[i] = { jumlah: m[1].replace(',', '.'), satuan: m[2].trim() }
-    })
-  return hasil
-}
-
-// Hitung volume, satuan & teks rumus dari faktor pengali yang terisi.
-function hitungDariKoef(koef) {
-  const terisi = koef.filter((k) => k.jumlah !== '' && Number(k.jumlah) > 0)
-  if (terisi.length === 0) return null
-  return {
-    volume: terisi.reduce((acc, k) => acc * Number(k.jumlah), 1),
-    satuan: terisi.map((k) => k.satuan).filter(Boolean).join('/'),
-    rumus: terisi.map((k) => `${k.jumlah} ${k.satuan}`.trim()).join(' x '),
-  }
-}
 
 const emptyFormRka = {
   tahun_anggaran: new Date().getFullYear(),
@@ -234,22 +214,15 @@ export default function TabRKA() {
     else alert('Gagal menghapus: ' + error.message)
   }
 
-  // Ambil nilai kolom dari baris hasil parsing Excel secara fleksibel —
-  // cocokkan nama header tanpa peduli besar/kecil huruf atau spasi di
-  // ujung, supaya template tidak harus persis sama urutan/kapitalisasinya.
-  function ambilKolom(row, ...kemungkinanNama) {
-    for (const key of Object.keys(row)) {
-      const bersih = key.toString().trim().toLowerCase()
-      if (kemungkinanNama.some((n) => bersih === n.toLowerCase())) {
-        return row[key]
-      }
-    }
-    return ''
-  }
-
   function bukaDialogImport() {
     setImportError('')
     fileInputRef.current?.click()
+  }
+
+  function tutupImport() {
+    setShowImport(false)
+    setImportRows([])
+    setImportError('')
   }
 
   async function handleFileImport(e) {
@@ -261,54 +234,24 @@ export default function TabRKA() {
     try {
       const buffer = await file.arrayBuffer()
       const wb = XLSX.read(buffer, { type: 'array' })
-      const sheetName = wb.SheetNames.find((n) => n.toLowerCase().includes('rka')) || wb.SheetNames[0]
-      const sheet = wb.Sheets[sheetName]
-      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' })
 
-      if (rows.length === 0) {
-        setImportError('Sheet Excel kosong atau format tidak terbaca. Pastikan baris pertama berisi judul kolom.')
-        setImportRows([])
-        setShowImport(true)
-        return
+      // 1) Format POA/RPD Puskesmas — setiap sheet dianggap satu bulan.
+      let hasil = []
+      for (const nama of wb.SheetNames) {
+        hasil.push(...parsePoaSheet(XLSX, wb.Sheets[nama], nama, tahunFilter))
       }
 
-      const hasil = rows
-        .map((row, i) => {
-          const rumus = String(ambilKolom(row, 'Rumus Volume', 'Rumus', 'Koefisien') || '').trim()
-          const dariRumus = hitungDariKoef(parseRumus(rumus))
-          const volume = Number(ambilKolom(row, 'Volume', 'Vol')) || (dariRumus ? dariRumus.volume : 0)
-          const hargaSatuan = Number(ambilKolom(row, 'Harga Satuan', 'Harga')) || 0
-          const komponen = String(ambilKolom(row, 'Komponen', 'Upaya Kesehatan') || '').trim()
-          const rincianKegiatan = String(ambilKolom(row, 'Rincian Kegiatan', 'Kegiatan') || '').trim()
-          const tahun = Number(ambilKolom(row, 'Tahun Anggaran', 'Tahun')) || tahunFilter
+      // 2) Cadangan: format datar lama (satu baris judul di baris pertama).
+      if (hasil.length === 0) {
+        const sheetName = wb.SheetNames.find((n) => n.toLowerCase().includes('rka')) || wb.SheetNames[0]
+        hasil = parseFlatSheet(XLSX, wb.Sheets[sheetName], tahunFilter)
+      }
 
-          return {
-            _baris: i + 2, // baris 1 = judul kolom, data mulai baris 2 di Excel
-            tahun_anggaran: tahun,
-            kode_kegiatan: String(ambilKolom(row, 'Kode Kegiatan', 'Kode', 'No') || '').trim(),
-            komponen,
-            sub_komponen: String(ambilKolom(row, 'Sub Komponen') || '').trim(),
-            rincian_kegiatan: rincianKegiatan,
-            tujuan: String(ambilKolom(row, 'Tujuan') || '').trim(),
-            sasaran: String(ambilKolom(row, 'Sasaran') || '').trim(),
-            target: String(ambilKolom(row, 'Target') || '').trim(),
-            penanggung_jawab: String(ambilKolom(row, 'PJ', 'Penanggung Jawab') || '').trim(),
-            jenis_belanja: String(ambilKolom(row, 'Jenis Belanja') || '').trim(),
-            uraian_belanja: String(ambilKolom(row, 'Uraian Belanja', 'Uraian') || '').trim(),
-            rumus_volume: dariRumus ? dariRumus.rumus : '',
-            volume,
-            satuan: String(ambilKolom(row, 'Satuan') || '').trim() || (dariRumus ? dariRumus.satuan : ''),
-            harga_satuan: hargaSatuan,
-            jumlah_anggaran: volume * hargaSatuan,
-            kode_rekening: String(ambilKolom(row, 'Kode Rekening', 'Kode Akun') || '').trim(),
-            bulan_pelaksanaan: String(ambilKolom(row, 'Bulan Pelaksanaan', 'Bulan') || '').trim(),
-            keterangan: String(ambilKolom(row, 'Keterangan') || '').trim(),
-            _valid: komponen !== '' && rincianKegiatan !== '' && volume > 0,
-          }
-        })
-        // Baris yang benar-benar kosong semua tidak perlu ditampilkan di preview.
-        .filter((r) => r.komponen !== '' || r.rincian_kegiatan !== '' || r.volume > 0 || r.harga_satuan > 0)
-
+      if (hasil.length === 0) {
+        setImportError(
+          'Format file tidak dikenali. Gunakan format POA (judul kolom: UPAYA KESEHATAN, KEGIATAN, TUJUAN, SASARAN, TARGET, PJ, URAIAN, HARGA SATUAN) atau unduh "Template Excel" sebagai contoh.'
+        )
+      }
       setImportRows(hasil)
       setShowImport(true)
     } catch (err) {
@@ -364,34 +307,10 @@ export default function TabRKA() {
   }
 
   // Template Excel dibuat langsung di browser (tidak perlu file statis di
-  // server) — berisi judul kolom sesuai format POA & satu baris contoh.
+  // server) — mengikuti format POA/RPD Puskesmas: judul, Upaya Kesehatan,
+  // Sub Komponen, kegiatan + belanja, rumus volume, dan baris TOTAL.
   function unduhTemplate() {
-    const contoh = [
-      [
-        'Tahun Anggaran', 'Kode Kegiatan', 'Komponen', 'Sub Komponen', 'Rincian Kegiatan',
-        'Tujuan', 'Sasaran', 'Target', 'PJ', 'Jenis Belanja', 'Uraian Belanja',
-        'Rumus Volume', 'Volume', 'Satuan', 'Harga Satuan', 'Kode Rekening',
-        'Bulan Pelaksanaan', 'Keterangan',
-      ],
-      [
-        tahunFilter, '2.3.1', 'Peningkatan Layanan Kesehatan Sesuai Siklus Hidup',
-        'Pelaksanaan Kelas ibu Hamil dan Kelas Ibu Balita', 'Pelaksanaan Kelas ibu Hamil',
-        'Meningkatkan persiapan ibu hamil agar melahirkan dengan aman dan selamat',
-        'Masyarakat', 'Ibu Hamil', 'Bidan', 'Belanja Perjalanan Dinas Dalam Daerah', '- Transport Lokal',
-        '3 Org x 1 Hr x 1 Desa x 1 Keg', '', 'Org/Hr/Desa/Keg', 70000, '5.1.02.xx.xx',
-        'Mei', 'Contoh baris — hapus/ganti sebelum diisi data asli',
-      ],
-    ]
-    const ws = XLSX.utils.aoa_to_sheet(contoh)
-    ws['!cols'] = [
-      { wch: 14 }, { wch: 12 }, { wch: 30 }, { wch: 30 }, { wch: 34 },
-      { wch: 36 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 32 }, { wch: 22 },
-      { wch: 30 }, { wch: 9 }, { wch: 16 }, { wch: 15 }, { wch: 16 },
-      { wch: 20 }, { wch: 30 },
-    ]
-    const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, ws, 'RKA BOK')
-    XLSX.writeFile(workbook, 'template-rka-bok.xlsx')
+    XLSX.writeFile(buatWorkbookTemplatePoa(XLSX, tahunFilter), 'template-poa-bok.xlsx')
   }
 
   const filtered = data.filter((r) =>
@@ -546,7 +465,7 @@ export default function TabRKA() {
             <button type="button" className="btn-secondary w-full sm:w-auto justify-center" onClick={bukaTemplate} title="Isi cepat dari katalog kegiatan BOK umum">
               <ListChecks size={16} /> Template Kegiatan BOK
             </button>
-            <button type="button" className="btn-secondary w-full sm:w-auto justify-center" onClick={unduhTemplate} title="Unduh contoh format Excel">
+            <button type="button" className="btn-secondary w-full sm:w-auto justify-center" onClick={unduhTemplate} title="Unduh contoh format Excel (format POA/RPD)">
               <Download size={16} /> Template Excel
             </button>
             <button type="button" className="btn-secondary w-full sm:w-auto justify-center" onClick={bukaDialogImport}>
@@ -840,7 +759,7 @@ export default function TabRKA() {
             <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 to-blue-700" />
             <button
               type="button"
-              onClick={() => { setShowImport(false); setImportRows([]); setImportError('') }}
+              onClick={tutupImport}
               className="absolute top-4 right-4 text-ink-700/40 hover:text-ink-900 p-1 touch-manipulation"
             >
               <X size={20} />
@@ -861,14 +780,17 @@ export default function TabRKA() {
                 <p className="text-sm text-ink-700/60 mb-2">
                   {importRows.filter((r) => r._valid).length} dari {importRows.length} baris siap diimpor.
                   Baris bertanda "Tidak lengkap" akan dilewati (Komponen, Rincian Kegiatan & Volume wajib diisi).
+                  Total: {formatRupiah(importRows.filter((r) => r._valid).reduce((s, r) => s + r.jumlah_anggaran, 0))}
                 </p>
                 <div className="overflow-x-auto border border-ink-900/10 rounded-lg mb-4">
                   <table className="table-shell">
                     <thead>
                       <tr>
                         <th>Baris</th>
+                        <th>Bulan</th>
                         <th>Kode</th>
                         <th>Komponen</th>
+                        <th>Sub Komponen</th>
                         <th>Rincian Kegiatan</th>
                         <th>Sasaran</th>
                         <th>Target</th>
@@ -888,9 +810,11 @@ export default function TabRKA() {
                     <tbody>
                       {importRows.map((r, i) => (
                         <tr key={i} className={!r._valid ? 'bg-red-900/[0.04]' : 'hover:bg-emerald-600/[0.03]'}>
-                          <td className="text-xs">{r._baris}</td>
+                          <td className="text-xs whitespace-nowrap">{r._sheet ? `${r._sheet} · ` : ''}{r._baris}</td>
+                          <td className="text-xs">{r.bulan_pelaksanaan || '-'}</td>
                           <td className="font-mono text-xs">{r.kode_kegiatan || '-'}</td>
                           <td>{r.komponen || '-'}</td>
+                          <td className="text-xs">{r.sub_komponen || '-'}</td>
                           <td className="font-medium">{r.rincian_kegiatan || '-'}</td>
                           <td className="text-xs">{r.sasaran || '-'}</td>
                           <td className="text-xs">{r.target || '-'}</td>
@@ -925,7 +849,7 @@ export default function TabRKA() {
               <button
                 type="button"
                 className="btn-secondary w-full sm:w-auto justify-center"
-                onClick={() => { setShowImport(false); setImportRows([]); setImportError('') }}
+                onClick={tutupImport}
               >
                 Batal
               </button>
