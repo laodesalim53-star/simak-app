@@ -72,8 +72,15 @@ const NotaPrintTemplate = forwardRef(function NotaPrintTemplate(
   while (rows.length < MIN_ROWS) rows.push(null)
 
   const anchorBawah = t.posisiV === 'bawah'
+  // 'tengah' di jalur cetak langsung (tanpa pembungkus .lembar-nota) didekati
+  // dengan margin atas tetap; di pratinjau, pembungkuslah yang menempatkannya.
+  const jarakAtas = t.posisiV === 'tengah' && !pratinjau ? '60mm' : '0'
   const margin =
-    t.posisiH === 'tengah' ? '0 auto' : t.posisiH === 'kanan' ? '0 0 0 auto' : '0'
+    t.posisiH === 'tengah'
+      ? `${jarakAtas} auto 0`
+      : t.posisiH === 'kanan'
+        ? `${jarakAtas} 0 0 auto`
+        : `${jarakAtas} 0 0 0`
 
   const sel = { borderColor: p.line }
 
