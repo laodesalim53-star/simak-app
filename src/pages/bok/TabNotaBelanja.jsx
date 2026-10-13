@@ -371,6 +371,7 @@ export default function TabNotaBelanja() {
             overflow: visible !important;
           }
           .lembar-nota.pos-atas { top: 0 !important; }
+          .lembar-nota.pos-tengah { top: 50% !important; transform: translateY(-50%) !important; }
           .lembar-nota.pos-bawah { top: 138mm !important; }
           .no-print { display: none !important; }
         }
