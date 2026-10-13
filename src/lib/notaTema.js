@@ -13,7 +13,7 @@ export const KUNCI_STORAGE = 'simak_nota_tampilan_cetak'
 export const DEFAULT_TEMA = {
   warna: 'putih', // 'putih' | key WARNA_PRESET | 'kustom'
   warnaKustom: '#2c5a66', // dipakai bila warna === 'kustom'
-  posisiV: 'bawah', // 'atas' | 'bawah' (bawah = di bawah Kuitansi, perilaku lama)
+  posisiV: 'bawah', // 'atas' | 'tengah' | 'bawah' (bawah = di bawah Kuitansi, perilaku lama)
   posisiH: 'kiri', // 'kiri' | 'tengah' | 'kanan'
   ukuran: 'ringkas', // 'standar' | 'ringkas' | 'mini'
 }
@@ -23,6 +23,7 @@ export const OPSI_WARNA = [{ key: 'putih', nama: 'Putih', hex: '#ffffff' }, ...W
 
 export const OPSI_POSISI_V = [
   { key: 'atas', nama: 'Atas' },
+  { key: 'tengah', nama: 'Tengah' },
   { key: 'bawah', nama: 'Bawah' },
 ]
 
