@@ -166,13 +166,16 @@ function satuLembar({ siswa, identitas, logoUrl, jenisWilayah, email, judulAtas,
         pageBreakAfter: terakhir ? 'auto' : 'always',
         breakAfter: terakhir ? 'auto' : 'page',
         boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
       }}
     >
-      <div style={{ position: 'relative', height: '100%', border: `0.7mm solid ${EMAS}`, padding: '2mm', boxSizing: 'border-box' }}>
+      <div style={{ position: 'relative', flex: 1, minHeight: 0, width: '100%', border: `0.7mm solid ${EMAS}`, padding: '2mm', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
         <div
           style={{
             position: 'relative',
-            height: '100%',
+            flex: 1,
+            minHeight: 0,
             border: `0.3mm solid ${EMAS}`,
             padding: landscape ? '6mm 20mm' : '12mm 14mm',
             boxSizing: 'border-box',
@@ -2419,23 +2422,57 @@ export default function SampulLaporan({
     html, body {
       width: ${lebarMm}mm !important;
       height: auto !important;
+      min-height: 0 !important;
       margin: 0 !important;
       padding: 0 !important;
       background: #fff !important;
+      overflow: visible !important;
+    }
+    /* pembungkus aplikasi (layout penuh-layar) tidak boleh memotong / memanjangkan cetakan */
+    #root {
+      height: auto !important;
+      min-height: 0 !important;
+      overflow: visible !important;
     }
     .no-print { display: none !important; }
 
+    /* pembungkus halaman hub (CetakSampulHub): lepas flex, tinggi layar & latar abu-abu */
+    .hub-sampul { display: block !important; min-height: 0 !important; height: auto !important; background: #fff !important; }
+    .hub-sampul-isi { display: block !important; min-width: 0 !important; }
+
     /* lepas semua pembungkus layar supaya sampul tampil di ukuran aslinya */
-    .tata-letak-sampul { display: block !important; min-height: 0 !important; background: #fff !important; }
+    .tata-letak-sampul { display: block !important; min-height: 0 !important; height: auto !important; background: #fff !important; }
     .area-pratinjau { display: block !important; padding: 0 !important; margin: 0 !important; background: #fff !important; height: auto !important; overflow: visible !important; }
     .area-pratinjau > div { display: block !important; width: auto !important; }
     .pratinjau-bungkus { width: auto !important; height: auto !important; overflow: visible !important; box-shadow: none !important; background: transparent !important; }
     .pratinjau-skala { width: auto !important; height: auto !important; transform: none !important; }
 
+    /*
+     * Lembar sampul = tepat satu halaman kertas.
+     * - SEMUA margin dinolkan (sebelumnya hanya kiri-kanan; margin atas/bawah
+     *   my-6 = 24px membuat lembar lebih tinggi dari kertas -> halaman kosong
+     *   tambahan & isi bergeser).
+     * - Tinggi dikurangi 0,6mm karena tinggi persis = tinggi kertas sering
+     *   "tumpah" ke halaman berikutnya akibat pembulatan piksel.
+     * - Susunan flex-kolom dipertahankan (class print-only global bisa
+     *   mengubah display menjadi block dan merusak tata letak).
+     */
     .lembar-cetak.print-only {
-      position: static !important;
-      margin-left: 0 !important;
-      margin-right: 0 !important;
+      display: flex !important;
+      flex-direction: column !important;
+      position: relative !important;
+      box-sizing: border-box !important;
+      width: ${lebarMm}mm !important;
+      height: calc(${tinggiMm}mm - 0.6mm) !important;
+      margin: 0 !important;
+      overflow: hidden !important;
+      break-inside: avoid !important;
+      page-break-inside: avoid !important;
+      transform: none !important;
+    }
+    .lembar-cetak.print-only:last-child {
+      break-after: auto !important;
+      page-break-after: auto !important;
     }
   }
 `}</style>
