@@ -29,13 +29,13 @@ const JABATAN_PUSKESMAS = [
   { value: 'kepala_puskesmas', label: 'Kepala Puskesmas' },
 ]
 
-// Tenant "polres" di database ditampilkan ke pengguna sebagai "Keamanan"
-// (istilah di kalimat: "Satuan"). Nilai internal (polres, kepala_polres)
-// TIDAK diubah karena dipakai database dan AuthContext.daftar().
+// Catatan: tenant "polres" di database hanya DITAMPILKAN sebagai "Keamanan".
+// Nilai internal (polres, kepala_polres) TIDAK diubah karena dipakai
+// database dan AuthContext.daftar().
 const JABATAN_POLRES = [
-  { value: 'pegawai', label: 'Pegawai' },
+  { value: 'pegawai', label: 'Personel / Pegawai' },
   { value: 'admin', label: 'Admin' },
-  { value: 'kepala_polres', label: 'Kepala Satuan' },
+  { value: 'kepala_polres', label: 'Kapolres' },
 ]
 
 // Nilai internal ('sekolah' | 'kantor' | 'puskesmas' | 'polres') TIDAK diubah
@@ -211,16 +211,15 @@ function jabatanDefaultUntuk(jenis) {
 export default function Register() {
   const { session, daftar } = useAuth()
 
-  // Link dari beranda membawa ?untuk=kua, ?untuk=puskesmas, ?untuk=keamanan
-  // (atau ?untuk=polres, tetap didukung), atau ?untuk=sekolah, jadi
-  // pengunjung yang sudah memilih jenis instansinya di beranda tidak perlu
-  // memilih lagi.
+  // Link dari beranda membawa ?untuk=kua, ?untuk=puskesmas, ?untuk=polres,
+  // atau ?untuk=sekolah, jadi pengunjung yang sudah memilih jenis
+  // instansinya di beranda tidak perlu memilih lagi.
   const [searchParams] = useSearchParams()
   const untukParam = searchParams.get('untuk')
   const jenisAwal =
     untukParam === 'kua' ? 'kantor'
     : untukParam === 'puskesmas' ? 'puskesmas'
-    : untukParam === 'polres' || untukParam === 'keamanan' ? 'polres'
+    : untukParam === 'polres' ? 'polres'
     : 'sekolah'
 
   // Jenis institusi dipilih dulu sebelum jabatan, karena menentukan
@@ -262,9 +261,8 @@ export default function Register() {
   const isOrangTua = jenisInstitusi === 'sekolah' && form.jabatan === 'orang_tua'
   const butuhNip = JENIS_BUTUH_NIP.includes(jenisInstitusi)
   const opsiJabatan = opsiJabatanUntuk(jenisInstitusi)
-  // Istilah di kalimat: tenant "polres" ditulis sebagai "satuan".
-  const kata = isKantor ? 'kantor' : isPuskesmas ? 'puskesmas' : isPolres ? 'satuan' : 'sekolah'
-  const Kata = isKantor ? 'Kantor' : isPuskesmas ? 'Puskesmas' : isPolres ? 'Satuan' : 'Sekolah'
+  const kata = isKantor ? 'kantor' : isPuskesmas ? 'puskesmas' : isPolres ? 'keamanan' : 'sekolah'
+  const Kata = isKantor ? 'Kantor' : isPuskesmas ? 'Puskesmas' : isPolres ? 'Keamanan' : 'Sekolah'
 
   // Muat daftar institusi (sekolah, kantor, puskesmas, ATAU keamanan) sesuai
   // jenis yang dipilih. Semuanya disimpan di tabel "sekolah" yang sama,
@@ -453,7 +451,7 @@ export default function Register() {
         : `-- Pilih ${Kata} --`
 
   const langkah = [
-    'Pilih jenis institusi: Sekolah, Kantor (KUA), Puskesmas, atau Keamanan.',
+    'Pilih jenis institusi: Sekolah, Kantor (KUA), atau Puskesmas.',
     butuhNip
       ? `Isi nama lengkap dan NIP (Nomor Induk Pegawai), lalu pilih jabatan: Pegawai, Admin, atau Kepala ${Kata}.`
       : 'Isi nama lengkap, lalu pilih jabatan: Guru, Admin, Kepala Sekolah, atau Orang Tua/Wali Murid.',
@@ -539,11 +537,11 @@ export default function Register() {
           {butuhNip && (
             <Field
               id="reg-nip"
-              label={isPolres ? 'NIP / No. Induk' : 'NIP'}
+              label={isPolres ? 'NRP / NIP' : 'NIP'}
               required
               inputMode="numeric"
               autoComplete="off"
-              placeholder={isPolres ? 'Nomor Induk Pegawai / Personel' : 'Nomor Induk Pegawai'}
+              placeholder={isPolres ? 'Nomor Registrasi Pokok / NIP' : 'Nomor Induk Pegawai'}
               value={form.nip}
               onChange={(e) => ubah('nip', e.target.value)}
             />
@@ -597,7 +595,7 @@ export default function Register() {
                   : isPuskesmas
                     ? 'Contoh: Puskesmas Kecamatan Contoh'
                     : isPolres
-                      ? 'Contoh: Satuan Keamanan Contoh'
+                      ? 'Contoh: Keamanan Kepulauan Aru'
                       : 'Contoh: SD Negeri Contoh'
               }
               value={form.namaSekolahBaru}
