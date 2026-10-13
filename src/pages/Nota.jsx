@@ -7,7 +7,7 @@ import NotaPrintTemplate from '../components/NotaPrintTemplate'
 import NotaTemaPanel from '../components/NotaTemaPanel'
 import PilihBkuUntukNotaModal from '../components/PilihBkuUntukNotaModal'
 import Layout from '../components/Layout'
-import { ArrowDownToLine } from 'lucide-react'
+import { ArrowDownToLine, Palette } from 'lucide-react'
 
 // -----------------------------------------------------------------
 // Baris item kosong untuk form manual
@@ -438,12 +438,6 @@ export default function Nota({ sekolah }) {
                 onChange={handleFileImpor}
               />
             </label>
-            <button
-              onClick={() => setShowTema((v) => !v)}
-              className="px-3 py-2 rounded bg-gray-200 text-sm"
-            >
-              Tampilan Cetak
-            </button>
             <button onClick={bukaTambah} className="px-3 py-2 rounded bg-blue-600 text-white text-sm">
               + Tambah Nota
             </button>
@@ -457,6 +451,21 @@ export default function Nota({ sekolah }) {
           </div>
         }
       >
+        {/* Tombol "Tampilan Cetak" sengaja ada di badan halaman (bukan di
+            actions header): header Layout tidak membungkus tombol, jadi
+            tombol ke-4 dari 6 terdorong keluar layar & tidak terlihat. */}
+        <div className="mb-3 flex flex-wrap items-center gap-2 print:hidden">
+          <button
+            type="button"
+            onClick={() => setShowTema((v) => !v)}
+            aria-expanded={showTema}
+            className="px-3 py-2 rounded bg-gray-200 text-sm flex items-center gap-1.5"
+          >
+            <Palette size={15} /> Tampilan Cetak
+          </button>
+          <span className="text-xs text-gray-500">Warna kertas, ukuran, dan posisi nota saat dicetak</span>
+        </div>
+
         {/* Panel tema cetak: warna kertas, ukuran, posisi */}
         {showTema && (
           <div className="mb-4">
