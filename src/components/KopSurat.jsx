@@ -8,14 +8,70 @@ const LOGO_BUCKET_PUSKESMAS = 'profil-puskesmas'
 const LOGO_BUCKET_SEKOLAH = 'profil-sekolah'
 const LOGO_BUCKET_POLRES = 'profil-polres'
 
+// Ubah path/URL di database menjadi URL publik. Path berawalan http dipakai apa adanya.
+function urlLogo(bucket, path) {
+  if (!path) return null
+  if (path.startsWith('http')) return path
+  return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl
+}
+
+// Kepala kop untuk tenant Sekolah & Puskesmas.
+//  - Ada logo kabupaten -> logo kabupaten di KIRI, logo instansi di KANAN
+//    (format kop surat Pemda pada umumnya).
+//  - Tidak ada logo kabupaten -> tampilan lama: logo instansi di kiri,
+//    kolom kanan kosong.
+function KopHeader({ logoUtama, logoKabupaten, altUtama, children }) {
+  const sembunyikanJikaRusak = (e) => {
+    e.currentTarget.style.visibility = 'hidden'
+  }
+  const logoKiri = logoKabupaten || logoUtama
+  const altKiri = logoKabupaten ? 'Logo Kabupaten' : altUtama
+  const logoKanan = logoKabupaten ? logoUtama : null
+
+  return (
+    <div className="kop-surat-resmi mb-6">
+      <div className="grid grid-cols-[80px_1fr_80px] items-center gap-4 pb-1">
+        <div className="flex justify-start">
+          {logoKiri && (
+            <img
+              src={logoKiri}
+              alt={altKiri}
+              onError={sembunyikanJikaRusak}
+              className="w-20 h-20 object-contain shrink-0"
+            />
+          )}
+        </div>
+
+        <div className="text-center">{children}</div>
+
+        <div className="flex justify-end">
+          {logoKanan && (
+            <img
+              src={logoKanan}
+              alt={altUtama}
+              onError={sembunyikanJikaRusak}
+              className="w-20 h-20 object-contain shrink-0"
+            />
+          )}
+        </div>
+      </div>
+
+      <div className="border-t border-slate-900" />
+      <div className="border-t-4 border-slate-900 mt-0.5" />
+    </div>
+  )
+}
+
 // Komponen kop surat resmi, dipakai di halaman cetak manapun cukup dengan
 // <KopSurat />. Sumber datanya menyesuaikan jenis tenant yang sedang login:
 //  - isPolres    -> tabel profil_polres, bucket 'profil-polres',
 //                   format 3 tingkat ala Polri
 //  - isPuskesmas -> tabel profil_puskesmas, bucket 'profil-puskesmas'
+//                   (+ logo_kabupaten_path)
 //  - isKantor    -> tabel profil_kantor, format 3 tingkat ala Kementerian
 //                   Agama, bucket 'profil-kantor'
 //  - selain itu (sekolah) -> tabel profil_sekolah, bucket 'profil-sekolah'
+//                   (+ logo_kabupaten_path)
 //
 // Pastikan AuthContext menyediakan flag isPolres
 // (isPolres = jenis_organisasi === 'polres').
@@ -56,10 +112,13 @@ export default function KopSurat() {
     } else if (jenis === 'puskesmas') {
       supabase
         .from('profil_puskesmas')
-        .select('nama_puskesmas, kode_puskesmas, alamat, kabupaten, kecamatan, provinsi, telepon, email, logo_path')
+        .select('nama_puskesmas, kode_puskesmas, alamat, kabupaten, kecamatan, provinsi, telepon, email, logo_path, logo_kabupaten_path')
         .eq('sekolah_id', sekolahId)
         .maybeSingle()
-        .then(({ data }) => setProfilPuskesmas(data))
+        .then(({ data, error }) => {
+          if (error) console.error('KopSurat: gagal memuat profil_puskesmas:', error)
+          setProfilPuskesmas(data)
+        })
     } else if (jenis === 'kantor') {
       supabase
         .from('profil_kantor')
@@ -70,7 +129,7 @@ export default function KopSurat() {
     } else {
       supabase
         .from('profil_sekolah')
-        .select('dinas_pendidikan, nama_sekolah, alamat, kabupaten, kecamatan, telepon, email, logo_path')
+        .select('dinas_pendidikan, nama_sekolah, alamat, kabupaten, kecamatan, telepon, email, logo_path, logo_kabupaten_path')
         .eq('sekolah_id', sekolahId)
         .maybeSingle()
         .then(({ data, error }) => {
@@ -83,11 +142,7 @@ export default function KopSurat() {
   // ==== Cabang POLRES: 3 tingkat ala Polri ====
   // KEPOLISIAN NEGARA REPUBLIK INDONESIA / DAERAH <POLDA> / RESOR <SATUAN>
   if (jenis === 'polres') {
-    const logoUrl = profilPolres?.logo_path
-      ? profilPolres.logo_path.startsWith('http')
-        ? profilPolres.logo_path
-        : supabase.storage.from(LOGO_BUCKET_POLRES).getPublicUrl(profilPolres.logo_path).data.publicUrl
-      : null
+    const logoUrl = urlLogo(LOGO_BUCKET_POLRES, profilPolres?.logo_path)
 
     const namaPolda = (profilPolres?.polda || '').replace(/^polda\s+/i, '').trim()
     const namaResor = (profilPolres?.nama_satuan || '').replace(/^polres\s+/i, '').trim()
@@ -148,11 +203,10 @@ export default function KopSurat() {
     )
   }
 
-  // ==== Cabang SEKOLAH: format sama dengan kop di LaporanDaftarHadirGuru ====
+  // ==== Cabang SEKOLAH: logo kabupaten (kiri) + logo sekolah (kanan) ====
   if (jenis === 'sekolah') {
-    const logoUrl = profilSekolah?.logo_path
-      ? supabase.storage.from(LOGO_BUCKET_SEKOLAH).getPublicUrl(profilSekolah.logo_path).data.publicUrl
-      : null
+    const logoUrl = urlLogo(LOGO_BUCKET_SEKOLAH, profilSekolah?.logo_path)
+    const logoKabupatenUrl = urlLogo(LOGO_BUCKET_SEKOLAH, profilSekolah?.logo_kabupaten_path)
 
     const kontak = [
       profilSekolah?.email && `Email: ${profilSekolah.email}`,
@@ -163,55 +217,38 @@ export default function KopSurat() {
     const barisAlamat = [profilSekolah?.alamat, kontak].filter(Boolean).join('  —  ')
 
     return (
-      <div className="kop-surat-resmi mb-6">
-        <div className="grid grid-cols-[80px_1fr_80px] items-center gap-4 pb-1">
-          <div className="flex justify-start">
-            {logoUrl && (
-              <img src={logoUrl} alt="Logo Sekolah" className="w-20 h-20 object-contain shrink-0" />
-            )}
-          </div>
-
-          <div className="text-center">
-            {profilSekolah?.dinas_pendidikan && (
-              <p className="font-display text-[13px] font-bold uppercase text-slate-900 leading-tight">
-                {profilSekolah.dinas_pendidikan}
-              </p>
-            )}
-            {profilSekolah?.kabupaten && (
-              <p className="font-display text-[13px] font-bold uppercase text-slate-900 leading-tight">
-                {profilSekolah.kabupaten}
-              </p>
-            )}
-            <p className="font-display text-[15px] font-bold uppercase text-slate-900 leading-tight">
-              {profilSekolah?.nama_sekolah || 'Nama Sekolah Belum Diatur'}
-            </p>
-            {profilSekolah?.kecamatan && (
-              <p className="text-[11px] font-medium uppercase text-slate-700 leading-tight">
-                {profilSekolah.kecamatan}
-              </p>
-            )}
-            {barisAlamat && (
-              <p className="text-[10.5px] font-normal text-slate-600 leading-snug mt-1">
-                {barisAlamat}
-              </p>
-            )}
-          </div>
-
-          <div aria-hidden="true" />
-        </div>
-
-        <div className="border-t border-slate-900" />
-        <div className="border-t-4 border-slate-900 mt-0.5" />
-      </div>
+      <KopHeader logoUtama={logoUrl} logoKabupaten={logoKabupatenUrl} altUtama="Logo Sekolah">
+        {profilSekolah?.dinas_pendidikan && (
+          <p className="font-display text-[13px] font-bold uppercase text-slate-900 leading-tight">
+            {profilSekolah.dinas_pendidikan}
+          </p>
+        )}
+        {profilSekolah?.kabupaten && (
+          <p className="font-display text-[13px] font-bold uppercase text-slate-900 leading-tight">
+            {profilSekolah.kabupaten}
+          </p>
+        )}
+        <p className="font-display text-[15px] font-bold uppercase text-slate-900 leading-tight">
+          {profilSekolah?.nama_sekolah || 'Nama Sekolah Belum Diatur'}
+        </p>
+        {profilSekolah?.kecamatan && (
+          <p className="text-[11px] font-medium uppercase text-slate-700 leading-tight">
+            {profilSekolah.kecamatan}
+          </p>
+        )}
+        {barisAlamat && (
+          <p className="text-[10.5px] font-normal text-slate-600 leading-snug mt-1">
+            {barisAlamat}
+          </p>
+        )}
+      </KopHeader>
     )
   }
 
-  // ==== Cabang PUSKESMAS: kop 1 baris (nama puskesmas), bukan format
-  // 3 tingkat Kemenag — puskesmas bukan instansi keagamaan. ====
+  // ==== Cabang PUSKESMAS: logo kabupaten (kiri) + logo puskesmas (kanan) ====
   if (jenis === 'puskesmas') {
-    const logoUrl = profilPuskesmas?.logo_path
-      ? supabase.storage.from(LOGO_BUCKET_PUSKESMAS).getPublicUrl(profilPuskesmas.logo_path).data.publicUrl
-      : null
+    const logoUrl = urlLogo(LOGO_BUCKET_PUSKESMAS, profilPuskesmas?.logo_path)
+    const logoKabupatenUrl = urlLogo(LOGO_BUCKET_PUSKESMAS, profilPuskesmas?.logo_kabupaten_path)
 
     const namaPuskesmas = profilPuskesmas?.nama_puskesmas || 'Nama Puskesmas Belum Diatur'
     const subjudul = [
@@ -233,43 +270,26 @@ export default function KopSurat() {
     const barisAlamat = [alamatLengkap, kontak].filter(Boolean).join('  —  ')
 
     return (
-      <div className="kop-surat-resmi mb-6">
-        <div className="grid grid-cols-[80px_1fr_80px] items-center gap-4 pb-1">
-          <div className="flex justify-start">
-            {logoUrl && (
-              <img src={logoUrl} alt="Logo Puskesmas" className="w-20 h-20 object-contain shrink-0" />
-            )}
-          </div>
-
-          <div className="text-center">
-            <p className="font-display text-[15px] font-bold uppercase text-slate-900 leading-tight">
-              {namaPuskesmas}
-            </p>
-            {subjudul && (
-              <p className="text-[11px] font-medium uppercase text-slate-700 leading-tight mt-0.5">
-                {subjudul}
-              </p>
-            )}
-            {barisAlamat && (
-              <p className="text-[10.5px] font-normal text-slate-600 leading-snug mt-1">
-                {barisAlamat}
-              </p>
-            )}
-          </div>
-
-          <div aria-hidden="true" />
-        </div>
-
-        <div className="border-t border-slate-900" />
-        <div className="border-t-4 border-slate-900 mt-0.5" />
-      </div>
+      <KopHeader logoUtama={logoUrl} logoKabupaten={logoKabupatenUrl} altUtama="Logo Puskesmas">
+        <p className="font-display text-[15px] font-bold uppercase text-slate-900 leading-tight">
+          {namaPuskesmas}
+        </p>
+        {subjudul && (
+          <p className="text-[11px] font-medium uppercase text-slate-700 leading-tight mt-0.5">
+            {subjudul}
+          </p>
+        )}
+        {barisAlamat && (
+          <p className="text-[10.5px] font-normal text-slate-600 leading-snug mt-1">
+            {barisAlamat}
+          </p>
+        )}
+      </KopHeader>
     )
   }
 
   // ==== Cabang KANTOR (pola asli) ====
-  const logoUrl = profilKantor?.logo_path
-    ? supabase.storage.from(LOGO_BUCKET_KANTOR).getPublicUrl(profilKantor.logo_path).data.publicUrl
-    : null
+  const logoUrl = urlLogo(LOGO_BUCKET_KANTOR, profilKantor?.logo_path)
 
   const baris1 = profilKantor?.nama_kementerian || 'KEMENTERIAN AGAMA REPUBLIK INDONESIA'
   const baris2 = profilKantor?.nama_kantor_kabupaten || ''
