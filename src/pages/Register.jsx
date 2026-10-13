@@ -28,14 +28,18 @@ const JABATAN_PUSKESMAS = [
   { value: 'admin', label: 'Admin' },
   { value: 'kepala_puskesmas', label: 'Kepala Puskesmas' },
 ]
+
+// Tenant "polres" di database ditampilkan ke pengguna sebagai "Keamanan"
+// (istilah di kalimat: "Satuan"). Nilai internal (polres, kepala_polres)
+// TIDAK diubah karena dipakai database dan AuthContext.daftar().
 const JABATAN_POLRES = [
-  { value: 'pegawai', label: 'Personel / Pegawai' },
+  { value: 'pegawai', label: 'Pegawai' },
   { value: 'admin', label: 'Admin' },
-  { value: 'kepala_polres', label: 'Kapolres' },
+  { value: 'kepala_polres', label: 'Kepala Satuan' },
 ]
 
-// Nilai internal ('sekolah' | 'kantor' | 'puskesmas') TIDAK diubah karena
-// sama dengan kolom jenis_organisasi di database. Yang berubah hanya
+// Nilai internal ('sekolah' | 'kantor' | 'puskesmas' | 'polres') TIDAK diubah
+// karena sama dengan kolom jenis_organisasi di database. Yang berubah hanya
 // tulisan di layar: "Kantor" & "Puskesmas" diberi keterangan singkat
 // supaya pengunjung yakin ini pintu yang benar — sama dengan istilah di
 // beranda.
@@ -43,12 +47,12 @@ const OPSI_JENIS = [
   { value: 'sekolah', label: 'Sekolah' },
   { value: 'kantor', label: 'Kantor (KUA)' },
   { value: 'puskesmas', label: 'Puskesmas' },
-  { value: 'polres', label: 'Polres' },
+  { value: 'polres', label: 'Keamanan' },
 ]
 
 // Jenis institusi yang butuh NIP (Nomor Induk Pegawai) sebagai identitas
 // kepegawaian, sejalan dengan validasi wajib-NIP di AuthContext.daftar()
-// untuk jenisOrganisasi 'kantor' dan 'puskesmas'.
+// untuk jenisOrganisasi 'kantor', 'puskesmas', dan 'polres'.
 const JENIS_BUTUH_NIP = ['kantor', 'puskesmas', 'polres']
 
 const inputClass =
@@ -163,11 +167,11 @@ function SelectField({ id, label, hint, children, ...selectProps }) {
 }
 
 // Tombol pilihan (segmented control) dengan status tekan. Jumlah kolom
-// menyesuaikan jumlah opsi (2 atau 3) — ditulis sebagai kelas literal
+// menyesuaikan jumlah opsi (2, 3, atau 4) — ditulis sebagai kelas literal
 // (bukan template dinamis) supaya tetap terdeteksi oleh Tailwind JIT.
 function Segmen({ label, opsi, nilai, onPilih }) {
-const kolom =
-opsi.length >= 4 ? 'grid-cols-2 sm:grid-cols-4' : opsi.length === 3 ? 'grid-cols-3' : 'grid-cols-2'
+  const kolom =
+    opsi.length >= 4 ? 'grid-cols-2 sm:grid-cols-4' : opsi.length === 3 ? 'grid-cols-3' : 'grid-cols-2'
   return (
     <div
       role="group"
@@ -207,20 +211,21 @@ function jabatanDefaultUntuk(jenis) {
 export default function Register() {
   const { session, daftar } = useAuth()
 
-  // Link dari beranda membawa ?untuk=kua, ?untuk=puskesmas, atau
-  // ?untuk=sekolah, jadi pengunjung yang sudah memilih jenis instansinya
-  // di beranda tidak perlu memilih lagi.
+  // Link dari beranda membawa ?untuk=kua, ?untuk=puskesmas, ?untuk=keamanan
+  // (atau ?untuk=polres, tetap didukung), atau ?untuk=sekolah, jadi
+  // pengunjung yang sudah memilih jenis instansinya di beranda tidak perlu
+  // memilih lagi.
   const [searchParams] = useSearchParams()
   const untukParam = searchParams.get('untuk')
   const jenisAwal =
-  untukParam === 'kua' ? 'kantor'
-  : untukParam === 'puskesmas' ? 'puskesmas'
-  : untukParam === 'polres' ? 'polres'
-  : 'sekolah'
+    untukParam === 'kua' ? 'kantor'
+    : untukParam === 'puskesmas' ? 'puskesmas'
+    : untukParam === 'polres' || untukParam === 'keamanan' ? 'polres'
+    : 'sekolah'
 
   // Jenis institusi dipilih dulu sebelum jabatan, karena menentukan
   // daftar jabatan yang tersedia dan daftar institusi (sekolah/kantor/
-  // puskesmas/polres) yang dimuat dari tabel "sekolah" (dibedakan lewat
+  // puskesmas/keamanan) yang dimuat dari tabel "sekolah" (dibedakan lewat
   // jenis_organisasi).
   const [jenisInstitusi, setJenisInstitusi] = useState(jenisAwal) // 'sekolah' | 'kantor' | 'puskesmas' | 'polres'
   const [mode, setMode] = useState('gabung') // 'gabung' | 'baru'
@@ -246,8 +251,8 @@ export default function Register() {
 
   // Daftar siswa untuk sekolah yang dipilih — hanya relevan kalau
   // jenisInstitusi adalah "sekolah" DAN jabatan yang dipilih "orang_tua",
-  // karena mereka wajib memilih anak. Kantor dan Puskesmas tidak punya
-  // siswa sama sekali.
+  // karena mereka wajib memilih anak. Kantor, Puskesmas, dan Keamanan
+  // tidak punya siswa sama sekali.
   const [daftarSiswa, setDaftarSiswa] = useState([])
   const [loadingSiswa, setLoadingSiswa] = useState(false)
 
@@ -257,11 +262,12 @@ export default function Register() {
   const isOrangTua = jenisInstitusi === 'sekolah' && form.jabatan === 'orang_tua'
   const butuhNip = JENIS_BUTUH_NIP.includes(jenisInstitusi)
   const opsiJabatan = opsiJabatanUntuk(jenisInstitusi)
-  const kata = isKantor ? 'kantor' : isPuskesmas ? 'puskesmas' : isPolres ? 'polres' : 'sekolah'
-  const Kata = isKantor ? 'Kantor' : isPuskesmas ? 'Puskesmas' : isPolres ? 'Polres' : 'Sekolah'
+  // Istilah di kalimat: tenant "polres" ditulis sebagai "satuan".
+  const kata = isKantor ? 'kantor' : isPuskesmas ? 'puskesmas' : isPolres ? 'satuan' : 'sekolah'
+  const Kata = isKantor ? 'Kantor' : isPuskesmas ? 'Puskesmas' : isPolres ? 'Satuan' : 'Sekolah'
 
-  // Muat daftar institusi (sekolah, kantor, ATAU puskesmas) sesuai jenis
-  // yang dipilih. Ketiganya disimpan di tabel "sekolah" yang sama,
+  // Muat daftar institusi (sekolah, kantor, puskesmas, ATAU keamanan) sesuai
+  // jenis yang dipilih. Semuanya disimpan di tabel "sekolah" yang sama,
   // dibedakan lewat jenis_organisasi, jadi cukup difilter di sini.
   useEffect(() => {
     let aktif = true
@@ -344,7 +350,7 @@ export default function Register() {
   // Ganti jenis institusi → reset semua field yang tergantung padanya,
   // karena jabatan, daftar institusi, dan mode bisa jadi tidak valid lagi
   // untuk jenis yang baru (mis. jabatan "orang_tua" tidak ada di
-  // Kantor/Puskesmas).
+  // Kantor/Puskesmas/Keamanan).
   function ubahJenisInstitusi(value) {
     setJenisInstitusi(value)
     setMode('gabung')
@@ -447,7 +453,7 @@ export default function Register() {
         : `-- Pilih ${Kata} --`
 
   const langkah = [
-    'Pilih jenis institusi: Sekolah, Kantor (KUA), atau Puskesmas.',
+    'Pilih jenis institusi: Sekolah, Kantor (KUA), Puskesmas, atau Keamanan.',
     butuhNip
       ? `Isi nama lengkap dan NIP (Nomor Induk Pegawai), lalu pilih jabatan: Pegawai, Admin, atau Kepala ${Kata}.`
       : 'Isi nama lengkap, lalu pilih jabatan: Guru, Admin, Kepala Sekolah, atau Orang Tua/Wali Murid.',
@@ -528,16 +534,16 @@ export default function Register() {
             onChange={(e) => ubah('nama', e.target.value)}
           />
 
-          {/* Khusus institusi Kantor, Puskesmas & Polres: setiap pegawai wajib
-              mengisi NIP/NRP sebagai identitas kepegawaian. */}
+          {/* Khusus institusi Kantor, Puskesmas & Keamanan: setiap pegawai
+              wajib mengisi NIP / nomor induk sebagai identitas kepegawaian. */}
           {butuhNip && (
             <Field
               id="reg-nip"
-              label={isPolres ? 'NRP / NIP' : 'NIP'}
+              label={isPolres ? 'NIP / No. Induk' : 'NIP'}
               required
               inputMode="numeric"
               autoComplete="off"
-              placeholder={isPolres ? 'Nomor Registrasi Pokok / NIP' : 'Nomor Induk Pegawai'}
+              placeholder={isPolres ? 'Nomor Induk Pegawai / Personel' : 'Nomor Induk Pegawai'}
               value={form.nip}
               onChange={(e) => ubah('nip', e.target.value)}
             />
@@ -585,13 +591,13 @@ export default function Register() {
               label={`Nama ${Kata} Baru`}
               required
               autoComplete="off"
-               placeholder={
+              placeholder={
                 isKantor
                   ? 'Contoh: KUA Kecamatan Contoh'
                   : isPuskesmas
                     ? 'Contoh: Puskesmas Kecamatan Contoh'
                     : isPolres
-                      ? 'Contoh: Polres Kepulauan Aru'
+                      ? 'Contoh: Satuan Keamanan Contoh'
                       : 'Contoh: SD Negeri Contoh'
               }
               value={form.namaSekolahBaru}
