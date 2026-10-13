@@ -1766,48 +1766,6 @@ export default function AdministrasiKepsekItem() {
           </thead>
           <tbody>
             {tersaring.map((r, i) => (
-              <tr key={r.id} style={{ pageBreakInside: 'avoid' }}>
-                <td style={{ border: '1px solid #000', padding: '4px 6px', textAlign: 'center' }}>{i + 1}</td>
-                <td style={{ border: '1px solid #000', padding: '4px 6px' }}>{tgl(r.tanggal)}</td>
-                {kolom.map((c) => (
-                  <td key={c.k} style={{ border: '1px solid #000', padding: '4px 6px', verticalAlign: 'top', whiteSpace: 'pre-line' }}>{tampil(c, r.data[c.k])}</td>
-                ))}
-              </tr>
-            ))}
-            {idxTotal >= 0 && (
-              <tr style={{ pageBreakInside: 'avoid' }}>
-                <td colSpan={2 + idxTotal} style={{ border: '1px solid #000', padding: '4px 6px', textAlign: 'right', fontWeight: 700 }}>JUMLAH TOTAL</td>
-                <td style={{ border: '1px solid #000', padding: '4px 6px', fontWeight: 700, whiteSpace: 'nowrap' }}>{rupiah(totalAnggaran)}</td>
-                {kolom.length - idxTotal - 1 > 0 && (
-                  <td colSpan={kolom.length - idxTotal - 1} style={{ border: '1px solid #000', padding: '4px 6px' }} />
-                )}
-              </tr>
-            )}
-          </tbody>
-        </table>
-        <div style={{ marginTop: 28, marginLeft: '65%', textAlign: 'center', pageBreakInside: 'avoid' }}>
-          <div>Kepala Sekolah</div>
-          <div style={{ height: 64 }} />
-          <div style={{ fontWeight: 700, textDecoration: 'underline' }}>{profil?.kepala_sekolah || '........................'}</div>
-          <div>NIP. {nipKepsek || '........................'}</div>
-        </div>
-      </div>
-    </Layout>
-  )
-}{/* Area cetak (hanya tampil saat print) */}
-      <div id="cetak-area" className="hidden" style={{ color: '#000', fontSize: '11pt' }}>
-        <KopSurat />
-        <div style={{ textAlign: 'center', marginBottom: 12, fontWeight: 700, fontSize: '13pt' }}>{cfg.judul.toUpperCase()}</div>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10pt' }}>
-          <thead>
-            <tr>
-              {['No', cfg.tanggalLabel, ...kolom.map((c) => c.l)].map((h) => (
-                <th key={h} style={{ border: '1px solid #000', padding: '4px 6px', background: '#eee' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {tersaring.map((r, i) => (
               <tr
                 key={r.id}
                 // Khusus KOSP: baris panjang boleh terpotong antarhalaman agar tabel
