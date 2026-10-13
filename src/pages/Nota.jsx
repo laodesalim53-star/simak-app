@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabaseClient' // sesuaikan path kalau berbeda di project kamu
+import { useNotaTema } from '../lib/notaTema'
 import NotaPrintTemplate from '../components/NotaPrintTemplate'
+import NotaTemaPanel from '../components/NotaTemaPanel'
 import PilihBkuUntukNotaModal from '../components/PilihBkuUntukNotaModal'
 import Layout from '../components/Layout'
 import { ArrowDownToLine } from 'lucide-react'
@@ -124,9 +126,13 @@ export default function Nota({ sekolah }) {
   const [importRingkasan, setImportRingkasan] = useState(null)
   const [menghapusSemua, setMenghapusSemua] = useState(false)
   const [showPilihBku, setShowPilihBku] = useState(false) // modal "Tarik dari BKU"
-  // Mode cetak untuk nota yang sedang dicetak: 'standar' (di bagian bawah kertas,
-  // seperti semula) atau 'atas' (mulai dari bagian atas kertas, seperti Kwitansi).
+  // Mode cetak untuk nota yang sedang dicetak: 'standar' (ikut posisi vertikal
+  // di panel tema, bawaan = bawah kertas) atau 'atas' (dipaksa mulai dari
+  // bagian atas kertas, seperti Kwitansi).
   const [modeCetak, setModeCetak] = useState('standar')
+  // Tema cetak (warna kertas, ukuran, posisi) — disimpan per perangkat.
+  const [tema, ubahTema] = useNotaTema()
+  const [showTema, setShowTema] = useState(false)
 
   const printRef = useRef(null)
   const fileInputRef = useRef(null)
@@ -432,6 +438,12 @@ export default function Nota({ sekolah }) {
                 onChange={handleFileImpor}
               />
             </label>
+            <button
+              onClick={() => setShowTema((v) => !v)}
+              className="px-3 py-2 rounded bg-gray-200 text-sm"
+            >
+              Tampilan Cetak
+            </button>
             <button onClick={bukaTambah} className="px-3 py-2 rounded bg-blue-600 text-white text-sm">
               + Tambah Nota
             </button>
@@ -445,6 +457,13 @@ export default function Nota({ sekolah }) {
           </div>
         }
       >
+        {/* Panel tema cetak: warna kertas, ukuran, posisi */}
+        {showTema && (
+          <div className="mb-4">
+            <NotaTemaPanel tema={tema} ubahTema={ubahTema} />
+          </div>
+        )}
+
         {importRingkasan && (
           <div
             className={`mb-4 p-3 rounded text-sm ${
@@ -487,7 +506,7 @@ export default function Nota({ sekolah }) {
                     </td>
                     <td className="p-2">
                       <div className="flex justify-center gap-2 text-xs">
-                        <button onClick={() => cetakNota(row, 'standar')} className="text-blue-600" title="Cetak di bagian bawah kertas (bawaan)">Cetak</button>
+                        <button onClick={() => cetakNota(row, 'standar')} className="text-blue-600" title="Cetak sesuai posisi di Tampilan Cetak (bawaan: bagian bawah kertas)">Cetak</button>
                         <button onClick={() => cetakNota(row, 'atas')} className="text-indigo-600" title="Cetak mulai dari bagian atas kertas (seperti Kwitansi)">Cetak Atas</button>
                         <button onClick={() => bukaEdit(row)} className="text-amber-600">Edit</button>
                         <button onClick={() => hapusNota(row.id)} className="text-red-600">Hapus</button>
@@ -630,10 +649,15 @@ export default function Nota({ sekolah }) {
       </Layout>
 
       {/* Wajib DI LUAR Layout — ini yang tampil saat window.print().
-          Posisi di kertas ditentukan NotaPrintTemplate lewat prop modeCetak
-          ('standar' = bawah, 'atas' = atas). */}
+          Posisi vertikal diambil dari tema (panel "Tampilan Cetak"); tombol
+          "Cetak Atas" memaksa posisi atas untuk satu kali cetak. */}
       {notaCetak && (
-        <NotaPrintTemplate ref={printRef} sekolah={sekolah} data={notaCetak} modeCetak={modeCetak} />
+        <NotaPrintTemplate
+          ref={printRef}
+          sekolah={sekolah}
+          data={notaCetak}
+          tema={{ ...tema, posisiV: modeCetak === 'atas' ? 'atas' : tema.posisiV }}
+        />
       )}
     </>
   )
