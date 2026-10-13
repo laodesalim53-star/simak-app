@@ -162,7 +162,7 @@ export default function CetakSampulHub() {
 
   return (
     // dvh = tinggi layar yang sebenarnya di Chrome Android (address bar turun/naik)
-    <div className="min-h-[100dvh] bg-slate-100 flex">
+    <div className="hub-sampul min-h-[100dvh] bg-slate-100 flex">
       {/* Sidebar / drawer */}
       <aside
         className={`no-print print:hidden fixed inset-y-0 left-0 z-30 h-[100dvh] w-72 max-w-[85vw]
@@ -234,7 +234,7 @@ export default function CetakSampulHub() {
       />
 
       {/* Konten */}
-      <div className="flex-1 min-w-0">
+      <div className="hub-sampul-isi flex-1 min-w-0">
         {/* Bar atas mobile: tombol menu + nama jenis laporan yang aktif */}
         <div
           className="no-print print:hidden md:hidden sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-slate-200 px-3 pb-2"
