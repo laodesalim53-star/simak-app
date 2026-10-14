@@ -312,7 +312,16 @@ export default function Keuangan() {
             >
               <Trash2 size={16} /> Hapus Semua
             </button>
-            <ArkasImportModal tahunAnggaran={String(tahun)} onSelesai={loadArkasData} />
+            <ArkasImportModal
+              tahunAnggaran={String(tahun)}
+              onSelesai={(tahunFile) => {
+                // Kalau file yang diimpor tahun anggarannya beda dengan filter Tahun,
+                // pindahkan filter ke tahun itu (efek useEffect akan memuat ulang datanya).
+                const th = Number(tahunFile)
+                if (th && th !== tahun) setTahun(th)
+                else loadArkasData()
+              }}
+            />
           </>
         ) : (
           <>
@@ -455,7 +464,7 @@ export default function Keuangan() {
               {loadingArkas && <tr><td colSpan={6} className="text-center py-8 text-ink-700/50">Memuat data...</td></tr>}
               {!loadingArkas && arkasData.length === 0 && (
                 <tr><td colSpan={6} className="text-center py-8 text-ink-700/50">
-                  Belum ada data ARKAS tahun {tahun}. Klik "Input Data Massal ARKAS" untuk mengunggah CSV/Excel hasil konversi PDF.
+                  Belum ada data ARKAS tahun {tahun}. Klik "Input Data Massal ARKAS" untuk mengunggah PDF RKAS dari ARKAS (atau CSV/Excel hasil konversinya).
                 </td></tr>
               )}
               {arkasData.map((r) => (
@@ -463,7 +472,7 @@ export default function Keuangan() {
                   <td>{r.kode_rekening || '-'}</td>
                   <td>{r.kode_kegiatan || '-'}</td>
                   <td className={r.is_item ? '' : 'font-medium'}>{r.uraian}</td>
-                  <td className="font-medium">{formatRupiah(r.jumlah)}</td>
+                  <td className="font-medium">{r.is_item ? formatRupiah(r.jumlah) : ''}</td>
                   <td>{r.status}</td>
                   <td>
                     <div className="flex items-center justify-end">
