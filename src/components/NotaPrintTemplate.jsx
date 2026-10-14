@@ -40,6 +40,10 @@ function Blank({ value, width, align = 'left', garis, kertas }) {
 // `tema.ukuran` (148 / 120 / 100 mm) supaya mirip nota toko asli.
 const MIN_ROWS = 6
 
+// Jarak nota dari tepi bawah kertas saat posisi 'bawah' (hanya saat cetak).
+// Naikkan angkanya bila masih terpotong, turunkan bila terlalu tinggi.
+const JARAK_AMAN_BAWAH = '16mm'
+
 /**
  * Props:
  *  - sekolah: { nama, alamat, kota } (opsional)
@@ -75,12 +79,15 @@ const NotaPrintTemplate = forwardRef(function NotaPrintTemplate(
   // 'tengah' di jalur cetak langsung (tanpa pembungkus .lembar-nota) didekati
   // dengan margin atas tetap; di pratinjau, pembungkuslah yang menempatkannya.
   const jarakAtas = t.posisiV === 'tengah' && !pratinjau ? '60mm' : '0'
+  // Saat menempel ke bawah kertas, sisakan jarak dari tepi bawah supaya tidak
+  // masuk area yang tidak bisa dicetak printer (Canon iP2700 ± 14 mm).
+  const jarakBawah = anchorBawah && !pratinjau ? JARAK_AMAN_BAWAH : '0'
   const margin =
     t.posisiH === 'tengah'
-      ? `${jarakAtas} auto 0`
+      ? `${jarakAtas} auto ${jarakBawah}`
       : t.posisiH === 'kanan'
-        ? `${jarakAtas} 0 0 auto`
-        : `${jarakAtas} 0 0 0`
+        ? `${jarakAtas} 0 ${jarakBawah} auto`
+        : `${jarakAtas} 0 ${jarakBawah} 0`
 
   const sel = { borderColor: p.line }
 
