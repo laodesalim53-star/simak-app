@@ -9,10 +9,10 @@ import { useAuth } from '../lib/AuthContext'
  * Tampilan cetak A4 landscape: kop identitas, A. Penerimaan, B. Belanja
  * dengan alokasi per sumber dana (Belanja Operasi / Belanja Modal).
  *
- * Sumber data:
+ * Sumber data (semuanya dibatasi sekolah_id akun yang login):
  *   - arkas_anggaran   (baris belanja + kolom alok_*)
  *   - arkas_penerimaan (bagian A)
- *   - profil_sekolah   (npsn, nama_sekolah, alamat, kabupaten, provinsi)
+ *   - profil_sekolah   (npsn, nama_sekolah, alamat, kabupaten, provinsi, penandatangan)
  *
  * Pakai di Keuangan.jsx:
  *   {showRkas && <RkasCetak tahun={tahun} onClose={() => setShowRkas(false)} />}
@@ -51,6 +51,13 @@ const WARNA = {
 
 const num = (v) => Number(v) || 0
 const fmt = (n) => new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(num(n))
+
+// Kode kegiatan selalu diakhiri titik (mis. "08.04.08."); samakan supaya "08.04" tidak
+// ikut mencocokkan "08.045".
+const dgTitik = (k) => {
+  const s = (k || '').trim()
+  return s && !s.endsWith('.') ? `${s}.` : s
+}
 
 const CSS_CETAK = `
   @media print {
@@ -106,31 +113,42 @@ export default function RkasCetak({ tahun, onClose }) {
   const [savingTtd, setSavingTtd] = useState(false)
 
   async function muat() {
+    // Profil belum termuat: tunggu (efek akan jalan lagi saat sekolahId tersedia).
+    // Tidak ada data sekolah lain yang dipakai sebagai cadangan.
+    if (!sekolahId) return
     setLoading(true)
     setError('')
     try {
-      // Penerimaan dipisah per sekolah (sekolah_id akun yang login)
-      let qPen = supabase.from('arkas_penerimaan').select('*').eq('tahun_anggaran', String(tahun))
-      if (sekolahId) qPen = qPen.eq('sekolah_id', sekolahId)
-
-      const [rA, rP] = await Promise.all([
-        supabase.from('arkas_anggaran').select('*').eq('tahun_anggaran', String(tahun)).order('no_urut', { ascending: true }),
-        qPen.order('no_urut', { ascending: true }),
+      const [rA, rP, rS] = await Promise.all([
+        supabase
+          .from('arkas_anggaran')
+          .select('*')
+          .eq('sekolah_id', sekolahId)
+          .eq('tahun_anggaran', String(tahun))
+          .order('no_urut', { ascending: true }),
+        supabase
+          .from('arkas_penerimaan')
+          .select('*')
+          .eq('sekolah_id', sekolahId)
+          .eq('tahun_anggaran', String(tahun))
+          .order('no_urut', { ascending: true }),
+        supabase
+          .from('profil_sekolah')
+          .select('*')
+          .eq('sekolah_id', sekolahId)
+          .limit(1)
+          .maybeSingle(),
       ])
       if (rA.error) throw rA.error
       setRows(rA.data || [])
       // Tabel penerimaan belum dibuat/diperbarui → tetap tampilkan, nilai 0
       setPenRows(rP.error ? [] : rP.data || [])
-      if (rP.error) setError('Tabel arkas_penerimaan belum sesuai. Jalankan rkas_migrasi.sql versi terbaru di Supabase.')
+      setSekolah(rS.error ? {} : rS.data || {})
 
-      let q = supabase.from('profil_sekolah').select('*')
-      if (sekolahId) q = q.eq('sekolah_id', sekolahId)
-      let { data: prof, error: eProf } = await q.limit(1).maybeSingle()
-      if (eProf) {
-        const r2 = await supabase.from('profil_sekolah').select('*').limit(1).maybeSingle()
-        prof = r2.data
-      }
-      setSekolah(prof || {})
+      const pesan = []
+      if (rP.error) pesan.push('Tabel arkas_penerimaan belum sesuai. Jalankan rkas_migrasi.sql versi terbaru di Supabase.')
+      if (rS.error) pesan.push('Gagal memuat profil sekolah: ' + rS.error.message)
+      if (pesan.length) setError(pesan.join(' '))
     } catch (e) {
       setError('Gagal memuat data: ' + (e.message || e))
     } finally {
@@ -170,9 +188,13 @@ export default function RkasCetak({ tahun, onClose }) {
   }
 
   async function simpanPen() {
+    if (!sekolahId) {
+      alert('Profil akun belum termuat. Coba lagi sebentar.')
+      return
+    }
     setSavingPen(true)
     const payload = penerimaan.map((p, i) => ({
-      sekolah_id: sekolahId || null,
+      sekolah_id: sekolahId,
       tahun_anggaran: String(tahun),
       kode: p.kode,
       uraian: p.uraian,
@@ -229,10 +251,13 @@ export default function RkasCetak({ tahun, onClose }) {
       bendahara_nama: kosongJadiNull(formTtd.bendahara),
       bendahara_nip: kosongJadiNull(formTtd.nipBendahara),
     }
-    let q = supabase.from('profil_sekolah').update(payload)
+    if (!sekolahId) {
+      alert('Profil akun belum termuat. Coba lagi sebentar.')
+      return
+    }
+    let q = supabase.from('profil_sekolah').update(payload).eq('sekolah_id', sekolahId)
     if (sekolah.id !== undefined && sekolah.id !== null) q = q.eq('id', sekolah.id)
-    else if (sekolah.sekolah_id) q = q.eq('sekolah_id', sekolah.sekolah_id)
-    else {
+    else if (!sekolah.sekolah_id) {
       alert('Profil sekolah tidak ditemukan, isi dulu lewat halaman Profil Sekolah.')
       return
     }
@@ -258,12 +283,30 @@ export default function RkasCetak({ tahun, onClose }) {
 
     const hasil = rows.map((r, i) => {
       const kode = (r.kode_kegiatan || '').trim()
+      const rekening = (r.kode_rekening || '').trim()
       const depth = kode ? kode.split('.').filter(Boolean).length : 0
       const tipe = r.is_item ? 'item' : depth <= 1 ? 'standar' : depth === 2 ? 'kegiatan' : 'sub'
 
-      // Baris induk yang jumlahnya kosong → dijumlahkan dari rincian di bawahnya
-      const turunan = !r.is_item && kode ? items.filter((it) => (it.kode_kegiatan || '').trim().startsWith(kode)) : []
-      const ambil = (k) => num(r[k]) || (turunan.length ? jumlahkan(turunan, k) : 0)
+      // Rincian yang dijumlahkan ke baris induk:
+      //  - induk REKENING (punya kode rekening): hanya rincian dengan rekening DAN kegiatan yang sama.
+      //    (Satu kegiatan bisa punya beberapa rekening; jangan dicampur.)
+      //  - induk KEGIATAN/standar (tanpa kode rekening): semua rincian di bawah kode kegiatannya.
+      let turunan = []
+      if (!r.is_item) {
+        if (rekening) {
+          turunan = items.filter(
+            (it) =>
+              (it.kode_rekening || '').trim() === rekening &&
+              dgTitik(it.kode_kegiatan) === dgTitik(kode)
+          )
+        } else if (kode) {
+          const awalan = dgTitik(kode)
+          turunan = items.filter((it) => dgTitik(it.kode_kegiatan).startsWith(awalan))
+        }
+      }
+      // Ada rincian → jumlah selalu dihitung dari rincian (konsisten dengan total bawah).
+      // Tidak ada → pakai nilai tersimpan.
+      const ambil = (k) => (turunan.length ? jumlahkan(turunan, k) : num(r[k]))
 
       const alok = {}
       KOLOM_ALOKASI.forEach((k) => { alok[k] = ambil(k) })
@@ -506,7 +549,7 @@ export default function RkasCetak({ tahun, onClose }) {
                 })}
                 {baris.length > 0 && (
                   <tr style={{ fontWeight: 700, background: '#f3f4f6' }}>
-                    <td colSpan={4}>Total Belanja</td>
+                    <td colSpan={4} className="ctr">Jumlah</td>
                     <td className="num">{fmt(total.jumlah)}</td>
                     {KOLOM_ALOKASI.map((k) => (
                       <td key={k} className="num">{fmt(total.alok[k])}</td>
@@ -523,7 +566,7 @@ export default function RkasCetak({ tahun, onClose }) {
                 <div style={{ fontWeight: 700 }}>Komite Sekolah</div>
                 <div style={{ height: 56 }} />
                 <div style={{ display: 'inline-block', minWidth: '70%', borderBottom: '1px solid #000', fontWeight: 700 }}>
-                  {ttd.komite || ' '}
+                  {ttd.komite || ' '}
                 </div>
               </div>
 
@@ -532,7 +575,7 @@ export default function RkasCetak({ tahun, onClose }) {
                 <div style={{ fontWeight: 700 }}>Kepala Sekolah</div>
                 <div style={{ height: 56 }} />
                 <div style={{ display: 'inline-block', minWidth: '55%', borderBottom: '1px solid #000', fontWeight: 700 }}>
-                  {ttd.kepsek || ' '}
+                  {ttd.kepsek || ' '}
                 </div>
                 <div>NIP: {ttd.nipKepsek || '-'}</div>
               </div>
@@ -544,7 +587,7 @@ export default function RkasCetak({ tahun, onClose }) {
                 <div style={{ fontWeight: 700 }}>Bendahara Sekolah</div>
                 <div style={{ height: 56 }} />
                 <div style={{ display: 'inline-block', minWidth: '55%', borderBottom: '1px solid #000', fontWeight: 700 }}>
-                  {ttd.bendahara || ' '}
+                  {ttd.bendahara || ' '}
                 </div>
                 <div>NIP: {ttd.nipBendahara || '-'}</div>
               </div>
