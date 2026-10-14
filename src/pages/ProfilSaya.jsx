@@ -1708,6 +1708,8 @@ export default function ProfilSaya() {
               tanggal_cpns: row.tanggal_cpns ? String(row.tanggal_cpns).slice(0, 10) : '',
               tmt_pengangkatan: row.tmt_pengangkatan ? String(row.tmt_pengangkatan).slice(0, 10) : '',
               tmt_pns: row.tmt_pns ? String(row.tmt_pns).slice(0, 10) : '',
+              tmt_pangkat: row.tmt_pangkat ? String(row.tmt_pangkat).slice(0, 10) : '',
+              tmt_kgb: row.tmt_kgb ? String(row.tmt_kgb).slice(0, 10) : '',
               jumlah_anak_tanggungan:
                 row.jumlah_anak_tanggungan === null || row.jumlah_anak_tanggungan === undefined
                   ? ''
@@ -1938,6 +1940,8 @@ export default function ProfilSaya() {
       tmt_pengangkatan: data.tmt_pengangkatan || null,
       lembaga_pengangkatan: data.lembaga_pengangkatan,
       tmt_pns: data.tmt_pns || null,
+      tmt_pangkat: data.tmt_pangkat || null,
+      tmt_kgb: data.tmt_kgb || null,
       sudah_lisensi_kepsek: data.sudah_lisensi_kepsek,
       pernah_diklat_pengawas: data.pernah_diklat_pengawas,
       karpeg: data.karpeg,
@@ -2108,6 +2112,8 @@ export default function ProfilSaya() {
     { label: 'TMT Pengangkatan', value: data.tmt_pengangkatan },
     { label: 'Lembaga Pengangkatan', value: data.lembaga_pengangkatan },
     { label: 'TMT PNS', value: data.tmt_pns },
+    { label: 'TMT Pangkat Terakhir', value: data.tmt_pangkat },
+    { label: 'TMT KGB Terakhir', value: data.tmt_kgb },
     { label: 'Karpeg', value: data.karpeg },
     { label: 'Karis/Karsu', value: data.karis_karsu },
     { label: 'NUKS', value: data.nuks },
@@ -2468,6 +2474,22 @@ export default function ProfilSaya() {
                 className="input w-full"
                 value={data.tmt_pns || ''}
                 onChange={(e) => setData({ ...data, tmt_pns: e.target.value })}
+              />
+            </Field>
+            <Field label="TMT Pangkat Terakhir">
+              <input
+                type="date"
+                className="input w-full"
+                value={data.tmt_pangkat || ''}
+                onChange={(e) => setData({ ...data, tmt_pangkat: e.target.value })}
+              />
+            </Field>
+            <Field label="TMT KGB Terakhir">
+              <input
+                type="date"
+                className="input w-full"
+                value={data.tmt_kgb || ''}
+                onChange={(e) => setData({ ...data, tmt_kgb: e.target.value })}
               />
             </Field>
             <Field label="Karpeg">
