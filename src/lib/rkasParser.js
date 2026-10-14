@@ -319,6 +319,7 @@ export function parseRkasMentah(baris, tahunCadangan = '') {
   let tanpaAlokasi = 0
   let tidakCocok = 0
   let tanpaKode = 0
+  const contohTanpaAlokasi = []
 
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i]
@@ -425,13 +426,27 @@ export function parseRkasMentah(baris, tahunCadangan = '') {
   const belanja = []
   mentah.forEach((m, idx) => {
     const berikut = mentah[idx + 1]
-    const header = m.tipe === 'kegiatan' || (m.tipe === 'rekening' && berikut && berikut.tipe === 'anak')
+    const sebelum = mentah[idx - 1]
+    // Di format ARKAS, baris induk rekening (mis. "Belanja Makanan dan Minuman Jamuan Tamu")
+    // dan rincian di bawahnya (001., 002., ...) SAMA-SAMA membawa kode rekening + kode kegiatan.
+    // Induk = baris pertama dari rangkaian >= 2 baris berurutan yang kodenya persis sama.
+    const samaKode = (a, b) =>
+      !!a && !!b && a.tipe === 'rekening' && b.tipe === 'rekening' &&
+      a.kode_rekening === b.kode_rekening && a.kode_kegiatan === b.kode_kegiatan
+    const header =
+      m.tipe === 'kegiatan' ||
+      (m.tipe === 'rekening' &&
+        !samaKode(sebelum, m) &&
+        (samaKode(m, berikut) || (berikut && berikut.tipe === 'anak')))
     const sumAlok = KOLOM_ALOKASI.reduce((a, k) => a + m.alok[k], 0)
 
     let jumlah = 0
     if (!header) {
       jumlah = m.jml !== null && m.jml !== 0 ? m.jml : sumAlok
-      if (m.tipe !== 'kegiatan' && jumlah > 0 && sumAlok === 0 && peta && peta.alokasi.length) tanpaAlokasi++
+      if (m.tipe !== 'kegiatan' && jumlah > 0 && sumAlok === 0 && peta && peta.alokasi.length) {
+        tanpaAlokasi++
+        if (contohTanpaAlokasi.length < 3) contohTanpaAlokasi.push(`no ${belanja.length + 1}: ${m.uraian.slice(0, 40)}`)
+      }
       if (sumAlok > 0 && Math.abs(sumAlok - jumlah) > 1) tidakCocok++
       if (!m.kode_rekening) tanpaKode++
     }
@@ -451,7 +466,7 @@ export function parseRkasMentah(baris, tahunCadangan = '') {
   })
 
   if (gabungLanjutan) peringatan.add(`${gabungLanjutan} baris uraian yang terpotong digabung ke baris di atasnya.`)
-  if (tanpaAlokasi) peringatan.add(`${tanpaAlokasi} rincian punya jumlah tetapi alokasi sumber dananya kosong.`)
+  if (tanpaAlokasi) peringatan.add(`${tanpaAlokasi} rincian punya jumlah tetapi alokasi sumber dananya kosong (mis. ${contohTanpaAlokasi.join('; ')}).`)
   if (tidakCocok) peringatan.add(`${tidakCocok} rincian punya jumlah yang tidak sama dengan total alokasi sumber dananya.`)
   if (tanpaKode) peringatan.add(`${tanpaKode} rincian tidak punya kode rekening.`)
 
