@@ -56,7 +56,14 @@ const CSS_CETAK = `
   @media print {
     @page { size: A4 landscape; margin: 8mm; }
     #root { display: none !important; }
-    html, body { background: #fff !important; }
+    html, body { background: #fff !important; height: auto !important; overflow: visible !important; }
+    /* index.css punya aturan global "body * { visibility: hidden }" (untuk Kuitansi/Nota).
+       Isi RKAS harus dinyatakan terlihat lagi, kalau tidak halaman cetak kosong. */
+    #rkas-portal, #rkas-portal * {
+      visibility: visible !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
     #rkas-portal { position: static !important; background: #fff !important; overflow: visible !important; padding: 0 !important; }
     #rkas-portal .rkas-noprint { display: none !important; }
     #rkas-portal .rkas-sheet { box-shadow: none !important; margin: 0 !important; padding: 0 !important; width: 100% !important; max-width: none !important; }
@@ -318,7 +325,7 @@ export default function RkasCetak({ tahun, onClose }) {
             <X size={16} /> Tutup
           </button>
           <span className="text-xs text-ink-700/60">
-            Pilih ukuran A4 landscape, skala 100%, dan aktifkan "Background graphics" di dialog cetak.
+            Dialog cetak otomatis A4 landscape. Pilih skala 100% (Default) dan matikan "Headers and footers".
           </span>
         </div>
 
