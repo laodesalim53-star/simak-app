@@ -179,9 +179,20 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
     const hasil = parseRkasMentah(matriksSheets.flat(), tahunAnggaran || '')
     setMode('rkas')
     setPenerimaan(hasil.penerimaan)
-    setPeringatan(hasil.peringatan)
     setTahunTerdeteksi(hasil.tahunTerdeteksi)
     setInvalidCount(0)
+
+    // Pengaman: total rincian belanja harus sama dengan total penerimaan.
+    // Hanya peringatan (tidak memblokir) karena RKAS memang bisa belum seimbang.
+    const catatan = [...hasil.peringatan]
+    const totalBelanja = hasil.belanja.filter((b) => b.is_item).reduce((a, b) => a + b.jumlah, 0)
+    const totalPenerimaan = hasil.penerimaan.reduce((a, p) => a + p.jumlah, 0)
+    if (totalPenerimaan > 0 && hasil.belanja.length > 0 && Math.abs(totalBelanja - totalPenerimaan) > 1) {
+      catatan.push(
+        `Total belanja Rp ${totalBelanja.toLocaleString('id-ID')} tidak sama dengan total penerimaan Rp ${totalPenerimaan.toLocaleString('id-ID')}. Periksa pratinjau sebelum menyimpan.`
+      )
+    }
+    setPeringatan(catatan)
 
     const tahunOk = /^\d{4}$/.test(hasil.tahun)
     setRows(tahunOk ? hasil.belanja : [])
@@ -252,7 +263,8 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
     const konfirmasi = confirm(
       `Data ARKAS pada ${kelompok.length} tahun anggaran (${kelompok.join(', ')}) yang sudah ada akan DIHAPUS dan diganti dengan ${rows.length} baris dari file ini.` +
       (mode === 'rkas' && penerimaan.length > 0 ? ` Data penerimaan (${penerimaan.length} baris) juga ikut diperbarui.` : '') +
-      ' Lanjutkan?'
+      (!npsn ? '\n\nPERHATIAN: NPSN sekolah tidak terkirim ke formulir ini, sehingga penghapusan tidak dibatasi per sekolah.' : '') +
+      '\n\nLanjutkan?'
     )
     if (!konfirmasi) return
 
