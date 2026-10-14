@@ -17,7 +17,8 @@
  *   4. Baris sebelum tabel belanja (judul, tahun anggaran, penerimaan) diteruskan apa adanya.
  */
 
-const RE_KEGIATAN = /^\d{2}\.\d{2}\.\d{2}\.?$/
+// 03.  03.01.  03.01.01.  -> kode standar / program / kegiatan (1 sampai 3 kelompok dua digit)
+const RE_KEGIATAN = /^\d{2}(\.\d{2}){0,2}\.$|^\d{2}\.\d{2}(\.\d{2})?$/
 const RE_REKENING = /^\d\.\d\.\d{2}(\.\d{2,4})*\.?$/
 const RE_ANGKA = /^-?\d{1,3}(\.\d{3})+(,\d+)?$|^0$/
 const RE_SUMBER = /reguler|daerah|afirmasi|kinerja|silpa|sisa lebih|lainnya|lain-lain|\blain\b/i
@@ -57,7 +58,12 @@ function susunBaris(items) {
     for (const it of urut) {
       const prev = sel[sel.length - 1]
       const batas = Math.max(5, it.h * 0.9)
-      if (prev && it.x - prev.x1 <= batas) {
+      // kolom No, kode kegiatan, dan kode rekening sering berdempetan dengan uraian:
+      // sel-sel itu tidak boleh digabung dengan teks di sebelahnya.
+      const kodeIni = /^(\d{2}(\.\d{2}){0,2}\.|\d{2}\.\d{2}(\.\d{2})?|\d\.\d\.\d{2}(\.\d{2,4})*\.?)$/.test(it.str.trim())
+      const prevKode = prev && /^(\d{2}(\.\d{2}){0,2}\.|\d{2}\.\d{2}(\.\d{2})?|\d\.\d\.\d{2}(\.\d{2,4})*\.?)$/.test(prev.teks.trim())
+      const prevNo = prev && sel.length === 1 && /^\d{1,3}$/.test(prev.teks.trim())
+      if (prev && !kodeIni && !prevKode && !prevNo && it.x - prev.x1 <= batas) {
         const perluSpasi = it.x - prev.x1 > 1 && !prev.teks.endsWith(' ') && !it.str.startsWith(' ')
         prev.teks += (perluSpasi ? ' ' : '') + it.str
         prev.x1 = it.x + it.w
@@ -69,8 +75,39 @@ function susunBaris(items) {
       s.teks = s.teks.replace(/\s+/g, ' ').trim()
       s.cx = (s.x0 + s.x1) / 2
     })
-    return sel.filter((s) => s.teks)
+    return pecahKodeDepan(sel.filter((s) => s.teks))
   })
+}
+
+const adalahKodeTeks = (t) => RE_KEGIATAN.test(t) || RE_REKENING.test(t)
+
+/**
+ * Kadang pdf.js menyatukan "No", kode rekening, kode kegiatan, dan uraian menjadi satu
+ * potongan teks, mis. "4 5.1.02.01.01.0053 03.01.01. Belanja Makanan". Bagian depan
+ * yang berupa nomor/kode dipisah lagi menjadi sel sendiri.
+ */
+function pecahKodeDepan(sel) {
+  const hasil = []
+  sel.forEach((s, idx) => {
+    const token = s.teks.split(' ')
+    let i = 0
+    const depan = []
+    if (idx === 0 && /^\d{1,3}$/.test(token[0]) && token.length > 1 && adalahKodeTeks(token[1])) {
+      depan.push(token[0])
+      i = 1
+    }
+    while (i < token.length - 1 && adalahKodeTeks(token[i])) {
+      depan.push(token[i])
+      i++
+    }
+    if (!depan.length) {
+      hasil.push(s)
+      return
+    }
+    depan.forEach((t) => hasil.push({ teks: t, x0: s.x0, x1: s.x0, cx: s.x0 }))
+    hasil.push({ ...s, teks: token.slice(i).join(' ') })
+  })
+  return hasil
 }
 
 /* ------------------------------------------------------------------ */
@@ -244,7 +281,9 @@ export function itemsKeMatriks(halaman) {
 
     const row = new Array(lebar).fill('')
     const uraian = []
-    for (const s of b) {
+    // kolom "No" di paling kiri (angka 1-3 digit berdiri sendiri) dibuang
+    const bTanpaNo = b.length > 1 && /^\d{1,3}$/.test(b[0].teks) ? b.slice(1) : b
+    for (const s of bTanpaNo) {
       if (RE_KEGIATAN.test(s.teks)) row[0] = s.teks
       else if (RE_REKENING.test(s.teks)) row[1] = s.teks
       else if (RE_ANGKA.test(s.teks)) row[3 + kolomAngka(s)] = s.teks
