@@ -208,6 +208,7 @@ function getGroupsAdmin(
         { to: '/pengajuan-surat-aktif', label: 'Pengajuan Surat Aktif', icon: FileCheck2 },
         { to: '/perbaikan-data-siswa', label: 'Perbaikan Data Siswa', icon: UserCog },
         { to: '/surat', label: 'Surat Masuk/Keluar', icon: Mail },
+        { to: '/kelengkapan-surat-pengantar', label: 'Kelengkapan Surat Pengantar', icon: FileText },
         // PERBAIKAN: Portal Ujian berada di bawah path /gudang-sk/portal-ujian,
         // sehingga NavLink "Gudang SK" ikut aktif di halaman Portal Ujian
         // (dan anak-anaknya, mis. Laporan Asesmen). `excludePrefix` membuat
