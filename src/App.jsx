@@ -72,7 +72,8 @@ const SupervisiAkademik = lazy(() => import('./pages/SupervisiAkademik'))    // 
 const KinerjaTendik = lazy(() => import('./pages/KinerjaTendik'))   
 const LaporanDaftarHadirGuru = lazy(() => import('./pages/LaporanDaftarHadirGuru'))
 const PusatLaporanGuru = lazy(() => import('./pages/PusatLaporanGuru'))
-const GudangSK = lazy(() => import('./pages/GudangSK'))                    
+const GudangSK = lazy(() => import('./pages/GudangSK'))  
+const KelengkapanSuratPengantar = lazy(() => import('./pages/KelengkapanSuratPengantar'))
 const SKBebanMengajar = lazy(() => import('./pages/SKBebanMengajar')) 
 const KeteranganMelaksanakanTugas = lazy(() => import('./pages/KeteranganMelaksanakanTugas'))
 const SKWaliKelas = lazy(() => import('./pages/SKWaliKelas'))
@@ -467,7 +468,8 @@ export default function App() {
           <Route path="/gudang-sk/portal-ujian/pakta-integritas" element={<ProtectedRoute adminOnly><PaktaIntegritas /></ProtectedRoute>} />
           <Route path="/gudang-sk/portal-ujian/berita-acara-ujian-sekolah" element={<ProtectedRoute adminOnly><BeritaAcaraUjianSekolah /></ProtectedRoute>} />
           <Route path="/gudang-sk/portal-ujian/pakta-integritas-pengawas" element={<ProtectedRoute adminOnly><PaktaIntegritasPengawas /></ProtectedRoute>} />
-<Route path="/gudang-sk/portal-ujian/laporan-asesmen" element={<ProtectedRoute adminOnly><LaporanAsesmenSekolah /></ProtectedRoute>} />
+          <Route path="/gudang-sk/portal-ujian/laporan-asesmen" element={<ProtectedRoute adminOnly><LaporanAsesmenSekolah /></ProtectedRoute>} />
+          <Route path="/kelengkapan-surat-pengantar" element={<ProtectedRoute adminOnly><KelengkapanSuratPengantar /></ProtectedRoute>} />
 {/* Cetak Sampul Laporan — satu halaman dengan sidebar menu berisi jenis
     laporan sesuai tipe tenant (sekolah: Bulanan, Semester, 8355, LPJ BOS, dst;
     kantor & puskesmas: Bulanan, Tahunan, Keuangan, Inventaris, Kegiatan).
