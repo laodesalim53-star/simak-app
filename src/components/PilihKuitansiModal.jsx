@@ -12,7 +12,7 @@ const SUMBER = [
 
 // ---- Pemetaan sumber -> bentuk dataAwal untuk KuitansiJasaModal ----
 function ringkasBarang(daftar = []) {
-  return daftar
+  return (Array.isArray(daftar) ? daftar : [])
     .filter((b) => b.nama)
     .map((b) => `${b.nama} (${b.jumlah}${b.satuan ? ' ' + b.satuan : ''})`)
     .join(', ')
@@ -64,6 +64,14 @@ function dariNota(n) {
   }
 }
 
+// Teks yang dicari: nomor, keterangan, tanggal (format ISO & tampilan),
+// jumlah (angka mentah & format rupiah), serta kolom tambahan per sumber.
+function teksCari(r) {
+  const jumlah = r.jumlah == null ? '' : `${r.jumlah} ${formatRupiah(r.jumlah)}`
+  const tgl = r.tanggal ? `${r.tanggal} ${formatTanggal(r.tanggal)}` : ''
+  return [r.judul, r.ket, tgl, jumlah, r.ekstra].filter(Boolean).join(' ').toLowerCase()
+}
+
 export default function PilihKuitansiModal({ onPilih, onClose }) {
   const { sekolahId } = useAuth()
   const [sumber, setSumber] = useState('kwitansi')
@@ -96,30 +104,41 @@ export default function PilihKuitansiModal({ onPilih, onClose }) {
     return () => { batal = true }
   }, [sekolahId])
 
-  // Baris seragam untuk ditampilkan: { id, tanggal, judul, ket, jumlah, ambil() }
+  // Baris seragam untuk ditampilkan: { id, tanggal, judul, ket, jumlah, ekstra, ambil() }
   const baris = useMemo(() => {
-    const q = cari.trim().toLowerCase()
     let list = []
     if (sumber === 'bku') {
       list = data.bku.map((b) => ({
         id: b.id, tanggal: b.tanggal, judul: b.nomor_bukti || '-',
-        ket: b.uraian, jumlah: b.pengeluaran, ambil: () => dariBku(b),
+        ket: b.uraian, jumlah: b.pengeluaran,
+        ekstra: b.kode_rekening || '',
+        ambil: () => dariBku(b),
       }))
     } else if (sumber === 'kwitansi') {
       list = data.kwitansi.map((k) => ({
         id: k.id, tanggal: k.tanggal, judul: k.nomor_kwitansi || '-',
         ket: `${k.sudah_terima_dari || ''} — ${k.untuk_pembayaran || ''}`,
-        jumlah: k.jumlah_uang, ambil: () => dariKwitansi(k),
+        jumlah: k.jumlah_uang,
+        ekstra: `${k.nama_penerima || ''} ${k.mata_anggaran || ''}`,
+        ambil: () => dariKwitansi(k),
       }))
     } else {
       list = data.nota.map((n) => ({
         id: n.id, tanggal: n.tanggal, judul: n.nomor_nota || '-',
         ket: `${n.nama_toko || ''} — ${ringkasBarang(n.daftar_barang)}`,
-        jumlah: n.total_belanja, ambil: () => dariNota(n),
+        jumlah: n.total_belanja,
+        ekstra: '',
+        ambil: () => dariNota(n),
       }))
     }
-    if (!q) return list
-    return list.filter((r) => `${r.judul} ${r.ket}`.toLowerCase().includes(q))
+
+    // Beberapa kata dipisah spasi: semua kata harus ada (urutan bebas).
+    const kata = cari.trim().toLowerCase().split(/\s+/).filter(Boolean)
+    if (kata.length === 0) return list
+    return list.filter((r) => {
+      const teks = teksCari(r)
+      return kata.every((k) => teks.includes(k))
+    })
   }, [sumber, data, cari])
 
   return (
@@ -147,8 +166,16 @@ export default function PilihKuitansiModal({ onPilih, onClose }) {
         </div>
 
         <div className="relative mb-3">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-700/40" />
-          <input className="input-field pl-9" placeholder="Cari nomor atau keterangan..." value={cari} onChange={(e) => setCari(e.target.value)} />
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-700/40 pointer-events-none" />
+          {/* paddingLeft inline: class .input-field bisa menimpa utilitas pl-9 sehingga ikon menimpa teks */}
+          <input
+            className="input-field"
+            style={{ paddingLeft: '2.25rem' }}
+            placeholder="Cari nomor, keterangan, tanggal, atau jumlah..."
+            value={cari}
+            onChange={(e) => setCari(e.target.value)}
+            autoFocus
+          />
         </div>
 
         {error && <div className="p-3 mb-3 rounded-lg text-sm text-red-900 bg-red-900/5">{error}</div>}
