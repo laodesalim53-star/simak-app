@@ -4,9 +4,10 @@ import Layout from '../components/Layout'
 import { eksporExcel, eksporPDF } from '../lib/exportUtils'
 import ArkasImportModal from '../components/ArkasImportModal'
 import BkuImportModal from '../components/BkuImportModal'
+import RkasCetak from '../components/RkasCetak'
 import {
   Plus, Pencil, Trash2, X, Loader2, TrendingUp, TrendingDown, Wallet,
-  FileDown, FileSpreadsheet, BookOpen, ClipboardList,
+  FileDown, FileSpreadsheet, BookOpen, ClipboardList, Printer,
 } from 'lucide-react'
 
 const KATEGORI_MASUK = ['SPP', 'Donasi', 'Dana BOS', 'Sumbangan', 'Lainnya']
@@ -55,6 +56,9 @@ export default function Keuangan() {
   // Tab BKU
   const [bkuData, setBkuData] = useState([])
   const [loadingBku, setLoadingBku] = useState(false)
+
+  // Cetak RKAS (tab ARKAS)
+  const [showRkas, setShowRkas] = useState(false)
 
   async function loadData() {
     setLoading(true)
@@ -298,6 +302,9 @@ export default function Keuangan() {
           </>
         ) : menu === 'arkas' ? (
           <>
+            <button className="btn-secondary" onClick={() => setShowRkas(true)}>
+              <Printer size={16} /> Cetak RKAS
+            </button>
             <button
               className="btn-secondary text-red-600"
               onClick={handleHapusSemuaArkas}
@@ -645,6 +652,9 @@ export default function Keuangan() {
           </div>
         </div>
       )}
+
+      {/* Cetak RKAS (tampilan A4 landscape, dibuka dari tab ARKAS) */}
+      {showRkas && <RkasCetak tahun={tahun} onClose={() => setShowRkas(false)} />}
     </Layout>
   )
 }
