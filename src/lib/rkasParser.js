@@ -26,7 +26,7 @@ const RE_KEGIATAN = /^\d{2}(\.\d{2}){0,2}\.$|^\d{2}\.\d{2}(\.\d{2})?$/
 const RE_REKENING = /^\d\.\d\.\d{2}(\.\d{2,4})*\.?$/
 const RE_TOTAL = /^(sub\s*)?(jumlah|total|grand\s*total)\b/i
 const RE_PENUTUP = /^(mengetahui|menyetujui|disetujui oleh|pengesahan)\b/i
-const RE_FOOTER = /^(halaman|page|hal\.)\s*\d+|dicetak|^\d+\s*(dari|of|\/)\s*\d+$/i
+const RE_FOOTER = /^(halaman|page|hal\.)\s*\d+|dicetak|^\d+\s*(dari|of|\/)\s*\d+$|^kertas kerja\b/i
 
 /* ------------------------------------------------------------------ */
 /* Pembantu umum                                                       */
@@ -316,6 +316,7 @@ export function parseRkasMentah(baris, tahunCadangan = '') {
   let state = 'awal'
   let ctx = { keg: '', rek: '' }
   let gabungLanjutan = 0
+  let tutup = false // true sesudah baris "Jumlah" akhir: teks tanpa kode sesudahnya (tanda tangan, dll.) diabaikan
   let tanpaAlokasi = 0
   let tidakCocok = 0
   let tanpaKode = 0
@@ -388,12 +389,21 @@ export function parseRkasMentah(baris, tahunCadangan = '') {
     }
     const jml = peta.jumlah >= 0 ? angka(r[peta.jumlah]) : null
 
-    if (!uraian && !kodeKeg && !kodeRek) continue
-    if (uraian && RE_TOTAL.test(uraian) && !kodeKeg && !kodeRek) continue
+    // baris lanjutan hanya berisi angka kecil (mis. "1" pada "...kelas" / "1"): tetap bagian uraian
+    const uraianAngkaKecil =
+      !uraian && peta.uraian >= 0 && /^\d{1,3}$/.test(sel[peta.uraian] || '') ? sel[peta.uraian] : ''
+
+    if (RE_TOTAL.test(uraian || '') && !kodeKeg && !kodeRek) {
+      tutup = true
+      continue
+    }
+    if (kodeKeg || kodeRek) tutup = false
+    if (tutup && !kodeKeg && !kodeRek) continue
+    if (!uraian && !uraianAngkaKecil && !kodeKeg && !kodeRek) continue
 
     // baris lanjutan: teks uraian yang terpotong ke baris berikutnya oleh konversi PDF
-    if (!kodeKeg && !kodeRek && jml === null && !adaAlokasi && uraian && mentah.length) {
-      mentah[mentah.length - 1].uraian += ' ' + uraian
+    if (!kodeKeg && !kodeRek && jml === null && !adaAlokasi && (uraian || uraianAngkaKecil) && mentah.length) {
+      mentah[mentah.length - 1].uraian += ' ' + (uraian || uraianAngkaKecil)
       gabungLanjutan++
       continue
     }
