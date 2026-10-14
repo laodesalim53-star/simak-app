@@ -2,10 +2,6 @@ import { useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { Download, X, Loader2, Search } from 'lucide-react'
 
-// Ubah ke true HANYA kalau tabel bku_kas punya kolom sekolah_id yang wajib diisi
-// dan belum diisi otomatis oleh trigger/default di database.
-const BKU_PUNYA_SEKOLAH_ID = false
-
 function formatRupiah(angka) {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(angka || 0)
 }
@@ -55,6 +51,7 @@ export default function TarikArkasModal({ tahun, bulan, sekolahId, onSelesai }) 
       supabase
         .from('bku_kas')
         .select('arkas_id, pengeluaran')
+        .eq('sekolah_id', sekolahId)
         .eq('tahun', tahun)
         .not('arkas_id', 'is', null),
     ])
@@ -167,7 +164,7 @@ export default function TarikArkasModal({ tahun, bulan, sekolahId, onSelesai }) 
         arkas_id: String(it.id),
         kode_rekening: it.kode_rekening || null,
         kode_kegiatan: it.kode_kegiatan || null,
-        ...(BKU_PUNYA_SEKOLAH_ID ? { sekolah_id: sekolahId } : {}),
+        sekolah_id: sekolahId,
       })
     }
 
