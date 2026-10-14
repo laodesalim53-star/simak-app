@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 
 // ============================================================
-// PENGATURAN — sesuaikan bila nama tabel/kolom di Supabase berbeda
+// PENGATURAN
 // ============================================================
 const TABEL_GURU = 'guru'
 
@@ -16,32 +16,22 @@ const BULAN_PERINGATAN = 6
 
 const KUNCI_TUTUP = 'notif_kepegawaian_ditutup'
 
-// Kolom yang dicoba (urut) pada tabel guru.
-const KOLOM = {
-  nama: ['nama', 'nama_guru', 'nama_lengkap', 'name'],
-  status: ['status_kepegawaian', 'status_pegawai', 'jenis_kepegawaian', 'status_guru', 'status'],
-  golongan: ['pangkat_golongan', 'golongan', 'pangkat', 'golongan_ruang'],
-  tmtPangkat: ['tmt_pangkat', 'tmt_golongan', 'tmt_pangkat_terakhir', 'tmt_pangkat_golongan'],
-  tmtKgb: ['tmt_kgb', 'tmt_gaji_berkala', 'tmt_kgb_terakhir', 'tmt_gaji_berkala_terakhir', 'kgb_terakhir'],
-  tmtMulai: ['tmt_pppk', 'tmt_cpns', 'tmt_pengangkatan', 'tmt_sk_pertama', 'tmt_pns'],
-}
-
-function pilih(g, kolom) {
-  for (const k of kolom) {
-    if (g[k] !== undefined && g[k] !== null && g[k] !== '') return g[k]
-  }
-  return ''
-}
-
+// Kolom tabel `guru` (sesuai ProfilSaya.jsx):
+//   nama_lengkap, status_kepegawaian, tanggal_cpns, tmt_pengangkatan -> sudah ada
+//   tmt_pangkat, tmt_kgb                                             -> perlu ditambahkan:
+//   alter table guru add column if not exists tmt_pangkat date;
+//   alter table guru add column if not exists tmt_kgb date;
 function bacaGuru(g) {
   return {
     id: String(g.id),
-    nama: String(pilih(g, KOLOM.nama)),
-    statusMentah: String(pilih(g, KOLOM.status)),
-    golongan: String(pilih(g, KOLOM.golongan)),
-    tmtPangkat: pilih(g, KOLOM.tmtPangkat),
-    tmtKgb: pilih(g, KOLOM.tmtKgb),
-    tmtMulai: pilih(g, KOLOM.tmtMulai),
+    nama: g.nama_lengkap ? String(g.nama_lengkap) : '',
+    statusMentah: g.status_kepegawaian ? String(g.status_kepegawaian) : '',
+    tmtPangkat: g.tmt_pangkat || '',
+    tmtKgb: g.tmt_kgb || '',
+    tmtPengangkatan: g.tmt_pengangkatan || '',
+    tmtCpns: g.tanggal_cpns || '',
+    // true bila kolom tmt_pangkat/tmt_kgb memang ada di tabel (walau nilainya kosong)
+    adaKolomTmt: 'tmt_pangkat' in g || 'tmt_kgb' in g,
   }
 }
 
@@ -52,29 +42,6 @@ function jenisKepegawaian(raw) {
   if (/\bnon\b|non-|honor|gtt|gty|tidak tetap/.test(s)) return null
   if (/p3k|pppk/.test(s)) return 'pppk'
   if (/pns|cpns|asn/.test(s)) return 'pns'
-  return null
-}
-
-// ============================================================
-// Mencari data guru milik pengguna yang sedang login
-// Urutan: profil.guru_id -> NIP -> NUPTK -> email -> nama
-// ============================================================
-async function cariGuruSaya({ sekolahId, profil, user }) {
-  const dasar = () => supabase.from(TABEL_GURU).select('*').eq('sekolah_id', sekolahId)
-  const percobaan = []
-
-  if (profil?.guru_id) percobaan.push(() => dasar().eq('id', profil.guru_id))
-  if (profil?.nip) percobaan.push(() => dasar().eq('nip', String(profil.nip)))
-  if (profil?.nuptk) percobaan.push(() => dasar().eq('nuptk', String(profil.nuptk)))
-  if (user?.email) percobaan.push(() => dasar().ilike('email', user.email))
-  const nama = profil?.nama ?? profil?.nama_lengkap ?? profil?.full_name
-  if (nama) percobaan.push(() => dasar().ilike('nama', String(nama).trim()))
-
-  for (const buat of percobaan) {
-    const { data, error } = await buat().limit(1)
-    // error biasanya berarti kolomnya tidak ada di tabel -> coba cara berikutnya
-    if (!error && data && data.length) return data[0]
-  }
   return null
 }
 
@@ -146,11 +113,15 @@ const ATURAN = {
 const CATATAN =
   'Informasi ini ringkasan dan bukan pengganti peraturan resmi. Untuk kepastian, rujuk JDIH BKN/KemenPAN-RB atau tanyakan kepada BKD/BKPSDM dan operator kepegawaian.'
 
-// Pengingat jadwal pribadi dari data TMT guru
+// Pengingat jadwal pribadi dari data TMT guru.
+// `perkiraan` = true bila acuannya bukan TMT terakhir (mis. TMT pengangkatan/CPNS),
+// sehingga pengingat hanya ditampilkan di sekitar siklus pertama (sampai 12 bulan
+// setelah jatuh tempo). Setelah itu tidak diketahui apakah KGB sudah pernah diproses.
 function susunPengingat(g, jenis, sekarang) {
   const hasil = []
 
-  function tambah(kode, label, due) {
+  function tambah(kode, label, due, perkiraan = false) {
+    if (perkiraan && sekarang > tambahBulan(due, 12)) return
     const batas = tambahBulan(due, -BULAN_PERINGATAN)
     let tahap = null
     if (sekarang >= due) tahap = 'sudah'
@@ -169,18 +140,30 @@ function susunPengingat(g, jenis, sekarang) {
 
   const tmtPangkat = parseTanggal(g.tmtPangkat)
   const tmtKgb = parseTanggal(g.tmtKgb)
-  const tmtMulai = parseTanggal(g.tmtMulai)
+  const tmtPengangkatan = parseTanggal(g.tmtPengangkatan)
+  const tmtCpns = parseTanggal(g.tmtCpns)
 
   if (jenis === 'pns') {
     if (tmtPangkat) tambah('pangkat', 'Kenaikan Pangkat', tambahTahun(tmtPangkat, 2))
-    const acuanKgb = tmtKgb ?? tmtPangkat
-    if (acuanKgb) tambah('kgb', 'Kenaikan Gaji Berkala', tambahTahun(acuanKgb, 2))
+    if (tmtKgb) {
+      tambah('kgb', 'Kenaikan Gaji Berkala', tambahTahun(tmtKgb, 2))
+    } else if (tmtPangkat) {
+      tambah('kgb', 'Kenaikan Gaji Berkala', tambahTahun(tmtPangkat, 2))
+    } else {
+      // Belum pernah KGB / data belum diisi: acuan awal TMT CPNS atau TMT pengangkatan.
+      // Bila "Tanggal CPNS" di data Anda adalah tanggal SK (bukan TMT), ganti dengan: tmtPengangkatan
+      const awal = tmtCpns ?? tmtPengangkatan
+      if (awal) tambah('kgb', 'Kenaikan Gaji Berkala', tambahTahun(awal, 2), true)
+    }
   } else if (jenis === 'pppk') {
-    const acuanKgb = tmtKgb ?? tmtMulai
-    if (acuanKgb) tambah('kgb', 'Kenaikan Gaji Berkala', tambahTahun(acuanKgb, 2))
+    if (tmtKgb) tambah('kgb', 'Kenaikan Gaji Berkala', tambahTahun(tmtKgb, 2))
+    else if (tmtPengangkatan) tambah('kgb', 'Kenaikan Gaji Berkala', tambahTahun(tmtPengangkatan, 2), true)
   }
 
-  const adaTmt = jenis === 'pns' ? Boolean(tmtPangkat || tmtKgb) : Boolean(tmtKgb || tmtMulai)
+  const adaTmt =
+    jenis === 'pns'
+      ? Boolean(tmtPangkat || tmtKgb || tmtCpns || tmtPengangkatan)
+      : Boolean(tmtKgb || tmtPengangkatan)
   return { pengingat: hasil, adaTmt }
 }
 
@@ -232,17 +215,17 @@ function Kartu({ warna, label, judul, children, onTutup }) {
   )
 }
 
-function KartuAturan({ aturan, adaTmt, nama, onTutup }) {
+function KartuAturan({ aturan, tampilkanDataBelumLengkap, nama, onTutup }) {
   const [terbuka, setTerbuka] = useState(false)
   return (
     <Kartu warna="biru" label="Pemberitahuan untuk Anda" judul={aturan.judul} onTutup={onTutup}>
       <p className="mt-1 text-sm">
         {nama ? `Bapak/Ibu ${nama}, ` : ''}berikut ketentuan terbaru yang berkaitan dengan status kepegawaian Anda.
       </p>
-      {!adaTmt && (
+      {tampilkanDataBelumLengkap && (
         <p className="mt-2 rounded bg-white/70 p-2 text-xs text-slate-600">
-          Data TMT Anda belum lengkap sehingga pengingat jadwal belum dapat ditampilkan. Mohon hubungi operator untuk
-          melengkapinya.
+          Data TMT Anda belum lengkap sehingga pengingat jadwal belum dapat ditampilkan. Mohon lengkapi di menu Profil
+          Saya atau hubungi operator.
         </p>
       )}
       <button
@@ -273,27 +256,36 @@ function KartuAturan({ aturan, adaTmt, nama, onTutup }) {
 }
 
 // Pasang di halaman Beranda:  <PengumumanAturanKepegawaian />
-// Hanya tampil bila pengguna yang login cocok dengan data guru berstatus PNS/PPPK.
+// Hanya tampil bila akun yang login tertaut ke data guru (profil.guru_id)
+// berstatus PNS/PPPK. Admin/operator/orang tua/pegawai kantor tanpa guru_id
+// tidak melihat apa-apa.
 export default function PengumumanAturanKepegawaian() {
-  const { sekolahId: sekolahIdCtx, profil, user } = useAuth()
-  const sekolahId = sekolahIdCtx ?? profil?.sekolah_id
+  const { profil } = useAuth()
+  const guruId = profil?.guru_id
 
   const [guru, setGuru] = useState(null)
   const [ditutup, setDitutup] = useState(bacaDitutup)
 
   useEffect(() => {
-    if (!sekolahId) return
+    if (!guruId) {
+      setGuru(null)
+      return
+    }
     let batal = false
-    cariGuruSaya({ sekolahId, profil, user })
-      .then((row) => {
-        if (!batal) setGuru(row ? bacaGuru(row) : null)
+    supabase
+      .from(TABEL_GURU)
+      .select('*')
+      .eq('id', guruId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (batal) return
+        if (error) console.error('PengumumanAturanKepegawaian:', error.message)
+        setGuru(data ? bacaGuru(data) : null)
       })
-      .catch((e) => console.error('PengumumanAturanKepegawaian:', e))
     return () => {
       batal = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sekolahId, profil?.guru_id, profil?.nip, profil?.nuptk, user?.email])
+  }, [guruId])
 
   const jenis = guru ? jenisKepegawaian(guru.statusMentah) : null
 
@@ -316,6 +308,10 @@ export default function PengumumanAturanKepegawaian() {
 
   if (!pengingatTampil.length && !tampilAturan) return null
 
+  // Pemberitahuan "data TMT belum lengkap" hanya masuk akal bila guru memang bisa
+  // melengkapinya: PPPK (TMT pengangkatan) atau tabel sudah punya kolom tmt_pangkat/tmt_kgb.
+  const tampilkanDataBelumLengkap = !adaTmt && (jenis === 'pppk' || guru.adaKolomTmt)
+
   return (
     <div className="space-y-3">
       {pengingatTampil.map((p) => (
@@ -333,7 +329,12 @@ export default function PengumumanAturanKepegawaian() {
         </Kartu>
       ))}
       {tampilAturan && (
-        <KartuAturan aturan={ATURAN[jenis]} adaTmt={adaTmt} nama={guru.nama} onTutup={() => tutup(idAturan)} />
+        <KartuAturan
+          aturan={ATURAN[jenis]}
+          tampilkanDataBelumLengkap={tampilkanDataBelumLengkap}
+          nama={guru.nama}
+          onTutup={() => tutup(idAturan)}
+        />
       )}
     </div>
   )
