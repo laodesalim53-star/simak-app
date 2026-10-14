@@ -23,7 +23,7 @@ const RE_REKENING = /^\d\.\d\.\d{2}(\.\d{2,4})*\.?$/
 const RE_ANGKA = /^-?\d{1,3}(\.\d{3})+(,\d+)?$|^0$/
 const RE_SUMBER = /reguler|daerah|afirmasi|kinerja|silpa|sisa lebih|lainnya|lain-lain|\blain\b/i
 const RE_JENIS = /operasi|modal/i
-const RE_FOOTER = /^(halaman|page|hal\.)\s*\d+|dicetak|^\d+\s*(dari|of|\/)\s*\d+$/i
+const RE_FOOTER = /^(halaman|page|hal\.)\s*\d+|dicetak|^\d+\s*(dari|of|\/)\s*\d+$|^kertas kerja\b/i
 
 /* ------------------------------------------------------------------ */
 /* Tahap 1: item pdf.js -> baris -> sel                                */
@@ -63,7 +63,11 @@ function susunBaris(items) {
       const kodeIni = /^(\d{2}(\.\d{2}){0,2}\.|\d{2}\.\d{2}(\.\d{2})?|\d\.\d\.\d{2}(\.\d{2,4})*\.?)$/.test(it.str.trim())
       const prevKode = prev && /^(\d{2}(\.\d{2}){0,2}\.|\d{2}\.\d{2}(\.\d{2})?|\d\.\d\.\d{2}(\.\d{2,4})*\.?)$/.test(prev.teks.trim())
       const prevNo = prev && sel.length === 1 && /^\d{1,3}$/.test(prev.teks.trim())
-      if (prev && !kodeIni && !prevKode && !prevNo && it.x - prev.x1 <= batas) {
+      // angka (kolom Jumlah / alokasi) juga tidak boleh digabung: dua angka yang berdekatan,
+      // mis. "0" dan "11.162.600", jangan sampai menjadi satu sel "0 11.162.600".
+      const angkaIni = RE_ANGKA.test(it.str.trim())
+      const prevAngka = prev && RE_ANGKA.test(prev.teks.trim())
+      if (prev && !kodeIni && !prevKode && !prevNo && !angkaIni && !prevAngka && it.x - prev.x1 <= batas) {
         const perluSpasi = it.x - prev.x1 > 1 && !prev.teks.endsWith(' ') && !it.str.startsWith(' ')
         prev.teks += (perluSpasi ? ' ' : '') + it.str
         prev.x1 = it.x + it.w
