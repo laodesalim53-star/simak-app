@@ -5,12 +5,14 @@ import { supabase } from '../lib/supabaseClient'
 import { Upload, X, Loader2, CheckCircle2, AlertCircle, AlertTriangle, Download } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { KOLOM_ALOKASI, adalahFormatTemplate, templateKeObjek, parseRkasMentah } from '../lib/rkasParser'
+import { pdfKeMatriks } from '../lib/pdfKeMatriks'
 
 /**
  * Tombol + Modal "Input Data Massal ARKAS"
- * Menerima CSV/Excel hasil konversi PDF ARKAS (rencana anggaran sekolah).
+ * Menerima PDF RKAS langsung dari ARKAS, atau CSV/Excel hasil konversi PDF
+ * ARKAS (rencana anggaran sekolah).
  *
- * Kolom yang dibaca dari file:
+ * Kolom yang dibaca dari file berformat template:
  *   tahun_anggaran, no_urut, level, kode_rekening, kode_kegiatan, uraian,
  *   jumlah, status, is_item
  * Kolom alokasi per sumber dana (opsional, kosong dianggap 0) untuk cetak RKAS:
@@ -42,6 +44,10 @@ import { KOLOM_ALOKASI, adalahFormatTemplate, templateKeObjek, parseRkasMentah }
  * (Prop tahunAnggaran lama masih diterima untuk kompatibilitas tapi
  * tidak lagi dipakai untuk menentukan tahun data — tahun diambil dari
  * isi file.)
+ *
+ * Berkas pendukung:
+ *   src/lib/rkasParser.js    — pembaca format RKAS mentah & template
+ *   src/lib/pdfKeMatriks.js  — pembaca PDF ARKAS (butuh: npm install pdfjs-dist)
  */
 
 const TEMPLATE_HEADERS = [
@@ -126,6 +132,7 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
   const [invalidCount, setInvalidCount] = useState(0)
   const [fileName, setFileName] = useState('')
   const [loading, setLoading] = useState(false)
+  const [membaca, setMembaca] = useState(false) // sedang membaca file PDF
   const [error, setError] = useState('')
   const [done, setDone] = useState(null)
   // Format RKAS asli dari ARKAS: baris penerimaan + peringatan hasil pembacaan
@@ -144,6 +151,7 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
     setPenerimaan([])
     setPeringatan([])
     setTahunTerdeteksi(true)
+    setMembaca(false)
   }
 
   function processRows(rawRows) {
@@ -153,9 +161,10 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
     setRows(valid)
   }
 
-  // matriksSheets = satu matriks (array of array) per sheet / per file CSV.
+  // matriksSheets = satu matriks (array of array) per sheet / per file CSV / per file PDF.
   // Dua format diterima: (1) template lama berheader tahun_anggaran, uraian, ...
-  // (2) file RKAS asli dari ARKAS hasil konversi PDF (dibaca lewat isi barisnya).
+  // (2) file RKAS asli dari ARKAS (PDF, atau hasil konversi PDF ke CSV/Excel),
+  //     dibaca lewat isi barisnya.
   function prosesMatriks(matriksSheets) {
     const pertama = matriksSheets[0] || []
     if (adalahFormatTemplate(pertama)) {
@@ -191,6 +200,19 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
 
     const lower = file.name.toLowerCase()
 
+    if (lower.endsWith('.pdf')) {
+      setMembaca(true)
+      try {
+        const matriks = await pdfKeMatriks(file)
+        prosesMatriks([matriks])
+      } catch (err) {
+        setError('Gagal membaca PDF: ' + err.message)
+      } finally {
+        setMembaca(false)
+      }
+      return
+    }
+
     if (lower.endsWith('.csv')) {
       Papa.parse(file, {
         header: false,
@@ -219,7 +241,7 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
       return
     }
 
-    setError('Format file tidak dikenali. Gunakan file .csv atau .xlsx hasil konversi PDF ARKAS.')
+    setError('Format file tidak dikenali. Gunakan file .pdf dari ARKAS, atau .csv / .xlsx hasil konversinya.')
   }
 
   const kelompok = [...new Set(rows.map((r) => r.tahun_anggaran))].sort()
@@ -320,11 +342,11 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
             </div>
 
             <p className="text-sm text-ink-700/60 mb-3">
-              Upload file CSV/Excel hasil konversi PDF RKAS dari ARKAS (tabel aslinya langsung
-              terbaca, termasuk bagian Penerimaan) atau file berformat template di bawah. Tahun anggaran diambil dari
-              kolom <code>tahun_anggaran</code> di masing-masing baris file — bukan dari filter
-              Tahun yang aktif di halaman ini — sehingga satu file boleh berisi laporan untuk
-              tahun anggaran yang berbeda dari tahun berjalan.{' '}
+              Upload file PDF RKAS langsung dari ARKAS (bagian Penerimaan dan Belanja terbaca
+              otomatis), atau file CSV/Excel hasil konversinya, atau file berformat template di
+              bawah. Tahun anggaran diambil dari isi file (atau kolom <code>tahun_anggaran</code> pada
+              format template) — bukan dari filter Tahun yang aktif di halaman ini — sehingga satu
+              file boleh berisi laporan untuk tahun anggaran yang berbeda dari tahun berjalan.{' '}
               <strong>Upload baru akan menggantikan data ARKAS pada tahun anggaran yang ada di file ini</strong>,
               bukan menambah.
             </p>
@@ -339,12 +361,18 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
 
             <input
               type="file"
-              accept=".csv,.xlsx,.xls"
+              accept=".pdf,.csv,.xlsx,.xls"
               onChange={handleFile}
               className="input-field mb-3"
             />
 
-            {fileName && (
+            {membaca && (
+              <div className="flex items-center gap-2 text-sm text-ink-700/70 mb-3">
+                <Loader2 size={16} className="animate-spin" /> Membaca PDF...
+              </div>
+            )}
+
+            {fileName && !membaca && (
               <div className="text-sm text-ink-700/70 mb-3">
                 File: <strong>{fileName}</strong> — {rows.length} baris siap diimpor
                 {kelompok.length > 0 && <> ({kelompok.length} tahun anggaran: {kelompok.join(', ')})</>}
@@ -432,7 +460,7 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
               <button
                 className="btn-primary"
                 onClick={handleImport}
-                disabled={rows.length === 0 || loading}
+                disabled={rows.length === 0 || loading || membaca}
               >
                 {loading && <Loader2 size={16} className="animate-spin" />}
                 Simpan {rows.length > 0 ? rows.length : ''} Baris
