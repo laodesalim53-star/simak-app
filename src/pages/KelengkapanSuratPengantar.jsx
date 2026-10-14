@@ -7,7 +7,6 @@ import KopSurat from '../components/KopSurat' // sesuaikan path jika KopSurat ad
 // ============================================================
 // PENGATURAN — sesuaikan bila nama tabel/kolom di Supabase berbeda
 // ============================================================
-// Tabel daftar guru (difilter per tenant lewat kolom sekolah_id).
 const TABEL_GURU = 'guru'
 
 // Kolom-kolom yang dicoba (urut) untuk membaca data guru dari baris tabel.
@@ -17,14 +16,24 @@ function bacaGuru(g) {
     nama: g.nama ?? g.nama_guru ?? g.nama_lengkap ?? g.name ?? '',
     nip: g.nip ?? '',
     nuptk: g.nuptk ?? '',
+    // dipakai untuk mencari Kepala Sekolah di daftar guru (cadangan)
+    jabatan: g.jabatan ?? g.jabatan_guru ?? g.tugas_tambahan ?? g.tugas ?? g.status_jabatan ?? '',
   }
 }
 
+// Kolom-kolom yang dicoba (urut) untuk nama & NIP Kepala Sekolah di tabel profil_sekolah.
+function bacaKepalaDariProfil(p) {
+  if (!p) return { nama: '', nip: '' }
+  return {
+    nama: p.kepala_sekolah ?? p.nama_kepala_sekolah ?? p.nama_kepsek ?? p.kepsek ?? p.nama_kepala ?? '',
+    nip: p.nip_kepala_sekolah ?? p.nip_kepsek ?? p.nip_kepala ?? p.nip_kepsek_sekolah ?? '',
+  }
+}
+
+const POLA_KEPSEK = /kepala\s*sekolah|kepsek|kasek/i
+
 // ============================================================
 // JENIS SURAT — tinggal tambah satu objek di sini untuk menambah tab baru.
-//   tujuan(kab)  -> isi baris "Yth" (kab = "Kabupaten ...", boleh kosong)
-//   pokok        -> teks "Pokok isi surat" di tabel
-//   keterangan   -> teks kolom "Keterangan"
 // ============================================================
 const KE_BKD = (kab) => `Kepala Badan Kepegawaian Daerah (BKD)${kab ? `\n${kab}` : ''}`
 const KE_DINAS = (kab) => `Kepala Dinas Pendidikan dan Kebudayaan${kab ? `\n${kab}` : ''}`
@@ -93,7 +102,7 @@ function ambilGuruBaris(baris, daftarGuru) {
 // ============================================================
 const sel = { border: '1px solid #000', padding: '2mm 3mm' }
 
-function LembarSurat({ layar, jenis, nomor, tujuan, pokok, keterangan, baris, daftarGuru, tempat, tanggal, kepala, nipKepala }) {
+function LembarSurat({ layar, nomor, tujuan, pokok, keterangan, baris, daftarGuru, tempat, tanggal, kepala, nipKepala }) {
   return (
     <div
       style={{
@@ -203,9 +212,36 @@ function Field({ label, children }) {
 const inputCls =
   'w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500'
 
+// CSS cetak. Elemen .sp-print-root adalah anak langsung <body> (lewat portal).
+// Semua anak <body> lain disembunyikan, tinggi/overflow body di-reset supaya
+// halaman tidak kosong akibat layout aplikasi (h-screen / overflow-hidden).
+const CSS_CETAK = `
+  .sp-print-root { display: none; }
+  @media print {
+    @page { size: A4; margin: 0; }
+    html, body {
+      height: auto !important;
+      min-height: 0 !important;
+      overflow: visible !important;
+      background: #fff !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    body > *:not(.sp-print-root) { display: none !important; }
+    .sp-print-root {
+      display: block !important;
+      position: static !important;
+      visibility: visible !important;
+      width: 210mm;
+      margin: 0;
+      padding: 0;
+      background: #fff;
+    }
+    .sp-print-root * { visibility: visible !important; }
+  }
+`
+
 export default function KelengkapanSuratPengantar() {
-  // Ambil id sekolah dari AuthContext. Dicoba dua cara supaya aman:
-  // 1) sekolahId langsung, 2) profil.sekolah_id (dipakai di App.jsx).
   const { sekolahId: sekolahIdCtx, profil } = useAuth()
   const sekolahId = sekolahIdCtx ?? profil?.sekolah_id
 
@@ -216,22 +252,28 @@ export default function KelengkapanSuratPengantar() {
   const [galatGuru, setGalatGuru] = useState('')
   const [kabupaten, setKabupaten] = useState('')
   const [kecamatan, setKecamatan] = useState('')
+  const [kepalaProfil, setKepalaProfil] = useState({ nama: '', nip: '' })
 
   const [nomor, setNomor] = useState('')
   const [tanggal, setTanggal] = useState(hariIni)
   const [baris, setBaris] = useState(() => [barisBaru()])
 
-  // Isian teks yang boleh diubah manual; null = pakai bawaan jenis surat.
+  // Isian teks yang boleh diubah manual; null = pakai bawaan.
   const [tujuanKustom, setTujuanKustom] = useState(null)
   const [pokokKustom, setPokokKustom] = useState(null)
   const [keteranganKustom, setKeteranganKustom] = useState(null)
 
   const ttdTersimpan = useMemo(bacaTtd, [])
   const [tempatKustom, setTempatKustom] = useState(ttdTersimpan.tempat ?? null)
-  const [kepala, setKepala] = useState(ttdTersimpan.kepala ?? '')
-  const [nipKepala, setNipKepala] = useState(ttdTersimpan.nipKepala ?? '')
+  // null = otomatis dari data sekolah/guru; terisi = diketik manual oleh pengguna
+  const [kepalaKustom, setKepalaKustom] = useState(ttdTersimpan.kepala || null)
+  const [nipKepalaKustom, setNipKepalaKustom] = useState(ttdTersimpan.nipKepala || null)
 
-  // Daftar guru + kabupaten/kecamatan dari profil sekolah
+  // Portal cetak hanya dipasang setelah komponen termuat di browser
+  const [siapCetak, setSiapCetak] = useState(false)
+  useEffect(() => setSiapCetak(true), [])
+
+  // Daftar guru + data profil sekolah (kabupaten, kecamatan, kepala sekolah)
   useEffect(() => {
     if (!sekolahId) return
     let batal = false
@@ -259,13 +301,14 @@ export default function KelengkapanSuratPengantar() {
 
     supabase
       .from('profil_sekolah')
-      .select('kabupaten, kecamatan')
+      .select('*')
       .eq('sekolah_id', sekolahId)
       .maybeSingle()
       .then(({ data }) => {
         if (batal || !data) return
         setKabupaten(formatKabupaten(data.kabupaten))
         setKecamatan(data.kecamatan || '')
+        setKepalaProfil(bacaKepalaDariProfil(data))
       })
 
     return () => {
@@ -273,14 +316,27 @@ export default function KelengkapanSuratPengantar() {
     }
   }, [sekolahId])
 
-  // Simpan data penanda tangan agar tidak perlu diketik ulang
+  // Kepala sekolah otomatis: prioritas profil_sekolah, cadangan dari daftar guru (jabatan "Kepala Sekolah")
+  const kepalaOtomatis = useMemo(() => {
+    if (kepalaProfil.nama) return kepalaProfil
+    const g = daftarGuru.find((x) => POLA_KEPSEK.test(x.jabatan || ''))
+    return g ? { nama: g.nama, nip: g.nip } : { nama: '', nip: '' }
+  }, [kepalaProfil, daftarGuru])
+
+  const kepala = kepalaKustom ?? kepalaOtomatis.nama
+  const nipKepala = nipKepalaKustom ?? kepalaOtomatis.nip
+
+  // Simpan hanya isian manual agar data otomatis selalu terbaru
   useEffect(() => {
     try {
-      localStorage.setItem(KUNCI_TTD, JSON.stringify({ tempat: tempatKustom, kepala, nipKepala }))
+      localStorage.setItem(
+        KUNCI_TTD,
+        JSON.stringify({ tempat: tempatKustom, kepala: kepalaKustom, nipKepala: nipKepalaKustom })
+      )
     } catch {
       /* abaikan */
     }
-  }, [tempatKustom, kepala, nipKepala])
+  }, [tempatKustom, kepalaKustom, nipKepalaKustom])
 
   const tujuan = tujuanKustom ?? jenis.tujuan(kabupaten)
   const pokok = pokokKustom ?? jenis.pokok
@@ -298,24 +354,20 @@ export default function KelengkapanSuratPengantar() {
     setBaris((lama) => lama.map((b) => (b.id === id ? { ...b, ...patch } : b)))
   }
 
-  const propsLembar = { jenis, nomor, tujuan, pokok, keterangan, baris, daftarGuru, tempat, tanggal, kepala, nipKepala }
+  function cetak() {
+    // jeda singkat agar React selesai merender salinan cetak sebelum dialog print dibuka
+    requestAnimationFrame(() => setTimeout(() => window.print(), 50))
+  }
+
+  const propsLembar = { nomor, tujuan, pokok, keterangan, baris, daftarGuru, tempat, tanggal, kepala, nipKepala }
 
   return (
     <div className="p-4 lg:p-6">
-      <style>{`
-        .sp-print-root { display: none; }
-        @media print {
-          @page { size: A4; margin: 0; }
-          body > *:not(.sp-print-root) { display: none !important; }
-          .sp-print-root { display: block !important; }
-        }
-      `}</style>
-
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-bold text-slate-900">Kelengkapan Surat Pengantar</h1>
         <button
           type="button"
-          onClick={() => window.print()}
+          onClick={cetak}
           className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
         >
           Cetak
@@ -451,11 +503,28 @@ export default function KelengkapanSuratPengantar() {
               <input className={inputCls} value={tempat} onChange={(e) => setTempatKustom(e.target.value)} />
             </Field>
             <Field label="Nama Kepala Sekolah">
-              <input className={inputCls} value={kepala} onChange={(e) => setKepala(e.target.value)} placeholder="Nama, gelar" />
+              <input
+                className={inputCls}
+                value={kepala}
+                onChange={(e) => setKepalaKustom(e.target.value || null)}
+                placeholder="Nama, gelar"
+              />
             </Field>
             <Field label="NIP Kepala Sekolah">
-              <input className={inputCls} value={nipKepala} onChange={(e) => setNipKepala(e.target.value)} />
+              <input className={inputCls} value={nipKepala} onChange={(e) => setNipKepalaKustom(e.target.value || null)} />
             </Field>
+            {(kepalaKustom || nipKepalaKustom) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setKepalaKustom(null)
+                  setNipKepalaKustom(null)
+                }}
+                className="text-xs font-medium text-blue-700 hover:underline"
+              >
+                Kembalikan ke data otomatis
+              </button>
+            )}
           </div>
         </div>
 
@@ -467,13 +536,15 @@ export default function KelengkapanSuratPengantar() {
         </div>
       </div>
 
-      {/* Salinan khusus cetak, di luar #root supaya halaman lain tidak ikut tercetak */}
-      {createPortal(
-        <div className="sp-print-root">
-          <LembarSurat {...propsLembar} />
-        </div>,
-        document.body
-      )}
+      {/* Salinan khusus cetak, anak langsung <body> supaya halaman lain tidak ikut tercetak */}
+      {siapCetak &&
+        createPortal(
+          <div className="sp-print-root">
+            <style>{CSS_CETAK}</style>
+            <LembarSurat {...propsLembar} />
+          </div>,
+          document.body
+        )}
     </div>
   )
 }
