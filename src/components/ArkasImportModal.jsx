@@ -296,7 +296,7 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
         insertedTotal += data?.length || 0
       }
       setDone({ inserted: insertedTotal, total: payload.length })
-      onSelesai?.()
+      onSelesai?.(kelompok[0])
 
       // 3) Penerimaan (bagian A RKAS) — hanya untuk file RKAS asli dari ARKAS
       if (mode === 'rkas' && penerimaan.length > 0) {
