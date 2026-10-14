@@ -3,6 +3,8 @@ import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabaseClient'
 import { Upload, X, Loader2, CheckCircle2, AlertCircle, AlertTriangle, Download } from 'lucide-react'
+import { useAuth } from '../lib/AuthContext'
+import { KOLOM_ALOKASI, adalahFormatTemplate, templateKeObjek, parseRkasMentah } from '../lib/rkasParser'
 
 /**
  * Tombol + Modal "Input Data Massal ARKAS"
@@ -41,10 +43,6 @@ import { Upload, X, Loader2, CheckCircle2, AlertCircle, AlertTriangle, Download 
  * tidak lagi dipakai untuk menentukan tahun data — tahun diambil dari
  * isi file.)
  */
-
-// Alokasi per sumber dana (Belanja Operasi / Belanja Modal) untuk cetak RKAS
-const KOLOM_ALOKASI = ['reguler', 'daerah', 'afirmasi', 'kinerja', 'silpa', 'lainnya']
-  .flatMap((s) => [`alok_${s}_operasi`, `alok_${s}_modal`])
 
 const TEMPLATE_HEADERS = [
   'tahun_anggaran', 'no_urut', 'level', 'kode_rekening', 'kode_kegiatan', 'uraian',
@@ -122,6 +120,7 @@ function tahunValid(tahun_anggaran) {
 }
 
 export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
+  const { sekolahId } = useAuth()
   const [open, setOpen] = useState(false)
   const [rows, setRows] = useState([])
   const [invalidCount, setInvalidCount] = useState(0)
@@ -129,6 +128,11 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState(null)
+  // Format RKAS asli dari ARKAS: baris penerimaan + peringatan hasil pembacaan
+  const [mode, setMode] = useState('template') // 'template' | 'rkas'
+  const [penerimaan, setPenerimaan] = useState([])
+  const [peringatan, setPeringatan] = useState([])
+  const [tahunTerdeteksi, setTahunTerdeteksi] = useState(true)
 
   function resetState() {
     setRows([])
@@ -136,6 +140,10 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
     setFileName('')
     setError('')
     setDone(null)
+    setMode('template')
+    setPenerimaan([])
+    setPeringatan([])
+    setTahunTerdeteksi(true)
   }
 
   function processRows(rawRows) {
@@ -143,6 +151,36 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
     const valid = normalized.filter((r) => tahunValid(r.tahun_anggaran) && r.uraian)
     setInvalidCount(normalized.length - valid.length)
     setRows(valid)
+  }
+
+  // matriksSheets = satu matriks (array of array) per sheet / per file CSV.
+  // Dua format diterima: (1) template lama berheader tahun_anggaran, uraian, ...
+  // (2) file RKAS asli dari ARKAS hasil konversi PDF (dibaca lewat isi barisnya).
+  function prosesMatriks(matriksSheets) {
+    const pertama = matriksSheets[0] || []
+    if (adalahFormatTemplate(pertama)) {
+      setMode('template')
+      setPenerimaan([])
+      setPeringatan([])
+      setTahunTerdeteksi(true)
+      processRows(templateKeObjek(pertama))
+      return
+    }
+
+    const hasil = parseRkasMentah(matriksSheets.flat(), tahunAnggaran || '')
+    setMode('rkas')
+    setPenerimaan(hasil.penerimaan)
+    setPeringatan(hasil.peringatan)
+    setTahunTerdeteksi(hasil.tahunTerdeteksi)
+    setInvalidCount(0)
+
+    const tahunOk = /^\d{4}$/.test(hasil.tahun)
+    setRows(tahunOk ? hasil.belanja : [])
+    if (!tahunOk) {
+      setError('Tahun anggaran tidak terbaca di file dan halaman Keuangan belum punya tahun yang valid.')
+    } else if (hasil.belanja.length === 0) {
+      setError('Tidak ada baris belanja yang dikenali. Pastikan file berisi tabel RKAS (kolom Kode Rekening, Kode Kegiatan, Uraian, Jumlah, dan sumber dana).')
+    }
   }
 
   async function handleFile(e) {
@@ -155,9 +193,9 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
 
     if (lower.endsWith('.csv')) {
       Papa.parse(file, {
-        header: true,
+        header: false,
         skipEmptyLines: true,
-        complete: (result) => processRows(result.data),
+        complete: (result) => prosesMatriks([result.data]),
         error: (err) => setError('Gagal membaca CSV: ' + err.message),
       })
       return
@@ -168,9 +206,11 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
       reader.onload = (evt) => {
         try {
           const wb = XLSX.read(evt.target.result, { type: 'binary' })
-          const sheet = wb.Sheets[wb.SheetNames[0]]
-          const json = XLSX.utils.sheet_to_json(sheet, { defval: '' })
-          processRows(json)
+          // Semua sheet dibaca: hasil konversi PDF sering memecah halaman jadi beberapa sheet
+          const semua = wb.SheetNames.map((nama) =>
+            XLSX.utils.sheet_to_json(wb.Sheets[nama], { header: 1, defval: '', raw: true })
+          )
+          prosesMatriks(semua)
         } catch (err) {
           setError('Gagal membaca Excel: ' + err.message)
         }
@@ -188,7 +228,9 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
     if (rows.length === 0) return
 
     const konfirmasi = confirm(
-      `Data ARKAS pada ${kelompok.length} tahun anggaran (${kelompok.join(', ')}) yang sudah ada akan DIHAPUS dan diganti dengan ${rows.length} baris dari file ini. Lanjutkan?`
+      `Data ARKAS pada ${kelompok.length} tahun anggaran (${kelompok.join(', ')}) yang sudah ada akan DIHAPUS dan diganti dengan ${rows.length} baris dari file ini.` +
+      (mode === 'rkas' && penerimaan.length > 0 ? ` Data penerimaan (${penerimaan.length} baris) juga ikut diperbarui.` : '') +
+      ' Lanjutkan?'
     )
     if (!konfirmasi) return
 
@@ -233,6 +275,27 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
       }
       setDone({ inserted: insertedTotal, total: payload.length })
       onSelesai?.()
+
+      // 3) Penerimaan (bagian A RKAS) — hanya untuk file RKAS asli dari ARKAS
+      if (mode === 'rkas' && penerimaan.length > 0) {
+        const payloadPen = penerimaan.map((p, i) => ({
+          sekolah_id: sekolahId || null,
+          tahun_anggaran: rows[0].tahun_anggaran,
+          kode: p.kode,
+          uraian: p.uraian,
+          tanda: p.tanda || null,
+          jumlah: p.jumlah,
+          no_urut: i + 1,
+        }))
+        const { error: penError } = await supabase
+          .from('arkas_penerimaan')
+          .upsert(payloadPen, { onConflict: 'sekolah_id,tahun_anggaran,kode' })
+        if (penError) {
+          setError('Belanja tersimpan, tetapi penerimaan gagal: ' + penError.message)
+        } else {
+          setDone((d) => ({ ...d, penerimaan: payloadPen.length }))
+        }
+      }
     } catch (err) {
       setError('Gagal menyimpan ke database: ' + err.message)
     } finally {
@@ -257,7 +320,8 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
             </div>
 
             <p className="text-sm text-ink-700/60 mb-3">
-              Upload file CSV/Excel hasil konversi PDF ARKAS. Tahun anggaran diambil dari
+              Upload file CSV/Excel hasil konversi PDF RKAS dari ARKAS (tabel aslinya langsung
+              terbaca, termasuk bagian Penerimaan) atau file berformat template di bawah. Tahun anggaran diambil dari
               kolom <code>tahun_anggaran</code> di masing-masing baris file — bukan dari filter
               Tahun yang aktif di halaman ini — sehingga satu file boleh berisi laporan untuk
               tahun anggaran yang berbeda dari tahun berjalan.{' '}
@@ -287,6 +351,30 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
               </div>
             )}
 
+            {rows.length > 0 && mode === 'rkas' && (
+              <div className="text-sm text-sage-600 bg-sage-50 rounded-lg p-2 mb-3">
+                Format RKAS asli dari ARKAS terdeteksi.
+                {penerimaan.length > 0 && (
+                  <> Penerimaan terbaca: {penerimaan.length} baris (total Rp{' '}
+                  {penerimaan.reduce((a, p) => a + p.jumlah, 0).toLocaleString('id-ID')}).</>
+                )}
+                {!tahunTerdeteksi && ' Tahun anggaran memakai filter Tahun di halaman ini.'}
+              </div>
+            )}
+
+            {peringatan.length > 0 && (
+              <div className="flex items-start gap-2 text-sm text-amber-700 bg-amber-50 rounded-lg p-2 mb-3">
+                <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                <div>
+                  <div>{peringatan.length} catatan saat membaca file (periksa pratinjau sebelum menyimpan):</div>
+                  <ul className="list-disc ml-4">
+                    {peringatan.slice(0, 5).map((p, i) => <li key={i}>{p}</li>)}
+                  </ul>
+                  {peringatan.length > 5 && <div>...dan {peringatan.length - 5} catatan lainnya</div>}
+                </div>
+              </div>
+            )}
+
             {invalidCount > 0 && (
               <div className="flex items-start gap-2 text-sm text-amber-700 bg-amber-50 rounded-lg p-2 mb-3">
                 <AlertTriangle size={16} className="mt-0.5 shrink-0" />
@@ -300,6 +388,7 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
                   <thead className="bg-sage-50 sticky top-0">
                     <tr>
                       <th className="text-left p-1">Tahun</th>
+                      <th className="text-left p-1">Kode Keg.</th>
                       <th className="text-left p-1">Kode Rekening</th>
                       <th className="text-left p-1">Uraian</th>
                       <th className="text-right p-1">Jumlah</th>
@@ -309,6 +398,7 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
                     {rows.slice(0, 20).map((r, idx) => (
                       <tr key={idx} className="border-t">
                         <td className="p-1">{r.tahun_anggaran}</td>
+                        <td className="p-1">{r.kode_kegiatan || '-'}</td>
                         <td className="p-1">{r.kode_rekening || '-'}</td>
                         <td className="p-1">{r.uraian}</td>
                         <td className="p-1 text-right">{r.jumlah ? r.jumlah.toLocaleString('id-ID') : '-'}</td>
@@ -331,6 +421,7 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
             {done && (
               <div className="flex items-center gap-2 text-sm text-sage-600 mb-3">
                 <CheckCircle2 size={16} /> Berhasil! {done.inserted} dari {done.total} baris tersimpan.
+                {done.penerimaan ? ` Penerimaan: ${done.penerimaan} baris.` : ''}
               </div>
             )}
 
