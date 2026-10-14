@@ -542,6 +542,7 @@ export default function Keuangan() {
                 <tr>
                   <th>Tanggal</th>
                   <th>No. Bukti</th>
+                  <th>Kode Rekening</th>
                   <th>Uraian</th>
                   <th>Jumlah Barang</th>
                   <th>Penerimaan</th>
@@ -551,10 +552,10 @@ export default function Keuangan() {
                 </tr>
               </thead>
               <tbody>
-                {loadingBku && <tr><td colSpan={8} className="text-center py-8 text-ink-700/50">Memuat data...</td></tr>}
+                {loadingBku && <tr><td colSpan={9} className="text-center py-8 text-ink-700/50">Memuat data...</td></tr>}
                 {!loadingBku && bkuData.length === 0 && (
-                  <tr><td colSpan={8} className="text-center py-8 text-ink-700/50">
-                    Belum ada data BKU bulan {NAMA_BULAN[bulan - 1]} {tahun}. Klik "Input Data Massal BKU" untuk mengunggah CSV/Excel hasil konversi PDF.
+                  <tr><td colSpan={9} className="text-center py-8 text-ink-700/50">
+                    Belum ada data BKU bulan {NAMA_BULAN[bulan - 1]} {tahun}. Klik "Input Data Massal BKU" untuk mengunggah PDF Buku Kas Umum dari ARKAS (atau CSV/Excel).
                   </td></tr>
                 )}
                 {(() => {
@@ -565,6 +566,7 @@ export default function Keuangan() {
                       <tr key={r.id}>
                         <td>{r.tanggal}</td>
                         <td>{r.no_bukti || '-'}</td>
+                        <td className="whitespace-nowrap">{r.kode_rekening || '-'}</td>
                         <td>
                           {r.uraian || '-'}
                           {r.arkas_id && (
@@ -572,7 +574,7 @@ export default function Keuangan() {
                               className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-brass-400/20 text-brass-600 align-middle"
                               title="Ditarik dari ARKAS"
                             >
-                              ARKAS{r.kode_rekening ? ` · ${r.kode_rekening}` : ''}
+                              ARKAS
                             </span>
                           )}
                         </td>
