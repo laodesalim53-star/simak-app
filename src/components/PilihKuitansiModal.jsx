@@ -4,10 +4,23 @@ import { useAuth } from '../lib/AuthContext'
 import { formatRupiah, formatTanggal } from '../pages/bok/utils'
 import { X, Search, Loader2 } from 'lucide-react'
 
-const SUMBER = [
+/**
+ * Modal "Tarik Data untuk Kuitansi Jasa". Sumber data bergantung jenis akun:
+ *
+ *  - Puskesmas (isPuskesmas): bku_bok, kwitansi_bok, nota_belanja_bok
+ *  - Sekolah (lainnya)      : bku_kas (BKU BOS) dan kuitansi jenis='kuitansi'.
+ *                             Tab Nota Belanja disembunyikan karena belum ada
+ *                             tabel sumbernya untuk sekolah.
+ */
+
+const SUMBER_BOK = [
   { key: 'bku', label: 'BKU' },
   { key: 'kwitansi', label: 'Kwitansi' },
   { key: 'nota', label: 'Nota Belanja' },
+]
+const SUMBER_SEKOLAH = [
+  { key: 'bku', label: 'BKU' },
+  { key: 'kwitansi', label: 'Kwitansi' },
 ]
 
 // ---- Pemetaan sumber -> bentuk dataAwal untuk KuitansiJasaModal ----
@@ -18,10 +31,11 @@ function ringkasBarang(daftar = []) {
     .join(', ')
 }
 
+// BKU puskesmas (bku_bok) memakai nomor_bukti, BKU sekolah (bku_kas) memakai no_bukti.
 function dariBku(b) {
   return {
     bku_id: b.id,
-    no_bukti: b.nomor_bukti || '',
+    no_bukti: b.nomor_bukti || b.no_bukti || '',
     tanggal: b.tanggal,
     untuk_pembayaran: b.uraian || '',
     jumlah_total: b.pengeluaran || 0,
@@ -29,7 +43,8 @@ function dariBku(b) {
   }
 }
 
-function dariKwitansi(k) {
+// Kwitansi puskesmas (kwitansi_bok)
+function dariKwitansiBok(k) {
   return {
     kwitansi_id: k.id,
     bku_id: k.bku_id || null,
@@ -47,6 +62,24 @@ function dariKwitansi(k) {
     nip_disetujui: k.nip_disetujui || '',
     dibayar_oleh: k.dibayar_oleh || '',
     nip_dibayar: k.nip_dibayar || '',
+    catatan: k.catatan || '',
+  }
+}
+
+// Kuitansi sekolah (tabel kuitansi, jenis='kuitansi').
+// kwitansi_id sengaja tidak diisi: id ini bukan id kwitansi_bok.
+function dariKuitansiSekolah(k) {
+  return {
+    bku_id: k.bku_id || null,
+    no_bukti: k.no_bukti || k.nomor || '',
+    tanggal: k.tanggal,
+    diterima_dari: k.diterima_dari || '',
+    untuk_pembayaran: k.untuk_pembayaran || '',
+    jumlah_total: k.jumlah_total || 0,
+    nama_penerima: k.nama_penerima || '',
+    alamat_penerima: k.alamat_penerima || '',
+    mata_anggaran: k.mata_anggaran || '',
+    tahun_anggaran: k.tahun_anggaran || '',
     catatan: k.catatan || '',
   }
 }
@@ -73,7 +106,10 @@ function teksCari(r) {
 }
 
 export default function PilihKuitansiModal({ onPilih, onClose }) {
-  const { sekolahId } = useAuth()
+  const { sekolahId, isPuskesmas } = useAuth()
+  const modeBok = !!isPuskesmas
+  const daftarSumber = modeBok ? SUMBER_BOK : SUMBER_SEKOLAH
+
   const [sumber, setSumber] = useState('kwitansi')
   const [data, setData] = useState({ bku: [], kwitansi: [], nota: [] })
   const [loading, setLoading] = useState(true)
@@ -81,46 +117,73 @@ export default function PilihKuitansiModal({ onPilih, onClose }) {
   const [cari, setCari] = useState('')
 
   useEffect(() => {
-    if (!sekolahId) return
+    // Tenant puskesmas wajib punya sekolahId; sekolah mengandalkan RLS
+    // (sama seperti PilihBkuModal & halaman Kuitansi).
+    if (modeBok && !sekolahId) return
     let batal = false
+
     async function muat() {
       setLoading(true)
       setError('')
-      const [bku, kwi, nota] = await Promise.all([
-        supabase.from('bku_bok').select('*').eq('sekolah_id', sekolahId)
-          .gt('pengeluaran', 0).order('tanggal', { ascending: false }).limit(300),
-        supabase.from('kwitansi_bok').select('*').eq('sekolah_id', sekolahId)
-          .order('tanggal', { ascending: false }).limit(300),
-        supabase.from('nota_belanja_bok').select('*').eq('sekolah_id', sekolahId)
-          .order('tanggal', { ascending: false }).limit(300),
-      ])
-      if (batal) return
-      const err = bku.error || kwi.error || nota.error
-      if (err) setError('Gagal memuat data: ' + err.message)
-      setData({ bku: bku.data || [], kwitansi: kwi.data || [], nota: nota.data || [] })
+
+      if (modeBok) {
+        const [bku, kwi, nota] = await Promise.all([
+          supabase.from('bku_bok').select('*').eq('sekolah_id', sekolahId)
+            .gt('pengeluaran', 0).order('tanggal', { ascending: false }).limit(300),
+          supabase.from('kwitansi_bok').select('*').eq('sekolah_id', sekolahId)
+            .order('tanggal', { ascending: false }).limit(300),
+          supabase.from('nota_belanja_bok').select('*').eq('sekolah_id', sekolahId)
+            .order('tanggal', { ascending: false }).limit(300),
+        ])
+        if (batal) return
+        const err = bku.error || kwi.error || nota.error
+        if (err) setError('Gagal memuat data: ' + err.message)
+        setData({ bku: bku.data || [], kwitansi: kwi.data || [], nota: nota.data || [] })
+      } else {
+        const [bku, kwi] = await Promise.all([
+          supabase.from('bku_kas').select('*')
+            .gt('pengeluaran', 0).order('tanggal', { ascending: false }).limit(300),
+          supabase.from('kuitansi').select('*').eq('jenis', 'kuitansi')
+            .order('tanggal', { ascending: false }).limit(300),
+        ])
+        if (batal) return
+        const err = bku.error || kwi.error
+        if (err) setError('Gagal memuat data: ' + err.message)
+        setData({ bku: bku.data || [], kwitansi: kwi.data || [], nota: [] })
+      }
+
       setLoading(false)
     }
+
     muat()
     return () => { batal = true }
-  }, [sekolahId])
+  }, [sekolahId, modeBok])
 
   // Baris seragam untuk ditampilkan: { id, tanggal, judul, ket, jumlah, ekstra, ambil() }
   const baris = useMemo(() => {
     let list = []
     if (sumber === 'bku') {
       list = data.bku.map((b) => ({
-        id: b.id, tanggal: b.tanggal, judul: b.nomor_bukti || '-',
+        id: b.id, tanggal: b.tanggal, judul: b.nomor_bukti || b.no_bukti || '-',
         ket: b.uraian, jumlah: b.pengeluaran,
         ekstra: b.kode_rekening || '',
         ambil: () => dariBku(b),
       }))
-    } else if (sumber === 'kwitansi') {
+    } else if (sumber === 'kwitansi' && modeBok) {
       list = data.kwitansi.map((k) => ({
         id: k.id, tanggal: k.tanggal, judul: k.nomor_kwitansi || '-',
         ket: `${k.sudah_terima_dari || ''} — ${k.untuk_pembayaran || ''}`,
         jumlah: k.jumlah_uang,
         ekstra: `${k.nama_penerima || ''} ${k.mata_anggaran || ''}`,
-        ambil: () => dariKwitansi(k),
+        ambil: () => dariKwitansiBok(k),
+      }))
+    } else if (sumber === 'kwitansi') {
+      list = data.kwitansi.map((k) => ({
+        id: k.id, tanggal: k.tanggal, judul: k.nomor || k.no_bukti || '-',
+        ket: `${k.diterima_dari || ''} — ${k.untuk_pembayaran || ''}`,
+        jumlah: k.jumlah_total,
+        ekstra: `${k.nama_penerima || ''} ${k.mata_anggaran || ''}`,
+        ambil: () => dariKuitansiSekolah(k),
       }))
     } else {
       list = data.nota.map((n) => ({
@@ -139,7 +202,7 @@ export default function PilihKuitansiModal({ onPilih, onClose }) {
       const teks = teksCari(r)
       return kata.every((k) => teks.includes(k))
     })
-  }, [sumber, data, cari])
+  }, [sumber, data, cari, modeBok])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 backdrop-blur-sm p-2 sm:p-4">
@@ -151,7 +214,7 @@ export default function PilihKuitansiModal({ onPilih, onClose }) {
         <h2 className="font-display text-xl font-semibold mb-3">Tarik Data untuk Kuitansi Jasa</h2>
 
         <div className="flex flex-wrap gap-1 mb-3">
-          {SUMBER.map((s) => (
+          {daftarSumber.map((s) => (
             <button
               key={s.key}
               type="button"
