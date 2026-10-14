@@ -11,6 +11,8 @@ import { Upload, X, Loader2, CheckCircle2, AlertCircle, AlertTriangle, Download 
  * Kolom yang dibaca dari file:
  *   tahun_anggaran, no_urut, level, kode_rekening, kode_kegiatan, uraian,
  *   jumlah, status, is_item
+ * Kolom alokasi per sumber dana (opsional, kosong dianggap 0) untuk cetak RKAS:
+ *   alok_{reguler|daerah|afirmasi|kinerja|silpa|lainnya}_{operasi|modal}
  * (level wajib diisi di database — kalau kosong di file, diturunkan
  * otomatis dari is_item: item/rincian = 3, kelompok/header = 1. Ini
  * masih dugaan; sesuaikan lagi kalau makna "level" di tabel berbeda.)
@@ -40,9 +42,13 @@ import { Upload, X, Loader2, CheckCircle2, AlertCircle, AlertTriangle, Download 
  * isi file.)
  */
 
+// Alokasi per sumber dana (Belanja Operasi / Belanja Modal) untuk cetak RKAS
+const KOLOM_ALOKASI = ['reguler', 'daerah', 'afirmasi', 'kinerja', 'silpa', 'lainnya']
+  .flatMap((s) => [`alok_${s}_operasi`, `alok_${s}_modal`])
+
 const TEMPLATE_HEADERS = [
   'tahun_anggaran', 'no_urut', 'level', 'kode_rekening', 'kode_kegiatan', 'uraian',
-  'jumlah', 'status', 'is_item',
+  'jumlah', 'status', 'is_item', ...KOLOM_ALOKASI,
 ]
 
 // Baris contoh — sengaja pakai dua tahun anggaran berbeda untuk
@@ -56,7 +62,12 @@ const TEMPLATE_CONTOH = [
 ]
 
 function unduhTemplateArkas() {
-  const baris = [TEMPLATE_HEADERS, ...TEMPLATE_CONTOH]
+  // Contoh: rincian (is_item TRUE) dialokasikan ke BOSP Reguler - Belanja Operasi
+  const contohLengkap = TEMPLATE_CONTOH.map((r) => [
+    ...r,
+    ...KOLOM_ALOKASI.map((k) => (r[8] === 'TRUE' && k === 'alok_reguler_operasi' ? r[6] : '0')),
+  ])
+  const baris = [TEMPLATE_HEADERS, ...contohLengkap]
   const csv = baris.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\r\n')
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
@@ -102,6 +113,7 @@ function normalizeRow(row, idx) {
     jumlah: toNumber(row.jumlah),
     status: (row.status || '').toString().trim() || null,
     is_item,
+    ...Object.fromEntries(KOLOM_ALOKASI.map((k) => [k, toNumber(row[k])])),
   }
 }
 
@@ -205,6 +217,7 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
         jumlah: r.jumlah,
         status: r.status,
         is_item: r.is_item,
+        ...Object.fromEntries(KOLOM_ALOKASI.map((k) => [k, r[k]])),
       }))
 
       const BATCH_SIZE = 200
