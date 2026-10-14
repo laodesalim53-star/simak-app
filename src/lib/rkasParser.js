@@ -20,8 +20,8 @@ const JENIS = ['operasi', 'modal']
 
 export const KOLOM_ALOKASI = SUMBER.flatMap((s) => JENIS.map((j) => `alok_${s}_${j}`))
 
-// 06.05.08.  -> kode kegiatan (tiga kelompok dua digit)
-const RE_KEGIATAN = /^\d{2}\.\d{2}\.\d{2}\.?$/
+// 03.  03.01.  03.01.01.  06.05.08.  -> kode standar/program/kegiatan (1 sampai 3 kelompok dua digit)
+const RE_KEGIATAN = /^\d{2}(\.\d{2}){0,2}\.$|^\d{2}\.\d{2}(\.\d{2})?$/
 // 5.1.02.01.01.0024 -> kode rekening belanja
 const RE_REKENING = /^\d\.\d\.\d{2}(\.\d{2,4})*\.?$/
 const RE_TOTAL = /^(sub\s*)?(jumlah|total|grand\s*total)\b/i
