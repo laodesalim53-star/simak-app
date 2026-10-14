@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
 import { eksporExcel, eksporPDF } from '../lib/exportUtils'
 import ArkasImportModal from '../components/ArkasImportModal'
 import BkuImportModal from '../components/BkuImportModal'
+import TarikArkasModal from '../components/TarikArkasModal'
 import RkasCetak from '../components/RkasCetak'
 import {
   Plus, Pencil, Trash2, X, Loader2, TrendingUp, TrendingDown, Wallet,
@@ -36,6 +38,10 @@ function formatRupiah(angka) {
 
 export default function Keuangan() {
   const now = new Date()
+  // Profil akun yang login -> dipakai untuk membatasi data ARKAS per sekolah
+  const { profil } = useAuth()
+  const sekolahId = profil?.sekolah_id
+
   const [menu, setMenu] = useState('transaksi') // 'transaksi' | 'arkas' | 'bku'
   const [bulan, setBulan] = useState(now.getMonth() + 1)
   const [tahun, setTahun] = useState(now.getFullYear())
@@ -76,10 +82,16 @@ export default function Keuangan() {
   }
 
   async function loadArkasData() {
+    // Profil belum termuat: jangan query dulu (efek akan jalan lagi saat sekolahId tersedia)
+    if (!sekolahId) {
+      setArkasData([])
+      return
+    }
     setLoadingArkas(true)
     const { data: rows } = await supabase
       .from('arkas_anggaran')
       .select('*')
+      .eq('sekolah_id', sekolahId)
       .eq('tahun_anggaran', String(tahun))
       .order('no_urut', { ascending: true })
     setArkasData(rows || [])
@@ -103,7 +115,7 @@ export default function Keuangan() {
     if (menu === 'arkas') loadArkasData()
     if (menu === 'bku') loadBkuData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [menu, bulan, tahun])
+  }, [menu, bulan, tahun, sekolahId])
 
   useEffect(() => {
     supabase.from('siswa').select('id, nama_lengkap').order('nama_lengkap').then(({ data }) => setSiswaList(data || []))
@@ -150,6 +162,7 @@ export default function Keuangan() {
   }
 
   // Hapus satu baris ARKAS
+  // (batas antar sekolah dijaga oleh RLS di tabel arkas_anggaran)
   async function handleHapusArkas(id) {
     if (!confirm('Hapus baris ARKAS ini?')) return
     const { error } = await supabase.from('arkas_anggaran').delete().eq('id', id)
@@ -160,9 +173,9 @@ export default function Keuangan() {
     }
   }
 
-  // Hapus semua baris ARKAS untuk tahun yang sedang dipilih
+  // Hapus semua baris ARKAS untuk tahun yang sedang dipilih, khusus sekolah ini
   async function handleHapusSemuaArkas() {
-    if (arkasData.length === 0) return
+    if (arkasData.length === 0 || !sekolahId) return
     const konfirmasi = confirm(
       `Semua data ARKAS tahun ${tahun} (${arkasData.length} baris) akan DIHAPUS PERMANEN. Tindakan ini tidak bisa dibatalkan. Lanjutkan?`
     )
@@ -171,6 +184,7 @@ export default function Keuangan() {
     const { error, data: rowsHapus } = await supabase
       .from('arkas_anggaran')
       .delete()
+      .eq('sekolah_id', sekolahId)
       .eq('tahun_anggaran', String(tahun))
       .select('id')
     setLoadingArkas(false)
@@ -308,7 +322,7 @@ export default function Keuangan() {
             <button
               className="btn-secondary text-red-600"
               onClick={handleHapusSemuaArkas}
-              disabled={arkasData.length === 0 || loadingArkas}
+              disabled={arkasData.length === 0 || loadingArkas || !sekolahId}
             >
               <Trash2 size={16} /> Hapus Semua
             </button>
@@ -333,6 +347,7 @@ export default function Keuangan() {
               <Trash2 size={16} /> Hapus Semua
             </button>
             <button className="btn-secondary" onClick={handleExportBkuPDF}><FileDown size={16} /> Ekspor PDF</button>
+            <TarikArkasModal tahun={tahun} bulan={bulan} sekolahId={sekolahId} onSelesai={loadBkuData} />
             <BkuImportModal bulan={bulan} tahun={tahun} onSelesai={loadBkuData} />
           </>
         )
@@ -550,7 +565,17 @@ export default function Keuangan() {
                       <tr key={r.id}>
                         <td>{r.tanggal}</td>
                         <td>{r.no_bukti || '-'}</td>
-                        <td>{r.uraian || '-'}</td>
+                        <td>
+                          {r.uraian || '-'}
+                          {r.arkas_id && (
+                            <span
+                              className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-brass-400/20 text-brass-600 align-middle"
+                              title="Ditarik dari ARKAS"
+                            >
+                              ARKAS{r.kode_rekening ? ` · ${r.kode_rekening}` : ''}
+                            </span>
+                          )}
+                        </td>
                         <td>{r.jumlah_barang ?? '-'}</td>
                         <td>{r.penerimaan ? formatRupiah(r.penerimaan) : '-'}</td>
                         <td>{r.pengeluaran ? formatRupiah(r.pengeluaran) : '-'}</td>
