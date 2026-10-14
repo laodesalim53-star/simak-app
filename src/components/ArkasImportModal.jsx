@@ -2,7 +2,7 @@ import { useState } from 'react'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabaseClient'
-import { Upload, X, Loader2, CheckCircle2, AlertCircle, AlertTriangle, Download } from 'lucide-react'
+import { Upload, X, Loader2, CheckCircle2, AlertCircle, AlertTriangle, Download, Trash2 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { KOLOM_ALOKASI, adalahFormatTemplate, templateKeObjek, parseRkasMentah } from '../lib/rkasParser'
 import { pdfKeMatriks } from '../lib/pdfKeMatriks'
@@ -18,32 +18,22 @@ import { pdfKeMatriks } from '../lib/pdfKeMatriks'
  * Kolom alokasi per sumber dana (opsional, kosong dianggap 0) untuk cetak RKAS:
  *   alok_{reguler|daerah|afirmasi|kinerja|silpa|lainnya}_{operasi|modal}
  * (level wajib diisi di database — kalau kosong di file, diturunkan
- * otomatis dari is_item: item/rincian = 3, kelompok/header = 1. Ini
- * masih dugaan; sesuaikan lagi kalau makna "level" di tabel berbeda.)
+ * otomatis dari is_item: item/rincian = 3, kelompok/header = 1.)
  *
- * PENTING soal tahun anggaran:
- *   Sekolah sering mengerjakan laporan untuk tahun anggaran yang BUKAN
- *   tahun berjalan (mis. menyusun ARKAS 2024 di tahun 2026). Karena itu
- *   modal ini TIDAK memaksa semua baris memakai filter "Tahun" yang
- *   sedang aktif di halaman Keuangan — setiap baris membawa
- *   tahun_anggaran-nya sendiri dari file, dan baris-baris dikelompokkan
- *   per tahun_anggaran itu sendiri (sama seperti BkuImportModal
- *   mengelompokkan tiap baris BKU per tahun+bulan dari kolom tanggal,
- *   bukan dari filter Bulan/Tahun aktif).
+ * Tahun anggaran diambil dari isi file, bukan dari filter Tahun di halaman Keuangan.
  *
- * Upload akan MENGHAPUS dulu data arkas_anggaran pada tahun_anggaran yang
- * sama dengan baris-baris di file, baru insert ulang — supaya upload
- * berkali-kali tidak menumpuk jadi dobel. Satu file boleh berisi lebih
- * dari satu tahun anggaran sekaligus.
+ * PENYIMPANAN ATOMIK:
+ *   Simpan memanggil fungsi database import_arkas (lihat import_arkas.sql). Hapus data
+ *   lama + insert data baru + upsert penerimaan terjadi dalam SATU transaksi, jadi kalau
+ *   gagal di tengah, data lama tetap utuh. sekolah_id diambil server dari akun yang login.
+ *
+ * HAPUS SEMUA:
+ *   Tombol "Hapus Semua Data {tahun}" menghapus seluruh baris arkas_anggaran sekolah ini
+ *   pada tahun yang sedang dipilih di halaman Keuangan (untuk mengulang dari awal bila
+ *   ada kesalahan impor).
  *
  * Penggunaan di Keuangan.jsx:
- *   import ArkasImportModal from '../components/ArkasImportModal'
- *   ...
- *   <ArkasImportModal onSelesai={loadArkasData} />
- *
- * (Prop tahunAnggaran lama masih diterima untuk kompatibilitas tapi
- * tidak lagi dipakai untuk menentukan tahun data — tahun diambil dari
- * isi file.)
+ *   <ArkasImportModal tahunAnggaran={String(tahun)} onSelesai={...} />
  *
  * Berkas pendukung:
  *   src/lib/rkasParser.js    — pembaca format RKAS mentah & template
@@ -125,8 +115,11 @@ function tahunValid(tahun_anggaran) {
   return /^\d{4}$/.test(tahun_anggaran)
 }
 
-export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
-  const { sekolahId } = useAuth()
+export default function ArkasImportModal({ tahunAnggaran, onSelesai }) {
+  const auth = useAuth()
+  // Sama seperti RkasCetak/Keuangan: sekolah_id dibaca dari profil akun
+  const sekolahId = auth?.profil?.sekolah_id ?? auth?.sekolahId
+
   const [open, setOpen] = useState(false)
   const [rows, setRows] = useState([])
   const [invalidCount, setInvalidCount] = useState(0)
@@ -140,6 +133,9 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
   const [penerimaan, setPenerimaan] = useState([])
   const [peringatan, setPeringatan] = useState([])
   const [tahunTerdeteksi, setTahunTerdeteksi] = useState(true)
+  // Hapus semua
+  const [hapusLoading, setHapusLoading] = useState(false)
+  const [hapusInfo, setHapusInfo] = useState('')
 
   function resetState() {
     setRows([])
@@ -152,6 +148,7 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
     setPeringatan([])
     setTahunTerdeteksi(true)
     setMembaca(false)
+    setHapusInfo('')
   }
 
   function processRows(rawRows) {
@@ -261,29 +258,19 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
     if (rows.length === 0) return
 
     const konfirmasi = confirm(
-      `Data ARKAS pada ${kelompok.length} tahun anggaran (${kelompok.join(', ')}) yang sudah ada akan DIHAPUS dan diganti dengan ${rows.length} baris dari file ini.` +
+      `Data ARKAS sekolah ini pada ${kelompok.length} tahun anggaran (${kelompok.join(', ')}) akan DIGANTI dengan ${rows.length} baris dari file ini.` +
       (mode === 'rkas' && penerimaan.length > 0 ? ` Data penerimaan (${penerimaan.length} baris) juga ikut diperbarui.` : '') +
-      (!npsn ? '\n\nPERHATIAN: NPSN sekolah tidak terkirim ke formulir ini, sehingga penghapusan tidak dibatasi per sekolah.' : '') +
+      '\n\nPenggantian dilakukan dalam satu transaksi: kalau gagal, data lama tetap aman.' +
       '\n\nLanjutkan?'
     )
     if (!konfirmasi) return
 
     setLoading(true)
     setError('')
+    setHapusInfo('')
 
     try {
-      // 1) Hapus dulu data pada tahun-tahun anggaran yang tersentuh file
-      //    ini, supaya upload ulang tidak menumpuk jadi dobel.
-      for (const ty of kelompok) {
-        let hapusQuery = supabase.from('arkas_anggaran').delete().eq('tahun_anggaran', ty)
-        if (npsn) hapusQuery = hapusQuery.eq('npsn', npsn)
-        const { error: hapusError } = await hapusQuery
-        if (hapusError) throw hapusError
-      }
-
-      // 2) Insert data baru per batch
       const payload = rows.map((r) => ({
-        npsn: npsn || null,
         tahun_anggaran: r.tahun_anggaran,
         no_urut: r.no_urut,
         level: r.level,
@@ -296,46 +283,78 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
         ...Object.fromEntries(KOLOM_ALOKASI.map((k) => [k, r[k]])),
       }))
 
-      const BATCH_SIZE = 200
-      let insertedTotal = 0
-      for (let i = 0; i < payload.length; i += BATCH_SIZE) {
-        const batch = payload.slice(i, i + BATCH_SIZE)
-        const { error: insertError, data } = await supabase
-          .from('arkas_anggaran')
-          .insert(batch)
-          .select('id')
-        if (insertError) throw insertError
-        insertedTotal += data?.length || 0
-      }
-      setDone({ inserted: insertedTotal, total: payload.length })
-      onSelesai?.(kelompok[0])
+      // Penerimaan (bagian A RKAS) — hanya untuk file RKAS asli dari ARKAS
+      const payloadPen =
+        mode === 'rkas' && penerimaan.length > 0
+          ? penerimaan.map((p, i) => ({
+              tahun_anggaran: rows[0].tahun_anggaran,
+              kode: p.kode,
+              uraian: p.uraian,
+              tanda: p.tanda || null,
+              jumlah: p.jumlah,
+              no_urut: i + 1,
+            }))
+          : []
 
-      // 3) Penerimaan (bagian A RKAS) — hanya untuk file RKAS asli dari ARKAS
-      if (mode === 'rkas' && penerimaan.length > 0) {
-        const payloadPen = penerimaan.map((p, i) => ({
-          sekolah_id: sekolahId || null,
-          tahun_anggaran: rows[0].tahun_anggaran,
-          kode: p.kode,
-          uraian: p.uraian,
-          tanda: p.tanda || null,
-          jumlah: p.jumlah,
-          no_urut: i + 1,
-        }))
-        const { error: penError } = await supabase
-          .from('arkas_penerimaan')
-          .upsert(payloadPen, { onConflict: 'sekolah_id,tahun_anggaran,kode' })
-        if (penError) {
-          setError('Belanja tersimpan, tetapi penerimaan gagal: ' + penError.message)
-        } else {
-          setDone((d) => ({ ...d, penerimaan: payloadPen.length }))
-        }
-      }
+      // Satu panggilan = satu transaksi di database (hapus lama + insert baru + penerimaan)
+      const { data, error: rpcError } = await supabase.rpc('import_arkas', {
+        p_baris: payload,
+        p_penerimaan: payloadPen,
+      })
+      if (rpcError) throw rpcError
+
+      setDone({
+        inserted: data?.baris ?? payload.length,
+        total: payload.length,
+        penerimaan: data?.penerimaan || 0,
+      })
+      onSelesai?.(kelompok[0])
     } catch (err) {
-      setError('Gagal menyimpan ke database: ' + err.message)
+      const fungsiBelumAda = err?.code === 'PGRST202' || /import_arkas/i.test(err?.message || '')
+      setError(
+        fungsiBelumAda
+          ? 'Fungsi import_arkas belum ada di database. Jalankan import_arkas.sql di Supabase SQL Editor. (' + err.message + ')'
+          : 'Gagal menyimpan ke database, data lama tidak diubah: ' + err.message
+      )
     } finally {
       setLoading(false)
     }
   }
+
+  // Hapus semua data ARKAS sekolah ini pada tahun yang sedang dipilih di halaman Keuangan
+  async function handleHapusSemua() {
+    if (!sekolahId || !tahunAnggaran) return
+    const ok = confirm(
+      `Semua data ARKAS tahun ${tahunAnggaran} milik sekolah ini akan DIHAPUS PERMANEN. Tindakan ini tidak bisa dibatalkan.\n\nLanjutkan?`
+    )
+    if (!ok) return
+
+    setHapusLoading(true)
+    setError('')
+    setHapusInfo('')
+    setDone(null)
+    const { data, error: err } = await supabase
+      .from('arkas_anggaran')
+      .delete()
+      .eq('sekolah_id', sekolahId)
+      .eq('tahun_anggaran', String(tahunAnggaran))
+      .select('id')
+    setHapusLoading(false)
+
+    if (err) {
+      setError('Gagal menghapus: ' + err.message)
+      return
+    }
+    const n = data?.length || 0
+    setHapusInfo(
+      n === 0
+        ? `Tidak ada data ARKAS tahun ${tahunAnggaran} yang terhapus.`
+        : `Berhasil menghapus ${n} baris ARKAS tahun ${tahunAnggaran}.`
+    )
+    onSelesai?.(String(tahunAnggaran))
+  }
+
+  const sibuk = loading || membaca || hapusLoading
 
   return (
     <>
@@ -345,7 +364,7 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
 
       {open && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-display text-lg font-semibold">Input Data Massal ARKAS</h2>
               <button className="icon-btn" onClick={() => { setOpen(false); resetState() }}>
@@ -453,8 +472,8 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
             )}
 
             {error && (
-              <div className="flex items-center gap-2 text-sm text-red-600 mb-3">
-                <AlertCircle size={16} /> {error}
+              <div className="flex items-start gap-2 text-sm text-red-600 mb-3">
+                <AlertCircle size={16} className="mt-0.5 shrink-0" /> <span>{error}</span>
               </div>
             )}
 
@@ -465,18 +484,36 @@ export default function ArkasImportModal({ tahunAnggaran, npsn, onSelesai }) {
               </div>
             )}
 
-            <div className="flex justify-end gap-3 pt-2">
-              <button className="btn-secondary" onClick={() => { setOpen(false); resetState() }}>
-                Tutup
-              </button>
+            {hapusInfo && (
+              <div className="flex items-center gap-2 text-sm text-sage-600 mb-3">
+                <CheckCircle2 size={16} /> {hapusInfo}
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
               <button
-                className="btn-primary"
-                onClick={handleImport}
-                disabled={rows.length === 0 || loading || membaca}
+                className="btn-secondary text-red-600"
+                onClick={handleHapusSemua}
+                disabled={sibuk || !sekolahId || !tahunAnggaran}
+                title="Hapus seluruh data ARKAS sekolah ini pada tahun yang sedang dipilih"
               >
-                {loading && <Loader2 size={16} className="animate-spin" />}
-                Simpan {rows.length > 0 ? rows.length : ''} Baris
+                {hapusLoading ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                Hapus Semua Data {tahunAnggaran || ''}
               </button>
+
+              <div className="flex gap-3">
+                <button className="btn-secondary" onClick={() => { setOpen(false); resetState() }}>
+                  Tutup
+                </button>
+                <button
+                  className="btn-primary"
+                  onClick={handleImport}
+                  disabled={rows.length === 0 || sibuk}
+                >
+                  {loading && <Loader2 size={16} className="animate-spin" />}
+                  Simpan {rows.length > 0 ? rows.length : ''} Baris
+                </button>
+              </div>
             </div>
           </div>
         </div>
