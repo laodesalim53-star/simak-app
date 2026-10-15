@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../lib/AuthContext'
 import { X, Search, Loader2, Receipt } from 'lucide-react'
 
 function formatRupiah(angka) {
@@ -18,6 +19,10 @@ function formatTanggal(tgl) {
  * Hanya menampilkan baris dengan pengeluaran > 0 (baris penerimaan tidak relevan
  * untuk kuitansi pengeluaran).
  *
+ * PERBAIKAN MULTI-SEKOLAH: query difilter per sekolah_id (lapisan kedua di
+ * samping RLS). Pencarian juga dibersihkan dari karakter yang merusak sintaks
+ * filter .or() milik PostgREST.
+ *
  * Dipanggil dari Kuitansi.jsx:
  *   <PilihBkuModal
  *     onPilih={(row) => { ...isi form pakai row... }}
@@ -25,25 +30,33 @@ function formatTanggal(tgl) {
  *   />
  */
 export default function PilihBkuModal({ onPilih, onClose }) {
+  const { sekolahId } = useAuth()
   const [pencarian, setPencarian] = useState('')
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   async function loadData(q) {
+    if (!sekolahId) return
     setLoading(true)
     setError('')
     let query = supabase
       .from('bku_kas')
       .select('*')
+      .eq('sekolah_id', sekolahId)
       .gt('pengeluaran', 0)
       .order('tanggal', { ascending: false })
       .limit(100)
 
     if (q.trim()) {
-      query = query.or(
-        `uraian.ilike.%${q}%,no_bukti.ilike.%${q}%,kode_rekening.ilike.%${q}%`
-      )
+      // Buang karakter yang bermakna di sintaks filter (koma, kurung, wildcard,
+      // backslash) supaya pencarian tidak error atau mengubah filter.
+      const aman = q.trim().replace(/[,()%*\\]/g, ' ').trim()
+      if (aman) {
+        query = query.or(
+          `uraian.ilike.%${aman}%,no_bukti.ilike.%${aman}%,kode_rekening.ilike.%${aman}%`
+        )
+      }
     }
 
     const { data, error: err } = await query
@@ -56,16 +69,13 @@ export default function PilihBkuModal({ onPilih, onClose }) {
     setLoading(false)
   }
 
+  // Satu efek saja (debounce 300 ms). Muatan awal (pencarian kosong) langsung
+  // jalan tanpa menunggu; efek ini juga jalan ulang kalau sekolahId berubah.
   useEffect(() => {
-    loadData('')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => {
-    const t = setTimeout(() => loadData(pencarian), 300)
+    const t = setTimeout(() => loadData(pencarian), pencarian ? 300 : 0)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pencarian])
+  }, [pencarian, sekolahId])
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 no-print">
