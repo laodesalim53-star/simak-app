@@ -11,6 +11,9 @@ import { X, Search, Loader2 } from 'lucide-react'
  *  - Sekolah (lainnya)      : bku_kas (BKU BOS) dan kuitansi jenis='kuitansi'.
  *                             Tab Nota Belanja disembunyikan karena belum ada
  *                             tabel sumbernya untuk sekolah.
+ *
+ * PERBAIKAN MULTI-SEKOLAH: semua mode kini wajib punya sekolahId dan memfilter
+ * per sekolah di sisi klien (lapisan kedua di samping RLS di database).
  */
 
 const SUMBER_BOK = [
@@ -117,9 +120,9 @@ export default function PilihKuitansiModal({ onPilih, onClose }) {
   const [cari, setCari] = useState('')
 
   useEffect(() => {
-    // Tenant puskesmas wajib punya sekolahId; sekolah mengandalkan RLS
-    // (sama seperti PilihBkuModal & halaman Kuitansi).
-    if (modeBok && !sekolahId) return
+    // PERBAIKAN: semua tenant (puskesmas maupun sekolah) wajib punya sekolahId.
+    // Sebelumnya mode sekolah hanya mengandalkan RLS.
+    if (!sekolahId) return
     let batal = false
 
     async function muat() {
@@ -141,9 +144,10 @@ export default function PilihKuitansiModal({ onPilih, onClose }) {
         setData({ bku: bku.data || [], kwitansi: kwi.data || [], nota: nota.data || [] })
       } else {
         const [bku, kwi] = await Promise.all([
-          supabase.from('bku_kas').select('*')
+          supabase.from('bku_kas').select('*').eq('sekolah_id', sekolahId)
             .gt('pengeluaran', 0).order('tanggal', { ascending: false }).limit(300),
-          supabase.from('kuitansi').select('*').eq('jenis', 'kuitansi')
+          supabase.from('kuitansi').select('*').eq('sekolah_id', sekolahId)
+            .eq('jenis', 'kuitansi')
             .order('tanggal', { ascending: false }).limit(300),
         ])
         if (batal) return
