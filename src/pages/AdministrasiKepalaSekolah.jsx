@@ -1,9 +1,7 @@
-import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import {
   Landmark, Search, Lock, Target, Wallet, CalendarCheck, BookOpen, ScrollText,
   ClipboardList, ArrowLeftRight, UserCheck, Mail, FileSignature, Award, Eye,
-  Users, Package, ClipboardEdit, FileBarChart, School, FileText,
+  Users, Package, ClipboardEdit, FileBarChart, School, FileText, ShieldCheck,
 } from 'lucide-react'
 import Layout from '../components/Layout'
 
@@ -64,6 +62,7 @@ const KELOMPOK = [
       { id: 'notulen-rapat', judul: 'Notulen Rapat', deskripsi: 'Catatan dan keputusan rapat dewan guru.', icon: ClipboardEdit, warna: 'indigo', siap: true },
       { id: 'evaluasi-diri', judul: 'Evaluasi Diri Sekolah', deskripsi: 'Rapor mutu dan rencana perbaikan.', icon: ClipboardList, warna: 'purple', siap: true },
       { id: 'laporan-bulanan', judul: 'Laporan Bulanan', deskripsi: 'Rekap kegiatan dan capaian sekolah tiap bulan.', icon: FileBarChart, warna: 'emerald', siap: true, path: '/laporan' },
+      { id: 'akreditasi', judul: 'Berkas Akreditasi', deskripsi: 'Checklist dan arsip berkas akreditasi SD dan SMP.', icon: ShieldCheck, warna: 'blue', siap: true },
     ],
   },
 ]
