@@ -477,36 +477,60 @@ export default function AkreditasiSekolah() {
 
   // Hitungan data dari halaman lain di aplikasi (hanya tampilan, tidak mengubah status).
   // Tabel: arkas_anggaran, bku_kas, siswa (sama seperti yang dipakai Keuangan.jsx).
+  // ARKAS dan BKU sering diisi untuk tahun yang bukan tahun berjalan, jadi yang
+  // dihitung adalah tahun TERBARU yang ada datanya, bukan tahun kalender ini.
   // Pembatasan per sekolah mengikuti RLS di Supabase, sama seperti halaman Keuangan.
   const [hitung, setHitung] = useState({})
-  const tahunIni = new Date().getFullYear()
 
   useEffect(() => {
     if (!sekolahId) return
     let aktif = true
-    const jumlah = (q) => q.then((r) => (r.error ? null : r.count))
+
+    // Cari tahun terbaru pada tabel, lalu hitung baris pada tahun itu.
+    async function terbaru(tabel, kolom, tahunSebagaiTeks) {
+      const { data: t, error: e1 } = await supabase
+        .from(tabel)
+        .select(kolom)
+        .order(kolom, { ascending: false })
+        .limit(1)
+      if (e1) return null
+      if (!t || t.length === 0) return { tahun: null, n: 0 }
+      const tahun = t[0][kolom]
+      const { count, error: e2 } = await supabase
+        .from(tabel)
+        .select('id', { count: 'exact', head: true })
+        .eq(kolom, tahunSebagaiTeks ? String(tahun) : tahun)
+      if (e2) return null
+      return { tahun, n: count || 0 }
+    }
+
     Promise.all([
-      jumlah(supabase.from('arkas_anggaran').select('id', { count: 'exact', head: true }).eq('tahun_anggaran', String(tahunIni))),
-      jumlah(supabase.from('bku_kas').select('id', { count: 'exact', head: true }).eq('tahun', tahunIni)),
-      jumlah(supabase.from('siswa').select('id', { count: 'exact', head: true })),
+      terbaru('arkas_anggaran', 'tahun_anggaran', true),
+      terbaru('bku_kas', 'tahun', false),
+      supabase
+        .from('siswa')
+        .select('id', { count: 'exact', head: true })
+        .then((r) => (r.error ? null : r.count)),
     ]).then(([arkas, bku, siswa]) => {
       if (aktif) setHitung({ arkas, bku, siswa })
     })
     return () => {
       aktif = false
     }
-  }, [sekolahId, tahunIni])
+  }, [sekolahId])
 
   function infoUntuk(kode) {
-    const teks = (n, satuan, kosong) => (n === null || n === undefined ? null : n > 0 ? `${n} ${satuan}` : kosong)
     if (kode === 'MAN-03') {
-      return [
-        teks(hitung.arkas, `baris ARKAS ${tahunIni}`, `ARKAS ${tahunIni} belum diisi`),
-        teks(hitung.bku, `baris BKU ${tahunIni}`, `BKU ${tahunIni} belum diisi`),
-      ].filter(Boolean)
+      const label = (d, nama) => {
+        if (!d) return null
+        return d.n > 0 ? `${nama} ${d.tahun}: ${d.n} baris` : `${nama} belum diisi`
+      }
+      return [label(hitung.arkas, 'ARKAS'), label(hitung.bku, 'BKU')].filter(Boolean)
     }
     if (kode === 'MAN-08') {
-      return [teks(hitung.siswa, 'siswa terdata', 'Data siswa belum diisi')].filter(Boolean)
+      const n = hitung.siswa
+      if (n === null || n === undefined) return []
+      return [n > 0 ? `${n} siswa terdata` : 'Data siswa belum diisi']
     }
     return []
   }
