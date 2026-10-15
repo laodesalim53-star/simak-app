@@ -14,74 +14,20 @@ const emptyForm = {
   catatan: '',
 }
 
-// Daftar sumber data surat dari bagian lain aplikasi.
-// SESUAIKAN nama tabel dan kolom dengan yang ada di databasemu.
-const SUMBER_OTOMATIS = [
-  {
-    sumber: 'surat_pengantar', // label unik sumber (jangan diubah setelah dipakai)
-    tabel: 'surat_pengantar', // nama tabel asal
-    jenis: 'keluar',
-    map: (r) => ({
-      nomor_surat: r.nomor_surat,
-      perihal: r.perihal || 'Surat Pengantar',
-      pengirim_tujuan: r.tujuan,
-      tanggal: r.tanggal,
-    }),
-  },
-  // Contoh surat masuk, aktifkan dan sesuaikan jika ada tabelnya:
-  // {
-  //   sumber: 'disposisi',
-  //   tabel: 'disposisi',
-  //   jenis: 'masuk',
-  //   map: (r) => ({
-  //     nomor_surat: r.nomor_surat,
-  //     perihal: r.perihal,
-  //     pengirim_tujuan: r.asal_surat,
-  //     tanggal: r.tanggal_terima,
-  //   }),
-  // },
-]
+// Arsip surat keluar diisi OTOMATIS oleh trigger database (trg_sync_surat)
+// dari tabel surat_keluar, surat_keterangan, surat_reskrim, pengajuan_surat_aktif,
+// dan pengajuan_izin. Halaman ini hanya membaca tabel `surat`,
+// jadi tidak ada lagi sinkron dari sisi client (mencegah data ganda).
 
 export default function Surat() {
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
-  const [syncing, setSyncing] = useState(false)
   const [search, setSearch] = useState('')
   const [filterJenis, setFilterJenis] = useState('semua')
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
-
-  async function syncOtomatis() {
-    setSyncing(true)
-    try {
-      for (const s of SUMBER_OTOMATIS) {
-        const { data: rows, error } = await supabase.from(s.tabel).select('*')
-        if (error) {
-          console.warn(`Sinkron ${s.sumber} gagal:`, error.message)
-          continue
-        }
-        if (!rows?.length) continue
-
-        const payload = rows.map((r) => ({
-          ...s.map(r),
-          jenis: s.jenis,
-          sumber: s.sumber,
-          sumber_id: String(r.id),
-        }))
-
-        // ignoreDuplicates: baris yang sudah ada tidak ditimpa,
-        // jadi koreksi manual di arsip tetap aman
-        const { error: errUpsert } = await supabase
-          .from('surat')
-          .upsert(payload, { onConflict: 'sumber,sumber_id', ignoreDuplicates: true })
-        if (errUpsert) console.warn(`Simpan ${s.sumber} gagal:`, errUpsert.message)
-      }
-    } finally {
-      setSyncing(false)
-    }
-  }
 
   async function loadData() {
     setLoading(true)
@@ -94,14 +40,13 @@ export default function Surat() {
     setLoading(false)
   }
 
+  // Tombol "Tarik Data": cukup muat ulang dari tabel surat
   async function tarikData() {
-    await syncOtomatis()
     await loadData()
   }
 
   useEffect(() => {
-    tarikData()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    loadData()
   }, [])
 
   function openAdd(jenis) {
@@ -175,8 +120,8 @@ export default function Surat() {
       subtitle={`${data.length} surat terarsip`}
       actions={
         <>
-          <button className="btn-secondary" disabled={syncing} onClick={tarikData}>
-            {syncing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />} Tarik Data
+          <button className="btn-secondary" disabled={loading} onClick={tarikData}>
+            {loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />} Tarik Data
           </button>
           <button className="btn-secondary" onClick={handleExport}>
             <FileSpreadsheet size={16} /> Ekspor Excel
