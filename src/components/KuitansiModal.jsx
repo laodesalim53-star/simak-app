@@ -15,27 +15,35 @@ import {
 // Menerima/Alamat Penerima). Tidak perlu ketik ulang tiap kali, tapi tetap
 // bisa diedit manual di form kalau memang beda dari biasanya.
 //
+// PERBAIKAN MULTI-SEKOLAH: kunci sekarang DIPISAH PER SEKOLAH
+// ("kuitansi_ttd_default:<sekolahId>"). Sebelumnya satu kunci dipakai semua
+// akun di browser yang sama, sehingga isian satu sekolah (mis. "BENDAHARA BOS
+// SD NEGERI WARIA") muncul di sekolah lain.
+//
 // KHUSUS disetujui_oleh/nip_disetujui/dibayar_oleh/nip_dibayar: nilai dari
-// localStorage ini sekarang hanya dipakai sebagai FALLBACK saat form pertama
-// kali dibuka. Begitu data Kepala Sekolah/Bendahara berhasil ditemukan dari
+// localStorage ini hanya dipakai sebagai FALLBACK saat form pertama kali
+// dibuka. Begitu data Kepala Sekolah/Bendahara berhasil ditemukan dari
 // tabel `guru` (lihat muatPenandatanganDariGuru di bawah), nilainya otomatis
-// ditimpa supaya selalu sinkron dengan data guru terbaru — tidak perlu lagi
-// mengandalkan isian lama yang bisa saja sudah tidak akurat (mis. setelah
-// pergantian kepala sekolah/bendahara).
-const ISIAN_STORAGE_KEY = 'kuitansi_ttd_default'
+// ditimpa supaya selalu sinkron dengan data guru terbaru.
+const ISIAN_STORAGE_PREFIX = 'kuitansi_ttd_default'
+const KUNCI_LAMA_GLOBAL = 'kuitansi_ttd_default' // kunci lama tanpa sekolah, dihapus sekali
 
-function ambilIsianTersimpan() {
+function kunciStorage(sekolahId) {
+  return `${ISIAN_STORAGE_PREFIX}:${sekolahId || 'tanpa-sekolah'}`
+}
+
+function ambilIsianTersimpan(sekolahId) {
   try {
-    const raw = localStorage.getItem(ISIAN_STORAGE_KEY)
+    const raw = localStorage.getItem(kunciStorage(sekolahId))
     return raw ? JSON.parse(raw) : {}
   } catch {
     return {}
   }
 }
 
-function simpanIsianDefault(form) {
+function simpanIsianDefault(form, sekolahId) {
   try {
-    localStorage.setItem(ISIAN_STORAGE_KEY, JSON.stringify({
+    localStorage.setItem(kunciStorage(sekolahId), JSON.stringify({
       diterima_dari: form.diterima_dari,
       disetujui_oleh: form.disetujui_oleh,
       nip_disetujui: form.nip_disetujui,
@@ -50,8 +58,8 @@ function simpanIsianDefault(form) {
   }
 }
 
-const emptyForm = (keuanganRow) => {
-  const isianDefault = ambilIsianTersimpan()
+const emptyForm = (keuanganRow, sekolahId) => {
+  const isianDefault = ambilIsianTersimpan(sekolahId)
   return {
     no_bukti: keuanganRow?.no_bukti || '',
     lembar: 'I/II/III/IV/V',
@@ -62,8 +70,8 @@ const emptyForm = (keuanganRow) => {
     jumlah: keuanganRow?.jumlah || '',
     untuk_pembayaran: keuanganRow?.catatan || keuanganRow?.kategori || '',
     catatan: '',
-    // Fallback awal dari localStorage — akan ditimpa otomatis oleh data guru
-    // (Kepala Sekolah/Bendahara) begitu ditemukan, lihat useEffect di bawah.
+    // Fallback awal dari localStorage (per sekolah) — akan ditimpa otomatis
+    // oleh data guru (Kepala Sekolah/Bendahara) begitu ditemukan.
     disetujui_oleh: isianDefault.disetujui_oleh || '',
     jabatan_disetujui: 'Atasan Langsung',
     nip_disetujui: isianDefault.nip_disetujui || '',
@@ -98,7 +106,7 @@ function cariGuruBerdasarkanPeran(daftarGuru, kataKunci) {
  *     jenis="kuitansi"           // 'kuitansi' (bawaan, ada watermark bintang) | 'kwitansi' (polos, tanpa watermark)
  *     keuanganRow={row}          // baris transaksi keuangan yang mau dibuatkan kuitansi (boleh null)
  *     sekolah={{ nama, alamat, kota }}
- *     sekolahId={sekolahId}      // dipakai untuk cari Kepala Sekolah/Bendahara di tabel guru
+ *     sekolahId={sekolahId}      // dipakai untuk cari Kepala Sekolah/Bendahara, kunci localStorage, dan kolom sekolah_id
  *     onClose={() => setKuitansiFor(null)}
  *   />
  *
@@ -108,44 +116,19 @@ function cariGuruBerdasarkanPeran(daftarGuru, kataKunci) {
  * keuanganRow juga dipakai untuk prefill dari alur "Tarik Data dari BKU" di
  * Kuitansi.jsx — baris bku_kas dipetakan ke bentuk yang sama di sana
  * ({ tanggal, jumlah, catatan, kategori, no_bukti, mata_anggaran }, TANPA
- * field id — lihat catatan di handleSimpan soal keuangan_id) sebelum dioper
- * ke sini, supaya komponen ini tidak perlu tahu soal BKU. Field-field itu
- * TIDAK disentuh oleh logika penandatangan di bawah.
+ * field id — lihat catatan di handleSimpan soal keuangan_id).
  *
- * Field "Sudah Terima Dari", tanda tangan (disetujui_oleh/nip_disetujui/
- * dibayar_oleh/nip_dibayar), dan "Yang Menerima"/"Alamat Penerima" diingat
- * otomatis lewat localStorage (lihat ISIAN_STORAGE_KEY di atas) supaya tidak
- * perlu diketik ulang tiap kali — kalau suatu saat beda, tinggal edit manual
- * di form, dan isian barunya otomatis jadi default berikutnya.
- *
- * KHUSUS nama+NIP Kepala Sekolah (disetujui_oleh/nip_disetujui) dan Bendahara
- * (dibayar_oleh/nip_dibayar): begitu modal dibuka dan sekolahId tersedia,
- * muatPenandatanganDariGuru() mengambil data guru aktif sekolah tsb dan
- * mencari yang jenis_ptk/tugas_tambahan mengandung "kepala sekolah" atau
- * "bendahara", lalu MENGISI ULANG kedua field itu dengan data guru terbaru —
- * jadi selalu sinkron otomatis walau kepala sekolah/bendahara berganti,
- * tanpa perlu edit manual. Kalau tidak ketemu guru yang cocok, isian
- * localStorage/manual di atas tetap dipakai (tidak ditimpa jadi kosong).
- * Field lain tetap bisa diedit manual seperti biasa.
- *
- * PENOMORAN: untuk kuitansi biasa (dibuat manual, keuanganRow?.id terisi
- * atau kosong total), nomor kuitansi tetap otomatis lewat RPC
- * next_nomor_kuitansi seperti semula (p_jenis mengikuti prop `jenis`).
- * KHUSUS untuk kuitansi hasil "Tarik Data dari BKU" (keuanganRow tanpa id,
- * tapi No. Bukti terisi dari baris BKU), nomor kuitansi LANGSUNG memakai
- * No. Bukti BKU apa adanya (mis. "BNU02"), bukan format auto
- * "0008/BNU/2026" — supaya nomor kuitansi selalu mengikuti nomor bukti
- * aslinya di BKU. Lihat handleSimpan.
+ * PENOMORAN: untuk kuitansi biasa, nomor kuitansi tetap otomatis lewat RPC
+ * next_nomor_kuitansi (p_jenis mengikuti prop `jenis`). KHUSUS untuk kuitansi
+ * hasil "Tarik Data dari BKU" (keuanganRow tanpa id, tapi No. Bukti terisi),
+ * nomor kuitansi LANGSUNG memakai No. Bukti BKU apa adanya.
  *
  * TAMPILAN CETAK: warna & tata letak dipilih lewat PilihanTampilanCetak dan
- * disimpan sebagai preferensi di localStorage (lib/kuitansiTema.js) — tidak
- * ikut disimpan ke tabel kuitansi, sehingga Cetak Ulang dari halaman riwayat
- * memakai preferensi yang berlaku saat itu. Berlaku sama untuk 'kuitansi'
- * dan 'kwitansi'.
+ * disimpan sebagai preferensi di localStorage (lib/kuitansiTema.js).
  */
 export default function KuitansiModal({ keuanganRow, sekolah, sekolahId, jenis = 'kuitansi', onClose }) {
   const tanpaWatermark = jenis === 'kwitansi'
-  const [form, setForm] = useState(emptyForm(keuanganRow))
+  const [form, setForm] = useState(() => emptyForm(keuanganRow, sekolahId))
   const [saving, setSaving] = useState(false)
   const [savedData, setSavedData] = useState(null) // { ...kuitansi row } setelah tersimpan, siap dicetak
   const [tema, setTema] = useState(() => muatTemaKuitansi())
@@ -159,6 +142,12 @@ export default function KuitansiModal({ keuanganRow, sekolah, sekolahId, jenis =
     setTema(temaBaru)
     simpanTemaKuitansi(temaBaru)
   }
+
+  // Hapus sekali kunci lama yang tidak dipisah per sekolah, supaya isian
+  // sekolah lain (mis. Waria) tidak terbawa lagi.
+  useEffect(() => {
+    try { localStorage.removeItem(KUNCI_LAMA_GLOBAL) } catch { /* abaikan */ }
+  }, [])
 
   // Sinkronkan nama+NIP Kepala Sekolah & Bendahara dari tabel guru setiap
   // modal dibuka. Tidak menyentuh field lain (termasuk yang berasal dari
@@ -198,26 +187,32 @@ export default function KuitansiModal({ keuanganRow, sekolah, sekolahId, jenis =
 
   async function handleSimpan(e) {
     e.preventDefault()
+    // PERBAIKAN: jangan pernah menyimpan tanpa tahu sekolah pemiliknya.
+    if (!sekolahId) {
+      alert('Data sekolah belum termuat. Muat ulang halaman lalu coba lagi.')
+      return
+    }
     setSaving(true)
     try {
       // Kuitansi yang ditarik dari BKU tidak punya keuangan_id (lihat catatan
       // di payload di bawah), dan No. Bukti-nya sudah otomatis terisi dari
       // baris BKU. Untuk kasus ini, nomor kuitansi langsung mengikuti No.
       // Bukti BKU apa adanya — penomoran otomatis (next_nomor_kuitansi)
-      // dilewati supaya tidak "memakan" urutan nomor untuk kuitansi biasa,
-      // dan supaya nomor kuitansi selalu identik dengan nomor bukti BKU.
+      // dilewati supaya tidak "memakan" urutan nomor untuk kuitansi biasa.
       const dariBku = !keuanganRow?.id && !!form.no_bukti
       let nomorFinal
 
       if (dariBku) {
         nomorFinal = form.no_bukti
       } else {
+        // RPC sengaja tidak diubah supaya tidak merusak fungsi yang sudah ada.
         const { data: nomorData, error: nomorErr } = await supabase.rpc('next_nomor_kuitansi', { p_jenis: jenis })
         if (nomorErr) throw nomorErr
         nomorFinal = nomorData
       }
 
       const payload = {
+        sekolah_id: sekolahId, // PERBAIKAN: ikat baris ke sekolah yang login
         // PENTING: keuangan_id punya foreign key ke tabel `keuangan`. keuanganRow
         // bisa juga datang dari alur "Tarik Data dari BKU" (baris tabel bku_kas,
         // ID-nya BUKAN ID di tabel keuangan) — di situ Kuitansi.jsx sengaja TIDAK
@@ -248,8 +243,9 @@ export default function KuitansiModal({ keuanganRow, sekolah, sekolahId, jenis =
       const { data: inserted, error: insertErr } = await supabase.from('kuitansi').insert(payload).select().single()
       if (insertErr) throw insertErr
 
-      // Simpan isian yang biasanya konstan sebagai default untuk kuitansi berikutnya.
-      simpanIsianDefault(form)
+      // Simpan isian yang biasanya konstan sebagai default untuk kuitansi
+      // berikutnya — hanya untuk sekolah ini.
+      simpanIsianDefault(form, sekolahId)
 
       setSavedData(inserted)
     } catch (err) {
@@ -364,11 +360,8 @@ export default function KuitansiModal({ keuanganRow, sekolah, sekolahId, jenis =
             {/* ==== Tanda tangan ====
                 Nama+NIP Kepala Sekolah dan Bendahara di bawah ini otomatis terisi
                 dari data guru (lihat muatPenandatanganDariGuru di atas), dengan
-                fallback ke isian terakhir (localStorage) lewat emptyForm() kalau
-                belum ketemu di data guru — tetap bisa diedit manual kalau memang
-                beda dari biasanya. Sudah Terima Dari di atas, dan Yang
-                Menerima/Alamat Penerima di bawah, tetap dari localStorage seperti
-                semula. */}
+                fallback ke isian terakhir SEKOLAH INI (localStorage) kalau belum
+                ketemu di data guru — tetap bisa diedit manual. */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label-field">Setuju Dibayar (nama)</label>
