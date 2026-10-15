@@ -101,6 +101,11 @@ function mapRowKuitansi(row, jenis = 'kuitansi') {
   }
 }
 
+// Ambil nilai unik & tidak kosong dari sebuah daftar (urutan kemunculan dipertahankan).
+function nilaiUnik(daftar) {
+  return [...new Set(daftar.map((v) => String(v ?? '').trim()).filter(Boolean))]
+}
+
 export default function Kuitansi() {
   const { profil } = useAuth()
   const sekolahId = profil?.sekolah_id
@@ -111,7 +116,7 @@ export default function Kuitansi() {
   const [showBuat, setShowBuat] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [showPilihBku, setShowPilihBku] = useState(false)
-  const [bkuTerpilih, setBkuTerpilih] = useState(null) // baris BKU yang dipilih, dipetakan ke bentuk keuanganRow
+  const [bkuTerpilih, setBkuTerpilih] = useState(null) // gabungan baris BKU yang dicentang, dipetakan ke bentuk keuanganRow
   const [sekolah, setSekolah] = useState(null)
   const [menghapus, setMenghapus] = useState(null) // id yang sedang dihapus
 
@@ -214,22 +219,37 @@ export default function Kuitansi() {
     loadData()
   }
 
-  // Petakan baris bku_kas ke bentuk yang diharapkan KuitansiModal (keuanganRow):
-  // { id, tanggal, jumlah, catatan, kategori, no_bukti, mata_anggaran } — supaya
-  // KuitansiModal tidak perlu tahu soal struktur tabel bku_kas sama sekali.
-  function handlePilihBku(row) {
+  // Petakan satu atau BEBERAPA baris bku_kas (hasil centang di PilihBkuModal) ke
+  // bentuk yang diharapkan KuitansiModal (keuanganRow):
+  // { tanggal, jumlah, catatan, kategori, no_bukti, mata_anggaran }
+  // Beberapa baris dengan no. bukti yang sama digabung menjadi 1 kuitansi:
+  //  - jumlah        : dijumlahkan
+  //  - uraian        : digabung dengan "; " (nilai unik)
+  //  - tanggal       : tanggal terbaru
+  //  - no_bukti      : nilai unik digabung koma
+  //  - mata_anggaran : kode rekening unik digabung koma
+  function handlePilihBku(rows) {
+    const daftar = Array.isArray(rows) ? rows : [rows]
+    if (daftar.length === 0) return
+
+    const jumlah = daftar.reduce((s, r) => s + (Number(r.pengeluaran) || 0), 0)
+    const tanggalTerbaru = daftar
+      .map((r) => r.tanggal)
+      .filter(Boolean)
+      .sort()
+      .at(-1)
+    const uraian = nilaiUnik(daftar.map((r) => r.uraian)).join('; ')
+
     setBkuTerpilih({
-      // SENGAJA tidak menyertakan `id` di sini. keuanganRow.id dipakai
-      // KuitansiModal untuk mengisi kolom keuangan_id, yang foreign key-nya
-      // menunjuk ke tabel `keuangan` — bukan ke bku_kas. Kalau id baris BKU
-      // ikut dioper, insert kuitansi akan gagal (atau salah nyambung ke baris
-      // keuangan yang tidak berhubungan). keuangan_id akan otomatis null.
-      tanggal: row.tanggal,
-      jumlah: row.pengeluaran,
-      catatan: row.uraian,
-      kategori: row.uraian,
-      no_bukti: row.no_bukti,
-      mata_anggaran: row.kode_rekening,
+      // SENGAJA tidak menyertakan `id`. keuanganRow.id dipakai KuitansiModal
+      // untuk mengisi kolom keuangan_id, yang foreign key-nya menunjuk ke tabel
+      // `keuangan` — bukan ke bku_kas. keuangan_id akan otomatis null.
+      tanggal: tanggalTerbaru,
+      jumlah,
+      catatan: uraian,
+      kategori: uraian,
+      no_bukti: nilaiUnik(daftar.map((r) => r.no_bukti)).join(', '),
+      mata_anggaran: nilaiUnik(daftar.map((r) => r.kode_rekening)).join(', '),
     })
     setShowPilihBku(false)
     setShowBuat(true)
