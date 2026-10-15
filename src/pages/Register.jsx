@@ -4,9 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { Loader2, UserPlus, CheckCircle2, ListChecks, Info, Eye, EyeOff, ChevronDown } from 'lucide-react'
 
-// Jabatan yang tersedia per jenis institusi. Kantor & Puskesmas tidak punya
-// konsep "orang_tua" (tidak ada relasi siswa), jadi daftarnya lebih pendek
-// dan sejajar satu sama lain (pegawai / admin / kepala).
+// Jabatan yang tersedia untuk akun sekolah (SD & SMP).
 const JABATAN_SEKOLAH = [
   { value: 'guru', label: 'Guru' },
   { value: 'admin', label: 'Admin' },
@@ -14,46 +12,16 @@ const JABATAN_SEKOLAH = [
   { value: 'orang_tua', label: 'Orang Tua / Wali Murid' },
 ]
 
-const JABATAN_KANTOR = [
-  { value: 'pegawai', label: 'Pegawai' },
-  { value: 'admin', label: 'Admin' },
-  { value: 'kepala_kantor', label: 'Kepala Kantor / Kepala KUA' },
+// Jenjang sekolah yang dilayani. Nilainya sama dengan ?jenjang= di beranda.
+const OPSI_JENJANG = [
+  { value: 'sd', label: 'SD' },
+  { value: 'smp', label: 'SMP' },
 ]
 
-// PERBAIKAN: tenant Puskesmas, sejajar dengan Kantor (pegawai/admin/kepala),
-// nilai jabatan disesuaikan dengan validasi di AuthContext.daftar()
-// (jabatanValidPuskesmas: kepala_puskesmas, admin, pegawai).
-const JABATAN_PUSKESMAS = [
-  { value: 'pegawai', label: 'Pegawai' },
-  { value: 'admin', label: 'Admin' },
-  { value: 'kepala_puskesmas', label: 'Kepala Puskesmas' },
-]
-
-// Catatan: tenant "polres" di database hanya DITAMPILKAN sebagai "Keamanan".
-// Nilai internal (polres, kepala_polres) TIDAK diubah karena dipakai
-// database dan AuthContext.daftar().
-const JABATAN_POLRES = [
-  { value: 'pegawai', label: 'Personel / Pegawai' },
-  { value: 'admin', label: 'Admin' },
-  { value: 'kepala_polres', label: 'Kapolres' },
-]
-
-// Nilai internal ('sekolah' | 'kantor' | 'puskesmas' | 'polres') TIDAK diubah
-// karena sama dengan kolom jenis_organisasi di database. Yang berubah hanya
-// tulisan di layar: "Kantor" & "Puskesmas" diberi keterangan singkat
-// supaya pengunjung yakin ini pintu yang benar — sama dengan istilah di
-// beranda.
-const OPSI_JENIS = [
-  { value: 'sekolah', label: 'Sekolah' },
-  { value: 'kantor', label: 'Kantor (KUA)' },
-  { value: 'puskesmas', label: 'Puskesmas' },
-  { value: 'polres', label: 'Keamanan' },
-]
-
-// Jenis institusi yang butuh NIP (Nomor Induk Pegawai) sebagai identitas
-// kepegawaian, sejalan dengan validasi wajib-NIP di AuthContext.daftar()
-// untuk jenisOrganisasi 'kantor', 'puskesmas', dan 'polres'.
-const JENIS_BUTUH_NIP = ['kantor', 'puskesmas', 'polres']
+// Nilai internal jenis_organisasi di database. Hanya 'sekolah' yang dipakai
+// di halaman ini; nilai lain (kantor, puskesmas, polres) tetap ada di
+// database/AuthContext tapi tidak lagi ditawarkan di formulir pendaftaran.
+const JENIS_ORGANISASI = 'sekolah'
 
 const inputClass =
   'w-full bg-slate-900/60 border border-blue-500/30 rounded-lg px-3 py-2.5 min-h-[44px] text-base text-white placeholder-slate-400 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30 disabled:opacity-60'
@@ -76,9 +44,8 @@ function terjemahGalat(pesan) {
 }
 
 // ---- Komponen kecil di LUAR komponen utama ---------------------------
-// Sebelumnya Background dan InfoBox didefinisikan di dalam Register(), jadi
-// dibuat ulang (dan dipasang ulang) di setiap ketikan. Dipindah ke sini
-// supaya tidak dibangun ulang terus-menerus.
+// Didefinisikan di luar Register() supaya tidak dibuat ulang (dan dipasang
+// ulang) di setiap ketikan.
 
 function Latar() {
   return (
@@ -167,8 +134,8 @@ function SelectField({ id, label, hint, children, ...selectProps }) {
 }
 
 // Tombol pilihan (segmented control) dengan status tekan. Jumlah kolom
-// menyesuaikan jumlah opsi (2, 3, atau 4) — ditulis sebagai kelas literal
-// (bukan template dinamis) supaya tetap terdeteksi oleh Tailwind JIT.
+// menyesuaikan jumlah opsi — ditulis sebagai kelas literal (bukan template
+// dinamis) supaya tetap terdeteksi oleh Tailwind JIT.
 function Segmen({ label, opsi, nilai, onPilih }) {
   const kolom =
     opsi.length >= 4 ? 'grid-cols-2 sm:grid-cols-4' : opsi.length === 3 ? 'grid-cols-3' : 'grid-cols-2'
@@ -195,99 +162,67 @@ function Segmen({ label, opsi, nilai, onPilih }) {
   )
 }
 
-// Daftar jabatan sesuai jenis institusi yang dipilih.
-function opsiJabatanUntuk(jenis) {
-  if (jenis === 'kantor') return JABATAN_KANTOR
-  if (jenis === 'puskesmas') return JABATAN_PUSKESMAS
-  if (jenis === 'polres') return JABATAN_POLRES
-  return JABATAN_SEKOLAH
-}
-
-// Jabatan pertama (default) untuk suatu jenis institusi.
-function jabatanDefaultUntuk(jenis) {
-  return opsiJabatanUntuk(jenis)[0].value
-}
-
 export default function Register() {
   const { session, daftar } = useAuth()
 
-  // Link dari beranda membawa ?untuk=kua, ?untuk=puskesmas, ?untuk=polres,
-  // atau ?untuk=sekolah, jadi pengunjung yang sudah memilih jenis
-  // instansinya di beranda tidak perlu memilih lagi.
+  // Link dari beranda membawa ?jenjang=sd atau ?jenjang=smp, jadi pengunjung
+  // yang sudah memilih jenjang di beranda tidak perlu memilih lagi.
+  // Tanpa parameter (atau "semua"), jenjang awalnya SD.
   const [searchParams] = useSearchParams()
-  const untukParam = searchParams.get('untuk')
-  const jenisAwal =
-    untukParam === 'kua' ? 'kantor'
-    : untukParam === 'puskesmas' ? 'puskesmas'
-    : untukParam === 'polres' ? 'polres'
-    : 'sekolah'
+  const jenjangParam = searchParams.get('jenjang')
+  const jenjangAwal = jenjangParam === 'smp' ? 'smp' : 'sd'
 
-  // Jenis institusi dipilih dulu sebelum jabatan, karena menentukan
-  // daftar jabatan yang tersedia dan daftar institusi (sekolah/kantor/
-  // puskesmas/keamanan) yang dimuat dari tabel "sekolah" (dibedakan lewat
-  // jenis_organisasi).
-  const [jenisInstitusi, setJenisInstitusi] = useState(jenisAwal) // 'sekolah' | 'kantor' | 'puskesmas' | 'polres'
+  const [jenjang, setJenjang] = useState(jenjangAwal) // 'sd' | 'smp'
   const [mode, setMode] = useState('gabung') // 'gabung' | 'baru'
-  const [daftarInstitusi, setDaftarInstitusi] = useState([])
-  const [loadingInstitusi, setLoadingInstitusi] = useState(true)
-  const [galatInstitusi, setGalatInstitusi] = useState(false)
+  const [daftarSekolah, setDaftarSekolah] = useState([])
+  const [loadingSekolah, setLoadingSekolah] = useState(true)
+  const [galatSekolah, setGalatSekolah] = useState(false)
   const [form, setForm] = useState({
     nama: '',
     email: '',
     password: '',
     konfirmasi: '',
-    jabatan: jabatanDefaultUntuk(jenisAwal),
+    jabatan: JABATAN_SEKOLAH[0].value,
     sekolahId: '',
     namaSekolahBaru: '',
     siswaId: '',
     hubungan: '',
-    nip: '',
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [sukses, setSukses] = useState(false)
   const [tampilSandi, setTampilSandi] = useState(false)
 
-  // Daftar siswa untuk sekolah yang dipilih — hanya relevan kalau
-  // jenisInstitusi adalah "sekolah" DAN jabatan yang dipilih "orang_tua",
-  // karena mereka wajib memilih anak. Kantor, Puskesmas, dan Keamanan
-  // tidak punya siswa sama sekali.
+  // Daftar siswa untuk sekolah yang dipilih — hanya relevan kalau jabatan
+  // yang dipilih "orang_tua", karena mereka wajib memilih anak.
   const [daftarSiswa, setDaftarSiswa] = useState([])
   const [loadingSiswa, setLoadingSiswa] = useState(false)
 
-  const isKantor = jenisInstitusi === 'kantor'
-  const isPuskesmas = jenisInstitusi === 'puskesmas'
-  const isPolres = jenisInstitusi === 'polres'
-  const isOrangTua = jenisInstitusi === 'sekolah' && form.jabatan === 'orang_tua'
-  const butuhNip = JENIS_BUTUH_NIP.includes(jenisInstitusi)
-  const opsiJabatan = opsiJabatanUntuk(jenisInstitusi)
-  const kata = isKantor ? 'kantor' : isPuskesmas ? 'puskesmas' : isPolres ? 'keamanan' : 'sekolah'
-  const Kata = isKantor ? 'Kantor' : isPuskesmas ? 'Puskesmas' : isPolres ? 'Keamanan' : 'Sekolah'
+  const isOrangTua = form.jabatan === 'orang_tua'
+  const labelJenjang = jenjang === 'smp' ? 'SMP' : 'SD'
 
-  // Muat daftar institusi (sekolah, kantor, puskesmas, ATAU keamanan) sesuai
-  // jenis yang dipilih. Semuanya disimpan di tabel "sekolah" yang sama,
-  // dibedakan lewat jenis_organisasi, jadi cukup difilter di sini.
+  // Muat daftar sekolah (tabel "sekolah", jenis_organisasi = 'sekolah').
   useEffect(() => {
     let aktif = true
-    setLoadingInstitusi(true)
-    setGalatInstitusi(false)
+    setLoadingSekolah(true)
+    setGalatSekolah(false)
 
     supabase
       .from('sekolah')
       .select('id, nama_sekolah')
-      .eq('jenis_organisasi', jenisInstitusi)
+      .eq('jenis_organisasi', JENIS_ORGANISASI)
       .order('nama_sekolah')
       .then(({ data, error }) => {
         if (!aktif) return
-        setGalatInstitusi(Boolean(error))
-        setDaftarInstitusi(data || [])
-        setLoadingInstitusi(false)
+        setGalatSekolah(Boolean(error))
+        setDaftarSekolah(data || [])
+        setLoadingSekolah(false)
       })
 
     return () => {
       aktif = false
     }
-  }, [jenisInstitusi])
+  }, [])
 
   useEffect(() => {
     if (!isOrangTua || !form.sekolahId) {
@@ -328,10 +263,10 @@ export default function Register() {
           <h1 className="text-lg font-semibold text-white tracking-wide">Pendaftaran Berhasil</h1>
           <p className="text-sm text-blue-100/80 mt-2 leading-relaxed">
             {mode === 'baru'
-              ? `${Kata} dan akun Anda sudah dibuat, sedang menunggu persetujuan Superadmin. Anda akan bisa login setelah disetujui.`
+              ? 'Sekolah dan akun Anda sudah dibuat, sedang menunggu persetujuan Superadmin. Anda akan bisa login setelah disetujui.'
               : isOrangTua
                 ? 'Akun Anda sudah dibuat dan permintaan menghubungkan Anda dengan anak sedang menunggu persetujuan admin sekolah. Anda akan bisa login setelah disetujui.'
-                : `Akun Anda sudah dibuat dan sedang menunggu persetujuan admin ${kata}. Anda akan bisa login setelah disetujui.`}
+                : 'Akun Anda sudah dibuat dan sedang menunggu persetujuan admin sekolah. Anda akan bisa login setelah disetujui.'}
           </p>
           <Link to="/login" className="inline-block mt-4 text-sm font-medium text-blue-300 hover:text-white underline-offset-4 hover:underline">
             Kembali ke halaman Masuk
@@ -343,25 +278,6 @@ export default function Register() {
 
   function ubah(field, value) {
     setForm((f) => ({ ...f, [field]: value }))
-  }
-
-  // Ganti jenis institusi → reset semua field yang tergantung padanya,
-  // karena jabatan, daftar institusi, dan mode bisa jadi tidak valid lagi
-  // untuk jenis yang baru (mis. jabatan "orang_tua" tidak ada di
-  // Kantor/Puskesmas/Keamanan).
-  function ubahJenisInstitusi(value) {
-    setJenisInstitusi(value)
-    setMode('gabung')
-    setError('')
-    setForm((f) => ({
-      ...f,
-      jabatan: jabatanDefaultUntuk(value),
-      sekolahId: '',
-      namaSekolahBaru: '',
-      siswaId: '',
-      hubungan: '',
-      nip: '',
-    }))
   }
 
   // Jabatan "orang_tua" hanya boleh bergabung ke sekolah yang sudah ada
@@ -395,15 +311,11 @@ export default function Register() {
       return
     }
     if (mode === 'gabung' && !form.sekolahId) {
-      setError(`Pilih ${kata} terlebih dahulu.`)
+      setError('Pilih sekolah terlebih dahulu.')
       return
     }
     if (mode === 'baru' && !form.namaSekolahBaru.trim()) {
-      setError(`Isi nama ${kata} yang akan didaftarkan.`)
-      return
-    }
-    if (butuhNip && !form.nip.trim()) {
-      setError(`NIP wajib diisi untuk pegawai ${kata}.`)
+      setError('Isi nama sekolah yang akan didaftarkan.')
       return
     }
     if (isOrangTua && !form.siswaId) {
@@ -419,7 +331,8 @@ export default function Register() {
 
     const { error: daftarError } = await daftar({
       mode,
-      jenisOrganisasi: jenisInstitusi,
+      jenisOrganisasi: JENIS_ORGANISASI,
+      jenjang,
       namaLengkap: nama,
       jabatan: form.jabatan,
       email,
@@ -428,7 +341,6 @@ export default function Register() {
       namaSekolah: form.namaSekolahBaru.trim(),
       siswaId: form.siswaId || undefined,
       hubungan: form.hubungan || undefined,
-      nip: butuhNip ? form.nip.trim() : undefined,
     })
 
     setLoading(false)
@@ -441,23 +353,19 @@ export default function Register() {
     setSukses(true)
   }
 
-  // Teks pilihan awal pada daftar institusi, sesuai keadaan pemuatan.
-  const teksPilihInstitusi = loadingInstitusi
+  // Teks pilihan awal pada daftar sekolah, sesuai keadaan pemuatan.
+  const teksPilihSekolah = loadingSekolah
     ? 'Memuat daftar...'
-    : galatInstitusi
+    : galatSekolah
       ? 'Gagal memuat daftar'
-      : daftarInstitusi.length === 0
-        ? `Belum ada ${kata} terdaftar`
-        : `-- Pilih ${Kata} --`
+      : daftarSekolah.length === 0
+        ? 'Belum ada sekolah terdaftar'
+        : '-- Pilih Sekolah --'
 
   const langkah = [
-    'Pilih jenis institusi: Sekolah, Kantor (KUA), atau Puskesmas.',
-    butuhNip
-      ? `Isi nama lengkap dan NIP (Nomor Induk Pegawai), lalu pilih jabatan: Pegawai, Admin, atau Kepala ${Kata}.`
-      : 'Isi nama lengkap, lalu pilih jabatan: Guru, Admin, Kepala Sekolah, atau Orang Tua/Wali Murid.',
-    butuhNip
-      ? `Pilih ${kata} yang sudah terdaftar, atau daftarkan ${kata} baru.`
-      : 'Guru/Admin/Kepala Sekolah: pilih sekolah yang sudah terdaftar atau daftarkan sekolah baru. Orang Tua/Wali: pilih sekolah anak Anda, lalu pilih nama anak.',
+    'Pilih jenjang sekolah: SD atau SMP.',
+    'Isi nama lengkap, lalu pilih jabatan: Guru, Admin, Kepala Sekolah, atau Orang Tua/Wali Murid.',
+    'Guru/Admin/Kepala Sekolah: pilih sekolah yang sudah terdaftar atau daftarkan sekolah baru. Orang Tua/Wali: pilih sekolah anak Anda, lalu pilih nama anak.',
     'Isi email aktif (dipakai untuk login) dan buat kata sandi minimal 6 karakter.',
     'Tunggu persetujuan admin, lalu masuk.',
   ]
@@ -493,15 +401,14 @@ export default function Register() {
             <p className="text-sm text-blue-100/80 mt-1">Akun akan aktif setelah disetujui admin.</p>
           </div>
 
-          {/* Jenis institusi: menentukan jabatan yang tersedia dan daftar
-              institusi yang dimuat. */}
+          {/* Jenjang sekolah: SD atau SMP. */}
           <div>
-            <span className={labelClass}>Jenis Institusi</span>
+            <span className={labelClass}>Jenjang Sekolah</span>
             <Segmen
-              label="Jenis institusi"
-              opsi={OPSI_JENIS}
-              nilai={jenisInstitusi}
-              onPilih={ubahJenisInstitusi}
+              label="Jenjang sekolah"
+              opsi={OPSI_JENJANG}
+              nilai={jenjang}
+              onPilih={setJenjang}
             />
           </div>
 
@@ -514,11 +421,11 @@ export default function Register() {
               isOrangTua
                 ? 'Akun Orang Tua/Wali hanya dapat bergabung ke sekolah yang sudah terdaftar, lalu dihubungkan ke data anak Anda.'
                 : mode === 'baru'
-                  ? `Karena mendaftarkan ${kata} baru, akun Anda otomatis jadi Admin Utama ${kata} ini.`
+                  ? 'Karena mendaftarkan sekolah baru, akun Anda otomatis jadi Admin Utama sekolah ini.'
                   : undefined
             }
           >
-            {opsiJabatan.map((j) => (
+            {JABATAN_SEKOLAH.map((j) => (
               <option key={j.value} value={j.value} className="bg-slate-900">{j.label}</option>
             ))}
           </SelectField>
@@ -532,30 +439,15 @@ export default function Register() {
             onChange={(e) => ubah('nama', e.target.value)}
           />
 
-          {/* Khusus institusi Kantor, Puskesmas & Keamanan: setiap pegawai
-              wajib mengisi NIP / nomor induk sebagai identitas kepegawaian. */}
-          {butuhNip && (
-            <Field
-              id="reg-nip"
-              label={isPolres ? 'NRP / NIP' : 'NIP'}
-              required
-              inputMode="numeric"
-              autoComplete="off"
-              placeholder={isPolres ? 'Nomor Registrasi Pokok / NIP' : 'Nomor Induk Pegawai'}
-              value={form.nip}
-              onChange={(e) => ubah('nip', e.target.value)}
-            />
-          )}
-
-          {/* Mode: Gabung institusi yang sudah ada / Daftar institusi baru.
+          {/* Mode: Gabung sekolah yang sudah ada / Daftar sekolah baru.
               Disembunyikan untuk Orang Tua/Wali — mereka wajib gabung ke
               sekolah yang sudah ada. */}
           {!isOrangTua && (
             <Segmen
-              label={`Gabung atau daftarkan ${kata}`}
+              label="Gabung atau daftarkan sekolah"
               opsi={[
-                { value: 'gabung', label: `Gabung ${Kata}` },
-                { value: 'baru', label: `Daftar ${Kata} Baru` },
+                { value: 'gabung', label: 'Gabung Sekolah' },
+                { value: 'baru', label: 'Daftar Sekolah Baru' },
               ]}
               nilai={mode}
               onPilih={setMode}
@@ -564,48 +456,39 @@ export default function Register() {
 
           {mode === 'gabung' || isOrangTua ? (
             <SelectField
-              id="reg-institusi"
-              label={Kata}
+              id="reg-sekolah"
+              label="Sekolah"
               required
               value={form.sekolahId}
               onChange={(e) => ubah('sekolahId', e.target.value)}
-              disabled={loadingInstitusi}
+              disabled={loadingSekolah}
               hint={
-                !loadingInstitusi && !galatInstitusi && daftarInstitusi.length === 0
-                  ? `Belum ada ${kata} terdaftar. Pilih "Daftar ${Kata} Baru" di atas.`
-                  : galatInstitusi
+                !loadingSekolah && !galatSekolah && daftarSekolah.length === 0
+                  ? 'Belum ada sekolah terdaftar. Pilih "Daftar Sekolah Baru" di atas.'
+                  : galatSekolah
                     ? 'Daftar tidak bisa dimuat. Periksa koneksi internet lalu muat ulang halaman.'
                     : undefined
               }
             >
-              <option value="" className="bg-slate-900">{teksPilihInstitusi}</option>
-              {daftarInstitusi.map((s) => (
+              <option value="" className="bg-slate-900">{teksPilihSekolah}</option>
+              {daftarSekolah.map((s) => (
                 <option key={s.id} value={s.id} className="bg-slate-900">{s.nama_sekolah}</option>
               ))}
             </SelectField>
           ) : (
             <Field
               id="reg-nama-baru"
-              label={`Nama ${Kata} Baru`}
+              label="Nama Sekolah Baru"
               required
               autoComplete="off"
-              placeholder={
-                isKantor
-                  ? 'Contoh: KUA Kecamatan Contoh'
-                  : isPuskesmas
-                    ? 'Contoh: Puskesmas Kecamatan Contoh'
-                    : isPolres
-                      ? 'Contoh: Keamanan Kepulauan Aru'
-                      : 'Contoh: SD Negeri Contoh'
-              }
+              placeholder={`Contoh: ${labelJenjang} Negeri Contoh`}
               value={form.namaSekolahBaru}
               onChange={(e) => ubah('namaSekolahBaru', e.target.value)}
             />
           )}
 
-          {/* Khusus Orang Tua/Wali (hanya ada di jenis institusi Sekolah):
-              pilih anak dari daftar siswa sekolah yang baru saja dipilih,
-              lalu pilih hubungan dengan anak tersebut. */}
+          {/* Khusus Orang Tua/Wali: pilih anak dari daftar siswa sekolah
+              yang baru saja dipilih, lalu pilih hubungan dengan anak itu. */}
           {isOrangTua && (
             <>
               <SelectField
@@ -689,12 +572,12 @@ export default function Register() {
           <div className="flex gap-2.5 rounded-lg border border-blue-400/20 bg-blue-500/5 p-3 text-[13px] leading-relaxed text-blue-100/85">
             <Info size={16} className="text-blue-300 shrink-0 mt-0.5" aria-hidden />
             <ul className="space-y-1">
-              <li>Akun baru berstatus "menunggu" sampai disetujui admin {kata}. Anda baru bisa masuk setelah disetujui.</li>
+              <li>Akun baru berstatus "menunggu" sampai disetujui admin sekolah. Anda baru bisa masuk setelah disetujui.</li>
               {mode === 'baru' && !isOrangTua && (
-                <li>Mendaftarkan {kata} baru menjadikan Anda Admin Utama {kata} ini.</li>
+                <li>Mendaftarkan sekolah baru menjadikan Anda Admin Utama sekolah ini.</li>
               )}
               {isOrangTua && <li>Akun Anda akan dihubungkan ke data anak yang dipilih.</li>}
-              <li>Ada kendala? Hubungi admin {kata} Anda secara langsung.</li>
+              <li>Ada kendala? Hubungi admin sekolah Anda secara langsung.</li>
             </ul>
           </div>
 
