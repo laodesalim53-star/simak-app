@@ -68,6 +68,7 @@ import {
   Shield,
   Gavel,
   FileText,
+  BadgeCheck,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
@@ -224,7 +225,10 @@ function getGroupsAdmin(
         // BARU: Administrasi Kepala Sekolah (hub + 15 dokumen: KOSP, RKAS, Buku Induk, dst).
         // Hanya untuk kepala sekolah, admin utama, dan superadmin.
         ...(isKepalaSekolah || isAdminUtama
-          ? [{ to: '/administrasi-kepsek', label: 'Administrasi Kepsek', icon: ScrollText }]
+          ? [
+              { to: '/administrasi-kepsek', label: 'Administrasi Kepsek', icon: ScrollText, excludePrefix: '/administrasi-kepsek/akreditasi' },
+              { to: '/administrasi-kepsek/akreditasi', label: 'Berkas Akreditasi', icon: BadgeCheck },
+            ]
           : []),
         // BARU: Daftar Hadir Guru & Tendik (komponen DaftarHadirPegawai.jsx dipakai bersama tenant kantor)
         { to: '/daftar-hadir-pegawai', label: 'Daftar Hadir Guru & Tendik', icon: ClipboardList },
