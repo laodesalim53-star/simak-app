@@ -53,6 +53,18 @@ const angka = (v) => Number(v) || 0
 // Nilai satu item RKAS: kolom jumlah, atau volume x harga bila jumlah kosong.
 const nilaiRkas = (d) => angka(d?.jumlah) || angka(d?.volume) * angka(d?.harga)
 
+// Kolom sumber dana di tabel arkas_anggaran (operasi + modal) untuk tiap sumber dana RKAS.
+// Sumber dikenali dari kata kunci pada namanya, jadi tidak bergantung pada ejaan persisnya.
+const KOLOM_SUMBER_ARKAS = [
+  [/reguler/i, ['bosp_reguler_operasi', 'bosp_reguler_modal']],
+  [/daerah/i, ['bosp_daerah_operasi', 'bosp_daerah_modal']],
+  [/afirmasi|kinerja/i, ['afirmasi_kinerja_operasi', 'afirmasi_kinerja_modal']],
+  [/silpa/i, ['silpa_operasi', 'silpa_modal']],
+]
+const KOLOM_LAINNYA_ARKAS = ['bosp_lainnya_operasi', 'bosp_lainnya_modal']
+const SEMUA_KOLOM_ARKAS = [...KOLOM_SUMBER_ARKAS.flatMap(([, k]) => k), ...KOLOM_LAINNYA_ARKAS]
+const kolomSumberArkas = (sumber) => (KOLOM_SUMBER_ARKAS.find(([re]) => re.test(sumber)) || [null, KOLOM_LAINNYA_ARKAS])[1]
+
 // Gaya tabel Lembar Kerja ARKAS
 const sel = { border: '1px solid #000', padding: '4px 6px', verticalAlign: 'top' }
 const gayaBaris = {
@@ -203,6 +215,7 @@ export default function AdministrasiKepsekItem() {
   const [sinkron, setSinkron] = useState(false)
   const [menarik, setMenarik] = useState(false)
   const [menarikRkt, setMenarikRkt] = useState(false)
+  const [menarikArkas, setMenarikArkas] = useState(false)
   const [paguList, setPaguList] = useState([]) // baris jenis 'pagu' (khusus halaman RKAS)
   const [formPagu, setFormPagu] = useState(null) // { id?, data }
   const [savingPagu, setSavingPagu] = useState(false)
@@ -1032,6 +1045,158 @@ export default function AdministrasiKepsekItem() {
     }
   }
 
+  // ---- Tarik dari ARKAS (data keuangan, tabel arkas_anggaran) -> item RKAS ----
+  // Mengambil item anggaran ARKAS (is_item = true) untuk satu tahun dan satu sumber dana.
+  //  - belum ada di RKAS -> dibuat sebagai item baru (lengkap dengan kode kegiatan & rekening)
+  //  - sudah ada di RKAS (uraian sama, kode sama atau item lama belum berkode) -> hanya kolom
+  //    yang masih kosong yang dilengkapi; jumlah yang sudah terisi tidak ditimpa
+  // Aman ditekan berulang.
+  const tarikDariArkas = async () => {
+    const tahunIn = window.prompt('Tarik item RKAS dari data keuangan ARKAS. Tahun anggaran?', String(new Date().getFullYear()))
+    if (!tahunIn) return
+    const tahun = tahunIn.trim()
+    const sumberIn = window.prompt(`Sumber dana yang ditarik?\n(${opsiSumber.join(' / ')})`, opsiSumber[0])
+    if (!sumberIn) return
+    const sumber = opsiSumber.find((o) => o.toLowerCase() === sumberIn.trim().toLowerCase())
+    if (!sumber) return alert('Sumber dana tidak dikenali.')
+    const kolSumber = kolomSumberArkas(sumber)
+
+    setMenarikArkas(true)
+    try {
+      // Supabase membatasi 1000 baris per permintaan, jadi diambil bertahap.
+      const arkas = []
+      for (let dari = 0; ; dari += 1000) {
+        const { data, error } = await supabase.from('arkas_anggaran').select('*')
+          .eq('sekolah_id', sekolahId).eq('tahun_anggaran', tahun).eq('is_item', true)
+          .order('no_urut', { ascending: true }).order('id', { ascending: true })
+          .range(dari, dari + 999)
+        if (error) throw new Error('Data ARKAS: ' + error.message)
+        arkas.push(...(data || []))
+        if (!data || data.length < 1000) break
+      }
+      if (arkas.length === 0) {
+        return alert(`Belum ada data ARKAS tahun ${tahun} untuk sekolah ini. Isi atau impor dulu di bagian keuangan ARKAS.`)
+      }
+
+      // Bila kolom sumber dana tidak terisi sama sekali, seluruh item dianggap milik sumber yang dipilih.
+      const adaPemisah = arkas.some((a) => SEMUA_KOLOM_ARKAS.some((k) => angka(a[k]) > 0))
+      const bagian = arkas
+        .map((a) => ({ a, nilai: adaPemisah ? kolSumber.reduce((n, k) => n + angka(a[k]), 0) : angka(a.jumlah) }))
+        .filter((x) => x.nilai > 0 && bersih(x.a.uraian))
+      if (bagian.length === 0) {
+        return alert(`Ada ${arkas.length} item ARKAS tahun ${tahun}, tetapi tidak ada yang bersumber ${sumber}.`)
+      }
+
+      const sama = rows.filter((r) => String(r.data?.tahun) === tahun && r.data?.sumber === sumber)
+      const pg = ringkasPagu.find((x) => String(x.data?.tahun) === tahun && x.data?.sumber === sumber)
+      const batasT1 = pg ? angka(pg.data?.tahap1) : Infinity
+      const opsiBulan = cfg.fields.find((x) => x.k === 'bulan')?.o || BULAN
+      const kanonBulan = (nama) => opsiBulan.find((o) => o.toLowerCase() === String(nama).toLowerCase()) || nama
+      let t1 = sama.filter((r) => r.data?.tahap === 'Tahap 1').reduce((n, r) => n + nilaiRkas(r.data), 0)
+
+      const tambah = []
+      const ubah = []
+      const dipakai = new Set() // item RKAS yang sudah dicocokkan, agar dua baris ARKAS tidak berebut satu item
+      let selisih = 0
+      let jumlahBeda = 0
+
+      bagian.forEach(({ a, nilai }) => {
+        const uraian = bersih(a.uraian)
+        const kodeKeg = bersih(a.kode_kegiatan)
+        const kodeRek = bersih(a.kode_rekening)
+        const komponen = kodeKeg ? namaKeg(kodeKeg.slice(0, 5)) : ''
+        const namaKegiatan = kodeKeg ? namaKeg(kodeKeg) : ''
+        const namaRekening = kodeRek ? namaRek(kodeRek) : ''
+
+        // Volume, satuan, harga: dipakai apa adanya bila cocok dengan nilai sumber dana ini;
+        // bila item dibagi ke beberapa sumber dana, dicatat sebagai 1 paket.
+        const vol0 = angka(a.volume)
+        const hrg0 = angka(a.harga_satuan)
+        const utuh = vol0 > 0 && Math.round(vol0 * hrg0) === Math.round(nilai)
+        const volume = utuh ? vol0 : 1
+        const harga = utuh ? hrg0 : nilai
+        const satuan = utuh ? (bersih(a.satuan) || 'Paket') : 'Paket'
+
+        const ada = sama.find((r) => !dipakai.has(r.id)
+          && bersih(r.data?.uraian).toLowerCase() === uraian.toLowerCase()
+          && ((bersih(r.data?.kode_kegiatan) === kodeKeg && bersih(r.data?.kode_rekening) === kodeRek)
+            || (!bersih(r.data?.kode_kegiatan) && !bersih(r.data?.kode_rekening))))
+
+        if (ada) {
+          dipakai.add(ada.id)
+          const lama = ada.data || {}
+          const patch = {}
+          const isi = (kol, v) => { if (!bersih(lama[kol]) && v) patch[kol] = v }
+          isi('komponen', komponen); isi('kode_kegiatan', kodeKeg); isi('kode_rekening', kodeRek)
+          if (adaField('kegiatan')) isi('kegiatan', namaKegiatan)
+          if (adaField('rekening')) isi('rekening', namaRekening)
+          isi('satuan', satuan)
+          let tahap = bersih(lama.tahap)
+          if (!tahap) {
+            tahap = t1 + nilai <= batasT1 ? 'Tahap 1' : 'Tahap 2'
+            patch.tahap = tahap
+            if (tahap === 'Tahap 1') t1 += nilai
+          }
+          isi('bulan', kanonBulan(tahap === 'Tahap 2' ? 'Juli' : 'Januari'))
+          if (!angka(lama.jumlah)) {
+            patch.volume = volume; patch.harga = harga; patch.jumlah = nilai
+            selisih += nilai
+          } else if (Math.round(angka(lama.jumlah)) !== Math.round(nilai)) {
+            jumlahBeda++
+          }
+          if (Object.keys(patch).length) ubah.push({ id: ada.id, data: { ...lama, ...patch } })
+        } else {
+          const tahap = t1 + nilai <= batasT1 ? 'Tahap 1' : 'Tahap 2'
+          if (tahap === 'Tahap 1') t1 += nilai
+          selisih += nilai
+          const item = {
+            tahun, sumber, uraian, volume, satuan, harga, jumlah: nilai,
+            bulan: kanonBulan(tahap === 'Tahap 2' ? 'Juli' : 'Januari'), tahap, asal: 'ARKAS',
+          }
+          if (komponen) item.komponen = komponen
+          if (kodeKeg) item.kode_kegiatan = kodeKeg
+          if (kodeRek) item.kode_rekening = kodeRek
+          if (adaField('kegiatan') && namaKegiatan) item.kegiatan = namaKegiatan
+          if (adaField('rekening') && namaRekening) item.rekening = namaRekening
+          tambah.push(item)
+        }
+      })
+
+      if (tambah.length === 0 && ubah.length === 0) {
+        return alert(jumlahBeda > 0
+          ? `Semua item sudah ada di RKAS. ${jumlahBeda} item jumlahnya berbeda dari ARKAS dan tidak diubah.`
+          : 'Semua item RKAS sudah lengkap dan sesuai ARKAS.')
+      }
+
+      const sisaSetelah = pg ? pg.sisa - selisih : null
+      const catatan = [
+        jumlahBeda > 0 ? `${jumlahBeda} item sudah ada dengan jumlah berbeda dari ARKAS (tidak ditimpa).` : '',
+        sisaSetelah === null ? 'Pagu belum diatur untuk tahun dan sumber dana ini.'
+          : sisaSetelah < 0 ? `PERHATIAN: melebihi sisa pagu sebesar ${rupiah(Math.abs(sisaSetelah))}.`
+          : `Sisa pagu setelah ditarik: ${rupiah(sisaSetelah)}.`,
+      ].filter(Boolean).join('\n')
+      if (!window.confirm(`${sumber} ${tahun} dari ARKAS:\n- ${tambah.length} item baru ditambahkan\n- ${ubah.length} item yang sudah ada dilengkapi\nPerubahan total anggaran: ${rupiah(selisih)}.\n${catatan}\n\nLanjutkan?`)) return
+
+      const tanggal = new Date().toISOString().slice(0, 10)
+      if (tambah.length) {
+        const { error: e2 } = await supabase.from(TABEL).insert(
+          tambah.map((item) => ({ sekolah_id: sekolahId, jenis: slug, tanggal, data: item }))
+        )
+        if (e2) throw new Error('Gagal menyimpan item baru: ' + e2.message)
+      }
+      for (const u of ubah) {
+        const { error: e3 } = await supabase.from(TABEL).update({ data: u.data }).eq('id', u.id)
+        if (e3) throw new Error('Gagal melengkapi item: ' + e3.message)
+      }
+      alert(`${tambah.length} item baru dan ${ubah.length} item dilengkapi dari ARKAS.`)
+      muat()
+    } catch (e) {
+      alert('Gagal menarik dari ARKAS: ' + e.message)
+    } finally {
+      setMenarikArkas(false)
+    }
+  }
+
   const hitungLembar = (lb) => {
     const items = rows.filter((r) => String(r.data?.tahun) === String(lb.tahun) && r.data?.sumber === lb.sumber)
     const kk = susunKertasKerja(
@@ -1305,6 +1470,10 @@ export default function AdministrasiKepsekItem() {
               <button onClick={tarikDariRKT} disabled={menarikRkt || loading}
                 className={`${tombol} bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-60 col-span-2 sm:col-span-1`}>
                 <Download size={16} /> {menarikRkt ? 'Menarik data...' : 'Tarik dari RKT'}
+              </button>
+              <button onClick={tarikDariArkas} disabled={menarikArkas || loading}
+                className={`${tombol} bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-60 col-span-2 sm:col-span-1`}>
+                <Download size={16} /> {menarikArkas ? 'Menarik data...' : 'Tarik dari ARKAS'}
               </button>
             </>
           )}
