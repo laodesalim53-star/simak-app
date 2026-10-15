@@ -1,15 +1,13 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowRight, LogIn, Video, Download, Monitor, Apple, Smartphone, Share, SquarePlus, X, BookOpen, IdCard, Wallet, MessageCircle, Settings, Users, ShoppingBag, Phone, Send, Fish, Shell, Shirt, Pencil, Building2, Landmark, Megaphone, FileText, Library, ClipboardCheck, ClipboardList, UploadCloud, CheckCircle2, Stethoscope, HeartPulse, Pill } from 'lucide-react'
+import { ArrowRight, LogIn, Video, Download, Monitor, Apple, Smartphone, Share, SquarePlus, X, BookOpen, IdCard, Wallet, MessageCircle, Settings, Users, ShoppingBag, Phone, Send, Fish, Shell, Shirt, Pencil, Building2, Landmark, ClipboardList, UploadCloud } from 'lucide-react'
 // PENTING: sesuaikan path import ini dengan lokasi client Supabase Anda
 // yang sudah ada di project (biasanya di src/lib/ atau src/services/).
 import { supabase } from '../lib/supabaseClient'
 import { mulaiSesiDemo } from '../lib/demoSession'
-// Logo instansi mitra (Dinas Pendidikan, KUA, Puskesmas) — disimpan sebagai
-// base64 di src/assets/logoMitra.js dan diimpor langsung, jadi tidak
-// tergantung file di folder public/ (lihat catatan di logoMitra.js kalau
-// nanti mau ganti logonya).
-import { LOGO_DINAS_PENDIDIKAN, LOGO_KUA, LOGO_PUSKESMAS } from '../assets/logoMitra'
+// Logo Dinas Pendidikan — disimpan sebagai base64 di src/assets/logoMitra.js
+// dan diimpor langsung, jadi tidak tergantung file di folder public/.
+import { LOGO_DINAS_PENDIDIKAN } from '../assets/logoMitra'
 
 // Widget "Tanya AI" — dimuat malas (lazy) supaya tidak memperberat
 // pemuatan awal beranda, terutama di sinyal lambat. Ditempatkan di pojok
@@ -24,22 +22,20 @@ const TanyaAI = lazy(() => import('../components/TanyaAI'))
 // Tema visual: navy-indigo sebagai identitas brand, motif batik emas tipis
 // sebagai overlay, satu warna aksen oranye untuk aksi utama, dan satu warna
 // biru langit terpisah khusus untuk fitur Toko Sekolah (menandakan area yang
-// bisa diakses tanpa login). Area 1-6 dibedakan lewat warna datar yang lebih
+// bisa diakses tanpa login). Area dibedakan lewat warna datar yang lebih
 // bersahaja (bukan gradasi terang) supaya tetap mudah dipindai tanpa terasa
 // seperti pelangi. Gerakan dibatasi pada satu momen saja (ring di tombol
 // kontak mengambang) — bukan berkedip/berputar/berjalan di banyak tempat
-// sekaligus, supaya situs terasa tepercaya untuk sistem resmi sekolah & kantor.
+// sekaligus, supaya situs terasa tepercaya untuk sistem resmi sekolah.
 //
-// TIGA INSTANSI: halaman ini melayani tiga mitra tetap — Sekolah, KUA
-// (Kantor Urusan Agama), dan Puskesmas — bukan platform pendaftaran terbuka
-// untuk banyak instansi sembarang. Karena itu semua copy di bawah SENGAJA
-// menyebut "Sekolah, KUA & Puskesmas" secara eksplisit, dan modul yang
-// sifatnya khusus satu jenis instansi diberi badge "Khusus ..." supaya
-// pengguna dari jenis instansi lain tidak salah ekspektasi.
+// JENJANG: halaman ini melayani sekolah SD dan SMP. Pengunjung bisa memilih
+// jenjang (Semua / SD / SMP) lewat pemilih di hero; pilihan disimpan di URL
+// (?jenjang=smp). Modul yang khusus satu jenjang ditandai dengan `j` di
+// DAFTAR_AREA.
 //
 // SUSUNAN HERO (atas ke bawah): tombol aksi (Daftar sekarang, Sudah punya
-// akun? Masuk, Lihat Toko Sekolah, Coba Demo) -> pemilih jenis instansi
-// (Semua / Sekolah / KUA / Puskesmas) -> baris "Instal aplikasi".
+// akun? Masuk, Lihat Toko Sekolah, Coba Demo) -> pemilih jenjang
+// (Semua / SD / SMP) -> baris "Instal aplikasi".
 
 const NOMOR_WA_ADMIN = '6282197574897'
 
@@ -59,14 +55,11 @@ const FOTO_ADMIN_CHAT = '/ibu-guru-chat.jpg'
 // Saran: lebar ±1200px, rasio 16:10, format .webp/.png, ukuran < 200 KB.
 const FOTO_HERO = '/screenshot-dasbor.png'
 
-// ---- Coba Demo: kredensial TIDAK lagi ditulis di sini -----------------
-// Sebelumnya email & password akun demo tertulis polos sebagai konstanta
-// di file ini — masalahnya, kode React ikut dikirim ke browser pengunjung
-// apa adanya, jadi siapa pun bisa buka DevTools dan membaca kredensial
-// tersebut. Sekarang proses login demo dipindah ke Supabase Edge Function
-// "demo-login": fungsi itu yang menyimpan email/password akun demo sebagai
-// SECRET di sisi server, melakukan sign-in, lalu mengirim balik hanya
-// access_token & refresh_token untuk dipasang sebagai sesi di browser.
+// ---- Coba Demo: kredensial TIDAK ditulis di sini ----------------------
+// Proses login demo dipindah ke Supabase Edge Function "demo-login": fungsi
+// itu yang menyimpan email/password akun demo sebagai SECRET di sisi
+// server, melakukan sign-in, lalu mengirim balik hanya access_token &
+// refresh_token untuk dipasang sebagai sesi di browser.
 // Lihat file supabase/functions/demo-login/index.ts yang menyertai ini.
 
 // ---- Pembantu localStorage & ID sesi ----------------------------------
@@ -101,31 +94,24 @@ function buatIdSesi() {
 // ============================================================
 // DATA AREA — sumber tunggal untuk tile & kartu di bagian "area".
 //
-// untuk : jenis instansi yang melihat area ini. Nilainya harus cocok dengan
-//         id di OPSI_UNTUK di bawah. Untuk menambah jenis instansi baru
-//         (mis. puskesmas): tambah satu entri di OPSI_UNTUK, lalu isi
-//         `untuk` di area yang relevan.
-// items : string  -> tampil untuk semua jenis instansi pemilik area.
-//         {t, u}  -> hanya tampil bila jenis instansi yang dipilih ada di `u`
+// items : string  -> tampil untuk SD maupun SMP.
+//         {t, j}  -> hanya tampil bila jenjang yang dipilih ada di `j`
 //                    (pada tampilan "Semua", semuanya tampil).
 // link  : bila diisi, tile & kartu menjadi tautan (dipakai Toko Sekolah).
-//
-// Nama modul KUA di bawah mengikuti rute di App.jsx.
 // ============================================================
-const OPSI_UNTUK = [
-  { id: 'semua', label: 'Semua' },
-  { id: 'sekolah', label: 'Sekolah' },
-  { id: 'kua', label: 'KUA' },
-  { id: 'puskesmas', label: 'Puskesmas' },
+const OPSI_JENJANG = [
+  { id: 'semua', label: 'Semua jenjang' },
+  { id: 'sd', label: 'SD' },
+  { id: 'smp', label: 'SMP' },
 ]
 
 const DAFTAR_AREA = [
   {
-    id: 'akademik', warna: '#2E5AAC', ikon: BookOpen, untuk: ['sekolah'],
+    id: 'akademik', warna: '#2E5AAC', ikon: BookOpen,
     nama: 'Akademik & Ujian', judul: 'Akademik & ujian',
     items: [
       'Ujian online & bank soal',
-      'Kuis seru untuk kelas rendah',
+      { t: 'Kuis seru untuk kelas rendah', j: ['sd'] },
       'Nilai, rapor & nilai asesmen',
       'RPP & arsip RPP guru',
       'Portofolio & sertifikat siswa',
@@ -133,7 +119,7 @@ const DAFTAR_AREA = [
     ],
   },
   {
-    id: 'admin-siswa', warna: '#1F7A5C', ikon: IdCard, untuk: ['sekolah'],
+    id: 'admin-siswa', warna: '#1F7A5C', ikon: IdCard,
     nama: 'Administrasi Siswa', judul: 'Administrasi siswa',
     items: [
       'Data siswa, kelas & jadwal',
@@ -144,101 +130,21 @@ const DAFTAR_AREA = [
     ],
   },
   {
-    id: 'penyuluhan', warna: '#2F7D32', ikon: Megaphone, untuk: ['kua'],
-    nama: 'Layanan Penyuluhan', judul: 'Layanan penyuluhan',
+    id: 'keuangan', warna: '#B15A17', ikon: Wallet,
+    nama: 'Keuangan Sekolah', judul: 'Keuangan sekolah',
     items: [
-      'Laporan penyuluhan masyarakat bermoral & harmonis',
-      'RKTP Penyuluh Agama (rencana kerja tahunan)',
-      'Pusat & pengelolaan kelompok binaan',
-    ],
-  },
-  {
-    id: 'kepenghuluan', warna: '#7A4B1E', ikon: FileText, untuk: ['kua'],
-    nama: 'Kepenghuluan & Nikah', judul: 'Kepenghuluan & nikah',
-    items: [
-      'Pendaftaran nikah online untuk jamaah & pegawai',
-      'Verifikasi pengajuan nikah oleh Kepala KUA',
-      'Laporan kepenghuluan bulanan',
-    ],
-  },
-  {
-    id: 'materi-majelis', warna: '#5B6B1A', ikon: Library, untuk: ['kua'],
-    nama: 'Pusat Materi Majelis', judul: 'Pusat materi majelis',
-    items: [
-      'Keluarga sakinah',
-      'Pengelolaan zakat & wakaf',
-      'Akhlak & moderasi beragama',
-      'Materi majelis taklim',
-    ],
-  },
-  {
-    id: 'laporan-kua', warna: '#3B4A8C', ikon: ClipboardCheck, untuk: ['kua'],
-    nama: 'Laporan & Perencanaan', judul: 'Laporan & perencanaan KUA',
-    items: [
-      'Laporan Kepala KUA dengan tanda tangan otomatis',
-      'Laporan bulanan KUA',
-      'Rencana kerja tahunan',
-      'Ringkasan aset: inventaris & kondisi bangunan',
-    ],
-  },
-  {
-    id: 'pelayanan-pasien', warna: '#B23A48', ikon: Stethoscope, untuk: ['puskesmas'],
-    nama: 'Pelayanan Pasien', judul: 'Pelayanan pasien',
-    items: [
-      'Pendaftaran & antrean pasien',
-      'Rekam medis elektronik',
-      'Rujukan ke rumah sakit',
-      'Jadwal dokter & poli',
-    ],
-  },
-  {
-    id: 'farmasi', warna: '#0E7C86', ikon: Pill, untuk: ['puskesmas'],
-    nama: 'Farmasi & Obat', judul: 'Farmasi & obat',
-    items: [
-      'Stok obat & alat kesehatan',
-      'Resep & pengeluaran obat',
-      'Laporan persediaan farmasi',
-    ],
-  },
-  {
-    id: 'kesmas', warna: '#C2703D', ikon: HeartPulse, untuk: ['puskesmas'],
-    nama: 'Kesehatan Masyarakat', judul: 'Kesehatan masyarakat',
-    items: [
-      'Posyandu & imunisasi',
-      'Penyuluhan kesehatan',
-      'Laporan program kesehatan masyarakat',
-    ],
-  },
-  {
-    id: 'laporan-puskesmas', warna: '#2F5D8A', ikon: ClipboardCheck, untuk: ['puskesmas'],
-    nama: 'Laporan & Perencanaan Puskesmas', judul: 'Laporan & perencanaan puskesmas',
-    items: [
-      'Laporan Kepala Puskesmas dengan tanda tangan otomatis',
-      'Laporan bulanan puskesmas',
-      'Rencana kerja tahunan',
-      'Ringkasan aset: inventaris & kondisi bangunan',
-    ],
-  },
-  {
-    id: 'keuangan', warna: '#B15A17', ikon: Wallet, untuk: ['sekolah', 'kua', 'puskesmas'],
-    nama: 'Keuangan Sekolah, KUA & Puskesmas', judul: 'Keuangan sekolah, KUA & puskesmas',
-    items: [
-      { t: 'Keuangan sekolah & kas kelas', u: ['sekolah'] },
-      { t: 'Keuangan & anggaran KUA', u: ['kua'] },
-      { t: 'Keuangan & anggaran puskesmas', u: ['puskesmas'] },
+      'Keuangan sekolah & kas kelas',
       'Kuitansi & nota otomatis',
       'Laporan bulanan',
       'Backup data terjadwal',
     ],
   },
   {
-    id: 'komunikasi', warna: '#6B4FA0', ikon: MessageCircle, untuk: ['sekolah', 'kua', 'puskesmas'],
+    id: 'komunikasi', warna: '#6B4FA0', ikon: MessageCircle,
     nama: 'Komunikasi', judul: 'Komunikasi & publikasi',
     items: [
       'Pengumuman & agenda',
-      { t: 'Pesan langsung antar warga sekolah', u: ['sekolah'] },
-      { t: 'Pesan langsung antar staf KUA', u: ['kua'] },
-      { t: 'Pesan langsung antar staf puskesmas', u: ['puskesmas'] },
+      'Pesan langsung antar warga sekolah',
       'Rapat online lewat video',
       'Galeri foto kegiatan',
       'Scan dokumen jadi Word',
@@ -246,22 +152,17 @@ const DAFTAR_AREA = [
     ],
   },
   {
-    id: 'manajemen', warna: '#146B71', ikon: Settings, untuk: ['sekolah', 'kua', 'puskesmas'],
-    nama: 'Manajemen Sekolah, KUA & Puskesmas', judul: 'Manajemen sekolah, KUA & puskesmas',
+    id: 'manajemen', warna: '#146B71', ikon: Settings,
+    nama: 'Manajemen Sekolah', judul: 'Manajemen sekolah',
     items: [
-      { t: 'Data guru & inventaris sekolah', u: ['sekolah'] },
-      { t: 'Data pegawai, presensi & daftar hadir KUA', u: ['kua'] },
-      { t: 'Data pegawai, presensi & daftar hadir puskesmas', u: ['puskesmas'] },
-      { t: 'Inventaris & kondisi bangunan KUA', u: ['kua'] },
-      { t: 'Inventaris & kondisi bangunan puskesmas', u: ['puskesmas'] },
-      { t: 'Profil & identitas sekolah', u: ['sekolah'] },
-      { t: 'Profil kantor, kop surat & tanda tangan otomatis', u: ['kua', 'puskesmas'] },
+      'Data guru & inventaris sekolah',
+      'Profil & identitas sekolah',
       'Kalender kerja & hari libur',
       'Persetujuan akun pengguna baru',
     ],
   },
   {
-    id: 'orang-tua', warna: '#A23E56', ikon: Users, untuk: ['sekolah'],
+    id: 'orang-tua', warna: '#A23E56', ikon: Users,
     nama: 'Portal Orang Tua', judul: 'Portal orang tua',
     items: [
       'Pantau rapor & nilai anak',
@@ -270,7 +171,7 @@ const DAFTAR_AREA = [
     ],
   },
   {
-    id: 'toko', warna: '#0F6FA3', ikon: ShoppingBag, untuk: ['sekolah'],
+    id: 'toko', warna: '#0F6FA3', ikon: ShoppingBag,
     nama: 'Toko Sekolah', judul: 'Toko sekolah',
     link: '/toko', tanpaLogin: true, ctaLabel: 'Buka Toko Sekolah',
     items: [
@@ -284,10 +185,18 @@ const DAFTAR_AREA = [
 // ---- "Cara Mulai" (promosi + panduan lengkap dalam modal) --------------
 // Kartu di beranda hanya menampilkan `judul` & `desc` (ringkas). Saat
 // diklik, modal panduan menampilkan detail penuh (`menu`, `poin`,
-// `catatan`) — versi publik dari komponen PanduanAwalSIMAK yang dipasang
-// di Dasbor setelah login. Konten menyesuaikan jenis instansi terpilih.
-const LANGKAH_MULAI = {
-  sekolah: [
+// `catatan`). Konten menyesuaikan jenjang yang dipilih (SD/SMP).
+function buatLangkahMulai(jenjang) {
+  const rentang =
+    jenjang === 'sd' ? '1–6' : jenjang === 'smp' ? '7–9' : '1–6 (SD) atau 7–9 (SMP)'
+  const poinKelas =
+    jenjang === 'sd'
+      ? ['Kelas 1 s/d Kelas 6']
+      : jenjang === 'smp'
+        ? ['Kelas 7 s/d Kelas 9 (sesuai tingkatan)']
+        : ['SD: Kelas 1 s/d Kelas 6', 'SMP: Kelas 7 s/d Kelas 9 (sesuai tingkatan)']
+
+  return [
     {
       ikon: Building2, judul: 'Lengkapi Profil Sekolah',
       desc: 'Isi identitas, logo & kop surat sekolah Anda.',
@@ -303,12 +212,11 @@ const LANGKAH_MULAI = {
     },
     {
       ikon: ClipboardList, judul: 'Atur Data Kelas',
-      desc: 'Buat kelas 1–6/7–9 beserta rombelnya.',
+      desc: `Buat kelas ${rentang} beserta rombelnya.`,
       menu: 'Menu: Kelas',
       penjelasan: 'Buat data kelas sesuai jenjang sekolah lewat tombol + Tambah Kelas.',
       poin: [
-        'SD: Kelas 1 s/d Kelas 6',
-        'SMP: Kelas 7 s/d Kelas 9 (sesuai tingkatan)',
+        ...poinKelas,
         'Tambahkan kode rombel bila ada lebih dari satu rombongan belajar per tingkat (6A, 6B, 6C, dst.)',
         'Lengkapi wali kelas & tahun pelajaran',
       ],
@@ -327,82 +235,7 @@ const LANGKAH_MULAI = {
       ],
       catatan: 'Periksa jumlah data terbaca, lalu klik Impor Data.',
     },
-  ],
-  kua: [
-    {
-      ikon: Building2, judul: 'Lengkapi Profil Kantor',
-      desc: 'Isi identitas KUA, logo & kop surat resmi.',
-      menu: 'Menu: Profil Kantor',
-      penjelasan: 'Isi identitas KUA lengkap — data ini dipakai otomatis di kop surat & laporan resmi.',
-      poin: [
-        'Logo Kementerian Agama & Kantor Kabupaten',
-        'Data kantor: alamat, kecamatan, kabupaten, kontak',
-        'Tanda tangan elektronik Kepala KUA untuk laporan otomatis',
-      ],
-      catatan: 'Jangan lupa klik Simpan setelah semua data terisi.',
-    },
-    {
-      ikon: ClipboardList, judul: 'Atur Data Pegawai',
-      desc: 'Lengkapi data pegawai & penyuluh KUA.',
-      menu: 'Menu: Data Pegawai',
-      penjelasan: 'Lengkapi data pegawai & penyuluh agar presensi dan daftar hadir bisa langsung dipakai.',
-      poin: [
-        'Tambahkan data pegawai & penyuluh KUA',
-        'Lengkapi jabatan & NIP masing-masing pegawai',
-      ],
-      catatan: 'Setelah data pegawai lengkap, jangan lupa klik Simpan.',
-    },
-    {
-      ikon: CheckCircle2, judul: 'Mulai Kelola Layanan',
-      desc: 'Penyuluhan, kepenghuluan, keuangan & laporan langsung siap pakai.',
-      menu: 'Layanan Penyuluhan, Kepenghuluan & Keuangan',
-      penjelasan: 'Setelah profil & data pegawai lengkap, seluruh layanan langsung siap dipakai.',
-      poin: [
-        'Laporan penyuluhan & RKTP Penyuluh Agama',
-        'Pendaftaran nikah & laporan kepenghuluan bulanan',
-        'Keuangan, anggaran & laporan bulanan KUA',
-      ],
-      catatan: 'Semua data tersinkron otomatis ke laporan Kepala KUA.',
-    },
-  ],
-  puskesmas: [
-    {
-      ikon: Building2, judul: 'Lengkapi Profil Puskesmas',
-      desc: 'Isi identitas puskesmas, logo & kop surat resmi.',
-      menu: 'Menu: Profil Puskesmas',
-      penjelasan: 'Isi identitas puskesmas lengkap — data ini dipakai otomatis di kop surat & laporan resmi.',
-      poin: [
-        'Logo Dinas Kesehatan & Kantor Kabupaten',
-        'Data puskesmas: alamat, kecamatan, kabupaten, kontak',
-        'Tanda tangan elektronik Kepala Puskesmas untuk laporan otomatis',
-      ],
-      catatan: 'Jangan lupa klik Simpan setelah semua data terisi.',
-    },
-    {
-      ikon: ClipboardList, judul: 'Atur Data Pegawai & Poli',
-      desc: 'Lengkapi data pegawai, dokter & jadwal poli.',
-      menu: 'Menu: Data Pegawai',
-      penjelasan: 'Lengkapi data pegawai, dokter, dan jadwal poli agar pendaftaran & presensi bisa langsung dipakai.',
-      poin: [
-        'Tambahkan data pegawai, dokter & bidan',
-        'Lengkapi jabatan & NIP masing-masing pegawai',
-        'Atur jadwal poli dan jam layanan',
-      ],
-      catatan: 'Setelah data pegawai lengkap, jangan lupa klik Simpan.',
-    },
-    {
-      ikon: CheckCircle2, judul: 'Mulai Kelola Layanan Pasien',
-      desc: 'Pendaftaran, rekam medis, farmasi & laporan langsung siap pakai.',
-      menu: 'Layanan Pasien, Farmasi & Kesehatan Masyarakat',
-      penjelasan: 'Setelah profil & data pegawai lengkap, seluruh layanan langsung siap dipakai.',
-      poin: [
-        'Pendaftaran pasien & rekam medis elektronik',
-        'Stok obat & laporan farmasi',
-        'Posyandu, imunisasi & laporan kesehatan masyarakat',
-      ],
-      catatan: 'Semua data tersinkron otomatis ke laporan Kepala Puskesmas.',
-    },
-  ],
+  ]
 }
 
 // ---- Panduan instal manual ---------------------------------------------
@@ -495,38 +328,27 @@ function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 
 export default function Beranda() {
   const navigate = useNavigate()
 
-  // Jenis instansi yang sedang dilihat pengunjung: Semua / Sekolah / KUA / Puskesmas.
-  // Disimpan di URL (?untuk=kua) supaya bisa dibagikan — mis. link khusus
-  // untuk KUA: https://situs-anda/?untuk=kua
+  // Jenjang yang sedang dilihat pengunjung: Semua / SD / SMP. Disimpan di
+  // URL (?jenjang=smp) supaya bisa dibagikan.
   const [searchParams, setSearchParams] = useSearchParams()
-  const paramUntuk = searchParams.get('untuk')
-  const untuk = OPSI_UNTUK.some((o) => o.id === paramUntuk) ? paramUntuk : 'semua'
-  function pilihUntuk(id) {
-    setSearchParams(id === 'semua' ? {} : { untuk: id }, { replace: true })
+  const paramJenjang = searchParams.get('jenjang')
+  const jenjang = OPSI_JENJANG.some((o) => o.id === paramJenjang) ? paramJenjang : 'semua'
+  function pilihJenjang(id) {
+    setSearchParams(id === 'semua' ? {} : { jenjang: id }, { replace: true })
   }
-  // Tombol "Daftar" membawa pilihan jenis instansi ke halaman pendaftaran,
-  // jadi pengunjung yang sudah memilih KUA/Sekolah di sini tidak perlu
-  // memilih ulang di sana.
-  const linkDaftar = untuk === 'semua' ? '/register' : `/register?untuk=${untuk}`
-  const areaTampil = DAFTAR_AREA
-    .filter((a) => untuk === 'semua' || a.untuk.includes(untuk))
-    .map((a, i) => ({
-      ...a,
-      nomor: i + 1,
-      daftarItem: a.items
-        .filter((it) => typeof it === 'string' || untuk === 'semua' || it.u.includes(untuk))
-        .map((it) => (typeof it === 'string' ? it : it.t)),
-    }))
+  const labelJenjang = jenjang === 'sd' ? 'SD' : jenjang === 'smp' ? 'SMP' : 'Sekolah'
+  // Tombol "Daftar" membawa pilihan jenjang ke halaman pendaftaran.
+  const linkDaftar = jenjang === 'semua' ? '/register' : `/register?jenjang=${jenjang}`
 
-  // Langkah mulai (cuplikan promosi) yang tampil: KUA memakai versi KUA,
-  // Puskesmas memakai versi Puskesmas, selain itu (Semua/Sekolah) memakai
-  // versi Sekolah karena itu alur yang paling umum dipakai saat ini.
-  const langkahMulaiTampil =
-    untuk === 'kua'
-      ? LANGKAH_MULAI.kua
-      : untuk === 'puskesmas'
-        ? LANGKAH_MULAI.puskesmas
-        : LANGKAH_MULAI.sekolah
+  const areaTampil = DAFTAR_AREA.map((a, i) => ({
+    ...a,
+    nomor: i + 1,
+    daftarItem: a.items
+      .filter((it) => typeof it === 'string' || jenjang === 'semua' || it.j.includes(jenjang))
+      .map((it) => (typeof it === 'string' ? it : it.t)),
+  }))
+
+  const langkahMulaiTampil = buatLangkahMulai(jenjang)
 
   // Klik tile -> gulir ke kartu area yang bersangkutan. Menghormati
   // pengaturan "kurangi gerakan" milik perangkat.
@@ -545,7 +367,7 @@ export default function Beranda() {
   // Graph di index.html, bukan dari sini.
   useEffect(() => {
     const judulSebelumnya = document.title
-    document.title = 'SIMAK — Aplikasi terpadu untuk Sekolah, KUA & Puskesmas'
+    document.title = 'SIMAK — Aplikasi terpadu untuk Sekolah (SD & SMP)'
     let meta = document.querySelector('meta[name="description"]')
     if (!meta) {
       meta = document.createElement('meta')
@@ -554,7 +376,7 @@ export default function Beranda() {
     }
     meta.setAttribute(
       'content',
-      'SIMAK: sistem informasi terpadu untuk Sekolah, Kantor Urusan Agama (KUA), dan Puskesmas — akademik, administrasi, pelayanan kesehatan, keuangan, laporan, dan komunikasi dalam satu aplikasi.'
+      'SIMAK: sistem informasi terpadu untuk sekolah SD dan SMP — akademik, administrasi siswa, keuangan, laporan, dan komunikasi dalam satu aplikasi.'
     )
     return () => {
       document.title = judulSebelumnya
@@ -574,8 +396,8 @@ export default function Beranda() {
   // host (misal lewat WhatsApp). Menerima link penuh (.../rapat/xxxx) atau
   // kode ruangan saja.
   const [kodeRapat, setKodeRapat] = useState('')
-  // Panduan instal manual yang sedang terbuka: 'ios', 'windows', atau null
-  // (tertutup). Isinya ada di PANDUAN_INSTAL di atas.
+  // Panduan instal manual yang sedang terbuka: 'ios', 'android', 'windows',
+  // atau null (tertutup). Isinya ada di PANDUAN_INSTAL di atas.
   const [panduan, setPanduan] = useState(null)
   const isiPanduan = panduan ? PANDUAN_INSTAL[panduan] : null
 
@@ -590,13 +412,13 @@ export default function Beranda() {
   }
 
   // ---- Coba Demo: login langsung dari Beranda -------------------------
-  // Tidak lewat halaman /login — satu klik, langsung masuk. Berbeda dari
-  // sebelumnya, kredensial akun demo TIDAK ada di kode ini: fungsi Edge
-  // "demo-login" di Supabase yang menyimpannya sebagai secret di server,
-  // melakukan sign-in, lalu mengembalikan access_token & refresh_token
-  // yang kita pasang sebagai sesi lewat supabase.auth.setSession(...).
-  // Sesi demo di perangkat ini otomatis berakhir 1 jam kemudian (lihat
-  // demoSession.js & DemoSessionWatcher.jsx yang dipasang di App.jsx).
+  // Tidak lewat halaman /login — satu klik, langsung masuk. Kredensial akun
+  // demo TIDAK ada di kode ini: fungsi Edge "demo-login" di Supabase yang
+  // menyimpannya sebagai secret di server, melakukan sign-in, lalu
+  // mengembalikan access_token & refresh_token yang kita pasang sebagai
+  // sesi lewat supabase.auth.setSession(...). Sesi demo di perangkat ini
+  // otomatis berakhir 1 jam kemudian (lihat demoSession.js &
+  // DemoSessionWatcher.jsx yang dipasang di App.jsx).
   const [demoLoading, setDemoLoading] = useState(false)
   const [demoError, setDemoError] = useState('')
 
@@ -606,7 +428,7 @@ export default function Beranda() {
     setDemoLoading(true)
     try {
       const { data, error: fnError } = await supabase.functions.invoke('demo-login', {
-        body: { untuk },
+        body: { untuk: 'sekolah', jenjang },
       })
       if (fnError || !data?.access_token || !data?.refresh_token) {
         throw fnError || new Error('Respons demo-login tidak lengkap')
@@ -626,8 +448,8 @@ export default function Beranda() {
   }
 
   // Browser berbasis Chromium (Edge/Chrome) memberi tahu kapan situs ini
-  // bisa dipasang sebagai aplikasi. Kejadiannya disimpan supaya tombol
-  // "Windows" bisa langsung memunculkan kotak instal bawaan browser.
+  // bisa dipasang sebagai aplikasi. Kejadiannya disimpan supaya panduan
+  // bisa langsung memunculkan kotak instal bawaan browser.
   const [promptInstal, setPromptInstal] = useState(null)
   // Bila aplikasi sedang dibuka sebagai aplikasi terpasang, tombol instal
   // tidak perlu ditampilkan lagi.
@@ -850,19 +672,16 @@ export default function Beranda() {
                 <div className="brand-logo">
                   <div className="brand-logo-icon"><Landmark size={22} strokeWidth={2.5} /></div>
                   <span className="brand-logo-text">SIMAK</span>
-                  {/* Badge kecil di samping logo menandaskan bahwa platform ini
-                      sekarang melayani tiga jenis pendaftar: sekolah, kantor & puskesmas. */}
                   <span className="brand-logo-badge">
                     <Building2 size={11} strokeWidth={2.6} />
-                    Sekolah, KUA &amp; Puskesmas
+                    Sekolah SD &amp; SMP
                   </span>
                 </div>
-                <h1 className="beranda-title">Satu aplikasi, untuk Sekolah, KUA &amp; Puskesmas</h1>
+                <h1 className="beranda-title">Satu aplikasi, untuk Sekolah SD &amp; SMP</h1>
                 <p className="beranda-sub">
-                  Sistem informasi terpadu untuk Sekolah, Kantor Urusan Agama (KUA), dan Puskesmas,
-                  dengan {DAFTAR_AREA.length} area utama dan puluhan modul siap pakai — dari
-                  akademik dan administrasi siswa, penyuluhan dan kepenghuluan, hingga pelayanan
-                  kesehatan, keuangan, komunikasi, dan laporan pimpinan.
+                  Sistem informasi terpadu untuk sekolah SD dan SMP, dengan {DAFTAR_AREA.length} area
+                  utama dan puluhan modul siap pakai — dari akademik dan administrasi siswa, keuangan,
+                  komunikasi, hingga portal orang tua.
                 </p>
 
                 {/* 1) Tombol aksi utama: Daftar sekarang, Masuk, Lihat Toko
@@ -876,19 +695,15 @@ export default function Beranda() {
                     <LogIn size={15} strokeWidth={2.5} />
                     Sudah punya akun? Masuk
                   </Link>
-                  {/* Link ke Toko Sekolah — sengaja pakai <Link> biasa (bukan
-                      tombol instal/daftar) supaya pengunjung publik bisa
-                      langsung lihat-lihat toko TANPA perlu login/daftar dulu.
-                      Route "/toko" memang sudah publik di App.jsx. Diberi
-                      gaya outline (bukan solid) supaya tidak bersaing dengan
-                      CTA utama "Daftar sekarang". Disembunyikan pada
-                      tampilan KUA/Puskesmas karena Toko Sekolah khusus sekolah. */}
-                  {untuk !== 'kua' && untuk !== 'puskesmas' && (
-                    <Link to="/toko" className="btn-outline-toko">
-                      <ShoppingBag size={16} strokeWidth={2.5} />
-                      Lihat Toko Sekolah
-                    </Link>
-                  )}
+                  {/* Link ke Toko Sekolah — sengaja pakai <Link> biasa supaya
+                      pengunjung publik bisa langsung lihat-lihat toko TANPA
+                      perlu login/daftar dulu. Route "/toko" memang sudah
+                      publik di App.jsx. Gaya outline (bukan solid) supaya
+                      tidak bersaing dengan CTA utama "Daftar sekarang". */}
+                  <Link to="/toko" className="btn-outline-toko">
+                    <ShoppingBag size={16} strokeWidth={2.5} />
+                    Lihat Toko Sekolah
+                  </Link>
                   {/* Tombol Coba Demo: login langsung dari Beranda (bukan
                       lewat /login) lewat Edge Function "demo-login" — lihat
                       penjelasan di fungsi cobaDemo() di atas. */}
@@ -901,13 +716,10 @@ export default function Beranda() {
                   >
                     {demoLoading ? 'Memuat demo…' : 'Coba Demo'}
                   </button>
-                  {/* Logo instansi mitra (Dinas Pendidikan, KUA, Puskesmas/
-                      Dinas Kesehatan) — hanya logo, tanpa teks. Disematkan
-                      langsung (base64, lihat src/assets/logoMitra.js). */}
+                  {/* Logo Dinas Pendidikan — hanya logo, tanpa teks.
+                      Disematkan langsung (base64, lihat src/assets/logoMitra.js). */}
                   <div className="hero-logos">
                     <img src={LOGO_DINAS_PENDIDIKAN} alt="Dinas Pendidikan" className="mitra-logo" />
-                    <img src={LOGO_KUA} alt="Kantor Urusan Agama (KUA)" className="mitra-logo" />
-                    <img src={LOGO_PUSKESMAS} alt="Puskesmas / Dinas Kesehatan" className="mitra-logo" />
                   </div>
                 </div>
 
@@ -915,18 +727,17 @@ export default function Beranda() {
                   <p className="demo-error-msg" role="alert">{demoError}</p>
                 )}
 
-                {/* 2) Pemilih jenis instansi: kelompok tombol dengan status
-                    tekan (aria-pressed), bukan tab — karena tidak ada panel
-                    tab terpisah, hanya isi halaman yang disaring. Dipindah
-                    ke hero supaya pengunjung langsung memilih instansinya. */}
-                <div className="aud-switch aud-switch-hero" role="group" aria-label="Pilih jenis instansi">
-                  {OPSI_UNTUK.map((o) => (
+                {/* 2) Pemilih jenjang: kelompok tombol dengan status tekan
+                    (aria-pressed), bukan tab — karena tidak ada panel tab
+                    terpisah, hanya isi halaman yang disaring. */}
+                <div className="aud-switch aud-switch-hero" role="group" aria-label="Pilih jenjang sekolah">
+                  {OPSI_JENJANG.map((o) => (
                     <button
                       key={o.id}
                       type="button"
-                      aria-pressed={untuk === o.id}
-                      className={`aud-btn${untuk === o.id ? ' active' : ''}`}
-                      onClick={() => pilihUntuk(o.id)}
+                      aria-pressed={jenjang === o.id}
+                      className={`aud-btn${jenjang === o.id ? ' active' : ''}`}
+                      onClick={() => pilihJenjang(o.id)}
                     >
                       {o.label}
                     </button>
@@ -980,9 +791,8 @@ export default function Beranda() {
           <div className="aru-banner">
             <div className="aru-icon"><Users size={20} /></div>
             <p className="aru-text">
-              Salam hangat untuk Bapak/Ibu Guru, staf KUA (Kantor Urusan Agama), dan tenaga
-              Puskesmas — SIMAK dibuat untuk membantu sekolah, KUA, maupun Puskesmas Anda mengelola
-              data lebih ringan, dari ruang kelas hingga meja kerja.
+              Salam hangat untuk Bapak/Ibu Guru SD dan SMP — SIMAK dibuat untuk membantu sekolah
+              Anda mengelola data lebih ringan, dari ruang kelas hingga meja kerja.
             </p>
           </div>
 
@@ -1067,46 +877,22 @@ export default function Beranda() {
 
             <div className="area-showcase-heading">
               <h2 className="area-showcase-title" aria-live="polite">
-                {untuk === 'kua'
-                  ? `${areaTampil.length} area untuk KUA`
-                  : untuk === 'puskesmas'
-                    ? `${areaTampil.length} area untuk Puskesmas`
-                    : untuk === 'sekolah'
-                      ? `${areaTampil.length} area untuk Sekolah`
-                      : `${areaTampil.length} area, untuk Sekolah, KUA & Puskesmas`}
+                {jenjang === 'semua'
+                  ? `${areaTampil.length} area, untuk SD & SMP`
+                  : `${areaTampil.length} area untuk ${labelJenjang}`}
               </h2>
               <p className="area-showcase-sub">
-                {untuk === 'semua' ? (
-                  <>
-                    Pilih jenis instansi Anda di bagian atas untuk melihat modul yang tersedia. Badge{' '}
-                    <span className="badge-sekolah-inline">Khusus sekolah</span>,{' '}
-                    <span className="badge-kua-inline">Khusus KUA</span>, dan{' '}
-                    <span className="badge-puskesmas-inline">Khusus puskesmas</span> menandai modul
-                    yang hanya tampil untuk jenis akun tersebut.
-                  </>
-                ) : (
-                  <>
-                    Semua modul di bawah tersedia untuk akun{' '}
-                    {untuk === 'kua' ? 'KUA' : untuk === 'puskesmas' ? 'puskesmas' : 'sekolah'}.
-                    Kewenangan tiap pengguna (admin, kepala, pegawai) diatur setelah login.
-                  </>
-                )}
+                {jenjang === 'semua'
+                  ? 'Pilih jenjang di bagian atas untuk melihat modul yang sesuai. Modul tanpa penanda tersedia untuk SD maupun SMP.'
+                  : `Semua modul di bawah tersedia untuk akun ${labelJenjang}. Kewenangan tiap pengguna (admin, kepala sekolah, guru) diatur setelah login.`}
               </p>
-              {/* Pemilih jenis instansi sudah dipindah ke hero (bagian atas). */}
             </div>
 
             <div className="tile-strip">
               {areaTampil.map((a) => {
                 const Ikon = a.ikon
-                // Badge "Khusus ..." hanya perlu di tampilan Semua — kalau
-                // sudah difilter, badge itu redundan.
-                const badgeJenis =
-                  untuk === 'semua' && !a.tanpaLogin && a.untuk.length === 1 ? a.untuk[0] : null
                 const isi = (
                   <>
-                    {badgeJenis === 'sekolah' && <span className="tile-badge-sekolah">Khusus sekolah</span>}
-                    {badgeJenis === 'kua' && <span className="tile-badge-kua">Khusus KUA</span>}
-                    {badgeJenis === 'puskesmas' && <span className="tile-badge-puskesmas">Khusus puskesmas</span>}
                     {a.tanpaLogin && <span className="tile-toko-badge">Tanpa login</span>}
                     <div className="tile-icon"><Ikon size={15} strokeWidth={2.4} /></div>
                     <p className="tile-label">Area {a.nomor}</p>
@@ -1141,8 +927,6 @@ export default function Beranda() {
             <div className="cat-section">
               {areaTampil.map((a) => {
                 const Ikon = a.ikon
-                const badgeJenis =
-                  untuk === 'semua' && !a.tanpaLogin && a.untuk.length === 1 ? a.untuk[0] : null
                 const judul = (
                   <h2 className="cat-title">
                     <Ikon size={17} strokeWidth={2.2} className="cat-icon" style={{ color: a.warna }} />
@@ -1193,9 +977,6 @@ export default function Beranda() {
                 return (
                   <div key={a.id} id={`area-${a.id}`} tabIndex={-1} className="cat-card">
                     <span className="cat-tag" style={{ background: a.warna }}>Area {a.nomor}</span>
-                    {badgeJenis === 'sekolah' && <span className="cat-card-badge-sekolah">Khusus sekolah</span>}
-                    {badgeJenis === 'kua' && <span className="cat-card-badge-kua">Khusus KUA</span>}
-                    {badgeJenis === 'puskesmas' && <span className="cat-card-badge-puskesmas">Khusus puskesmas</span>}
                     {judul}
                     {daftar}
                   </div>
@@ -1208,8 +989,8 @@ export default function Beranda() {
             <BatikOverlay patternId="batikFooter" strokeColor="#d4af37" opacity={0.7} size={56} />
             <div className="footer-content">
               <div>
-                <p className="beranda-footer-title">Tertarik menerapkannya di sekolah, KUA, atau Puskesmas Anda?</p>
-                <p className="beranda-footer-sub"> Daftar Gratis akun untuk sekolah, KUA, maupun Puskesmas Anda sekarang.</p>
+                <p className="beranda-footer-title">Tertarik menerapkannya di sekolah Anda?</p>
+                <p className="beranda-footer-sub"> Daftar gratis akun untuk sekolah SD atau SMP Anda sekarang.</p>
               </div>
               <Link to={linkDaftar} className="beranda-cta">
                 Daftar sekarang
@@ -1218,8 +999,8 @@ export default function Beranda() {
             </div>
             {/* Baris legal: link ke Kebijakan Privasi & Syarat Layanan.
                 Ditaruh di footer karena ini konvensi umum yang dicari
-                pengunjung (terutama instansi pemerintah yang mengevaluasi
-                keamanan data sebelum mendaftar). */}
+                pengunjung (terutama instansi yang mengevaluasi keamanan
+                data sebelum mendaftar). */}
             <div className="footer-legal">
               <span>&copy; {new Date().getFullYear()} SIMAK</span>
               <Link to="/kebijakan-privasi">Kebijakan Privasi</Link>
@@ -1230,9 +1011,9 @@ export default function Beranda() {
         </div>
       </div>
 
-      {/* Modal panduan instal (iPhone/iPad dan Windows), muncul saat tombol
-          platform-nya diklik. Bisa ditutup dengan tombol X, klik di luar
-          kotak, atau tombol Esc. */}
+      {/* Modal panduan instal (Android, iPhone/iPad, dan Windows), muncul
+          saat tombol platform-nya diklik. Bisa ditutup dengan tombol X,
+          klik di luar kotak, atau tombol Esc. */}
       {isiPanduan && (
         <div className="ios-overlay" onClick={() => setPanduan(null)}>
           <div
@@ -1280,7 +1061,7 @@ export default function Beranda() {
       )}
 
       {/* Modal "Panduan Mulai" — muncul saat kartu langkah di mulai-section
-          diklik. Berisi 3 tab langkah (sesuai jenis instansi terpilih),
+          diklik. Berisi 3 tab langkah (sesuai jenjang terpilih),
           masing-masing dengan penjelasan, daftar poin, dan catatan. Bisa
           ditutup lewat tombol X, klik di luar kotak, atau tombol Esc. */}
       {panduanMulaiTerbuka && (
@@ -1294,7 +1075,7 @@ export default function Beranda() {
           >
             <div className="ios-modal-header">
               <h3 className="ios-modal-title" id="panduan-modal-judul">
-                Panduan Mulai — {untuk === 'kua' ? 'KUA' : untuk === 'puskesmas' ? 'Puskesmas' : 'Sekolah'}
+                Panduan Mulai — {labelJenjang}
               </h3>
               <button
                 type="button"
@@ -1797,9 +1578,9 @@ export default function Beranda() {
           height: 100%;
           object-fit: cover;
         }
-        /* PERBAIKAN: overflow: hidden dihapus dari .wa-fab. Sebelumnya ring
-           yang membesar 1.6x ikut terpotong sehingga denyutnya tidak
-           terlihat. Foto tetap bulat karena <img> punya border-radius sendiri. */
+        /* overflow: hidden sengaja tidak dipakai di .wa-fab supaya ring yang
+           membesar 1.6x tidak terpotong. Foto tetap bulat karena <img>
+           punya border-radius sendiri. */
         .wa-fab {
           width: 58px;
           height: 58px;
@@ -2128,7 +1909,7 @@ export default function Beranda() {
           margin: 0;
         }
 
-        /* Logo instansi mitra di hero, di samping tombol Coba Demo.
+        /* Logo Dinas Pendidikan di hero, di samping tombol Coba Demo.
            Latar putih supaya logo tetap jelas di atas header gelap. */
         .hero-logos {
           display: inline-flex;
@@ -2492,16 +2273,6 @@ export default function Beranda() {
           margin: 0;
           line-height: 1.6;
         }
-        .badge-sekolah-inline {
-          display: inline-block;
-          background: #FBBF24;
-          color: #78350F;
-          font-size: 11.5px;
-          font-weight: 800;
-          padding: 2px 8px;
-          border-radius: 999px;
-          vertical-align: 1px;
-        }
 
         .tile-strip {
           position: relative;
@@ -2538,21 +2309,6 @@ export default function Beranda() {
         .tile-label { font-size: 12.5px; opacity: 0.95; margin: 0 0 20px; }
         .tile-name { font-size: 15px; font-weight: 700; line-height: 1.25; margin: 0; }
 
-        .tile-badge-sekolah {
-          position: absolute;
-          top: -8px;
-          left: -6px;
-          background: #FBBF24;
-          color: #78350F;
-          font-size: 11px;
-          font-weight: 800;
-          padding: 3px 8px;
-          border-radius: 999px;
-          box-shadow: 0 4px 10px rgba(0,0,0,0.18);
-          z-index: 2;
-          white-space: nowrap;
-        }
-
         .tile-toko { overflow: visible; }
         .tile-toko-badge {
           position: absolute;
@@ -2585,19 +2341,6 @@ export default function Beranda() {
           scroll-margin-top: 16px;
         }
         .cat-card.wide { grid-column: span 2; }
-        .cat-card-badge-sekolah {
-          position: absolute;
-          top: -9px;
-          right: 14px;
-          background: #FBBF24;
-          color: #78350F;
-          font-size: 11px;
-          font-weight: 800;
-          padding: 3px 9px;
-          border-radius: 999px;
-          box-shadow: 0 4px 10px rgba(0,0,0,0.18);
-          white-space: nowrap;
-        }
         .cat-card-link {
           display: block;
           text-decoration: none;
@@ -2744,7 +2487,7 @@ export default function Beranda() {
         }
         .footer-legal a:hover { text-decoration: underline; }
 
-        /* Pemilih jenis instansi (Semua / Sekolah / KUA / Puskesmas) */
+        /* Pemilih jenjang (Semua / SD / SMP) */
         .aud-switch {
           display: inline-flex;
           flex-wrap: wrap;
@@ -2782,84 +2525,9 @@ export default function Beranda() {
         .aud-switch-hero .aud-btn:hover { background: rgba(255,255,255,0.12); }
         .aud-switch-hero .aud-btn.active { background: #F2762B; color: #fff; }
 
-        .badge-kua-inline {
-          display: inline-block;
-          background: #86EFAC;
-          color: #14532D;
-          font-size: 11.5px;
-          font-weight: 800;
-          padding: 2px 8px;
-          border-radius: 999px;
-          vertical-align: 1px;
-        }
-        .tile-badge-kua {
-          position: absolute;
-          top: -8px;
-          left: -6px;
-          background: #86EFAC;
-          color: #14532D;
-          font-size: 11px;
-          font-weight: 800;
-          padding: 3px 8px;
-          border-radius: 999px;
-          box-shadow: 0 4px 10px rgba(0,0,0,0.18);
-          z-index: 2;
-          white-space: nowrap;
-        }
-        .cat-card-badge-kua {
-          position: absolute;
-          top: -9px;
-          right: 14px;
-          background: #86EFAC;
-          color: #14532D;
-          font-size: 11px;
-          font-weight: 800;
-          padding: 3px 9px;
-          border-radius: 999px;
-          box-shadow: 0 4px 10px rgba(0,0,0,0.18);
-          white-space: nowrap;
-        }
-
-        .badge-puskesmas-inline {
-          display: inline-block;
-          background: #FDA4AF;
-          color: #881337;
-          font-size: 11.5px;
-          font-weight: 800;
-          padding: 2px 8px;
-          border-radius: 999px;
-          vertical-align: 1px;
-        }
-        .tile-badge-puskesmas {
-          position: absolute;
-          top: -8px;
-          left: -6px;
-          background: #FDA4AF;
-          color: #881337;
-          font-size: 11px;
-          font-weight: 800;
-          padding: 3px 8px;
-          border-radius: 999px;
-          box-shadow: 0 4px 10px rgba(0,0,0,0.18);
-          z-index: 2;
-          white-space: nowrap;
-        }
-        .cat-card-badge-puskesmas {
-          position: absolute;
-          top: -9px;
-          right: 14px;
-          background: #FDA4AF;
-          color: #881337;
-          font-size: 11px;
-          font-weight: 800;
-          padding: 3px 9px;
-          border-radius: 999px;
-          box-shadow: 0 4px 10px rgba(0,0,0,0.18);
-          white-space: nowrap;
-        }
         @media (max-width: 560px) {
           .aud-switch { display: flex; width: 100%; }
-          .aud-btn { flex: 1 1 40%; padding: 9px 8px; }
+          .aud-btn { flex: 1 1 28%; padding: 9px 8px; }
         }
 
         /* Tablet / layar sedang (mis. Android tablet, iPad mini) */
