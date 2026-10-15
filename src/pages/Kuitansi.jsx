@@ -133,10 +133,18 @@ export default function Kuitansi() {
   }
 
   async function loadData() {
+    // PERBAIKAN: tanpa sekolahId jangan memuat apa pun, dan selalu filter
+    // per sekolah (lapisan kedua di samping RLS di database).
+    if (!sekolahId) {
+      setData([])
+      setLoading(false)
+      return
+    }
     setLoading(true)
     const { data: rows, error } = await supabase
       .from('kuitansi')
       .select('*')
+      .eq('sekolah_id', sekolahId)
       .eq('jenis', tab)
       .order('tanggal', { ascending: false })
       .order('id', { ascending: false })
@@ -144,11 +152,11 @@ export default function Kuitansi() {
     setLoading(false)
   }
 
-  // Muat ulang data setiap kali tab berganti.
+  // Muat ulang data setiap kali tab atau sekolah berganti.
   useEffect(() => {
     loadData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab])
+  }, [tab, sekolahId])
 
   useEffect(() => {
     if (!sekolahId) return
@@ -190,9 +198,14 @@ export default function Kuitansi() {
   }, [cetakUlang])
 
   async function handleHapus(row) {
+    if (!sekolahId) return
     if (!confirm(`Hapus ${labelJenis.toLowerCase()} nomor "${row.nomor || '-'}"? Tindakan ini tidak bisa dibatalkan.`)) return
     setMenghapus(row.id)
-    const { error } = await supabase.from('kuitansi').delete().eq('id', row.id)
+    const { error } = await supabase
+      .from('kuitansi')
+      .delete()
+      .eq('id', row.id)
+      .eq('sekolah_id', sekolahId) // PERBAIKAN: hanya boleh menghapus milik sekolah sendiri
     setMenghapus(null)
     if (error) {
       alert('Gagal menghapus: ' + error.message)
@@ -230,14 +243,21 @@ export default function Kuitansi() {
   }
 
   async function handleImportKuitansi(rows) {
+    if (!sekolahId) {
+      throw new Error('Data sekolah belum termuat. Muat ulang halaman lalu coba lagi.')
+    }
     let sukses = 0
     const gagal = []
     for (const row of rows) {
       try {
+        // Catatan: RPC ini sengaja TIDAK diubah supaya tidak merusak fungsi
+        // yang sudah ada di database. Penomoran per sekolah bisa dibuat
+        // terpisah (lihat README).
         const { data: nomorData, error: nomorErr } = await supabase.rpc('next_nomor_kuitansi', { p_jenis: tab })
         if (nomorErr) throw nomorErr
 
         const payload = {
+          sekolah_id: sekolahId, // PERBAIKAN: ikat baris ke sekolah yang login
           jenis: tab,
           nomor: nomorData,
           no_bukti: row.no_bukti,
