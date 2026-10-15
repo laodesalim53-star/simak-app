@@ -22,6 +22,9 @@ import {
 //
 // j : bila diisi, butir hanya tampil untuk jenjang itu ('sd' / 'smp').
 //
+// SUMBER_APP : pintasan dari tiap butir ke halaman di aplikasi yang
+// menyimpan datanya (Data Guru, Inventaris, Gudang SK, dst).
+//
 // Tabel & kebijakan akses: lihat akreditasi_berkas.sql.
 // ============================================================
 
@@ -104,6 +107,53 @@ const KOMPONEN = [
   },
 ]
 
+// Butir akreditasi -> halaman di aplikasi yang menyimpan datanya.
+// Alamat (to) harus sama dengan rute di App.jsx. Ubah bebas bila ada yang kurang pas.
+const SUMBER_APP = {
+  'LEG-01': [{ to: '/profil-sekolah', label: 'Profil Sekolah' }],
+  'LEG-02': [{ to: '/dokumen', label: 'Dokumen Penting' }],
+  'LEG-03': [{ to: '/dokumen', label: 'Dokumen Penting' }],
+  'LEG-04': [{ to: '/surat', label: 'Surat Masuk/Keluar' }],
+  'LEG-05': [{ to: '/dokumen', label: 'Dokumen Penting' }],
+  'LUL-01': [{ to: '/administrasi-kelas', label: 'Administrasi Kelas (Rapor)' }],
+  'LUL-02': [{ to: '/nilai-asesmen', label: 'Nilai Asesmen' }],
+  'LUL-03': [{ to: '/portofolio-siswa', label: 'Portofolio Siswa' }],
+  'LUL-04': [{ to: '/sertifikat', label: 'Sertifikat & Penghargaan' }],
+  'LUL-05': [{ to: '/gudang-sk', label: 'Gudang SK' }],
+  'LUL-06': [{ to: '/siswa', label: 'Data Siswa' }],
+  'LUL-07': [{ to: '/siswa', label: 'Data Siswa' }],
+  'PRO-01': [{ to: '/administrasi-kepsek', label: 'Administrasi Kepsek' }],
+  'PRO-02': [{ to: '/administrasi-kelas', label: 'Administrasi Kelas' }],
+  'PRO-03': [{ to: '/kalender-pendidikan', label: 'Kalender Pendidikan' }],
+  'PRO-04': [{ to: '/gudang-sk', label: 'Gudang SK' }],
+  'PRO-05': [{ to: '/gudang-sk', label: 'Gudang SK' }],
+  'PRO-06': [{ to: '/hasil-ujian', label: 'Hasil Ujian' }],
+  'PRO-07': [{ to: '/administrasi-kepsek/supervisi-akademik', label: 'Supervisi Akademik' }],
+  'PRO-08': [{ to: '/administrasi-kelas', label: 'Administrasi Kelas' }],
+  'GUR-01': [{ to: '/guru', label: 'Data Guru' }],
+  'GUR-02': [{ to: '/gudang-sk', label: 'Gudang SK' }],
+  'GUR-03': [{ to: '/laporan-guru', label: 'Pusat Laporan Kepegawaian' }],
+  'GUR-06': [{ to: '/administrasi-kepsek/kinerja-tendik', label: 'Kinerja Tendik' }],
+  'GUR-07': [{ to: '/daftar-hadir-pegawai', label: 'Daftar Hadir Guru & Tendik' }],
+  'MAN-01': [{ to: '/administrasi-kepsek', label: 'Administrasi Kepsek' }],
+  'MAN-02': [{ to: '/administrasi-kepsek', label: 'Administrasi Kepsek' }],
+  'MAN-03': [
+    { to: '/bku-bank', label: 'BKU Bank' },
+    { to: '/keuangan', label: 'Keuangan' },
+  ],
+  'MAN-04': [{ to: '/gudang-sk', label: 'Gudang SK' }],
+  'MAN-05': [
+    { to: '/inventaris', label: 'Inventaris' },
+    { to: '/bangunan', label: 'Kondisi Bangunan' },
+  ],
+  'MAN-06': [{ to: '/gudang-sk', label: 'Gudang SK' }],
+  'MAN-07': [{ to: '/administrasi-kepsek', label: 'Administrasi Kepsek' }],
+  'MAN-08': [
+    { to: '/siswa', label: 'Data Siswa' },
+    { to: '/ppdb-admin', label: 'PPDB Siswa Baru' },
+  ],
+}
+
 // ---- Pembantu -----------------------------------------------------------
 function itemUntuk(komponen, jenjang) {
   return komponen.items.filter((it) => !it.j || it.j.includes(jenjang))
@@ -127,6 +177,7 @@ function BarisButir({ item, data, terbuka, onToggle, bisaEdit, sibuk, onSimpan, 
   const st = STATUS.find((s) => s.v === status) || STATUS[0]
   const [draft, setDraft] = useState({ status, tautan: data?.tautan || '', catatan: data?.catatan || '' })
   const [galat, setGalat] = useState('')
+  const sumber = SUMBER_APP[item.kode]
 
   useEffect(() => {
     setDraft({ status, tautan: data?.tautan || '', catatan: data?.catatan || '' })
@@ -221,6 +272,22 @@ function BarisButir({ item, data, terbuka, onToggle, bisaEdit, sibuk, onSimpan, 
             />
           </div>
 
+          {sumber && (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="text-slate-500">Data di aplikasi:</span>
+              {sumber.map((s) => (
+                <Link
+                  key={s.to + s.label}
+                  to={s.to}
+                  className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 font-semibold text-blue-700 hover:bg-blue-100"
+                >
+                  <ArrowRight size={12} />
+                  {s.label}
+                </Link>
+              ))}
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center gap-2">
             {data?.file_path && (
               <>
@@ -302,8 +369,8 @@ function BarisButir({ item, data, terbuka, onToggle, bisaEdit, sibuk, onSimpan, 
 }
 
 // ---- Kartu ringkas untuk Dasbor / hub menu -------------------------------
-// Pasang di daftar kartu menu Anda: <KartuAkreditasi />
-export function KartuAkreditasi({ to = '/akreditasi' }) {
+// Pasang di daftar kartu menu Anda: <KartuAkreditasi to="/administrasi-kepsek/akreditasi" />
+export function KartuAkreditasi({ to = '/administrasi-kepsek/akreditasi' }) {
   return (
     <Link
       to={to}
