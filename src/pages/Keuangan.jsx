@@ -63,6 +63,11 @@ export default function Keuangan() {
   const [bkuData, setBkuData] = useState([])
   const [loadingBku, setLoadingBku] = useState(false)
 
+  // Edit Jumlah Barang (tab BKU)
+  const [editBku, setEditBku] = useState(null) // baris BKU yang sedang diedit
+  const [jumlahBarang, setJumlahBarang] = useState('')
+  const [savingBku, setSavingBku] = useState(false)
+
   // Cetak RKAS (tab ARKAS)
   const [showRkas, setShowRkas] = useState(false)
 
@@ -203,6 +208,31 @@ export default function Keuangan() {
     } else {
       alert(`Berhasil menghapus ${jumlahTerhapus} baris ARKAS tahun ${tahun}.`)
     }
+  }
+
+  // Buka modal edit Jumlah Barang untuk satu baris BKU
+  function openEditBku(row) {
+    setEditBku(row)
+    setJumlahBarang(row.jumlah_barang ?? '')
+  }
+
+  // Simpan Jumlah Barang (kosong = NULL)
+  async function handleSimpanBku(e) {
+    e.preventDefault()
+    if (!editBku) return
+    setSavingBku(true)
+    const nilai = jumlahBarang === '' ? null : Number(jumlahBarang)
+    const { error } = await supabase
+      .from('bku_kas')
+      .update({ jumlah_barang: nilai })
+      .eq('id', editBku.id)
+    setSavingBku(false)
+    if (error) {
+      alert('Gagal menyimpan: ' + error.message)
+      return
+    }
+    setEditBku(null)
+    loadBkuData()
   }
 
   // Hapus satu baris BKU
@@ -583,7 +613,14 @@ export default function Keuangan() {
                         <td>{r.pengeluaran ? formatRupiah(r.pengeluaran) : '-'}</td>
                         <td className="font-medium">{formatRupiah(saldoBerjalan)}</td>
                         <td>
-                          <div className="flex items-center justify-end">
+                          <div className="flex items-center gap-1 justify-end">
+                            <button
+                              className="icon-btn"
+                              title="Edit jumlah barang"
+                              onClick={() => openEditBku(r)}
+                            >
+                              <Pencil size={15} />
+                            </button>
                             <button className="icon-btn text-red-600" onClick={() => handleHapusBku(r.id)}>
                               <Trash2 size={15} />
                             </button>
@@ -597,6 +634,47 @@ export default function Keuangan() {
             </table>
           </div>
         </>
+      )}
+
+      {/* Modal edit Jumlah Barang (tab BKU) */}
+      {editBku && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-display text-lg font-semibold">Edit Jumlah Barang</h2>
+              <button className="icon-btn" onClick={() => setEditBku(null)}><X size={18} /></button>
+            </div>
+            <form onSubmit={handleSimpanBku} className="space-y-3">
+              <div>
+                <label className="label-field">Uraian</label>
+                <p className="text-sm text-ink-950 bg-ink-950/5 rounded-lg px-3 py-2">
+                  {editBku.uraian || '-'}
+                </p>
+              </div>
+              <div>
+                <label className="label-field">Jumlah Barang</label>
+                <input
+                  autoFocus
+                  type="number"
+                  min="0"
+                  step="any"
+                  className="input-field"
+                  placeholder="Contoh: 10"
+                  value={jumlahBarang}
+                  onChange={(e) => setJumlahBarang(e.target.value)}
+                />
+                <p className="text-xs text-ink-700/50 mt-1">Kosongkan untuk menghapus nilai.</p>
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" className="btn-secondary" onClick={() => setEditBku(null)}>Batal</button>
+                <button type="submit" className="btn-primary" disabled={savingBku}>
+                  {savingBku && <Loader2 size={16} className="animate-spin" />}
+                  Simpan
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* Modal tambah/ubah transaksi (tab Transaksi) */}
