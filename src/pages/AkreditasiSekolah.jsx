@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
+import Layout from '../components/Layout'
 import {
   ShieldCheck, ChevronDown, Upload, Link2, ExternalLink, Loader2, Search,
   Trash2, Save, FileText, ArrowRight,
@@ -172,7 +173,7 @@ function Batang({ persen, warna = 'bg-blue-600' }) {
 }
 
 // ---- Satu baris butir (di LUAR komponen utama supaya state-nya stabil) --
-function BarisButir({ item, data, terbuka, onToggle, bisaEdit, sibuk, onSimpan, onUnggah, onHapusFile, onBukaFile }) {
+function BarisButir({ item, data, info = [], terbuka, onToggle, bisaEdit, sibuk, onSimpan, onUnggah, onHapusFile, onBukaFile }) {
   const status = data?.status || 'belum'
   const st = STATUS.find((s) => s.v === status) || STATUS[0]
   const [draft, setDraft] = useState({ status, tautan: data?.tautan || '', catatan: data?.catatan || '' })
@@ -284,6 +285,11 @@ function BarisButir({ item, data, terbuka, onToggle, bisaEdit, sibuk, onSimpan, 
                   <ArrowRight size={12} />
                   {s.label}
                 </Link>
+              ))}
+              {info.map((t) => (
+                <span key={t} className="rounded-full bg-slate-100 border border-slate-200 px-3 py-1 font-medium text-slate-700">
+                  {t}
+                </span>
               ))}
             </div>
           )}
@@ -459,6 +465,42 @@ export default function AkreditasiSekolah() {
     }
   }, [sekolahId, jenjang])
 
+  // Hitungan data dari halaman lain di aplikasi (hanya tampilan, tidak mengubah status).
+  // Tabel: arkas_anggaran, bku_kas, siswa (sama seperti yang dipakai Keuangan.jsx).
+  // Pembatasan per sekolah mengikuti RLS di Supabase, sama seperti halaman Keuangan.
+  const [hitung, setHitung] = useState({})
+  const tahunIni = new Date().getFullYear()
+
+  useEffect(() => {
+    if (!sekolahId) return
+    let aktif = true
+    const jumlah = (q) => q.then((r) => (r.error ? null : r.count))
+    Promise.all([
+      jumlah(supabase.from('arkas_anggaran').select('id', { count: 'exact', head: true }).eq('tahun_anggaran', String(tahunIni))),
+      jumlah(supabase.from('bku_kas').select('id', { count: 'exact', head: true }).eq('tahun', tahunIni)),
+      jumlah(supabase.from('siswa').select('id', { count: 'exact', head: true })),
+    ]).then(([arkas, bku, siswa]) => {
+      if (aktif) setHitung({ arkas, bku, siswa })
+    })
+    return () => {
+      aktif = false
+    }
+  }, [sekolahId, tahunIni])
+
+  function infoUntuk(kode) {
+    const teks = (n, satuan, kosong) => (n === null || n === undefined ? null : n > 0 ? `${n} ${satuan}` : kosong)
+    if (kode === 'MAN-03') {
+      return [
+        teks(hitung.arkas, `baris ARKAS ${tahunIni}`, `ARKAS ${tahunIni} belum diisi`),
+        teks(hitung.bku, `baris BKU ${tahunIni}`, `BKU ${tahunIni} belum diisi`),
+      ].filter(Boolean)
+    }
+    if (kode === 'MAN-08') {
+      return [teks(hitung.siswa, 'siswa terdata', 'Data siswa belum diisi')].filter(Boolean)
+    }
+    return []
+  }
+
   const simpan = useCallback(
     async (kode, patch) => {
       if (!sekolahId) return false
@@ -582,26 +624,21 @@ export default function AkreditasiSekolah() {
   // ---- Tampilan -------------------------------------------------------
   if (profilSelesai && !sekolahId) {
     return (
-      <div className="max-w-xl mx-auto p-6 text-center">
-        <p className="text-sm text-slate-600">
-          Akun Anda belum terhubung ke sekolah, jadi berkas akreditasi belum bisa ditampilkan.
-        </p>
-      </div>
+      <Layout title="Berkas Akreditasi" subtitle="Checklist dan arsip berkas persiapan akreditasi.">
+        <div className="max-w-xl mx-auto p-6 text-center">
+          <p className="text-sm text-slate-600">
+            Akun Anda belum terhubung ke sekolah, jadi berkas akreditasi belum bisa ditampilkan.
+          </p>
+        </div>
+      </Layout>
     )
   }
 
   return (
-    <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-5">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0">
-            <ShieldCheck size={22} />
-          </div>
-          <div>
-            <h1 className="text-xl font-extrabold text-slate-900">Berkas Akreditasi</h1>
-            <p className="text-sm text-slate-500">Checklist dan arsip berkas persiapan akreditasi {labelJenjang}.</p>
-          </div>
-        </div>
+    <Layout title="Berkas Akreditasi" subtitle="Checklist dan arsip berkas persiapan akreditasi.">
+    <div className="max-w-5xl mx-auto space-y-5">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-slate-500">Persiapan akreditasi {labelJenjang}. Pilih jenjang di kanan.</p>
 
         <div role="group" aria-label="Pilih jenjang" className="inline-flex p-1 rounded-full bg-slate-100 border border-slate-200">
           {OPSI_JENJANG.map((o) => (
@@ -704,6 +741,7 @@ export default function AkreditasiSekolah() {
                     key={it.kode}
                     item={it}
                     data={baris[it.kode]}
+                    info={infoUntuk(it.kode)}
                     terbuka={terbuka === it.kode}
                     onToggle={() => setTerbuka((t) => (t === it.kode ? null : it.kode))}
                     bisaEdit={bisaEdit}
@@ -724,5 +762,6 @@ export default function AkreditasiSekolah() {
         Daftar butir ini adalah panduan kerja. Selalu cocokkan dengan instrumen dan petunjuk teknis akreditasi terbaru dari BAN-S/M.
       </p>
     </div>
+    </Layout>
   )
 }
