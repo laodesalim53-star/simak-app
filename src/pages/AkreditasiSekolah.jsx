@@ -120,19 +120,22 @@ const SUMBER_APP = {
   'LUL-02': [{ to: '/nilai-asesmen', label: 'Nilai Asesmen' }],
   'LUL-03': [{ to: '/portofolio-siswa', label: 'Portofolio Siswa' }],
   'LUL-04': [{ to: '/sertifikat', label: 'Sertifikat & Penghargaan' }],
-  'LUL-05': [{ to: '/gudang-sk', label: 'Gudang SK' }],
+  'LUL-05': [{ to: '/gudang-sk/pembina-ekstrakurikuler', label: 'SK Pembina Ekstrakurikuler' }],
   'LUL-06': [{ to: '/siswa', label: 'Data Siswa' }],
   'LUL-07': [{ to: '/siswa', label: 'Data Siswa' }],
   'PRO-01': [{ to: '/administrasi-kepsek', label: 'Administrasi Kepsek' }],
   'PRO-02': [{ to: '/administrasi-kelas', label: 'Administrasi Kelas' }],
   'PRO-03': [{ to: '/kalender-pendidikan', label: 'Kalender Pendidikan' }],
-  'PRO-04': [{ to: '/gudang-sk', label: 'Gudang SK' }],
-  'PRO-05': [{ to: '/gudang-sk', label: 'Gudang SK' }],
+  'PRO-04': [{ to: '/gudang-sk/wali-kelas', label: 'SK Wali Kelas' }],
+  'PRO-05': [{ to: '/gudang-sk/wali-kelas', label: 'SK Wali Kelas' }],
   'PRO-06': [{ to: '/hasil-ujian', label: 'Hasil Ujian' }],
   'PRO-07': [{ to: '/administrasi-kepsek/supervisi-akademik', label: 'Supervisi Akademik' }],
   'PRO-08': [{ to: '/administrasi-kelas', label: 'Administrasi Kelas' }],
   'GUR-01': [{ to: '/guru', label: 'Data Guru' }],
-  'GUR-02': [{ to: '/gudang-sk', label: 'Gudang SK' }],
+  'GUR-02': [
+    { to: '/gudang-sk/beban-mengajar', label: 'SK Beban Mengajar' },
+    { to: '/gudang-sk/keterangan-melaksanakan-tugas', label: 'Keterangan Melaksanakan Tugas' },
+  ],
   'GUR-03': [{ to: '/laporan-guru', label: 'Pusat Laporan Kepegawaian' }],
   'GUR-06': [{ to: '/administrasi-kepsek/kinerja-tendik', label: 'Kinerja Tendik' }],
   'GUR-07': [{ to: '/daftar-hadir-pegawai', label: 'Daftar Hadir Guru & Tendik' }],
@@ -141,8 +144,14 @@ const SUMBER_APP = {
   'MAN-03': [
     { to: '/bku-bank', label: 'BKU Bank' },
     { to: '/keuangan', label: 'Keuangan' },
+    { to: '/gudang-sk/tim-bos', label: 'SK Tim BOS' },
+    { to: '/gudang-sk/bendahara-bos', label: 'SK Bendahara BOS' },
   ],
-  'MAN-04': [{ to: '/gudang-sk', label: 'Gudang SK' }],
+  'MAN-04': [
+    { to: '/gudang-sk/tim-bos', label: 'SK Tim BOS' },
+    { to: '/gudang-sk/panitia-ujian', label: 'SK Panitia Ujian' },
+    { to: '/gudang-sk/panitia-ppdb', label: 'SK Panitia PPDB' },
+  ],
   'MAN-05': [
     { to: '/inventaris', label: 'Inventaris' },
     { to: '/bangunan', label: 'Kondisi Bangunan' },
@@ -152,6 +161,7 @@ const SUMBER_APP = {
   'MAN-08': [
     { to: '/siswa', label: 'Data Siswa' },
     { to: '/ppdb-admin', label: 'PPDB Siswa Baru' },
+    { to: '/gudang-sk/panitia-ppdb', label: 'SK Panitia PPDB' },
   ],
 }
 
