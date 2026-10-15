@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabaseClient'
 import { X, Loader2, Printer } from 'lucide-react'
 import KuitansiPrintTemplate from '../lib/KuitansiPrintTemplate'
 import PilihanTampilanCetak from '../components/PilihanTampilanCetak'
+import InputItemKatalog, { useKatalogItem } from '../components/InputItemKatalog'
 import {
   muatTemaKuitansi,
   simpanTemaKuitansi,
@@ -125,6 +126,10 @@ function cariGuruBerdasarkanPeran(daftarGuru, kataKunci) {
  *
  * TAMPILAN CETAK: warna & tata letak dipilih lewat PilihanTampilanCetak dan
  * disimpan sebagai preferensi di localStorage (lib/kuitansiTema.js).
+ *
+ * KATALOG ITEM: kolom "Untuk Pembayaran / Keterangan" punya saran dari view
+ * katalog_item (lihat InputItemKatalog.jsx). Memilih saran mengisi keterangan,
+ * Mata Anggaran (kode rekening), dan Jumlah kalau masih kosong.
  */
 export default function KuitansiModal({ keuanganRow, sekolah, sekolahId, jenis = 'kuitansi', onClose }) {
   const tanpaWatermark = jenis === 'kwitansi'
@@ -133,9 +138,21 @@ export default function KuitansiModal({ keuanganRow, sekolah, sekolahId, jenis =
   const [savedData, setSavedData] = useState(null) // { ...kuitansi row } setelah tersimpan, siap dicetak
   const [tema, setTema] = useState(() => muatTemaKuitansi())
   const printRef = useRef(null)
+  const katalog = useKatalogItem(sekolahId)
 
   function ubah(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
+  }
+
+  // Pilih item dari katalog -> isi keterangan + Mata Anggaran (kode rekening).
+  // Jumlah hanya diisi kalau masih kosong (harga satuan belum tentu = total).
+  function pilihItemKatalog(k) {
+    setForm((prev) => ({
+      ...prev,
+      untuk_pembayaran: k.uraian,
+      mata_anggaran: k.kode_rekening || prev.mata_anggaran,
+      jumlah: prev.jumlah === '' || prev.jumlah == null ? (k.harga_satuan ?? '') : prev.jumlah,
+    }))
   }
 
   function ubahTema(temaBaru) {
@@ -350,10 +367,13 @@ export default function KuitansiModal({ keuanganRow, sekolah, sekolahId, jenis =
 
             <div>
               <label className="label-field">Untuk Pembayaran / Keterangan</label>
-              <input
+              <InputItemKatalog
                 className="input-field"
+                placeholder="Ketik untuk cari item dari katalog"
                 value={form.untuk_pembayaran}
-                onChange={(e) => ubah('untuk_pembayaran', e.target.value)}
+                items={katalog}
+                onChange={(v) => ubah('untuk_pembayaran', v)}
+                onPilih={pilihItemKatalog}
               />
             </div>
 
