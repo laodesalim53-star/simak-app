@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import { X, Search, Loader2, Receipt, ArrowDownToLine } from 'lucide-react'
+import { useAuth } from '../lib/AuthContext'
+import { X, Search, Loader2 } from 'lucide-react'
 
 function formatRupiah(angka) {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(angka || 0)
@@ -11,202 +12,202 @@ function formatTanggal(tgl) {
   return new Date(tgl).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+// No. bukti '-' atau kosong dianggap tidak punya grup (dipilih satu per satu).
+function kunciGrup(no) {
+  const v = String(no || '').trim()
+  return v && v !== '-' ? v : null
+}
+
 /**
- * Modal untuk mencari & memilih BANYAK baris pengeluaran dari BKU (tabel bku_kas)
- * sekaligus, dipakai untuk mengisi otomatis daftar barang di form Nota Belanja
- * lewat tombol "Tarik dari BKU".
+ * Props:
+ *  - onTarik(rows) : dipanggil dengan ARRAY baris bku_kas yang dicentang
+ *                    (dipakai formDariBku di Nota.jsx; tiap baris = 1 barang)
+ *  - onClose()
  *
- * Beda dengan PilihBkuModal (single-select, dipakai di Kuitansi): di sini user
- * mencentang beberapa baris — biasanya beberapa baris dengan No. Bukti yang
- * sama, yaitu satu nota belanja yang berisi banyak barang — lalu semua baris
- * terpilih dijadikan baris item di form Nota sekaligus.
- *
- * Hanya menampilkan baris dengan pengeluaran > 0 (baris penerimaan tidak
- * relevan untuk nota belanja).
- *
- * Dipanggil dari Nota.jsx:
- *   <PilihBkuUntukNotaModal
- *     onTarik={(rows) => { ...isi form pakai rows...; setShowForm(true) }}
- *     onClose={() => setShowPilihBku(false)}
- *   />
+ * Aturan centang (sama dengan PilihBkuModal untuk Kuitansi):
+ *  1. Mencentang baris ber-no. bukti X otomatis mencentang SEMUA baris ber-no. bukti X.
+ *  2. Setelah itu tiap baris masih bisa di-uncheck / dicentang lagi satu per satu
+ *     (selama masih satu no. bukti).
+ *  3. Mencentang baris dari no. bukti lain mengganti pilihan (1 nota = 1 no. bukti).
+ *  4. Baris tanpa no. bukti ('-') dipilih tunggal.
  */
 export default function PilihBkuUntukNotaModal({ onTarik, onClose }) {
-  const [pencarian, setPencarian] = useState('')
+  const { profil } = useAuth()
+  const sekolahId = profil?.sekolah_id
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [dipilih, setDipilih] = useState(() => new Set()) // Set of bku_kas.id
+  const [cari, setCari] = useState('')
+  const [terpilih, setTerpilih] = useState(() => new Set()) // kumpulan row.id
 
-  async function loadData(q) {
-    setLoading(true)
-    setError('')
-    let query = supabase
+  useEffect(() => {
+    if (!sekolahId) {
+      setLoading(false)
+      return
+    }
+    supabase
       .from('bku_kas')
       .select('*')
+      .eq('sekolah_id', sekolahId)
       .gt('pengeluaran', 0)
       .order('tanggal', { ascending: false })
-      .limit(100)
+      .order('no_bukti', { ascending: true })
+      .then(({ data }) => {
+        setRows(data || [])
+        setLoading(false)
+      })
+  }, [sekolahId])
 
-    if (q.trim()) {
-      query = query.or(
-        `uraian.ilike.%${q}%,no_bukti.ilike.%${q}%,kode_rekening.ilike.%${q}%`
-      )
+  const tersaring = useMemo(() => {
+    const q = cari.trim().toLowerCase()
+    if (!q) return rows
+    return rows.filter((r) =>
+      [r.uraian, r.no_bukti, r.kode_rekening].some((v) => String(v || '').toLowerCase().includes(q))
+    )
+  }, [rows, cari])
+
+  // Urutan mengikuti urutan tabel, jadi urutan barang di nota = urutan di BKU.
+  const rowTerpilih = useMemo(() => rows.filter((r) => terpilih.has(r.id)), [rows, terpilih])
+  const grupAktif = rowTerpilih.length ? kunciGrup(rowTerpilih[0].no_bukti) : null
+  const total = rowTerpilih.reduce((s, r) => s + (Number(r.pengeluaran) || 0), 0)
+
+  function toggle(row) {
+    // Sudah tercentang -> lepas baris ini saja
+    if (terpilih.has(row.id)) {
+      const next = new Set(terpilih)
+      next.delete(row.id)
+      setTerpilih(next)
+      return
     }
 
-    const { data, error: err } = await query
-    if (err) {
-      setError('Gagal memuat data BKU: ' + err.message)
-      setRows([])
-    } else {
-      setRows(data || [])
+    const kunci = kunciGrup(row.no_bukti)
+
+    // Tanpa no. bukti -> pilih tunggal
+    if (!kunci) {
+      setTerpilih(new Set([row.id]))
+      return
     }
-    setLoading(false)
+
+    // Grup sama dengan pilihan sekarang -> tambahkan baris ini
+    if (kunci === grupAktif) {
+      const next = new Set(terpilih)
+      next.add(row.id)
+      setTerpilih(next)
+      return
+    }
+
+    // Grup baru -> pilih SEMUA baris dengan no. bukti sama
+    const semua = rows.filter((r) => kunciGrup(r.no_bukti) === kunci).map((r) => r.id)
+    setTerpilih(new Set(semua))
   }
 
-  useEffect(() => {
-    loadData('')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => {
-    const t = setTimeout(() => loadData(pencarian), 300)
-    return () => clearTimeout(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pencarian])
-
-  function toggleSatu(id) {
-    setDipilih((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  const semuaTampilTerpilih = rows.length > 0 && rows.every((r) => dipilih.has(r.id))
-
-  function toggleSemuaTampil() {
-    setDipilih((prev) => {
-      if (semuaTampilTerpilih) {
-        // lepas hanya baris yang sedang tampil, baris terpilih lain (di luar hasil filter) tetap
-        const next = new Set(prev)
-        rows.forEach((r) => next.delete(r.id))
-        return next
-      }
-      const next = new Set(prev)
-      rows.forEach((r) => next.add(r.id))
-      return next
-    })
-  }
-
-  const barisTerpilih = rows.filter((r) => dipilih.has(r.id))
-  const totalTerpilih = barisTerpilih.reduce((sum, r) => sum + (Number(r.pengeluaran) || 0), 0)
-
-  function handleTarik() {
-    if (barisTerpilih.length === 0) return
-    onTarik(barisTerpilih)
+  function konfirmasi() {
+    if (rowTerpilih.length === 0) return
+    onTarik(rowTerpilih)
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 no-print">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl p-6 max-h-[90vh] overflow-y-auto flex flex-col">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-display text-lg font-semibold">Tarik dari BKU</h2>
-          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-xl">
+        <div className="flex items-center justify-between p-5 pb-2">
+          <h2 className="text-lg font-semibold">Tarik Data dari BKU ke Nota</h2>
+          <button type="button" onClick={onClose} aria-label="Tutup">
+            <X size={18} />
+          </button>
         </div>
 
-        <p className="text-sm text-ink-700/60 mb-3">
-          Centang beberapa baris pengeluaran BKU — biasanya baris-baris dengan No. Bukti yang
-          sama, yaitu satu nota belanja — lalu klik "Tarik ke Nota". Setiap baris akan jadi
-          satu baris barang di form Nota.
+        <p className="px-5 text-sm text-gray-500">
+          Centang baris pengeluaran. Baris dengan no. bukti yang sama otomatis ikut tercentang.
+          Setiap baris yang dipilih menjadi satu baris barang di nota.
         </p>
 
-        <div className="relative mb-3 shrink-0">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-700/40" />
+        <div className="px-5 py-3 relative">
+          <Search size={15} className="absolute left-8 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
-            autoFocus
-            className="input-field pl-9"
+            className="border rounded w-full p-2 pl-9 text-sm"
             placeholder="Cari uraian, no. bukti, atau kode rekening..."
-            value={pencarian}
-            onChange={(e) => setPencarian(e.target.value)}
+            value={cari}
+            onChange={(e) => setCari(e.target.value)}
+            autoFocus
           />
         </div>
 
-        {error && <div className="text-sm text-red-600 mb-3">{error}</div>}
-
-        <div className="border rounded-lg overflow-auto flex-1">
-          <table className="table-shell">
-            <thead>
+        <div className="flex-1 overflow-auto px-5">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-100 sticky top-0">
               <tr>
-                <th className="w-8">
-                  <input
-                    type="checkbox"
-                    checked={semuaTampilTerpilih}
-                    onChange={toggleSemuaTampil}
-                    disabled={loading || rows.length === 0}
-                  />
-                </th>
-                <th>Tanggal</th>
-                <th>No. Bukti</th>
-                <th>Uraian</th>
-                <th>Kode Rekening</th>
-                <th className="text-right">Pengeluaran</th>
+                <th className="p-2 w-8"></th>
+                <th className="p-2 text-left">Tanggal</th>
+                <th className="p-2 text-left">No. Bukti</th>
+                <th className="p-2 text-left">Uraian</th>
+                <th className="p-2 text-left">Kode Rekening</th>
+                <th className="p-2 text-right">Jumlah</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={6} className="text-center py-8 text-ink-700/50">
-                  <Loader2 size={18} className="animate-spin inline-block" /> Memuat data...
-                </td></tr>
-              )}
-              {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="text-center py-10 text-ink-700/50">
-                    <div className="flex flex-col items-center gap-2">
-                      <Receipt size={28} className="text-ink-700/25" />
-                      <span>Tidak ada baris pengeluaran BKU yang cocok.</span>
-                    </div>
+                  <td colSpan={6} className="text-center py-6 text-gray-500">
+                    <Loader2 size={16} className="animate-spin inline mr-2" />
+                    Memuat data...
                   </td>
                 </tr>
               )}
-              {rows.map((r) => (
-                <tr
-                  key={r.id}
-                  className={`cursor-pointer hover:bg-sage-50 ${dipilih.has(r.id) ? 'bg-sage-50' : ''}`}
-                  onClick={() => toggleSatu(r.id)}
-                >
-                  <td onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      checked={dipilih.has(r.id)}
-                      onChange={() => toggleSatu(r.id)}
-                    />
+              {!loading && tersaring.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="text-center py-6 text-gray-500">
+                    Tidak ada data pengeluaran yang cocok.
                   </td>
-                  <td>{formatTanggal(r.tanggal)}</td>
-                  <td>{r.no_bukti || '-'}</td>
-                  <td className="max-w-[260px] truncate">{r.uraian || '-'}</td>
-                  <td>{r.kode_rekening || '-'}</td>
-                  <td className="text-right font-medium">{formatRupiah(r.pengeluaran)}</td>
                 </tr>
-              ))}
+              )}
+              {tersaring.map((r) => {
+                const dicentang = terpilih.has(r.id)
+                return (
+                  <tr
+                    key={r.id}
+                    onClick={() => toggle(r)}
+                    className={`border-t cursor-pointer ${dicentang ? 'bg-amber-50' : 'hover:bg-gray-50'}`}
+                  >
+                    <td className="p-2">
+                      <input
+                        type="checkbox"
+                        checked={dicentang}
+                        onChange={() => toggle(r)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </td>
+                    <td className="p-2 whitespace-nowrap">{formatTanggal(r.tanggal)}</td>
+                    <td className="p-2">{r.no_bukti || '-'}</td>
+                    <td className="p-2 max-w-[240px] truncate" title={r.uraian}>{r.uraian}</td>
+                    <td className="p-2 whitespace-nowrap">{r.kode_rekening}</td>
+                    <td className="p-2 text-right whitespace-nowrap">{formatRupiah(r.pengeluaran)}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
 
-        <div className="flex items-center justify-between pt-4">
-          <div className="text-sm text-ink-700/60">
-            {barisTerpilih.length > 0
-              ? `${barisTerpilih.length} baris dipilih • Total ${formatRupiah(totalTerpilih)}`
-              : 'Belum ada baris dipilih'}
+        <div className="flex items-center justify-between gap-3 p-5 border-t">
+          <div className="text-sm">
+            {rowTerpilih.length > 0 ? (
+              <>
+                <b>{rowTerpilih.length}</b> barang dipilih · Total <b>{formatRupiah(total)}</b>
+              </>
+            ) : (
+              <span className="text-gray-400">Belum ada baris dipilih</span>
+            )}
           </div>
           <div className="flex gap-2">
-            <button className="btn-secondary" onClick={onClose}>Batal</button>
+            <button type="button" className="px-4 py-2 rounded bg-gray-200 text-sm" onClick={onClose}>
+              Batal
+            </button>
             <button
-              className="px-4 py-2 rounded bg-indigo-600 text-white text-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-              onClick={handleTarik}
-              disabled={barisTerpilih.length === 0}
+              type="button"
+              className="px-4 py-2 rounded bg-teal-600 text-white text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={rowTerpilih.length === 0}
+              onClick={konfirmasi}
             >
-              <ArrowDownToLine size={15} /> Tarik ke Nota ({barisTerpilih.length})
+              Tarik ke Nota
             </button>
           </div>
         </div>
