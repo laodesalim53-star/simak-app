@@ -70,6 +70,7 @@ const BukuIndukSiswa = lazy(() => import('./pages/BukuIndukSiswa'))
 const BukuKerjaKepsek = lazy(() => import('./pages/BukuKerjaKepsek'))        // BARU
 const SupervisiAkademik = lazy(() => import('./pages/SupervisiAkademik'))    // BARU
 const KinerjaTendik = lazy(() => import('./pages/KinerjaTendik'))   
+const AkreditasiSekolah = lazy(() => import('./pages/AkreditasiSekolah'))
 const LaporanDaftarHadirGuru = lazy(() => import('./pages/LaporanDaftarHadirGuru'))
 const PusatLaporanGuru = lazy(() => import('./pages/PusatLaporanGuru'))
 const GudangSK = lazy(() => import('./pages/GudangSK'))  
@@ -418,6 +419,7 @@ export default function App() {
          <Route path="/administrasi-kepsek/buku-kerja" element={<ProtectedRoute adminOnly><BukuKerjaKepsek /></ProtectedRoute>} />
          <Route path="/administrasi-kepsek/supervisi-akademik" element={<ProtectedRoute adminOnly><SupervisiAkademik /></ProtectedRoute>} />
          <Route path="/administrasi-kepsek/kinerja-tendik" element={<ProtectedRoute adminOnly><KinerjaTendik /></ProtectedRoute>} />
+         <Route path="/administrasi-kepsek/akreditasi" element={<ProtectedRoute adminOnly><AkreditasiSekolah /></ProtectedRoute>} />
          <Route path="/administrasi-kepsek/:slug" element={<ProtectedRoute adminOnly><AdministrasiKepsekItem /></ProtectedRoute>} />
 
           {/* ============================================================
