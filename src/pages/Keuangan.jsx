@@ -6,6 +6,7 @@ import { eksporExcel, eksporPDF } from '../lib/exportUtils'
 import ArkasImportModal from '../components/ArkasImportModal'
 import BkuImportModal from '../components/BkuImportModal'
 import RekapBelanjaImportModal from '../components/RekapBelanjaImportModal'
+import KirimBukuPerpustakaanModal from '../components/KirimBukuPerpustakaanModal'
 import TarikArkasModal from '../components/TarikArkasModal'
 import RkasCetak from '../components/RkasCetak'
 import {
@@ -381,6 +382,7 @@ export default function Keuangan() {
             <TarikArkasModal tahun={tahun} bulan={bulan} sekolahId={sekolahId} onSelesai={loadBkuData} />
             <BkuImportModal bulan={bulan} tahun={tahun} onSelesai={loadBkuData} />
             <RekapBelanjaImportModal bulan={bulan} tahun={tahun} onSelesai={loadBkuData} />
+            <KirimBukuPerpustakaanModal bulan={bulan} tahun={tahun} sekolahId={sekolahId} onSelesai={loadBkuData} />
           </>
         )
       }
