@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabaseClient' // sesuaikan path kalau berbeda di project kamu
+import { useAuth } from '../lib/AuthContext'
 import { useNotaTema } from '../lib/notaTema'
 import NotaPrintTemplate from '../components/NotaPrintTemplate'
 import NotaTemaPanel from '../components/NotaTemaPanel'
@@ -116,6 +117,8 @@ function formDariBku(rows) {
 export default function Nota({ sekolah }) {
   const location = useLocation()
   const navigate = useNavigate()
+  const { profil } = useAuth()
+  const sekolahId = profil?.sekolah_id
   const [daftar, setDaftar] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -138,19 +141,29 @@ export default function Nota({ sekolah }) {
   const fileInputRef = useRef(null)
 
   async function muatDaftar() {
+    // Tanpa sekolahId jangan memuat apa pun, dan selalu filter per sekolah
+    // (lapisan kedua di samping RLS di database).
+    if (!sekolahId) {
+      setDaftar([])
+      setLoading(false)
+      return
+    }
     setLoading(true)
     const { data, error } = await supabase
       .from('nota')
       .select('*')
+      .eq('sekolah_id', sekolahId)
       .order('tanggal', { ascending: false })
       .order('dibuat_pada', { ascending: false })
     if (!error) setDaftar(data || [])
     setLoading(false)
   }
 
+  // Muat ulang setiap kali sekolah (hasil login) berubah.
   useEffect(() => {
     muatDaftar()
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sekolahId])
 
   // Datang dari tombol "Jadikan Nota" di halaman Kuitansi — buka form
   // "Tambah Nota" otomatis dengan data kuitansi asal sudah terisi.
@@ -213,6 +226,10 @@ export default function Nota({ sekolah }) {
 
   async function simpanForm(e) {
     e.preventDefault()
+    if (!sekolahId) {
+      alert('Data sekolah belum termuat. Muat ulang halaman lalu coba lagi.')
+      return
+    }
     const items = form.items.filter((it) => it.nama_barang?.trim())
 
     // Kalau No. Nota dikosongkan, tarik nomor otomatis dari deret gabungan
@@ -230,6 +247,7 @@ export default function Nota({ sekolah }) {
     }
 
     const payload = {
+      sekolah_id: sekolahId, // ikat nota ke sekolah yang login
       no_nota: noNotaFinal,
       tanggal: form.tanggal,
       tuan: form.tuan,
@@ -240,7 +258,7 @@ export default function Nota({ sekolah }) {
     }
 
     const query = editingId
-      ? supabase.from('nota').update(payload).eq('id', editingId)
+      ? supabase.from('nota').update(payload).eq('id', editingId).eq('sekolah_id', sekolahId)
       : supabase.from('nota').insert(payload)
 
     const { error } = await query
@@ -253,8 +271,13 @@ export default function Nota({ sekolah }) {
   }
 
   async function hapusNota(id) {
+    if (!sekolahId) return
     if (!confirm('Hapus nota ini?')) return
-    const { error } = await supabase.from('nota').delete().eq('id', id)
+    const { error } = await supabase
+      .from('nota')
+      .delete()
+      .eq('id', id)
+      .eq('sekolah_id', sekolahId) // hanya boleh menghapus milik sekolah sendiri
     if (error) {
       alert('Gagal menghapus: ' + error.message)
       return
@@ -262,14 +285,15 @@ export default function Nota({ sekolah }) {
     muatDaftar()
   }
 
-  // Hapus SEMUA nota yang ada di tabel. Sengaja dua kali konfirmasi (window.confirm
-  // biasa + mengetik ulang jumlah data) supaya tidak kepencet tidak sengaja, karena
-  // aksi ini tidak bisa dibatalkan.
+  // Hapus SEMUA nota milik sekolah yang login (bukan semua nota di tabel).
+  // Sengaja dua kali konfirmasi (window.confirm biasa + mengetik ulang jumlah
+  // data) supaya tidak kepencet tidak sengaja, karena aksi ini tidak bisa
+  // dibatalkan.
   async function hapusSemuaNota() {
-    if (daftar.length === 0) return
+    if (!sekolahId || daftar.length === 0) return
 
     const konfirmasi1 = confirm(
-      `Hapus SEMUA nota (${daftar.length} data)? Tindakan ini tidak bisa dibatalkan.`
+      `Hapus SEMUA nota sekolah ini (${daftar.length} data)? Tindakan ini tidak bisa dibatalkan.`
     )
     if (!konfirmasi1) return
 
@@ -283,13 +307,12 @@ export default function Nota({ sekolah }) {
     }
 
     setMenghapusSemua(true)
-    // .neq('id', '00000000-0000-0000-0000-000000000000') dipakai supaya query
-    // punya klausa WHERE (Supabase menolak delete tanpa filter sama sekali),
-    // sekaligus mencakup semua baris karena id asli tidak mungkin bernilai itu.
+    // Filter sekolah_id sekaligus menjadi klausa WHERE yang dibutuhkan Supabase
+    // dan membatasi penghapusan hanya pada nota milik sekolah ini.
     const { error } = await supabase
       .from('nota')
       .delete()
-      .neq('id', '00000000-0000-0000-0000-000000000000')
+      .eq('sekolah_id', sekolahId)
     setMenghapusSemua(false)
 
     if (error) {
@@ -346,6 +369,11 @@ export default function Nota({ sekolah }) {
   async function handleFileImpor(e) {
     const file = e.target.files?.[0]
     if (!file) return
+    if (!sekolahId) {
+      setImportRingkasan({ sukses: 0, gagal: 0, pesan: 'Data sekolah belum termuat. Muat ulang halaman lalu coba lagi.' })
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
     setImportBusy(true)
     setImportRingkasan(null)
 
@@ -386,6 +414,7 @@ export default function Nota({ sekolah }) {
 
       const records = Array.from(kelompok.values()).map((n) => ({
         ...n,
+        sekolah_id: sekolahId, // ikat tiap nota hasil impor ke sekolah yang login
         jumlah_total: hitungTotal(n.items),
       }))
 
@@ -476,7 +505,7 @@ export default function Nota({ sekolah }) {
         {importRingkasan && (
           <div
             className={`mb-4 p-3 rounded text-sm ${
-              importRingkasan.gagal ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+              importRingkasan.gagal || importRingkasan.pesan ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
             }`}
           >
             {importRingkasan.pesan
