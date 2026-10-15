@@ -7,6 +7,7 @@ import { useNotaTema } from '../lib/notaTema'
 import NotaPrintTemplate from '../components/NotaPrintTemplate'
 import NotaTemaPanel from '../components/NotaTemaPanel'
 import PilihBkuUntukNotaModal from '../components/PilihBkuUntukNotaModal'
+import InputItemKatalog, { useKatalogItem } from '../components/InputItemKatalog'
 import Layout from '../components/Layout'
 import { ArrowDownToLine, Palette } from 'lucide-react'
 
@@ -119,6 +120,8 @@ export default function Nota({ sekolah }) {
   const navigate = useNavigate()
   const { profil } = useAuth()
   const sekolahId = profil?.sekolah_id
+  // Katalog item sekolah (view katalog_item) untuk saran di kolom Nama Barang.
+  const katalog = useKatalogItem(sekolahId)
   const [daftar, setDaftar] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -212,6 +215,24 @@ export default function Nota({ sekolah }) {
     setForm((f) => {
       const items = [...f.items]
       items[idx] = { ...items[idx], [field]: value }
+      return { ...f, items }
+    })
+  }
+
+  // Pilih item dari katalog -> isi nama, satuan, harga satuan.
+  // Qty diisi 1 kalau masih kosong; kalau katalog tidak punya satuan/harga
+  // (item yang baru ada di RKAS), isian lama dibiarkan.
+  function pilihItemKatalog(idx, k) {
+    setForm((f) => {
+      const items = [...f.items]
+      const lama = items[idx]
+      items[idx] = {
+        ...lama,
+        nama_barang: k.uraian,
+        satuan: k.satuan || lama.satuan,
+        harga: k.harga_satuan ?? lama.harga,
+        banyaknya: lama.banyaknya === '' ? 1 : lama.banyaknya,
+      }
       return { ...f, items }
     })
   }
@@ -630,11 +651,14 @@ export default function Nota({ sekolah }) {
                       value={it.satuan}
                       onChange={(e) => ubahItem(idx, 'satuan', e.target.value)}
                     />
-                    <input
-                      className="col-span-4 border rounded p-2 text-sm"
-                      placeholder="Nama barang"
+                    <InputItemKatalog
+                      wrapperClassName="col-span-4"
+                      className="border rounded p-2 text-sm w-full"
+                      placeholder="Nama barang (ketik untuk cari katalog)"
                       value={it.nama_barang}
-                      onChange={(e) => ubahItem(idx, 'nama_barang', e.target.value)}
+                      items={katalog}
+                      onChange={(v) => ubahItem(idx, 'nama_barang', v)}
+                      onPilih={(k) => pilihItemKatalog(idx, k)}
                     />
                     <input
                       className="col-span-2 border rounded p-2 text-sm"
