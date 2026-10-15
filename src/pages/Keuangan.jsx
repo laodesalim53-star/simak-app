@@ -7,6 +7,7 @@ import ArkasImportModal from '../components/ArkasImportModal'
 import BkuImportModal from '../components/BkuImportModal'
 import RekapBelanjaImportModal from '../components/RekapBelanjaImportModal'
 import KirimBukuPerpustakaanModal from '../components/KirimBukuPerpustakaanModal'
+import KirimInventarisModal from '../components/KirimInventarisModal'
 import TarikArkasModal from '../components/TarikArkasModal'
 import RkasCetak from '../components/RkasCetak'
 import {
@@ -383,6 +384,7 @@ export default function Keuangan() {
             <BkuImportModal bulan={bulan} tahun={tahun} onSelesai={loadBkuData} />
             <RekapBelanjaImportModal bulan={bulan} tahun={tahun} onSelesai={loadBkuData} />
             <KirimBukuPerpustakaanModal bulan={bulan} tahun={tahun} sekolahId={sekolahId} onSelesai={loadBkuData} />
+            <KirimInventarisModal bulan={bulan} tahun={tahun} sekolahId={sekolahId} onSelesai={loadBkuData} />
           </>
         )
       }
