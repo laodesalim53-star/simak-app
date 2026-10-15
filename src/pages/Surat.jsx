@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import Layout from '../components/Layout'
 import { eksporExcel } from '../lib/exportUtils'
-import { Plus, Search, Pencil, Trash2, X, Loader2, FileSpreadsheet } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, X, Loader2, FileSpreadsheet, RefreshCw } from 'lucide-react'
 
 const emptyForm = {
   jenis: 'masuk',
@@ -14,9 +14,38 @@ const emptyForm = {
   catatan: '',
 }
 
+// Daftar sumber data surat dari bagian lain aplikasi.
+// SESUAIKAN nama tabel dan kolom dengan yang ada di databasemu.
+const SUMBER_OTOMATIS = [
+  {
+    sumber: 'surat_pengantar', // label unik sumber (jangan diubah setelah dipakai)
+    tabel: 'surat_pengantar', // nama tabel asal
+    jenis: 'keluar',
+    map: (r) => ({
+      nomor_surat: r.nomor_surat,
+      perihal: r.perihal || 'Surat Pengantar',
+      pengirim_tujuan: r.tujuan,
+      tanggal: r.tanggal,
+    }),
+  },
+  // Contoh surat masuk, aktifkan dan sesuaikan jika ada tabelnya:
+  // {
+  //   sumber: 'disposisi',
+  //   tabel: 'disposisi',
+  //   jenis: 'masuk',
+  //   map: (r) => ({
+  //     nomor_surat: r.nomor_surat,
+  //     perihal: r.perihal,
+  //     pengirim_tujuan: r.asal_surat,
+  //     tanggal: r.tanggal_terima,
+  //   }),
+  // },
+]
+
 export default function Surat() {
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
   const [search, setSearch] = useState('')
   const [filterJenis, setFilterJenis] = useState('semua')
   const [showForm, setShowForm] = useState(false)
@@ -24,15 +53,55 @@ export default function Surat() {
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
 
+  async function syncOtomatis() {
+    setSyncing(true)
+    try {
+      for (const s of SUMBER_OTOMATIS) {
+        const { data: rows, error } = await supabase.from(s.tabel).select('*')
+        if (error) {
+          console.warn(`Sinkron ${s.sumber} gagal:`, error.message)
+          continue
+        }
+        if (!rows?.length) continue
+
+        const payload = rows.map((r) => ({
+          ...s.map(r),
+          jenis: s.jenis,
+          sumber: s.sumber,
+          sumber_id: String(r.id),
+        }))
+
+        // ignoreDuplicates: baris yang sudah ada tidak ditimpa,
+        // jadi koreksi manual di arsip tetap aman
+        const { error: errUpsert } = await supabase
+          .from('surat')
+          .upsert(payload, { onConflict: 'sumber,sumber_id', ignoreDuplicates: true })
+        if (errUpsert) console.warn(`Simpan ${s.sumber} gagal:`, errUpsert.message)
+      }
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   async function loadData() {
     setLoading(true)
-    const { data: rows } = await supabase.from('surat').select('*').order('tanggal', { ascending: false })
+    const { data: rows, error } = await supabase
+      .from('surat')
+      .select('*')
+      .order('tanggal', { ascending: false })
+    if (error) console.warn('Gagal memuat surat:', error.message)
     setData(rows || [])
     setLoading(false)
   }
 
+  async function tarikData() {
+    await syncOtomatis()
+    await loadData()
+  }
+
   useEffect(() => {
-    loadData()
+    tarikData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function openAdd(jenis) {
@@ -42,7 +111,15 @@ export default function Surat() {
   }
 
   function openEdit(row) {
-    setForm({ ...emptyForm, ...row })
+    setForm({
+      jenis: row.jenis,
+      nomor_surat: row.nomor_surat || '',
+      perihal: row.perihal || '',
+      pengirim_tujuan: row.pengirim_tujuan || '',
+      tanggal: row.tanggal,
+      file_url: row.file_url || '',
+      catatan: row.catatan || '',
+    })
     setEditingId(row.id)
     setShowForm(true)
   }
@@ -69,6 +146,14 @@ export default function Surat() {
     else alert('Gagal menghapus: ' + error.message)
   }
 
+  const filtered = data.filter((d) => {
+    const cocokJenis = filterJenis === 'semua' || d.jenis === filterJenis
+    const cocokCari = `${d.perihal || ''} ${d.nomor_surat || ''} ${d.pengirim_tujuan || ''}`
+      .toLowerCase()
+      .includes(search.toLowerCase())
+    return cocokJenis && cocokCari
+  })
+
   function handleExport() {
     eksporExcel(
       filtered.map((d) => ({
@@ -84,20 +169,15 @@ export default function Surat() {
     )
   }
 
-  const filtered = data.filter((d) => {
-    const cocokJenis = filterJenis === 'semua' || d.jenis === filterJenis
-    const cocokCari = `${d.perihal} ${d.nomor_surat} ${d.pengirim_tujuan}`
-      .toLowerCase()
-      .includes(search.toLowerCase())
-    return cocokJenis && cocokCari
-  })
-
   return (
     <Layout
       title="Surat Masuk & Keluar"
       subtitle={`${data.length} surat terarsip`}
       actions={
         <>
+          <button className="btn-secondary" disabled={syncing} onClick={tarikData}>
+            {syncing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />} Tarik Data
+          </button>
           <button className="btn-secondary" onClick={handleExport}>
             <FileSpreadsheet size={16} /> Ekspor Excel
           </button>
@@ -156,7 +236,14 @@ export default function Surat() {
                   </span>
                 </td>
                 <td>{d.nomor_surat || '-'}</td>
-                <td className="font-medium">{d.perihal}</td>
+                <td className="font-medium">
+                  {d.perihal}
+                  {d.sumber && (
+                    <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-ink-700/10 text-ink-700/60">
+                      Otomatis
+                    </span>
+                  )}
+                </td>
                 <td>{d.pengirim_tujuan || '-'}</td>
                 <td>{d.tanggal}</td>
                 <td>
