@@ -26,7 +26,12 @@ export function ambilAnggaran({ sekolahId, tahun }) {
   return ambilSemua(() =>
     supabase
       .from('arkas_anggaran')
-      .select('id, tahun_anggaran, level, no_urut, kode_kegiatan, kode_rekening, item_no, uraian, jumlah, volume, satuan, harga_satuan, status')
+      .select(
+        'id, tahun_anggaran, level, no_urut, kode_kegiatan, kode_rekening, item_no, uraian, jumlah, volume, satuan, harga_satuan, status, ' +
+          'bosp_reguler_operasi, bosp_reguler_modal, bosp_daerah_operasi, bosp_daerah_modal, ' +
+          'afirmasi_kinerja_operasi, afirmasi_kinerja_modal, silpa_operasi, silpa_modal, ' +
+          'bosp_lainnya_operasi, bosp_lainnya_modal',
+      )
       .eq('sekolah_id', sekolahId)
       .eq('tahun_anggaran', String(tahun)) // kolom bertipe text
       .eq('is_item', true)
@@ -137,4 +142,44 @@ export function belanjaModal(bku, awalan = '5.2') {
   return bku
     .filter((b) => String(b.kode_rekening || '').startsWith(awalan) && angka(b.pengeluaran) > 0)
     .map((b) => ({ ...b, sudahDiInventaris: Boolean(b.inventaris_id) }))
+}
+
+// Sumber dana: kolom di arkas_anggaran dikelompokkan per sumber (operasi + modal).
+const SUMBER_DANA = [
+  ['BOSP Reguler', ['bosp_reguler_operasi', 'bosp_reguler_modal']],
+  ['BOSP Daerah', ['bosp_daerah_operasi', 'bosp_daerah_modal']],
+  ['BOSP Afirmasi/Kinerja', ['afirmasi_kinerja_operasi', 'afirmasi_kinerja_modal']],
+  ['SILPA', ['silpa_operasi', 'silpa_modal']],
+  ['BOSP Lainnya', ['bosp_lainnya_operasi', 'bosp_lainnya_modal']],
+]
+
+// Ubah baris item ARKAS menjadi baris RKAS di Administrasi Kepsek.
+// Bentuk keluaran mengikuti entri rkas: tahun, sumber, uraian, volume, satuan, harga, jumlah.
+// kode_kegiatan & kode_rekening ikut disertakan; hapus dari hasil bila tidak dipakai.
+export function anggaranKeBarisRkas(anggaran) {
+  return anggaran.map((a) => {
+    let sumber = ''
+    let terbesar = 0
+    for (const [label, kolom] of SUMBER_DANA) {
+      const total = kolom.reduce((t, k) => t + angka(a[k]), 0)
+      if (total > terbesar) {
+        terbesar = total
+        sumber = label
+      }
+    }
+    const volume = angka(a.volume)
+    const harga = angka(a.harga_satuan)
+    const jumlah = angka(a.jumlah) || volume * harga
+    return {
+      tahun: String(a.tahun_anggaran || ''),
+      sumber,
+      uraian: a.uraian || '',
+      volume,
+      satuan: a.satuan || '',
+      harga,
+      jumlah,
+      kode_kegiatan: a.kode_kegiatan || '',
+      kode_rekening: a.kode_rekening || '',
+    }
+  })
 }
