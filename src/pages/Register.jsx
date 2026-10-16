@@ -1,67 +1,612 @@
-#!/usr/bin/env python3
-"""
-Patch src/pages/Register.jsx: jenis institusi dikunci sesuai aplikasi
-(VITE_APP_TIPE), pilihan "Jenis Institusi" disembunyikan, ?untuk=... diabaikan,
-dan nama aplikasi tampil di judul.
+import { useEffect, useState } from 'react'
+import { Link, Navigate, useSearchParams } from 'react-router-dom'
+import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../lib/AuthContext'
+import { Loader2, UserPlus, CheckCircle2, ListChecks, Info, Eye, EyeOff, ChevronDown } from 'lucide-react'
 
-Pakai:  python3 tools/patch_register.py src/pages/Register.jsx
-Kalau ada potongan yang tidak ditemukan, skrip berhenti TANPA mengubah file.
-"""
-import sys
+// Jabatan yang tersedia untuk akun sekolah (SD & SMP).
+const JABATAN_SEKOLAH = [
+  { value: 'guru', label: 'Guru' },
+  { value: 'admin', label: 'Admin' },
+  { value: 'kepala_sekolah', label: 'Kepala Sekolah' },
+  { value: 'orang_tua', label: 'Orang Tua / Wali Murid' },
+]
 
-path = sys.argv[1] if len(sys.argv) > 1 else 'src/pages/Register.jsx'
-raw = open(path, encoding='utf-8', newline='').read()
-crlf = '\r\n' in raw
-s = raw.replace('\r\n', '\n')
+// Jenjang sekolah yang dilayani. Nilainya sama dengan ?jenjang= di beranda.
+const OPSI_JENJANG = [
+  { value: 'sd', label: 'SD' },
+  { value: 'smp', label: 'SMP' },
+]
 
-def rep(old, new, label):
-    global s
-    if old not in s:
-        sys.exit(f'GAGAL: potongan "{label}" tidak ditemukan. File tidak diubah.')
-    s = s.replace(old, new, 1)
+// Nilai internal jenis_organisasi di database. Hanya 'sekolah' yang dipakai
+// di halaman ini; nilai lain (kantor, puskesmas, polres) tetap ada di
+// database/AuthContext tapi tidak lagi ditawarkan di formulir pendaftaran.
+const JENIS_ORGANISASI = 'sekolah'
 
-rep("import { Link, Navigate, useSearchParams } from 'react-router-dom'\n",
-    "import { Link, Navigate } from 'react-router-dom'\n", 'import react-router-dom')
+const inputClass =
+  'w-full bg-slate-900/60 border border-blue-500/30 rounded-lg px-3 py-2.5 min-h-[44px] text-base text-white placeholder-slate-400 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30 disabled:opacity-60'
+const labelClass = 'text-xs font-medium text-blue-100/85 mb-1 block tracking-wide'
+const hintClass = 'text-xs text-blue-200/75 mt-1 leading-relaxed'
 
-rep("import { useAuth } from '../lib/AuthContext'\n",
-    "import { useAuth } from '../lib/AuthContext'\n"
-    "import { APP } from '../lib/appConfig'\n",
-    'import AuthContext')
+// Terjemahkan pesan galat bawaan Supabase yang berbahasa Inggris.
+function terjemahGalat(pesan) {
+  const p = (pesan || '').toLowerCase()
+  if (p.includes('already registered') || p.includes('already been registered')) {
+    return 'Email ini sudah terdaftar. Silakan masuk, atau pakai "Lupa kata sandi?" di halaman masuk.'
+  }
+  if (p.includes('rate limit') || p.includes('too many')) {
+    return 'Terlalu banyak percobaan. Tunggu beberapa menit lalu coba lagi.'
+  }
+  if (p.includes('password')) {
+    return 'Kata sandi belum memenuhi syarat. Gunakan minimal 6 karakter.'
+  }
+  return pesan || 'Gagal mendaftar. Coba lagi.'
+}
 
-rep("ChevronDown } from 'lucide-react'\n",
-    "ChevronDown } from 'lucide-react'\n\n"
-    "// Jenis institusi dikunci oleh aplikasi yang sedang dibuka (VITE_APP_TIPE).\n"
-    "// Nilainya sama dengan kolom jenis_organisasi: sekolah | kantor | puskesmas | polres.\n"
-    "const JENIS_APP = import.meta.env.VITE_APP_TIPE || 'sekolah'\n",
-    'import lucide-react')
+// ---- Komponen kecil di LUAR komponen utama ---------------------------
+// Didefinisikan di luar Register() supaya tidak dibuat ulang (dan dipasang
+// ulang) di setiap ketikan.
 
-rep("""  const [searchParams] = useSearchParams()
-  const untukParam = searchParams.get('untuk')
-  const jenisAwal =
-    untukParam === 'kua' ? 'kantor'
-    : untukParam === 'puskesmas' ? 'puskesmas'
-    : untukParam === 'polres' ? 'polres'
-    : 'sekolah'
-""", "  const jenisAwal = JENIS_APP\n", 'jenisAwal / useSearchParams')
+function Latar() {
+  return (
+    <div className="absolute inset-0 overflow-hidden" aria-hidden>
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,#1e3a8a_0%,transparent_45%),radial-gradient(circle_at_85%_80%,#1d4ed8_0%,transparent_50%),linear-gradient(160deg,#05061a_0%,#0a0f2e_45%,#0d1440_100%)]" />
+      <svg className="absolute inset-0 w-full h-full opacity-20" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <pattern id="grid" width="46" height="46" patternUnits="userSpaceOnUse">
+            <path d="M 46 0 L 0 0 0 46" fill="none" stroke="#3b82f6" strokeWidth="0.5" />
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#grid)" />
+      </svg>
+      <div className="absolute -top-24 -left-24 w-72 h-72 rounded-full bg-blue-600/20 blur-3xl" />
+      <div className="absolute -bottom-24 -right-16 w-80 h-80 rounded-full bg-cyan-500/10 blur-3xl" />
+    </div>
+  )
+}
 
-rep("""          <div>
-            <span className={labelClass}>Jenis Institusi</span>
+// Kolom isian teks dengan label yang terhubung (klik label -> fokus ke kolom).
+function Field({ id, label, hint, ...inputProps }) {
+  return (
+    <div>
+      <label htmlFor={id} className={labelClass}>{label}</label>
+      <input id={id} name={id} className={inputClass} {...inputProps} />
+      {hint && <p className={hintClass}>{hint}</p>}
+    </div>
+  )
+}
+
+// Kolom sandi dengan tombol lihat/sembunyikan.
+function PasswordField({ id, label, value, onChange, tampil, onToggle, placeholder }) {
+  return (
+    <div>
+      <label htmlFor={id} className={labelClass}>{label}</label>
+      <div className="relative">
+        <input
+          id={id}
+          name={id}
+          type={tampil ? 'text' : 'password'}
+          required
+          autoComplete="new-password"
+          placeholder={placeholder}
+          className={`${inputClass} pr-12`}
+          value={value}
+          onChange={onChange}
+        />
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={tampil ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
+          aria-pressed={tampil}
+          className="absolute right-1 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-md text-blue-200/80 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-300"
+        >
+          {tampil ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// Kolom pilihan (select) dengan panah sendiri supaya menyatu dengan tema
+// gelap, bukan panah putih bawaan browser.
+function SelectField({ id, label, hint, children, ...selectProps }) {
+  return (
+    <div>
+      <label htmlFor={id} className={labelClass}>{label}</label>
+      <div className="relative">
+        <select
+          id={id}
+          name={id}
+          className={`${inputClass} appearance-none pr-10 [color-scheme:dark]`}
+          {...selectProps}
+        >
+          {children}
+        </select>
+        <ChevronDown
+          size={16}
+          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-blue-200/80"
+          aria-hidden
+        />
+      </div>
+      {hint && <p className={hintClass}>{hint}</p>}
+    </div>
+  )
+}
+
+// Tombol pilihan (segmented control) dengan status tekan. Jumlah kolom
+// menyesuaikan jumlah opsi — ditulis sebagai kelas literal (bukan template
+// dinamis) supaya tetap terdeteksi oleh Tailwind JIT.
+function Segmen({ label, opsi, nilai, onPilih }) {
+  const kolom =
+    opsi.length >= 4 ? 'grid-cols-2 sm:grid-cols-4' : opsi.length === 3 ? 'grid-cols-3' : 'grid-cols-2'
+  return (
+    <div
+      role="group"
+      aria-label={label}
+      className={`grid ${kolom} gap-2 p-1 bg-slate-900/60 border border-blue-500/30 rounded-lg text-sm font-medium`}
+    >
+      {opsi.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          aria-pressed={nilai === o.value}
+          onClick={() => onPilih(o.value)}
+          className={`py-2.5 min-h-[40px] rounded-md transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-300 ${
+            nilai === o.value ? 'bg-blue-500/80 text-white' : 'text-blue-100/75 hover:text-white'
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+export default function Register() {
+  const { session, daftar } = useAuth()
+
+  // Link dari beranda membawa ?jenjang=sd atau ?jenjang=smp, jadi pengunjung
+  // yang sudah memilih jenjang di beranda tidak perlu memilih lagi.
+  // Tanpa parameter (atau "semua"), jenjang awalnya SD.
+  const [searchParams] = useSearchParams()
+  const jenjangParam = searchParams.get('jenjang')
+  const jenjangAwal = jenjangParam === 'smp' ? 'smp' : 'sd'
+
+  const [jenjang, setJenjang] = useState(jenjangAwal) // 'sd' | 'smp'
+  const [mode, setMode] = useState('gabung') // 'gabung' | 'baru'
+  const [daftarSekolah, setDaftarSekolah] = useState([])
+  const [loadingSekolah, setLoadingSekolah] = useState(true)
+  const [galatSekolah, setGalatSekolah] = useState(false)
+  const [form, setForm] = useState({
+    nama: '',
+    email: '',
+    password: '',
+    konfirmasi: '',
+    jabatan: JABATAN_SEKOLAH[0].value,
+    sekolahId: '',
+    namaSekolahBaru: '',
+    siswaId: '',
+    hubungan: '',
+  })
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [sukses, setSukses] = useState(false)
+  const [tampilSandi, setTampilSandi] = useState(false)
+
+  // Daftar siswa untuk sekolah yang dipilih — hanya relevan kalau jabatan
+  // yang dipilih "orang_tua", karena mereka wajib memilih anak.
+  const [daftarSiswa, setDaftarSiswa] = useState([])
+  const [loadingSiswa, setLoadingSiswa] = useState(false)
+
+  const isOrangTua = form.jabatan === 'orang_tua'
+  const labelJenjang = jenjang === 'smp' ? 'SMP' : 'SD'
+
+  // Muat daftar sekolah (tabel "sekolah", jenis_organisasi = 'sekolah').
+  useEffect(() => {
+    let aktif = true
+    setLoadingSekolah(true)
+    setGalatSekolah(false)
+
+    supabase
+      .from('sekolah')
+      .select('id, nama_sekolah')
+      .eq('jenis_organisasi', JENIS_ORGANISASI)
+      .order('nama_sekolah')
+      .then(({ data, error }) => {
+        if (!aktif) return
+        setGalatSekolah(Boolean(error))
+        setDaftarSekolah(data || [])
+        setLoadingSekolah(false)
+      })
+
+    return () => {
+      aktif = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isOrangTua || !form.sekolahId) {
+      setDaftarSiswa([])
+      return
+    }
+
+    let aktif = true
+    setLoadingSiswa(true)
+
+    supabase
+      .from('siswa_publik_registrasi')
+      .select('id, nama_lengkap, nis, nisn')
+      .eq('sekolah_id', form.sekolahId)
+      .order('nama_lengkap')
+      .then(({ data }) => {
+        if (!aktif) return
+        setDaftarSiswa(data || [])
+        setLoadingSiswa(false)
+      })
+
+    return () => {
+      aktif = false
+    }
+  }, [isOrangTua, form.sekolahId])
+
+  // Sudah login → tidak perlu mendaftar lagi, langsung ke dashboard
+  if (session) return <Navigate to="/dashboard" replace />
+
+  if (sukses) {
+    return (
+      <div className="relative min-h-screen flex items-center justify-center px-4">
+        <Latar />
+        <div className="relative max-w-sm w-full text-center bg-slate-900/70 backdrop-blur-xl p-7 rounded-2xl border border-blue-400/30 shadow-[0_0_40px_-10px_rgba(59,130,246,0.35)]">
+          <div className="mx-auto mb-3 w-14 h-14 rounded-full border border-emerald-400/40 flex items-center justify-center bg-emerald-400/10">
+            <CheckCircle2 className="text-emerald-400" size={28} />
+          </div>
+          <h1 className="text-lg font-semibold text-white tracking-wide">Pendaftaran Berhasil</h1>
+          <p className="text-sm text-blue-100/80 mt-2 leading-relaxed">
+            {mode === 'baru'
+              ? 'Sekolah dan akun Anda sudah dibuat, sedang menunggu persetujuan Superadmin. Anda akan bisa login setelah disetujui.'
+              : isOrangTua
+                ? 'Akun Anda sudah dibuat dan permintaan menghubungkan Anda dengan anak sedang menunggu persetujuan admin sekolah. Anda akan bisa login setelah disetujui.'
+                : 'Akun Anda sudah dibuat dan sedang menunggu persetujuan admin sekolah. Anda akan bisa login setelah disetujui.'}
+          </p>
+          <Link to="/login" className="inline-block mt-4 text-sm font-medium text-blue-300 hover:text-white underline-offset-4 hover:underline">
+            Kembali ke halaman Masuk
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  function ubah(field, value) {
+    setForm((f) => ({ ...f, [field]: value }))
+  }
+
+  // Jabatan "orang_tua" hanya boleh bergabung ke sekolah yang sudah ada
+  // (tidak bisa sekaligus mendaftarkan sekolah baru), jadi mode dikunci
+  // ke 'gabung' begitu jabatan ini dipilih. siswaId & hubungan direset
+  // setiap kali jabatan berganti supaya tidak salah bawa data lama.
+  function ubahJabatan(value) {
+    setForm((f) => ({ ...f, jabatan: value, siswaId: '', hubungan: '' }))
+    if (value === 'orang_tua') {
+      setMode('gabung')
+    }
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setError('')
+
+    const nama = form.nama.trim()
+    const email = form.email.trim().toLowerCase()
+
+    if (!nama) {
+      setError('Isi nama lengkap Anda.')
+      return
+    }
+    if (form.password !== form.konfirmasi) {
+      setError('Konfirmasi kata sandi tidak sama.')
+      return
+    }
+    if (form.password.length < 6) {
+      setError('Kata sandi minimal 6 karakter.')
+      return
+    }
+    if (mode === 'gabung' && !form.sekolahId) {
+      setError('Pilih sekolah terlebih dahulu.')
+      return
+    }
+    if (mode === 'baru' && !form.namaSekolahBaru.trim()) {
+      setError('Isi nama sekolah yang akan didaftarkan.')
+      return
+    }
+    if (isOrangTua && !form.siswaId) {
+      setError('Pilih anak Anda dari daftar siswa.')
+      return
+    }
+    if (isOrangTua && !form.hubungan) {
+      setError('Pilih hubungan Anda dengan anak.')
+      return
+    }
+
+    setLoading(true)
+
+    const { error: daftarError } = await daftar({
+      mode,
+      jenisOrganisasi: JENIS_ORGANISASI,
+      jenjang,
+      namaLengkap: nama,
+      jabatan: form.jabatan,
+      email,
+      password: form.password,
+      sekolahId: form.sekolahId,
+      namaSekolah: form.namaSekolahBaru.trim(),
+      siswaId: form.siswaId || undefined,
+      hubungan: form.hubungan || undefined,
+    })
+
+    setLoading(false)
+
+    if (daftarError) {
+      setError(terjemahGalat(daftarError.message))
+      return
+    }
+
+    setSukses(true)
+  }
+
+  // Teks pilihan awal pada daftar sekolah, sesuai keadaan pemuatan.
+  const teksPilihSekolah = loadingSekolah
+    ? 'Memuat daftar...'
+    : galatSekolah
+      ? 'Gagal memuat daftar'
+      : daftarSekolah.length === 0
+        ? 'Belum ada sekolah terdaftar'
+        : '-- Pilih Sekolah --'
+
+  const langkah = [
+    'Pilih jenjang sekolah: SD atau SMP.',
+    'Isi nama lengkap, lalu pilih jabatan: Guru, Admin, Kepala Sekolah, atau Orang Tua/Wali Murid.',
+    'Guru/Admin/Kepala Sekolah: pilih sekolah yang sudah terdaftar atau daftarkan sekolah baru. Orang Tua/Wali: pilih sekolah anak Anda, lalu pilih nama anak.',
+    'Isi email aktif (dipakai untuk login) dan buat kata sandi minimal 6 karakter.',
+    'Tunggu persetujuan admin, lalu masuk.',
+  ]
+
+  return (
+    <div className="relative min-h-screen flex items-center justify-center px-4 py-10">
+      <Latar />
+
+      <div className="relative w-full max-w-md space-y-4">
+        {/* Panduan langkah: dilipat supaya formulir tetap jadi fokus, tapi
+            tetap mudah dibuka oleh yang butuh. */}
+        <details className="rounded-xl border border-blue-400/25 bg-slate-900/60 backdrop-blur-xl px-4 py-3">
+          <summary className="cursor-pointer select-none flex items-center gap-2 text-sm font-medium text-blue-100">
+            <ListChecks size={16} className="text-blue-300 shrink-0" />
+            Butuh panduan? Lihat langkah pendaftaran
+          </summary>
+          <ol className="mt-3 space-y-2 list-decimal pl-5 text-[13px] leading-relaxed text-blue-100/85">
+            {langkah.map((teks, i) => (
+              <li key={i}>{teks}</li>
+            ))}
+          </ol>
+        </details>
+
+        <form
+          onSubmit={handleSubmit}
+          className="relative w-full bg-slate-900/70 backdrop-blur-xl p-6 sm:p-7 rounded-2xl border border-blue-400/30 shadow-[0_0_40px_-10px_rgba(59,130,246,0.35)] space-y-4"
+        >
+          <div className="text-center mb-2">
+            <div className="mx-auto mb-3 w-14 h-14 rounded-full border border-blue-400/40 flex items-center justify-center bg-blue-400/10 shadow-[0_0_20px_-4px_rgba(96,165,250,0.6)]">
+              <UserPlus className="text-blue-300" size={24} />
+            </div>
+            <h1 className="text-xl font-bold text-white tracking-widest uppercase">Daftar Akun</h1>
+            <p className="text-sm text-blue-100/80 mt-1">Akun akan aktif setelah disetujui admin.</p>
+          </div>
+
+          {/* Jenjang sekolah: SD atau SMP. */}
+          <div>
+            <span className={labelClass}>Jenjang Sekolah</span>
             <Segmen
-              label="Jenis institusi"
-              opsi={OPSI_JENIS}
-              nilai={jenisInstitusi}
-              onPilih={ubahJenisInstitusi}
+              label="Jenjang sekolah"
+              opsi={OPSI_JENJANG}
+              nilai={jenjang}
+              onPilih={setJenjang}
             />
           </div>
 
-""", "", 'blok pilihan Jenis Institusi')
+          <SelectField
+            id="reg-jabatan"
+            label="Jabatan"
+            value={form.jabatan}
+            onChange={(e) => ubahJabatan(e.target.value)}
+            hint={
+              isOrangTua
+                ? 'Akun Orang Tua/Wali hanya dapat bergabung ke sekolah yang sudah terdaftar, lalu dihubungkan ke data anak Anda.'
+                : mode === 'baru'
+                  ? 'Karena mendaftarkan sekolah baru, akun Anda otomatis jadi Admin Utama sekolah ini.'
+                  : undefined
+            }
+          >
+            {JABATAN_SEKOLAH.map((j) => (
+              <option key={j.value} value={j.value} className="bg-slate-900">{j.label}</option>
+            ))}
+          </SelectField>
 
-rep("    'Pilih jenis institusi: Sekolah, Kantor (KUA), atau Puskesmas.',\n", "", 'langkah 1 panduan')
+          <Field
+            id="reg-nama"
+            label="Nama Lengkap"
+            required
+            autoComplete="name"
+            value={form.nama}
+            onChange={(e) => ubah('nama', e.target.value)}
+          />
 
-rep('<h1 className="text-xl font-bold text-white tracking-widest uppercase">Daftar Akun</h1>',
-    '<h1 className="text-xl font-bold text-white tracking-widest uppercase">Daftar Akun</h1>\n'
-    '            <p className="text-xs font-semibold tracking-widest uppercase text-blue-200/70 mt-0.5">{APP.nama}</p>',
-    'judul Daftar Akun')
+          {/* Mode: Gabung sekolah yang sudah ada / Daftar sekolah baru.
+              Disembunyikan untuk Orang Tua/Wali — mereka wajib gabung ke
+              sekolah yang sudah ada. */}
+          {!isOrangTua && (
+            <Segmen
+              label="Gabung atau daftarkan sekolah"
+              opsi={[
+                { value: 'gabung', label: 'Gabung Sekolah' },
+                { value: 'baru', label: 'Daftar Sekolah Baru' },
+              ]}
+              nilai={mode}
+              onPilih={setMode}
+            />
+          )}
 
-open(path, 'w', encoding='utf-8', newline='').write(s.replace('\n', '\r\n') if crlf else s)
-print('Register.jsx berhasil di-patch:', path)
+          {mode === 'gabung' || isOrangTua ? (
+            <SelectField
+              id="reg-sekolah"
+              label="Sekolah"
+              required
+              value={form.sekolahId}
+              onChange={(e) => ubah('sekolahId', e.target.value)}
+              disabled={loadingSekolah}
+              hint={
+                !loadingSekolah && !galatSekolah && daftarSekolah.length === 0
+                  ? 'Belum ada sekolah terdaftar. Pilih "Daftar Sekolah Baru" di atas.'
+                  : galatSekolah
+                    ? 'Daftar tidak bisa dimuat. Periksa koneksi internet lalu muat ulang halaman.'
+                    : undefined
+              }
+            >
+              <option value="" className="bg-slate-900">{teksPilihSekolah}</option>
+              {daftarSekolah.map((s) => (
+                <option key={s.id} value={s.id} className="bg-slate-900">{s.nama_sekolah}</option>
+              ))}
+            </SelectField>
+          ) : (
+            <Field
+              id="reg-nama-baru"
+              label="Nama Sekolah Baru"
+              required
+              autoComplete="off"
+              placeholder={`Contoh: ${labelJenjang} Negeri Contoh`}
+              value={form.namaSekolahBaru}
+              onChange={(e) => ubah('namaSekolahBaru', e.target.value)}
+            />
+          )}
+
+          {/* Khusus Orang Tua/Wali: pilih anak dari daftar siswa sekolah
+              yang baru saja dipilih, lalu pilih hubungan dengan anak itu. */}
+          {isOrangTua && (
+            <>
+              <SelectField
+                id="reg-siswa"
+                label="Nama Anak"
+                required
+                value={form.siswaId}
+                onChange={(e) => ubah('siswaId', e.target.value)}
+                disabled={!form.sekolahId || loadingSiswa}
+                hint="Tidak menemukan nama anak Anda? Hubungi admin sekolah untuk memastikan data siswa sudah terdaftar."
+              >
+                <option value="" className="bg-slate-900">
+                  {!form.sekolahId
+                    ? '-- Pilih sekolah terlebih dahulu --'
+                    : loadingSiswa
+                      ? 'Memuat daftar siswa...'
+                      : daftarSiswa.length === 0
+                        ? 'Tidak ada siswa di sekolah ini'
+                        : '-- Pilih Anak --'}
+                </option>
+                {daftarSiswa.map((s) => (
+                  <option key={s.id} value={s.id} className="bg-slate-900">
+                    {s.nama_lengkap}
+                    {s.nis ? ` (NIS: ${s.nis})` : ''}
+                  </option>
+                ))}
+              </SelectField>
+
+              <SelectField
+                id="reg-hubungan"
+                label="Hubungan dengan Anak"
+                required
+                value={form.hubungan}
+                onChange={(e) => ubah('hubungan', e.target.value)}
+              >
+                <option value="" className="bg-slate-900">-- Pilih Hubungan --</option>
+                <option value="ayah" className="bg-slate-900">Ayah</option>
+                <option value="ibu" className="bg-slate-900">Ibu</option>
+                <option value="wali" className="bg-slate-900">Wali</option>
+              </SelectField>
+            </>
+          )}
+
+          <Field
+            id="reg-email"
+            label="Email"
+            type="email"
+            required
+            inputMode="email"
+            autoComplete="email"
+            autoCapitalize="none"
+            spellCheck={false}
+            placeholder="nama@email.com"
+            hint="Gunakan email yang aktif — dipakai untuk masuk dan memulihkan kata sandi."
+            value={form.email}
+            onChange={(e) => ubah('email', e.target.value)}
+          />
+
+          <PasswordField
+            id="reg-password"
+            label="Kata Sandi"
+            placeholder="Minimal 6 karakter"
+            value={form.password}
+            onChange={(e) => ubah('password', e.target.value)}
+            tampil={tampilSandi}
+            onToggle={() => setTampilSandi((v) => !v)}
+          />
+
+          <PasswordField
+            id="reg-konfirmasi"
+            label="Konfirmasi Kata Sandi"
+            placeholder="Ketik ulang kata sandi"
+            value={form.konfirmasi}
+            onChange={(e) => ubah('konfirmasi', e.target.value)}
+            tampil={tampilSandi}
+            onToggle={() => setTampilSandi((v) => !v)}
+          />
+
+          {/* Hal penting yang harus diketahui sebelum menekan Daftar —
+              ditaruh tepat di atas tombol, bukan di kolom samping. */}
+          <div className="flex gap-2.5 rounded-lg border border-blue-400/20 bg-blue-500/5 p-3 text-[13px] leading-relaxed text-blue-100/85">
+            <Info size={16} className="text-blue-300 shrink-0 mt-0.5" aria-hidden />
+            <ul className="space-y-1">
+              <li>Akun baru berstatus "menunggu" sampai disetujui admin sekolah. Anda baru bisa masuk setelah disetujui.</li>
+              {mode === 'baru' && !isOrangTua && (
+                <li>Mendaftarkan sekolah baru menjadikan Anda Admin Utama sekolah ini.</li>
+              )}
+              {isOrangTua && <li>Akun Anda akan dihubungkan ke data anak yang dipilih.</li>}
+              <li>Ada kendala? Hubungi admin sekolah Anda secara langsung.</li>
+            </ul>
+          </div>
+
+          {error && (
+            <p
+              role="alert"
+              className="text-sm text-red-200 bg-red-500/10 border border-red-500/40 rounded-lg px-3 py-2"
+            >
+              {error}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            aria-busy={loading}
+            className="w-full min-h-[44px] flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-blue-400 text-white font-medium py-2.5 rounded-lg shadow-[0_0_25px_-6px_rgba(59,130,246,0.7)] hover:brightness-110 transition disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-200"
+          >
+            {loading ? <Loader2 size={16} className="animate-spin" /> : 'Daftar'}
+          </button>
+
+          <p className="text-center text-sm text-blue-100/80">
+            Sudah punya akun?{' '}
+            <Link to="/login" className="text-blue-300 font-medium hover:text-white underline-offset-4 hover:underline">
+              Masuk
+            </Link>
+          </p>
+        </form>
+      </div>
+    </div>
+  )
+}
