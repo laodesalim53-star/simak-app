@@ -11,6 +11,9 @@ import {
   useDataSekolah, useDokumenTersimpan, ubahBaris, tambahBaris, hapusBarisTerakhir,
   gabungkanGuru, segarkanIdentitas,
 } from '../lib/administrasiKepsek'
+// [BARU] dropdown "Isi otomatis" + daftar pilihannya
+import PilihOtomatis from '../components/PilihOtomatis'
+import { PRESET_JURNAL, PRESET_PROGRAM, PRESET_PEMBINAAN } from '../data/bukuKerjaPreset'
 
 const TAB = [
   { id: 'jurnal', label: 'Jurnal Harian', sub: 'Catatan kerja harian' },
@@ -34,6 +37,16 @@ const bawaan = () => ({
   pembinaan: [],
 })
 
+// [BARU] Pilihan hanya menimpa kolom yang berisi teks; kolom lain
+// (tanggal, nama, nip, jabatan, dst.) tidak disentuh.
+const terapkan = (baris, nilai) => {
+  const hasil = { ...baris }
+  Object.entries(nilai || {}).forEach(([k, v]) => {
+    if (v !== '' && v != null) hasil[k] = v
+  })
+  return hasil
+}
+
 export default function BukuKerjaKepsek() {
   const { sekolahId } = useAuth()
   const [tab, setTab] = useState('jurnal')
@@ -53,6 +66,21 @@ export default function BukuKerjaKepsek() {
 
   const namaSekolah = info.sekolah?.nama_sekolah || info.sekolah?.nama || ''
   const set = (k) => (v) => setData((d) => ({ ...d, [k]: v }))
+
+  // [BARU] isi satu baris dari pilihan dropdown
+  const isiBaris = (kunci, i, nilai) =>
+    setData((d) => ({ ...d, [kunci]: d[kunci].map((r, idx) => (idx === i ? terapkan(r, nilai) : r)) }))
+
+  // [BARU] isi semua baris yang kolom penentunya masih kosong
+  const isiSemuaKosong = (kunci, kolomPenentu, nilai) =>
+    setData((d) => ({ ...d, [kunci]: d[kunci].map((r) => (r[kolomPenentu] ? r : terapkan(r, nilai))) }))
+
+  // [BARU] pengaturan dropdown per tab
+  const PRESET_TAB = {
+    jurnal: { kunci: 'jurnal', penentu: 'kegiatan', opsi: PRESET_JURNAL, judul: 'Pilih kegiatan' },
+    program: { kunci: 'program', penentu: 'program', opsi: PRESET_PROGRAM, judul: 'Pilih program kerja' },
+    pembinaan: { kunci: 'pembinaan', penentu: 'topik', opsi: PRESET_PEMBINAAN, judul: 'Pilih topik pembinaan' },
+  }[tab]
 
   return (
     <Layout title="Buku Kerja Kepala Sekolah" subtitle="Jurnal harian, program kerja, dan pembinaan guru.">
@@ -92,13 +120,22 @@ export default function BukuKerjaKepsek() {
             <option>Genap</option>
           </select>
         </label>
-        <button
-          type="button"
-          onClick={() => window.print()}
-          className="ml-auto inline-flex items-center gap-2 rounded-lg bg-blue-900 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-950"
-        >
-          <Printer size={16} /> Cetak
-        </button>
+        {/* [BARU] tombol dropdown isi semua baris kosong + Cetak (Cetak tetap di kanan) */}
+        <div className="ml-auto flex items-center gap-2">
+          <PilihOtomatis
+            teks="Isi semua baris kosong"
+            judulMenu="Baris yang masih kosong diisi dengan pilihan ini"
+            opsi={PRESET_TAB.opsi}
+            onPilih={(nilai) => isiSemuaKosong(PRESET_TAB.kunci, PRESET_TAB.penentu, nilai)}
+          />
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-900 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-950"
+          >
+            <Printer size={16} /> Cetak
+          </button>
+        </div>
       </div>
 
       <IsianTtd
@@ -150,6 +187,7 @@ export default function BukuKerjaKepsek() {
                     <Th>Uraian Kegiatan</Th>
                     <Th>Hasil / Tindak Lanjut</Th>
                     <Th className="w-28">Ket.</Th>
+                    <Th className="no-print w-10"><span className="sr-only">Isi otomatis</span></Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -160,6 +198,9 @@ export default function BukuKerjaKepsek() {
                       <Td><Isian area kiri value={r.kegiatan} onChange={ubahBaris(setData, 'jurnal', i, 'kegiatan')} /></Td>
                       <Td><Isian area kiri value={r.hasil} onChange={ubahBaris(setData, 'jurnal', i, 'hasil')} /></Td>
                       <Td><Isian value={r.ket} onChange={ubahBaris(setData, 'jurnal', i, 'ket')} /></Td>
+                      <Td className="no-print text-center">
+                        <PilihOtomatis ikonSaja teks="Isi baris ini" judulMenu={PRESET_TAB.judul} opsi={PRESET_JURNAL} onPilih={(n) => isiBaris('jurnal', i, n)} />
+                      </Td>
                     </tr>
                   ))}
                 </tbody>
@@ -184,6 +225,7 @@ export default function BukuKerjaKepsek() {
                     <Th>Target</Th>
                     <Th className="w-28">Waktu</Th>
                     <Th className="w-24">Ket.</Th>
+                    <Th className="no-print w-10"><span className="sr-only">Isi otomatis</span></Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -195,6 +237,9 @@ export default function BukuKerjaKepsek() {
                       <Td><Isian area kiri value={r.target} onChange={ubahBaris(setData, 'program', i, 'target')} /></Td>
                       <Td><Isian value={r.waktu} onChange={ubahBaris(setData, 'program', i, 'waktu')} /></Td>
                       <Td><Isian value={r.ket} onChange={ubahBaris(setData, 'program', i, 'ket')} /></Td>
+                      <Td className="no-print text-center">
+                        <PilihOtomatis ikonSaja teks="Isi baris ini" judulMenu={PRESET_TAB.judul} opsi={PRESET_PROGRAM} onPilih={(n) => isiBaris('program', i, n)} />
+                      </Td>
                     </tr>
                   ))}
                 </tbody>
@@ -219,13 +264,14 @@ export default function BukuKerjaKepsek() {
                   <Th className="w-32">Tanggal</Th>
                   <Th>Topik Pembinaan</Th>
                   <Th>Tindak Lanjut</Th>
+                  <Th className="no-print w-10"><span className="sr-only">Isi otomatis</span></Th>
                   <Th className="no-print w-14">Hapus</Th>
                 </tr>
               </thead>
               <tbody>
                 {data.pembinaan.length === 0 && (
                   <tr>
-                    <Td colSpan={8} className="py-4 text-center text-slate-500">
+                    <Td colSpan={9} className="py-4 text-center text-slate-500">
                       Belum ada baris. Klik "Tambah guru baru" untuk menarik dari data guru.
                     </Td>
                   </tr>
@@ -239,6 +285,9 @@ export default function BukuKerjaKepsek() {
                     <Td><Isian type="date" value={r.tanggal} onChange={ubahBaris(setData, 'pembinaan', i, 'tanggal')} /></Td>
                     <Td><Isian area kiri value={r.topik} onChange={ubahBaris(setData, 'pembinaan', i, 'topik')} /></Td>
                     <Td><Isian area kiri value={r.tindak} onChange={ubahBaris(setData, 'pembinaan', i, 'tindak')} /></Td>
+                    <Td className="no-print text-center">
+                      <PilihOtomatis ikonSaja teks="Isi baris ini" judulMenu={PRESET_TAB.judul} opsi={PRESET_PEMBINAAN} onPilih={(n) => isiBaris('pembinaan', i, n)} />
+                    </Td>
                     <Td className="no-print text-center">
                       <button type="button" className={tombolKecil} onClick={() => hapusBarisKe(setData, 'pembinaan', i)}>Hapus</button>
                     </Td>
