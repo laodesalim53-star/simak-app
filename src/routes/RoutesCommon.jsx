@@ -8,7 +8,9 @@ import { ProtectedRoute, RouteMenunggu } from '../components/RouteGuards'
 //    <Routes> ... {commonRoutes} ... </Routes>
 // ============================================================
 const Login = lazy(() => import('../pages/Login'))
-const Register = lazy(() => import('../pages/Register'))
+const RegisterSekolah = lazy(() => import('../pages/Register'))
+const RegisterPuskesmas = lazy(() => import('../pages/RegisterPuskesmas'))
+const Register = import.meta.env.VITE_APP_TIPE === 'puskesmas' ? RegisterPuskesmas : RegisterSekolah
 const Verifikasi = lazy(() => import('../pages/Verifikasi'))
 const MenungguPersetujuan = lazy(() => import('../pages/MenungguPersetujuan'))
 const PersetujuanAkun = lazy(() => import('../pages/PersetujuanAkun'))
