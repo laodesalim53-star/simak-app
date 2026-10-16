@@ -26,6 +26,28 @@
     <meta name="format-detection" content="telephone=no" />
 
     <title>SIMAK — Sistem Informasi Manajemen Sekolah</title>
+
+    <!-- Nama & ikon per aplikasi (sekolah/kantor/puskesmas/polres).
+         Vite mengganti %VITE_...% dari file .env.<mode> saat build.
+         Jika build tanpa --mode (build lama/produksi sekarang), variabel itu
+         tidak ada, teks %...% dibiarkan apa adanya, dan skrip ini tidak
+         mengubah apa pun: judul & ikon bawaan SIMAK di atas tetap dipakai. -->
+    <script>
+      (function () {
+        var nama = '%VITE_APP_NAMA%'
+        var ikon = '%VITE_APP_FAVICON%'
+        if (nama.charAt(0) !== '%') {
+          document.title = nama
+          var m = document.querySelector('meta[name="apple-mobile-web-app-title"]')
+          if (m) m.setAttribute('content', nama)
+        }
+        if (ikon.charAt(0) !== '%') {
+          var l = document.querySelector('link[rel="icon"]')
+          if (l) l.setAttribute('href', ikon)
+        }
+      })()
+    </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
