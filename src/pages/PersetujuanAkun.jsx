@@ -46,7 +46,6 @@ export default function PersetujuanAkun() {
 
   // Tenant puskesmas. Dipakai fallback ke profilPuskesmas kalau AuthContext
   // belum menyediakan flag isPuskesmas.
-  const isPuskesmas = auth.isPuskesmas ?? !!auth.profilPuskesmas
 
   // Puskesmas memakai alur yang sama dengan tenant kantor (pegawai, tanpa
   // guru dan tanpa orang tua/anak) — hanya kalimatnya yang berbeda.
