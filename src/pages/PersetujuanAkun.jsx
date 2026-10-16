@@ -40,7 +40,40 @@ const ROLE_DARI_JABATAN = {
 const MASA_AKTIF_HARI = 30
 
 export default function PersetujuanAkun() {
-  const { isSuperAdmin, sekolahId, isKantor } = useAuth()
+  const auth = useAuth()
+  const { isSuperAdmin, sekolahId } = auth
+
+  // Tenant puskesmas. Dipakai fallback ke profilPuskesmas kalau AuthContext
+  // belum menyediakan flag isPuskesmas.
+  const isPuskesmas = auth.isPuskesmas ?? !!auth.profilPuskesmas
+
+  // Puskesmas memakai alur yang sama dengan tenant kantor (pegawai, tanpa
+  // guru dan tanpa orang tua/anak) — hanya kalimatnya yang berbeda.
+  const isKantor = !!auth.isKantor || isPuskesmas
+
+  // Kalimat yang tampil di layar, disesuaikan dengan jenis tenant.
+  const teks = isPuskesmas
+    ? {
+        unit: 'Puskesmas',
+        lokasi: ' di puskesmas Anda',
+        semua: ' di seluruh puskesmas',
+        adminKepala: 'Admin & Kepala Puskesmas',
+        pegawai: 'Tenaga Kesehatan & Staf',
+        kepala: 'Kepala Puskesmas',
+        dataPegawai: 'Data Pegawai Puskesmas',
+        fitur: 'Presensi, Data Pegawai, dan layanan puskesmas',
+      }
+    : {
+        unit: 'Kantor',
+        lokasi: ' di kantor Anda',
+        semua: ' di seluruh kantor',
+        adminKepala: 'Admin & Kepala Kantor',
+        pegawai: 'Pegawai',
+        kepala: 'Kepala Kantor',
+        dataPegawai: 'Data Pegawai Kantor',
+        fitur: 'Presensi, Data Pegawai, dan fitur lain',
+      }
+
   const [tab, setTab] = useState('menunggu')
   const [filterJabatan, setFilterJabatan] = useState('semua')
   const [daftarAkun, setDaftarAkun] = useState([])
@@ -49,15 +82,15 @@ export default function PersetujuanAkun() {
   const [modalGuru, setModalGuru] = useState(null) // akun yang sedang diproses link guru-nya
   const [modalEdit, setModalEdit] = useState(null) // akun yang sedang diedit datanya
   const [modalPassword, setModalPassword] = useState(null) // akun yang sedang diganti password-nya
-  const [modalPegawai, setModalPegawai] = useState(null) // akun kantor yang sedang dihubungkan ke data pegawai
+  const [modalPegawai, setModalPegawai] = useState(null) // akun kantor/puskesmas yang sedang dihubungkan ke data pegawai
 
   // Anak-anak dari akun orang tua yang AKUNNYA SUDAH AKTIF, yang baru
   // ditambahkan lewat fitur "Tambah Anak" (bukan anak pertama saat
   // pendaftaran) dan masih menunggu persetujuan. Ditampilkan di tab
   // terpisah karena tab "Menunggu" di atas hanya memfilter dari
   // profil.status_akun, tidak akan pernah menangkap baris ini.
-  // TIDAK RELEVAN untuk tenant "kantor" — kantor tidak punya konsep
-  // orang tua/siswa sama sekali, jadi seluruh alur ini dilewati.
+  // TIDAK RELEVAN untuk tenant "kantor" dan "puskesmas" — keduanya tidak
+  // punya konsep orang tua/siswa sama sekali, jadi seluruh alur ini dilewati.
   const [anakMenunggu, setAnakMenunggu] = useState([])
   const [loadingAnakMenunggu, setLoadingAnakMenunggu] = useState(true)
 
@@ -84,7 +117,7 @@ export default function PersetujuanAkun() {
     }
 
     if (isKantor) {
-      // Tenant kantor: hanya ada Admin/Kepala Kantor dan Pegawai —
+      // Tenant kantor/puskesmas: hanya ada Admin/Kepala dan Pegawai —
       // tidak ada Guru maupun Orang Tua/Wali.
       if (filterJabatan === 'admin_kepala') {
         query = query.or(
@@ -112,8 +145,8 @@ export default function PersetujuanAkun() {
     // langsung lewat FK karena profil.id dan orang_tua_siswa.orang_tua_id
     // sama-sama mengacu ke auth.users, bukan saling berelasi satu sama
     // lain — jadi diambil terpisah lalu digabung di sisi klien.
-    // Dilewati sepenuhnya untuk tenant kantor karena jabatan 'orang_tua'
-    // tidak pernah ada di sana.
+    // Dilewati sepenuhnya untuk tenant kantor/puskesmas karena jabatan
+    // 'orang_tua' tidak pernah ada di sana.
     if (!isKantor) {
       const idOrangTua = akunList
         .filter((a) => (a.jabatan || a.role) === 'orang_tua')
@@ -141,7 +174,7 @@ export default function PersetujuanAkun() {
   // orang tua yang AKUNNYA sudah 'aktif' — ini yang menandakan baris
   // tersebut hasil "Tambah Anak" belakangan, bukan anak pertama saat
   // pendaftaran (yang sudah tertangani lewat tab "Menunggu" di atas).
-  // Khusus tenant sekolah — untuk kantor fungsi ini tidak pernah dipanggil.
+  // Khusus tenant sekolah — untuk kantor/puskesmas fungsi ini tidak pernah dipanggil.
   async function muatAnakMenunggu() {
     setLoadingAnakMenunggu(true)
 
@@ -224,7 +257,7 @@ export default function PersetujuanAkun() {
   }, [tab, filterJabatan, isKantor])
 
   useEffect(() => {
-    // Tenant kantor tidak punya konsep orang tua/anak — jangan query sama sekali.
+    // Tenant kantor/puskesmas tidak punya konsep orang tua/anak — jangan query sama sekali.
     if (isKantor) {
       setAnakMenunggu([])
       setLoadingAnakMenunggu(false)
@@ -252,6 +285,12 @@ export default function PersetujuanAkun() {
   useEffect(() => {
     if (!isSuperAdmin && tab === 'upgrade_paket') setTab('menunggu')
   }, [isSuperAdmin, tab])
+
+  // Tenant kantor/puskesmas tidak punya tab 'anak_menunggu' — kembalikan
+  // ke tab default kalau state-nya tersisa dari tenant sebelumnya.
+  useEffect(() => {
+    if (isKantor && tab === 'anak_menunggu') setTab('menunggu')
+  }, [isKantor, tab])
 
   async function ubahStatus(id, statusBaru, catatan = '', guruId = null, pegawaiId = null) {
     setProsesId(id)
@@ -283,7 +322,7 @@ export default function PersetujuanAkun() {
     // Dibatasi hanya baris yang MASIH 'menunggu' (anak pertama saat
     // pendaftaran) — supaya tidak menimpa status anak lain yang sudah
     // diproses terpisah lewat tab "Anak Menunggu". Tidak berlaku untuk
-    // tenant kantor.
+    // tenant kantor/puskesmas.
     const akun = akunTarget
     if (!isKantor && (akun?.jabatan || akun?.role) === 'orang_tua') {
       const statusRelasi =
@@ -308,7 +347,7 @@ export default function PersetujuanAkun() {
   }
 
   function isJabatanGuru(akun) {
-    // Tenant kantor tidak punya jabatan 'guru' sama sekali.
+    // Tenant kantor/puskesmas tidak punya jabatan 'guru' sama sekali.
     return !isKantor && (akun.jabatan || akun.role) === 'guru'
   }
 
@@ -326,8 +365,8 @@ export default function PersetujuanAkun() {
     }
   }
 
-  // Hubungkan akun kantor yang SUDAH aktif ke data pegawai_kantor, tanpa
-  // mengubah status_akun — dipakai untuk akun yang sempat disetujui
+  // Hubungkan akun kantor/puskesmas yang SUDAH aktif ke data pegawai_kantor,
+  // tanpa mengubah status_akun — dipakai untuk akun yang sempat disetujui
   // langsung (sebelum modal ini ada) sehingga pegawai_id-nya masih kosong.
   async function hubungkanPegawaiSaja(akun, pegawaiId) {
     setProsesId(akun.id)
@@ -399,7 +438,7 @@ export default function PersetujuanAkun() {
     // statusnya masih cerminan dari status akun SEBELUM direset ini (aktif
     // atau ditolak), supaya anak lain yang sudah diproses terpisah lewat
     // tab "Anak Menunggu" tidak ikut ter-reset tanpa sengaja. Tidak berlaku
-    // untuk tenant kantor.
+    // untuk tenant kantor/puskesmas.
     if (!error && !isKantor && (akun.jabatan || akun.role) === 'orang_tua') {
       await supabase
         .from('orang_tua_siswa')
@@ -617,8 +656,14 @@ export default function PersetujuanAkun() {
   return (
     <Layout
       title="Persetujuan Akun"
-      subtitle={`Kelola pendaftaran akun admin baru${
-        isSuperAdmin ? ' di seluruh sekolah' : isKantor ? ' di kantor Anda' : ' di sekolah Anda'
+      subtitle={`Kelola pendaftaran akun pegawai baru${
+        isSuperAdmin
+          ? isPuskesmas
+            ? teks.semua
+            : ' di seluruh sekolah'
+          : isKantor
+            ? teks.lokasi
+            : ' di sekolah Anda'
       }.`}
     >
       <div className="flex gap-2 mb-4 flex-wrap">
@@ -639,7 +684,7 @@ export default function PersetujuanAkun() {
           Riwayat
         </button>
         {/* Tab "Anak Menunggu" murni konsep orang tua/siswa sekolah — tidak
-            relevan sama sekali untuk tenant kantor, jadi disembunyikan. */}
+            relevan sama sekali untuk tenant kantor/puskesmas, jadi disembunyikan. */}
         {!isKantor && (
           <button
             onClick={() => setTab('anak_menunggu')}
@@ -702,7 +747,7 @@ export default function PersetujuanAkun() {
                   filterJabatan === 'admin_kepala' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-600'
                 }`}
               >
-                Admin & Kepala Kantor
+                {teks.adminKepala}
               </button>
               <button
                 onClick={() => setFilterJabatan('pegawai')}
@@ -710,7 +755,7 @@ export default function PersetujuanAkun() {
                   filterJabatan === 'pegawai' ? 'bg-cyan-600 text-white' : 'bg-cyan-50 text-cyan-600'
                 }`}
               >
-                Pegawai
+                {teks.pegawai}
               </button>
             </>
           ) : (
@@ -763,7 +808,7 @@ export default function PersetujuanAkun() {
                   <th className="text-left px-4 py-3 font-medium">Jabatan</th>
                   {isSuperAdmin && (
                     <th className="text-left px-4 py-3 font-medium">
-                      {isKantor ? 'Kantor' : 'Sekolah'}
+                      {isKantor ? teks.unit : 'Sekolah'}
                     </th>
                   )}
                   <th className="text-left px-4 py-3 font-medium">Status</th>
@@ -793,7 +838,7 @@ export default function PersetujuanAkun() {
                     </td>
                     <td className="px-4 py-3 text-slate-500">{akun.email_pendaftar || '—'}</td>
                     <td className="px-4 py-3">
-                      <JabatanBadge jabatan={akun.jabatan} role={akun.role} />
+                      <JabatanBadge jabatan={akun.jabatan} role={akun.role} teks={teks} />
                     </td>
                     {isSuperAdmin && (
                       <td className="px-4 py-3 text-slate-500">{akun.sekolah?.nama_sekolah || '—'}</td>
@@ -1036,6 +1081,7 @@ export default function PersetujuanAkun() {
       {modalPegawai && (
         <ModalHubungkanPegawai
           akun={modalPegawai}
+          teks={teks}
           onClose={() => setModalPegawai(null)}
           onSelesai={(pegawaiId) =>
             modalPegawai.status_akun === 'menunggu'
@@ -1049,6 +1095,7 @@ export default function PersetujuanAkun() {
         <ModalEditAkun
           akun={modalEdit}
           isKantor={isKantor}
+          teks={teks}
           onClose={() => setModalEdit(null)}
           onSimpan={handleSimpanEdit}
         />
@@ -1207,7 +1254,7 @@ function ModalHubungkanGuru({ akun, onClose, onSelesai }) {
   )
 }
 
-function ModalHubungkanPegawai({ akun, onClose, onSelesai }) {
+function ModalHubungkanPegawai({ akun, teks, onClose, onSelesai }) {
   const [daftarPegawai, setDaftarPegawai] = useState([])
   const [pegawaiIdTerpilih, setPegawaiIdTerpilih] = useState('')
   const [loading, setLoading] = useState(true)
@@ -1218,7 +1265,7 @@ function ModalHubungkanPegawai({ akun, onClose, onSelesai }) {
 
   useEffect(() => {
     async function muat() {
-      // Pegawai kantor yang sama, yang BELUM terhubung ke akun profil manapun
+      // Pegawai kantor/puskesmas yang sama, yang BELUM terhubung ke akun profil manapun
       const { data: sudahTerhubung } = await supabase
         .from('profil')
         .select('pegawai_id')
@@ -1285,8 +1332,8 @@ function ModalHubungkanPegawai({ akun, onClose, onSelesai }) {
           </button>
         </div>
         <p className="text-xs text-slate-500 mb-4">
-          {akun.nama_lengkap_pendaftar} ({akun.email_pendaftar}) perlu dihubungkan ke data Pegawai
-          Kantor supaya muncul di Presensi, Data Pegawai, dan fitur lain.
+          {akun.nama_lengkap_pendaftar} ({akun.email_pendaftar}) perlu dihubungkan ke{' '}
+          {teks.dataPegawai} supaya muncul di {teks.fitur}.
         </p>
 
         <div className="flex gap-2 p-1 bg-slate-100 rounded-lg mb-4">
@@ -1314,7 +1361,8 @@ function ModalHubungkanPegawai({ akun, onClose, onSelesai }) {
               <p className="text-sm text-slate-400 text-center py-4">Memuat data pegawai...</p>
             ) : daftarPegawai.length === 0 ? (
               <p className="text-sm text-slate-400 text-center py-4">
-                Tidak ada data pegawai yang belum terhubung di kantor ini. Gunakan tab "Buat Baru".
+                Tidak ada data pegawai yang belum terhubung di {teks.unit.toLowerCase()} ini. Gunakan
+                tab "Buat Baru".
               </p>
             ) : (
               <select
@@ -1362,7 +1410,7 @@ function ModalHubungkanPegawai({ akun, onClose, onSelesai }) {
   )
 }
 
-function ModalEditAkun({ akun, isKantor, onClose, onSimpan }) {
+function ModalEditAkun({ akun, isKantor, teks, onClose, onSimpan }) {
   const [nama, setNama] = useState(akun.nama_lengkap_pendaftar || '')
   const [email, setEmail] = useState(akun.email_pendaftar || '')
   const [jabatan, setJabatan] = useState(
@@ -1420,8 +1468,8 @@ function ModalEditAkun({ akun, isKantor, onClose, onSimpan }) {
             >
               {isKantor ? (
                 <>
-                  <option value="pegawai">Pegawai</option>
-                  <option value="kepala_kantor">Kepala Kantor</option>
+                  <option value="pegawai">{teks.pegawai}</option>
+                  <option value="kepala_kantor">{teks.kepala}</option>
                   <option value="admin">Admin</option>
                   <option value="admin_utama">Admin Utama</option>
                 </>
@@ -1558,7 +1606,7 @@ function StatusBadge({ status }) {
   )
 }
 
-function JabatanBadge({ jabatan, role }) {
+function JabatanBadge({ jabatan, role, teks }) {
   const map = {
     guru: { label: 'Guru', cls: 'bg-blue-50 text-blue-600' },
     admin: { label: 'Admin', cls: 'bg-purple-50 text-purple-600' },
@@ -1567,7 +1615,7 @@ function JabatanBadge({ jabatan, role }) {
     orang_tua: { label: 'Orang Tua/Wali', cls: 'bg-emerald-50 text-emerald-600' },
     superadmin: { label: 'Superadmin', cls: 'bg-slate-800 text-white' },
     pegawai: { label: 'Pegawai', cls: 'bg-cyan-50 text-cyan-600' },
-    kepala_kantor: { label: 'Kepala Kantor', cls: 'bg-amber-50 text-amber-600' },
+    kepala_kantor: { label: teks?.kepala || 'Kepala Kantor', cls: 'bg-amber-50 text-amber-600' },
   }
   const key = jabatan || role
   const item = map[key] || { label: key || '—', cls: 'bg-slate-100 text-slate-500' }
