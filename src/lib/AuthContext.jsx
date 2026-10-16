@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useRef } from 'react'
 import { supabase } from './supabaseClient'
+import { APP, JENIS_LABEL } from './appConfig'
 
 const AuthContext = createContext(null)
 
@@ -28,6 +29,8 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(undefined)
   const [profil, setProfil] = useState(undefined)
   const [profilPuskesmas, setProfilPuskesmas] = useState(undefined)
+  // Pesan bila akun yang login bukan milik jenis institusi aplikasi ini.
+  const [galatTenant, setGalatTenant] = useState(null)
 
   const profilRequestIdRef = useRef(0)
   const puskesmasRequestIdRef = useRef(0)
@@ -114,6 +117,18 @@ export function AuthProvider({ children }) {
 
     const jenisOrganisasi = data.sekolah?.jenis_organisasi || 'sekolah'
     const namaSekolah = data.sekolah?.nama_sekolah || null
+
+    // Aplikasi ini hanya untuk satu jenis institusi (VITE_APP_TIPE).
+    // Superadmin boleh masuk ke semua aplikasi.
+    if (data.role !== 'superadmin' && !APP.tipeTenant.includes(jenisOrganisasi)) {
+      setGalatTenant(
+        `Akun ini terdaftar sebagai ${JENIS_LABEL[jenisOrganisasi] || jenisOrganisasi}, ` +
+        `bukan di aplikasi ${APP.nama}. Silakan masuk lewat aplikasi yang sesuai.`
+      )
+      await supabase.auth.signOut()
+      if (requestId === profilRequestIdRef.current) setProfil(null)
+      return
+    }
 
     // Muat profil puskesmas secara paralel bila tenant ini jenisnya puskesmas.
     // Tidak di-await supaya tidak memperlambat pemuatan profil utama.
@@ -204,11 +219,13 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  const signIn = (email, password) =>
-    supabase.auth.signInWithPassword({
+  const signIn = (email, password) => {
+    setGalatTenant(null)
+    return supabase.auth.signInWithPassword({
       email,
       password,
     })
+  }
 
   const signOut = () => supabase.auth.signOut()
 
@@ -246,6 +263,13 @@ export function AuthProvider({ children }) {
   }) {
     // Semua validasi sebenarnya dijalankan ulang di server (daftar-akun).
     // Pemeriksaan di sini hanya supaya pengguna dapat umpan balik lebih cepat.
+    if (!APP.tipeTenant.includes(jenisOrganisasi)) {
+      return {
+        error: {
+          message: `Aplikasi ${APP.nama} hanya untuk pendaftaran ${JENIS_LABEL[APP.tipeTenant[0]]}.`,
+        },
+      }
+    }
     if (jenisOrganisasi === 'kantor' && jabatan === 'orang_tua') {
       return { error: { message: 'Jabatan Orang Tua/Wali tidak berlaku untuk akun Kantor.' } }
     }
@@ -485,6 +509,7 @@ export function AuthProvider({ children }) {
 
         signIn,
         signOut,
+        galatTenant,
 
         daftar,
         refreshProfil,
