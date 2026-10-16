@@ -1,10 +1,16 @@
 import { Link } from 'react-router-dom'
 import { ArrowLeft, ShieldCheck } from 'lucide-react'
+import { APP_TIPE } from '../lib/appConfig'
 
 // Halaman publik "Kebijakan Privasi" — mengikuti pola visual Beranda.jsx:
 // header navy-indigo dengan batik overlay, konten dalam kartu putih, font
-// Plus Jakarta Sans. Rute disarankan: /kebijakan-privasi (tambahkan di
-// App.jsx, bisa diakses tanpa login, sama seperti /toko).
+// Plus Jakarta Sans. Rute: /kebijakan-privasi (bisa diakses tanpa login).
+//
+// Isi halaman mengikuti jenis aplikasi yang sedang dibuild (VITE_APP_TIPE):
+//  - 'puskesmas' → teks khusus Puskesmas (SIMPUS), tanpa istilah sekolah/KUA
+//  - selain itu  → teks umum (SIMAK) untuk Sekolah, KUA, dan Puskesmas
+// Halaman publik ini sengaja memakai APP_TIPE (bukan data profil) karena
+// pengunjung belum tentu login.
 //
 // SEBELUM DIPUBLIKASIKAN, isi 3 konstanta di bawah ini, lalu cari teks
 // bertanda [ ... ] yang tersisa (masa proses hapus data, layanan pihak
@@ -20,6 +26,10 @@ import { ArrowLeft, ShieldCheck } from 'lucide-react'
 const TANGGAL_UPDATE = '[01 Oktober 2026]'
 const NAMA_PENGELOLA = '[LD SALIM,]'
 const EMAIL_KONTAK = '[laodesalim53@gmail.com]'
+
+const PUSKESMAS = APP_TIPE === 'puskesmas'
+const NAMA_APP = PUSKESMAS ? 'SIMPUS' : 'SIMAK'
+const MITRA = PUSKESMAS ? 'Puskesmas' : 'Instansi Mitra'
 
 function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 72 }) {
   return (
@@ -46,10 +56,30 @@ function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 
 const BAGIAN = [
   {
     judul: '1. Tentang Dokumen Ini',
-    isi: (
+    isi: PUSKESMAS ? (
       <>
         <p>
-          Kebijakan Privasi ini berlaku untuk aplikasi <strong>SIMAK</strong> ("Aplikasi",
+          Kebijakan Privasi ini berlaku untuk aplikasi <strong>{NAMA_APP}</strong> ("Aplikasi",
+          "Layanan"), sistem informasi yang digunakan oleh Puskesmas untuk mengelola data
+          kepegawaian, administrasi, pelayanan kesehatan, keuangan, dan komunikasi. Aplikasi
+          dikelola oleh <strong>{NAMA_PENGELOLA}</strong> ("kami").
+        </p>
+        <p>
+          Kebijakan ini menjelaskan data apa yang kami kumpulkan, bagaimana data itu digunakan
+          dan dilindungi, serta hak-hak Anda sebagai pengguna. Kebijakan ini disusun dengan
+          memperhatikan Undang-Undang Nomor 27 Tahun 2022 tentang Pelindungan Data Pribadi (UU
+          PDP).
+        </p>
+        <p>
+          Aplikasi ditujukan untuk pengguna dewasa, yaitu kepala puskesmas, tenaga kesehatan,
+          pegawai, dan petugas administrasi Puskesmas. Data pasien dimasukkan oleh petugas
+          Puskesmas, bukan oleh pasien itu sendiri.
+        </p>
+      </>
+    ) : (
+      <>
+        <p>
+          Kebijakan Privasi ini berlaku untuk aplikasi <strong>{NAMA_APP}</strong> ("Aplikasi",
           "Layanan"), sistem informasi terpadu yang digunakan oleh Sekolah, Kantor Urusan Agama
           (KUA), dan Puskesmas ("Instansi Mitra") untuk mengelola data akademik, administrasi,
           pelayanan kesehatan, keuangan, dan komunikasi. Aplikasi dikelola oleh{' '}
@@ -71,10 +101,19 @@ const BAGIAN = [
   },
   {
     judul: '2. Siapa yang Bertanggung Jawab atas Data',
-    isi: (
+    isi: PUSKESMAS ? (
+      <p>
+        Puskesmas bertindak sebagai <strong>pengendali data</strong> untuk data yang mereka
+        input ke dalam Aplikasi. {NAMA_APP} bertindak sebagai
+        <strong> penyedia sistem/pemroses data</strong> yang menyediakan infrastruktur teknis
+        untuk menyimpan dan mengelola data tersebut atas instruksi Puskesmas. Untuk pertanyaan
+        mengenai data pribadi Anda, silakan hubungi Puskesmas tempat data Anda terdaftar
+        terlebih dahulu, atau hubungi kami melalui kontak di Bagian 10.
+      </p>
+    ) : (
       <p>
         Setiap Instansi Mitra (sekolah, KUA, atau puskesmas) bertindak sebagai <strong>pengendali
-        data</strong> untuk data yang mereka input ke dalam Aplikasi. SIMAK bertindak sebagai
+        data</strong> untuk data yang mereka input ke dalam Aplikasi. {NAMA_APP} bertindak sebagai
         <strong> penyedia sistem/pemroses data</strong> yang menyediakan infrastruktur teknis
         untuk menyimpan dan mengelola data tersebut atas instruksi Instansi Mitra. Untuk
         pertanyaan mengenai data pribadi Anda, silakan hubungi Instansi Mitra tempat data Anda
@@ -84,7 +123,44 @@ const BAGIAN = [
   },
   {
     judul: '3. Data yang Kami Kumpulkan',
-    isi: (
+    isi: PUSKESMAS ? (
+      <>
+        <p className="kp-sub-label">a. Data akun & identitas dasar</p>
+        <ul>
+          <li>Nama, e-mail, nomor telepon, jabatan/peran, kata sandi (disimpan terenkripsi)</li>
+        </ul>
+        <p className="kp-sub-label">b. Data pegawai & tenaga kesehatan</p>
+        <ul>
+          <li>Data kepegawaian, presensi, jadwal tugas, dan dokumen SK</li>
+        </ul>
+        <p className="kp-sub-label">c. Data pelayanan kesehatan</p>
+        <ul>
+          <li><strong>Rekam medis pasien</strong> (kategori data spesifik menurut UU PDP): diagnosis, resep, hasil pemeriksaan</li>
+          <li>Data pendaftaran/antrean pasien, jadwal dokter/poli, data kesehatan masyarakat</li>
+        </ul>
+        <p className="kp-sub-label">d. Data keuangan</p>
+        <ul>
+          <li>Transaksi kas, anggaran, kuitansi/nota operasional Puskesmas, serta data rekening koran yang diunggah Puskesmas untuk pembukuan</li>
+        </ul>
+        <p className="kp-sub-label">e. Berkas yang Anda unggah</p>
+        <ul>
+          <li>Dokumen dan gambar yang diunggah pengguna, misalnya SK, kuitansi, dan hasil pindai (scan) PDF. Berkas dapat diproses untuk keperluan fitur Aplikasi seperti konversi dan kompresi berkas.</li>
+        </ul>
+        <p className="kp-sub-label">f. Data lokasi</p>
+        <ul>
+          <li>Koordinat lokasi (lintang/bujur) dari perangkat Anda, yang hanya diambil setelah Anda memberi izin lokasi dan menggunakan fitur deteksi lokasi pada saat mengisi atau memperbarui profil. Lokasi tidak dilacak di latar belakang.</li>
+        </ul>
+        <p className="kp-sub-label">g. Data komunikasi</p>
+        <ul>
+          <li>Pesan Live Chat & komunikasi internal, riwayat rapat daring</li>
+          <li>Untuk pengunjung belum login: nama & isi pesan Live Chat, disertai ID sesi anonim di perangkat Anda</li>
+        </ul>
+        <p className="kp-sub-label">h. Data teknis</p>
+        <ul>
+          <li>Alamat IP, jenis perangkat/browser, cookie/local storage untuk sesi & preferensi</li>
+        </ul>
+      </>
+    ) : (
       <>
         <p className="kp-sub-label">a. Data akun & identitas dasar</p>
         <ul>
@@ -130,7 +206,26 @@ const BAGIAN = [
   },
   {
     judul: '4. Dasar & Tujuan Pemrosesan Data',
-    isi: (
+    isi: PUSKESMAS ? (
+      <>
+        <p>Kami memproses data untuk:</p>
+        <ul>
+          <li>Menyediakan dan mengoperasikan fitur inti Aplikasi</li>
+          <li>Memenuhi kewajiban administratif dan pelaporan ke instansi induk (Dinas Kesehatan)</li>
+          <li>Menjaga keamanan akun dan mencegah penyalahgunaan</li>
+          <li>Memberikan dukungan teknis melalui Live Chat/WhatsApp</li>
+        </ul>
+        <p>
+          Untuk data sensitif (data kesehatan pasien), pemrosesan dilakukan atas dasar
+          kepentingan pelaksanaan layanan kesehatan publik oleh Puskesmas, dengan persetujuan
+          yang diperoleh melalui mekanisme pendaftaran/pendataan resmi Puskesmas.
+        </p>
+        <p>
+          Kami tidak menggunakan data Anda untuk iklan dan tidak membuat profil pengguna untuk
+          keperluan pemasaran.
+        </p>
+      </>
+    ) : (
       <>
         <p>Kami memproses data untuk:</p>
         <ul>
@@ -168,7 +263,10 @@ const BAGIAN = [
       <>
         <ul>
           <li>Data dikirim melalui koneksi terenkripsi (HTTPS)</li>
-          <li>Data disimpan di Supabase, akses dibatasi lewat Row Level Security (RLS) sesuai peran & instansi</li>
+          <li>
+            Data disimpan di Supabase, akses dibatasi lewat Row Level Security (RLS) sesuai
+            peran & {PUSKESMAS ? 'puskesmas' : 'instansi'}
+          </li>
           <li>Kata sandi disimpan terenkripsi (hash), tidak pernah sebagai teks biasa</li>
           <li>Akses rekam medis & keuangan dibatasi hanya untuk peran berwenang</li>
           <li>Pencadangan (backup) data dilakukan secara berkala</li>
@@ -180,7 +278,7 @@ const BAGIAN = [
         </p>
         <p>
           Tidak ada sistem yang sepenuhnya bebas risiko. Jika terjadi insiden yang berdampak pada
-          data pribadi Anda, kami akan memberi tahu Instansi Mitra dan pihak terkait sesuai
+          data pribadi Anda, kami akan memberi tahu {MITRA} dan pihak terkait sesuai
           ketentuan yang berlaku.
         </p>
       </>
@@ -188,7 +286,14 @@ const BAGIAN = [
   },
   {
     judul: '7. Berapa Lama Data Disimpan',
-    isi: (
+    isi: PUSKESMAS ? (
+      <p>
+        Data disimpan selama akun/Puskesmas masih aktif menggunakan Layanan, atau selama
+        diwajibkan oleh peraturan terkait (misalnya masa retensi rekam medis sesuai ketentuan
+        Kementerian Kesehatan, atau arsip kepegawaian sesuai ketentuan yang berlaku). Puskesmas
+        dapat meminta penghapusan data yang sudah tidak diperlukan sesuai prosedur masing-masing.
+      </p>
+    ) : (
       <p>
         Data disimpan selama akun/instansi masih aktif menggunakan Layanan, atau selama
         diwajibkan oleh peraturan instansi terkait (misalnya masa retensi rekam medis sesuai
@@ -204,7 +309,7 @@ const BAGIAN = [
       <>
         <p>Kami <strong>tidak menjual</strong> data pribadi kepada pihak ketiga. Data hanya dibagikan:</p>
         <ul>
-          <li>Kepada Instansi Mitra terkait, sebatas kewenangannya</li>
+          <li>Kepada {MITRA} terkait, sebatas kewenangannya</li>
           <li>Kepada penyedia infrastruktur teknis sebagai pemroses data teknis</li>
           <li>Jika diwajibkan oleh hukum atau permintaan resmi dari lembaga berwenang</li>
         </ul>
@@ -229,15 +334,15 @@ const BAGIAN = [
           <li>Meminta penghapusan data pribadi Anda (dengan memperhatikan kewajiban retensi hukum)</li>
           <li>Menarik persetujuan pemrosesan data, sepanjang tidak bertentangan dengan kewajiban layanan publik</li>
         </ul>
-        <p>Permintaan dapat diajukan melalui Instansi Mitra Anda atau kontak di Bagian 10.</p>
+        <p>Permintaan dapat diajukan melalui {MITRA} Anda atau kontak di Bagian 10.</p>
         <p className="kp-sub-label" id="hapus-akun">Penghapusan akun & data</p>
         <p>
           Untuk meminta penghapusan akun beserta data terkait, kirim e-mail ke{' '}
-          <strong>{EMAIL_KONTAK}</strong> dengan subjek "Hapus Akun SIMAK" dari alamat e-mail
-          yang terdaftar di akun Anda, dan sebutkan nama serta Instansi Mitra Anda. Permintaan
+          <strong>{EMAIL_KONTAK}</strong> dengan subjek "Hapus Akun {NAMA_APP}" dari alamat e-mail
+          yang terdaftar di akun Anda, dan sebutkan nama serta {PUSKESMAS ? 'nama Puskesmas' : 'Instansi Mitra'} Anda. Permintaan
           diproses dalam [isi jumlah] hari kerja. Data yang wajib disimpan menurut ketentuan
           hukum (misalnya rekam medis) tetap disimpan sampai masa retensinya berakhir. Data yang
-          dimasukkan atas nama Instansi Mitra mungkin perlu persetujuan instansi tersebut sebelum
+          dimasukkan atas nama {MITRA} mungkin perlu persetujuan {PUSKESMAS ? 'Puskesmas' : 'instansi tersebut'} sebelum
           dihapus.
         </p>
       </>
@@ -269,12 +374,13 @@ export default function KebijakanPrivasi() {
               </Link>
               <div className="brand-logo">
                 <div className="brand-logo-icon"><ShieldCheck size={22} strokeWidth={2.5} /></div>
-                <span className="brand-logo-text">SIMAK</span>
+                <span className="brand-logo-text">{NAMA_APP}</span>
               </div>
               <h1 className="beranda-title kp-title">Kebijakan Privasi</h1>
               <p className="beranda-sub">
-                Bagaimana kami mengumpulkan, menggunakan, dan melindungi data Anda di dalam
-                aplikasi SIMAK, untuk pengguna Sekolah, KUA, maupun Puskesmas.
+                {PUSKESMAS
+                  ? `Bagaimana kami mengumpulkan, menggunakan, dan melindungi data Anda di dalam aplikasi ${NAMA_APP}, untuk pengguna Puskesmas.`
+                  : `Bagaimana kami mengumpulkan, menggunakan, dan melindungi data Anda di dalam aplikasi ${NAMA_APP}, untuk pengguna Sekolah, KUA, maupun Puskesmas.`}
               </p>
               <p className="kp-updated">Terakhir diperbarui: {TANGGAL_UPDATE}</p>
             </div>

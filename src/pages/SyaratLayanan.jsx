@@ -1,16 +1,24 @@
 import { Link } from 'react-router-dom'
 import { ArrowLeft, FileText } from 'lucide-react'
+import { APP_TIPE } from '../lib/appConfig'
 
 // Halaman publik "Syarat & Ketentuan Layanan" — pasangan dari
 // KebijakanPrivasi.jsx, gaya visual & struktur style identik supaya
-// konsisten. Rute disarankan: /syarat-layanan (tambahkan di App.jsx,
-// bisa diakses tanpa login).
+// konsisten. Rute: /syarat-layanan (bisa diakses tanpa login).
+//
+// Isi halaman mengikuti jenis aplikasi yang sedang dibuild (VITE_APP_TIPE):
+//  - 'puskesmas' → teks khusus Puskesmas (SIMPUS), tanpa istilah sekolah/KUA
+//  - selain itu  → teks umum (SIMAK) untuk Sekolah, KUA, dan Puskesmas
 //
 // CATATAN ISI: ganti semua teks bertanda [ ... ] sebelum dipublikasikan,
 // terutama Bagian 6 (Biaya Layanan) — isi sesuai kebijakan harga aktual
 // setelah masa promo berakhir.
 
 const TANGGAL_UPDATE = '[isi tanggal saat dipublikasikan]'
+
+const PUSKESMAS = APP_TIPE === 'puskesmas'
+const NAMA_APP = PUSKESMAS ? 'SIMPUS' : 'SIMAK'
+const MITRA = PUSKESMAS ? 'Puskesmas' : 'Instansi Mitra'
 
 function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 72 }) {
   return (
@@ -39,15 +47,21 @@ const BAGIAN = [
     judul: '1. Penerimaan Syarat',
     isi: (
       <p>
-        Dengan mendaftar, mengakses, atau menggunakan Aplikasi SIMAK, Anda (baik sebagai
-        Instansi Mitra maupun pengguna individu di dalamnya) menyetujui Syarat & Ketentuan ini
+        Dengan mendaftar, mengakses, atau menggunakan Aplikasi {NAMA_APP}, Anda (baik sebagai{' '}
+        {MITRA} maupun pengguna individu di dalamnya) menyetujui Syarat & Ketentuan ini
         beserta <Link to="/kebijakan-privasi">Kebijakan Privasi</Link> kami.
       </p>
     ),
   },
   {
     judul: '2. Siapa yang Boleh Menggunakan Layanan',
-    isi: (
+    isi: PUSKESMAS ? (
+      <p>
+        Layanan ini disediakan untuk Puskesmas beserta pengguna yang berwenang di dalamnya
+        (kepala puskesmas, tenaga kesehatan seperti bidan dan mantri, pegawai, dan staf
+        administrasi) sesuai modul yang relevan.
+      </p>
+    ) : (
       <p>
         Layanan ini disediakan untuk tiga jenis Instansi Mitra: Sekolah, Kantor Urusan Agama
         (KUA), dan Puskesmas, beserta pengguna yang berwenang di dalamnya (kepala instansi,
@@ -61,7 +75,10 @@ const BAGIAN = [
     isi: (
       <ul>
         <li>Setiap pengguna bertanggung jawab menjaga kerahasiaan kata sandi akunnya.</li>
-        <li>Instansi Mitra bertanggung jawab memastikan hanya pengguna yang berwenang yang diberi akses ke akun.</li>
+        <li>
+          {MITRA} bertanggung jawab memastikan hanya pengguna yang berwenang yang diberi akses
+          ke akun.
+        </li>
         <li>
           <strong>Akun Demo</strong>: kredensial akun demo bersifat publik dan hanya untuk
           keperluan uji coba fitur; data yang dimasukkan ke akun demo tidak dijamin tersimpan
@@ -79,7 +96,11 @@ const BAGIAN = [
           <li>Memasukkan data yang melanggar hukum, memfitnah, atau melanggar privasi pihak lain</li>
           <li>Menggunakan fitur Live Chat/komunikasi untuk spam, penipuan, atau pelecehan</li>
           <li>Mencoba mengakses data yang bukan wewenangnya, termasuk membobol sistem keamanan Aplikasi</li>
-          <li>Menyalahgunakan data rekam medis atau data siswa untuk kepentingan di luar tujuan layanan resmi</li>
+          <li>
+            {PUSKESMAS
+              ? 'Menyalahgunakan data rekam medis atau data pasien untuk kepentingan di luar tujuan pelayanan kesehatan resmi'
+              : 'Menyalahgunakan data rekam medis atau data siswa untuk kepentingan di luar tujuan layanan resmi'}
+          </li>
         </ul>
       </>
     ),
@@ -90,7 +111,7 @@ const BAGIAN = [
       <p>
         Kami berupaya menjaga Aplikasi tetap dapat diakses, namun tidak menjamin layanan bebas
         gangguan 100% (misalnya karena pemeliharaan server, gangguan penyedia domain/hosting,
-        atau force majeure). Kami akan berupaya memberi tahu Instansi Mitra sebelum pemeliharaan
+        atau force majeure). Kami akan berupaya memberi tahu {MITRA} sebelum pemeliharaan
         terjadwal.
       </p>
     ),
@@ -101,8 +122,8 @@ const BAGIAN = [
       <p>
         [Isi sesuai kebijakan aktual Anda — misalnya: "Layanan ini gratis selama masa promo yang
         berlaku hingga [tanggal]. Setelah masa promo berakhir, biaya berlangganan akan
-        diinformasikan melalui [saluran komunikasi] minimal [X] hari sebelumnya, dan Instansi
-        Mitra dapat memilih untuk melanjutkan atau menghentikan penggunaan Layanan."]
+        diinformasikan melalui [saluran komunikasi] minimal [X] hari sebelumnya, dan {MITRA} dapat
+        memilih untuk melanjutkan atau menghentikan penggunaan Layanan."]
       </p>
     ),
   },
@@ -110,8 +131,8 @@ const BAGIAN = [
     judul: '7. Hak Kekayaan Intelektual',
     isi: (
       <p>
-        Aplikasi, termasuk kode, desain, dan mereknya, adalah milik pengembang SIMAK. Instansi
-        Mitra hanya diberikan hak pakai (lisensi) untuk menggunakan Layanan sesuai tujuan yang
+        Aplikasi, termasuk kode, desain, dan mereknya, adalah milik pengembang {NAMA_APP}.{' '}
+        {MITRA} hanya diberikan hak pakai (lisensi) untuk menggunakan Layanan sesuai tujuan yang
         dimaksud, bukan hak kepemilikan atas Aplikasi.
       </p>
     ),
@@ -132,7 +153,8 @@ const BAGIAN = [
     isi: (
       <p>
         Kami berhak menangguhkan atau menghentikan akses akun yang terbukti melanggar Syarat
-        ini, termasuk penyalahgunaan data pasien/siswa atau upaya membahayakan keamanan sistem.
+        ini, termasuk penyalahgunaan data {PUSKESMAS ? 'pasien' : 'pasien/siswa'} atau upaya
+        membahayakan keamanan sistem.
       </p>
     ),
   },
@@ -166,12 +188,13 @@ export default function SyaratLayanan() {
               </Link>
               <div className="brand-logo">
                 <div className="brand-logo-icon"><FileText size={22} strokeWidth={2.5} /></div>
-                <span className="brand-logo-text">SIMAK</span>
+                <span className="brand-logo-text">{NAMA_APP}</span>
               </div>
               <h1 className="beranda-title kp-title">Syarat & Ketentuan Layanan</h1>
               <p className="beranda-sub">
-                Ketentuan penggunaan aplikasi SIMAK bagi Sekolah, KUA, dan Puskesmas beserta
-                penggunanya.
+                {PUSKESMAS
+                  ? `Ketentuan penggunaan aplikasi ${NAMA_APP} bagi Puskesmas beserta penggunanya.`
+                  : `Ketentuan penggunaan aplikasi ${NAMA_APP} bagi Sekolah, KUA, dan Puskesmas beserta penggunanya.`}
               </p>
               <p className="kp-updated">Terakhir diperbarui: {TANGGAL_UPDATE}</p>
             </div>
