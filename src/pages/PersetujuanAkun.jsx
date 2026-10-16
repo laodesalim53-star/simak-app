@@ -18,6 +18,7 @@ import {
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import Layout from '../components/Layout'
+import { APP_TIPE } from '../lib/appConfig'
 
 // PERBAIKAN: role yang diberikan SAAT admin menyetujui pendaftaran, berdasarkan
 // jabatan yang dipilih pendaftar sendiri saat daftar (jabatan hanya label
@@ -49,7 +50,7 @@ export default function PersetujuanAkun() {
 
   // Puskesmas memakai alur yang sama dengan tenant kantor (pegawai, tanpa
   // guru dan tanpa orang tua/anak) — hanya kalimatnya yang berbeda.
-  const isKantor = !!auth.isKantor || isPuskesmas
+  const isPuskesmas = !!auth.isPuskesmas || APP_TIPE === 'puskesmas'
 
   // Kalimat yang tampil di layar, disesuaikan dengan jenis tenant.
   const teks = isPuskesmas
