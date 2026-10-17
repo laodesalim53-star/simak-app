@@ -263,9 +263,20 @@ export async function ocrCanvas(worker, canvas, { denganPosisi = false } = {}) {
 // ---------- AI Scan (endpoint yang sama dengan ScanDokumen.jsx) ----------
 export async function scanDenganAI(canvas, bahasa) {
   const url = canvas.toDataURL('image/jpeg', 0.85)
+
+  // Token login supaya server memastikan pemanggilnya user terdaftar.
+  // Import dinamis agar pengujian Node di file ini tidak terbawa import.meta.env.
+  const mod = await import('./supabaseClient')
+  const supabase = mod.supabase || mod.default
+  const { data: sesi } = await supabase.auth.getSession()
+  const token = sesi?.session?.access_token
+
   const res = await fetch('/api/ai-scan', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: 'Bearer ' + token } : {}),
+    },
     body: JSON.stringify({
       image: url.slice(url.indexOf(',') + 1),
       mimeType: 'image/jpeg',
