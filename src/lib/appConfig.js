@@ -62,7 +62,7 @@ const CONFIGS = {
   puskesmas: {
     nama: 'SIMPUS',
     tagline: 'Sistem Informasi Puskesmas',
-    warna: '#0e7490',
+    warna: '#0E7A57',
     tipeTenant: ['puskesmas'],
     lisensi: 'sekolah',
     fitur: [
@@ -72,9 +72,9 @@ const CONFIGS = {
     ],
     tema: {
       hurufBadge: 'P',
-      aksen: '#22d3ee',
-      aksenKuat: '#67e8f9',
-      kain: { atas: '#0e7490', atas2: '#06b6d4', bawah: '#f5f5f0', bawah2: '#ffffff' },
+      aksen: '#4AD0A0',
+      aksenKuat: '#8FE8C7',
+      kain: { atas: '#0E7A57', atas2: '#16A06E', bawah: '#f5f5f0', bawah2: '#ffffff' },
       teksAtas: ['Sistem Informasi Puskesmas'],
       teksBawah: ['Mendukung pelayanan kesehatan yang tertata'],
     },
@@ -114,6 +114,14 @@ export const APP = {
 if (typeof document !== 'undefined') {
   document.documentElement.dataset.tenant = APP_TIPE
   if (APP_TIPE === 'puskesmas') {
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#0B3A45')
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#0C3B36')
   }
+}
+
+// Huruf Nunito hanya dimuat untuk tenant puskesmas.
+if (typeof document !== 'undefined' && APP_TIPE === 'puskesmas') {
+  const tautan = document.createElement('link')
+  tautan.rel = 'stylesheet'
+  tautan.href = 'https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap'
+  document.head.appendChild(tautan)
 }

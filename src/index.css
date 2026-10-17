@@ -14,17 +14,8 @@
   --brass-600: 168 122 31;
   --paper: 246 244 239;
   --sage-500: 76 122 110;
-}
-/* SIMPUS: teal tua + aksen cyan, latar putih kebiruan. */
-[data-tenant='puskesmas'] {
-  --ink-950: 6 36 43;
-  --ink-900: 11 58 69;
-  --ink-800: 14 79 95;
-  --ink-700: 23 103 123;
-  --brass-400: 47 184 204;
-  --brass-500: 26 159 180;
-  --brass-600: 14 116 144;
-  --paper: 243 248 248;
+  --font-display: 'Fraunces';
+  --font-sans: 'Plus Jakarta Sans';
 }
 
 
@@ -149,4 +140,59 @@ body {
   .print-only {
     display: none;
   }
+}
+
+/* SIMPUS-TEMA-BARU: tema khusus puskesmas. Hijau pinus + mint, huruf Nunito,
+   sudut membulat. Hanya aktif bila <html data-tenant="puskesmas">. */
+[data-tenant='puskesmas'] {
+  --ink-950: 7 37 34;
+  --ink-900: 12 59 54;
+  --ink-800: 17 82 75;
+  --ink-700: 27 107 99;
+  --brass-400: 74 208 160;
+  --brass-500: 22 160 110;
+  --brass-600: 14 122 87;
+  --paper: 244 249 247;
+  --font-display: 'Nunito', system-ui, sans-serif;
+  --font-sans: 'Nunito', system-ui, sans-serif;
+}
+[data-tenant='puskesmas'] .card {
+  border-radius: 1.25rem;
+  border: 1px solid rgb(var(--ink-900) / 0.08);
+  box-shadow: 0 1px 2px rgb(var(--ink-900) / 0.05), 0 10px 28px -14px rgb(var(--ink-900) / 0.18);
+}
+[data-tenant='puskesmas'] .btn-primary {
+  background-color: rgb(var(--brass-600));
+  color: #fff;
+  border-radius: 0.75rem;
+}
+[data-tenant='puskesmas'] .btn-primary:hover:not(:disabled) {
+  background-color: rgb(var(--ink-800));
+}
+[data-tenant='puskesmas'] .btn-secondary {
+  border-radius: 0.75rem;
+  border-color: rgb(var(--brass-600) / 0.35);
+  color: rgb(var(--ink-800));
+}
+[data-tenant='puskesmas'] .btn-danger { border-radius: 0.75rem; }
+[data-tenant='puskesmas'] .input-field {
+  border-radius: 0.75rem;
+  border-color: rgb(var(--ink-900) / 0.18);
+}
+[data-tenant='puskesmas'] .eyebrow {
+  text-transform: none;
+  letter-spacing: 0.01em;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgb(var(--ink-700) / 0.8);
+}
+[data-tenant='puskesmas'] .table-shell th {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12.5px;
+  color: rgb(var(--ink-800) / 0.85);
+  background: rgb(var(--brass-600) / 0.07);
+}
+[data-tenant='puskesmas'] .table-shell tr:hover td {
+  background: rgb(var(--brass-400) / 0.1);
 }
