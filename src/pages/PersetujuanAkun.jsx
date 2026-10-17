@@ -50,6 +50,7 @@ export default function PersetujuanAkun() {
   // Puskesmas memakai alur yang sama dengan tenant kantor (pegawai, tanpa
   // guru dan tanpa orang tua/anak) — hanya kalimatnya yang berbeda.
   const isPuskesmas = !!auth.isPuskesmas || APP_TIPE === 'puskesmas'
+     const isKantor = !!auth.isKantor || isPuskesmas
 
   // Kalimat yang tampil di layar, disesuaikan dengan jenis tenant.
   const teks = isPuskesmas
