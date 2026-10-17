@@ -48,9 +48,18 @@ export default function ScanDokumen() {
     setOcrProgress(0)
     const base64 = await fileToBase64(file)
 
+    // Token login supaya server memastikan pemanggilnya user terdaftar.
+    const modSb = await import('../lib/supabaseClient')
+    const sb = modSb.supabase || modSb.default
+    const { data: sesi } = await sb.auth.getSession()
+    const token = sesi?.session?.access_token
+
     const res = await fetch('/api/ai-scan', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: 'Bearer ' + token } : {}),
+      },
       body: JSON.stringify({
         image: base64,
         mimeType: file.type,

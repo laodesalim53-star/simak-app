@@ -10,6 +10,21 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
 
+// Pastikan pemanggil adalah user Supabase yang sedang login.
+async function userTerautentikasi(req) {
+  const auth = req.headers.authorization || ''
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : null
+  if (!token) return false
+  try {
+    const r = await fetch(process.env.VITE_SUPABASE_URL + '/auth/v1/user', {
+      headers: { Authorization: 'Bearer ' + token, apikey: process.env.VITE_SUPABASE_ANON_KEY },
+    })
+    return r.ok
+  } catch {
+    return false
+  }
+}
+
 const BAHASA_LABEL = {
   ind: 'Bahasa Indonesia',
   eng: 'Bahasa Inggris',
@@ -27,6 +42,10 @@ export const config = {
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method tidak diizinkan.' })
+  }
+
+  if (!(await userTerautentikasi(req))) {
+    return res.status(401).json({ error: 'Silakan login terlebih dahulu.' })
   }
 
   try {
