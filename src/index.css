@@ -2,6 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Palet warna per tenant (format "R G B" supaya kelas seperti bg-ink-900/20
+   tetap bisa memakai opasitas). Nilai bawaan = tema SIMAK sekolah yang lama. */
+:root {
+  --ink-950: 11 18 32;
+  --ink-900: 17 26 46;
+  --ink-800: 24 37 69;
+  --ink-700: 34 49 91;
+  --brass-400: 217 164 65;
+  --brass-500: 196 146 44;
+  --brass-600: 168 122 31;
+  --paper: 246 244 239;
+  --sage-500: 76 122 110;
+}
+/* SIMPUS: teal tua + aksen cyan, latar putih kebiruan. */
+[data-tenant='puskesmas'] {
+  --ink-950: 6 36 43;
+  --ink-900: 11 58 69;
+  --ink-800: 14 79 95;
+  --ink-700: 23 103 123;
+  --brass-400: 47 184 204;
+  --brass-500: 26 159 180;
+  --brass-600: 14 116 144;
+  --paper: 243 248 248;
+}
+
+
 html, body, #root {
   height: 100%;
 }

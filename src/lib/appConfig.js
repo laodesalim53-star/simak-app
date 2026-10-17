@@ -109,3 +109,11 @@ export const APP = {
   ...dasar,
   tema: { judul: dasar.nama, tagline: dasar.tagline, ...dasar.tema },
 }
+
+// Pilih palet warna di index.css ([data-tenant=...]) dan warna bilah status HP.
+if (typeof document !== 'undefined') {
+  document.documentElement.dataset.tenant = APP_TIPE
+  if (APP_TIPE === 'puskesmas') {
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#0B3A45')
+  }
+}

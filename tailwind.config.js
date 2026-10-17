@@ -1,23 +1,27 @@
 /** @type {import('tailwindcss').Config} */
+// Warna dibaca dari variabel CSS (lihat src/index.css) supaya tiap tenant
+// bisa punya palet sendiri tanpa mengubah kelas di halaman mana pun.
+const v = (nama) => `rgb(var(--${nama}) / <alpha-value>)`
+
 export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
     extend: {
       colors: {
         ink: {
-          950: '#0B1220',
-          900: '#111A2E',
-          800: '#182545',
-          700: '#22315B',
+          950: v('ink-950'),
+          900: v('ink-900'),
+          800: v('ink-800'),
+          700: v('ink-700'),
         },
         brass: {
-          400: '#D9A441',
-          500: '#C4922C',
-          600: '#A87A1F',
+          400: v('brass-400'),
+          500: v('brass-500'),
+          600: v('brass-600'),
         },
-        paper: '#F6F4EF',
+        paper: v('paper'),
         sage: {
-          500: '#4C7A6E',
+          500: v('sage-500'),
         },
       },
       fontFamily: {
