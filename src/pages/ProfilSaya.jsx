@@ -544,6 +544,7 @@ function ProfilAdminCard({ profil, userId, adminData }) {
 
   // Tenant Polres? (dibaca dari tabel sekolah.jenis_organisasi lewat komponen induk)
   const isPolres = adminData?.jenis_organisasi === 'polres'
+  const isPuskesmas = adminData?.jenis_organisasi === 'puskesmas'
 
   // Label jabatan: akun dengan role admin_utama/superadmin selalu memakai role
   // tersebut (supaya konsisten dengan label di sidebar), selain itu pakai jabatan.
@@ -558,13 +559,13 @@ function ProfilAdminCard({ profil, userId, adminData }) {
     'Admin'
 
   // Istilah yang berbeda antara tenant sekolah/kantor dan tenant Polres.
-  const labelNomorPegawai = isPolres ? 'NRP' : 'NIPA'
-  const placeholderNomorPegawai = isPolres ? 'mis. 85010123' : 'mis. 765368787875555'
+   const labelNomorPegawai = isPolres ? 'NRP' : isPuskesmas ? 'Nomor STR (jika ada)' : 'NIPA'
+  const placeholderNomorPegawai = isPolres ? 'mis. 85010123' : isPuskesmas ? 'mis. 3111010120250001' : 'mis. 765368787875555'
   const labelPangkat = isPolres ? 'Pangkat' : 'Pangkat / Golongan'
   const placeholderPangkat = isPolres ? 'mis. AKP / Iptu' : 'mis. Penata Muda / III-a'
-  const placeholderPendidikan = isPolres ? 'mis. S1 Hukum' : 'mis. S1 Pendidikan Guru SD'
-  const labelSatuan = isPolres ? 'Satuan' : 'Sekolah'
-  const teksSemuaSatuan = isPolres ? 'Akses Semua Satuan' : 'Akses Semua Sekolah'
+  const placeholderPendidikan = isPolres ? 'mis. S1 Hukum' : isPuskesmas ? 'mis. D3 Kebidanan' : 'mis. S1 Pendidikan Guru SD'
+  const labelSatuan = isPolres ? 'Satuan' : isPuskesmas ? 'Puskesmas' : 'Sekolah'
+  const teksSemuaSatuan = isPolres ? 'Akses Semua Satuan' : isPuskesmas ? 'Akses Semua Puskesmas' : 'Akses Semua Sekolah'
 
   // Superadmin (akses semua sekolah) ditandai dengan sekolah_id kosong.
   // Admin/kepala sekolah biasa selalu terikat ke satu sekolah spesifik.
@@ -666,7 +667,7 @@ function ProfilAdminCard({ profil, userId, adminData }) {
               </p>
               <p className="text-sm text-blue-200/70">{labelJabatan}</p>
               <p className="text-xs text-brass-300/90 mt-0.5 truncate">
-                {isSuperadmin ? teksSemuaSatuan : namaSekolah || (isPolres ? 'Memuat nama satuan...' : 'Memuat nama sekolah...')}
+                                {isSuperadmin ? teksSemuaSatuan : namaSekolah || (isPolres ? 'Memuat nama satuan...' : isPuskesmas ? 'Memuat nama puskesmas...' : 'Memuat nama sekolah...')}
               </p>
             </div>
           </div>
