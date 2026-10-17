@@ -66,9 +66,18 @@ function AiRppModal({ isOpen, onClose, onApplyToForm, defaultNamaGuru, defaultNa
     setErrorMsg('')
 
     try {
+      // Token login supaya server memastikan pemanggilnya user terdaftar.
+      const _modSb = await import('../lib/supabaseClient')
+      const _sb = _modSb.supabase || _modSb.default
+      const { data: _sesiAi } = await _sb.auth.getSession()
+      const _tokenAi = _sesiAi?.session?.access_token
+
       const res = await fetch('/api/generate-rpp', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(_tokenAi ? { Authorization: 'Bearer ' + _tokenAi } : {}),
+        },
         body: JSON.stringify({ mataPelajaran, kelas, materi, sertakanLampiran }),
       })
       const data = await res.json()

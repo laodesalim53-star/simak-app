@@ -67,7 +67,28 @@ async function scanKKWithFallback(image, mimeType) {
   throw lastErr
 }
 
+// PPDB publik: tanpa login, jadi dibatasi per IP (best-effort, per instance serverless).
+const _hitsKK = new Map()
+function terlaluSering(req) {
+  const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'x'
+  const now = Date.now()
+  const jendela = 10 * 60 * 1000
+  const maks = 15
+  const arr = (_hitsKK.get(ip) || []).filter((t) => now - t < jendela)
+  arr.push(now)
+  _hitsKK.set(ip, arr)
+  if (_hitsKK.size > 5000) _hitsKK.clear()
+  return arr.length > maks
+}
+
 export default async function handler(req, res) {
+  if (terlaluSering(req)) {
+    return res.status(429).json({ error: 'Terlalu banyak percobaan. Coba lagi beberapa menit lagi.' })
+  }
+  const _img = req.body && req.body.image
+  if (typeof _img === 'string' && _img.length > 6000000) {
+    return res.status(413).json({ error: 'Foto terlalu besar. Kecilkan ukuran foto lalu coba lagi.' })
+  }
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method tidak diizinkan.' })
   }

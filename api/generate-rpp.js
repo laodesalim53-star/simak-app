@@ -1,4 +1,22 @@
+// Pastikan pemanggil adalah user Supabase yang sedang login.
+async function userTerautentikasi(req) {
+  const auth = req.headers.authorization || ''
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : null
+  if (!token) return false
+  try {
+    const r = await fetch(process.env.VITE_SUPABASE_URL + '/auth/v1/user', {
+      headers: { Authorization: 'Bearer ' + token, apikey: process.env.VITE_SUPABASE_ANON_KEY },
+    })
+    return r.ok
+  } catch {
+    return false
+  }
+}
+
 export default async function handler(req, res) {
+  if (!(await userTerautentikasi(req))) {
+    return res.status(401).json({ error: 'Silakan login terlebih dahulu.' })
+  }
   // Atur header CORS dan JSON
   res.setHeader('Content-Type', 'application/json')
   if (req.method !== 'POST') {
