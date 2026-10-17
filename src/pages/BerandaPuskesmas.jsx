@@ -3,7 +3,6 @@ import { APP } from '../lib/appConfig'
 import InstallButton from '../components/InstallButton'
 
 // Beranda publik SIMPUS. Hanya memuat fitur yang rutenya sudah ada di
-   const BerandaPuskesmas = lazy(() => import('../pages/BerandaPuskesmas'))
 
 const FITUR = [
   { judul: 'STR & SIP pegawai', isi: 'Simpan masa berlaku izin tiap tenaga kesehatan dan pantau yang segera habis.', ikon: 'M9 12l2 2 4-4M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6l8-3z' },
@@ -19,7 +18,6 @@ const LANGKAH = [
   { judul: 'Admin mengisi data pegawai', isi: 'STR/SIP, jadwal piket, dan profil puskesmas diatur oleh admin.' },
   { judul: 'Pegawai memakai dari ponsel', isi: 'Lihat piket, ajukan cuti, dan presensi tanpa menunggu rekap manual.' },
 ]
-   <Route path="/" element={<BerandaPuskesmas />} />
 // Contoh tampilan pantauan STR/SIP (data contoh, bukan data asli).
 const CONTOH = [
   { nama: 'dr. Andi Pratama', sisa: '14 hari', warna: '#b45309', latar: '#fef3c7' },
