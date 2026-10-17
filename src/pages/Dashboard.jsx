@@ -6,7 +6,7 @@ import Layout from '../components/Layout'
 import StoryBar from '../components/StoryBar'
 import StoryUploader from '../components/StoryUploader'
 import PintasanKUA from '../components/PintasanKUA'
-import { Users, GraduationCap, DoorOpen, Megaphone, LayoutDashboard, ClipboardCheck, FileClock, Briefcase, UserCheck, AlertTriangle, Link2, ArrowRight, Gavel, FileText } from 'lucide-react'
+import { Users, GraduationCap, DoorOpen, Megaphone, LayoutDashboard, ClipboardCheck, FileClock, Briefcase, UserCheck, AlertTriangle, Link2, ArrowRight, Gavel, FileText, HeartPulse, ShieldCheck, CalendarRange, CalendarCheck } from 'lucide-react'
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -776,7 +776,74 @@ function DashboardKantor({ sekolahId }) {
 /* ================================================================
    ==================  DASBOR PUSKESMAS  ==============================
    ================================================================ */
+// SIMPUS-DASBOR-BARU: tampilan dasbor khusus puskesmas (terang, tanpa batik).
+const STAT_WARNA = {
+  mint: 'bg-emerald-50 text-emerald-700',
+  sky: 'bg-sky-50 text-sky-700',
+  amber: 'bg-amber-50 text-amber-700',
+  rose: 'bg-rose-50 text-rose-700',
+}
+
+function salamWaktu() {
+  const jam = new Date().getHours()
+  if (jam < 11) return 'Selamat pagi'
+  if (jam < 15) return 'Selamat siang'
+  if (jam < 18) return 'Selamat sore'
+  return 'Selamat malam'
+}
+
+function KartuStatPuskesmas({ label, value, sublabel, icon: Icon, warna, loading }) {
+  return (
+    <div className="bg-white rounded-2xl border border-emerald-900/10 p-5 shadow-sm">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-slate-600">{label}</p>
+        <span className={`w-10 h-10 rounded-full grid place-items-center ${STAT_WARNA[warna]}`}>
+          <Icon size={19} />
+        </span>
+      </div>
+      <p className="mt-3 text-3xl font-extrabold text-slate-900">{loading ? '…' : value}</p>
+      {sublabel && <p className="mt-1 text-xs text-slate-500">{sublabel}</p>}
+    </div>
+  )
+}
+
+function PintasanPuskesmas({ daftar }) {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      {daftar.map(({ to, label, icon: Icon }) => (
+        <Link
+          key={to}
+          to={to}
+          className="flex flex-col items-center gap-2 bg-white rounded-2xl border border-emerald-900/10 p-4 text-center text-sm font-semibold text-slate-700 hover:border-emerald-600 hover:text-emerald-800 transition-colors"
+        >
+          <span className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-700 grid place-items-center">
+            <Icon size={19} />
+          </span>
+          {label}
+        </Link>
+      ))}
+    </div>
+  )
+}
+
+const PINTASAN_ADMIN = [
+  { to: '/data-pegawai-puskesmas', label: 'Data pegawai', icon: Briefcase },
+  { to: '/presensi-puskesmas', label: 'Presensi', icon: ClipboardCheck },
+  { to: '/str-sip-puskesmas', label: 'STR & SIP', icon: ShieldCheck },
+  { to: '/jadwal-piket-puskesmas', label: 'Jadwal piket', icon: CalendarRange },
+  { to: '/cuti-izin-puskesmas', label: 'Cuti & izin', icon: CalendarCheck },
+  { to: '/keuangan-bok', label: 'Keuangan BOK', icon: FileText },
+]
+
+const PINTASAN_PEGAWAI = [
+  { to: '/jadwal-piket-saya', label: 'Piket saya', icon: CalendarRange },
+  { to: '/cuti-izin-saya', label: 'Cuti & izin saya', icon: CalendarCheck },
+  { to: '/bidan-puskesmas', label: 'Bidan / Mantri', icon: HeartPulse },
+  { to: '/profil-saya', label: 'Profil saya', icon: UserCheck },
+]
+
 function DashboardPuskesmas({ sekolahId }) {
+  const { profil, isAdmin } = useAuth()
   const [stats, setStats] = useState({ pegawai: 0, pengumuman: 0 })
   const [pengumuman, setPengumuman] = useState([])
   const [attendanceTrend, setAttendanceTrend] = useState([])
@@ -856,55 +923,44 @@ function DashboardPuskesmas({ sekolahId }) {
   }, [sekolahId])
 
   const cards = [
-    { label: 'Total Pegawai', value: stats.pegawai, icon: Briefcase, theme: 'navy' },
-    { label: 'Pengumuman', value: stats.pengumuman, icon: Megaphone, theme: 'gold' },
+    { label: 'Total pegawai', value: stats.pegawai, sublabel: 'pegawai aktif', icon: Briefcase, warna: 'mint' },
     {
-      label: 'Presensi Hari Ini',
+      label: 'Presensi hari ini',
       value: `${presensiHariIni.terisi}/${stats.pegawai}`,
       sublabel: `${presensiHariIni.hadir} hadir · ${presensiHariIni.izin} izin · ${presensiHariIni.alpa} alpa`,
       icon: ClipboardCheck,
-      theme: 'slate',
+      warna: 'sky',
     },
     {
-      label: 'Akun Menunggu',
+      label: 'Akun menunggu',
       value: akunMenunggu,
-      sublabel: akunMenunggu > 0 ? 'menunggu persetujuan Anda' : 'tidak ada yang menunggu',
+      sublabel: akunMenunggu > 0 ? 'menunggu persetujuan' : 'tidak ada yang menunggu',
       icon: UserCheck,
-      theme: akunMenunggu > 0 ? 'rose' : 'emerald',
+      warna: akunMenunggu > 0 ? 'amber' : 'mint',
     },
+    { label: 'Pengumuman', value: stats.pengumuman, sublabel: 'seluruhnya', icon: Megaphone, warna: 'rose' },
   ]
+
+  const namaPuskesmas = profil?.nama_sekolah || 'Puskesmas Anda'
 
   return (
     <Layout title="Dasbor" subtitle="Ringkasan data puskesmas Anda hari ini">
-      <style>{`
-        @keyframes dashFadeInUp {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .dash-fade-in {
-          animation: dashFadeInUp 0.5s ease-out forwards;
-        }
-      `}</style>
-
-      <div className="relative">
-        <div className="dash-fade-in opacity-0 relative overflow-hidden rounded-xl p-6 mb-6 flex items-center gap-4 bg-gradient-to-br from-blue-900 to-blue-950">
-          <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/5 pointer-events-none" />
-          <div className="absolute -bottom-14 -left-6 w-32 h-32 rounded-full bg-white/5 pointer-events-none" />
-          <BatikOverlay patternId="batikBannerPuskesmas" strokeColor="#d4af37" />
-          <div className="relative w-12 h-12 rounded-full bg-white/10 ring-2 ring-white/20 text-white flex items-center justify-center shrink-0">
-            <LayoutDashboard size={22} />
-          </div>
-          <div className="relative flex-1 min-w-0">
-            <p className="font-display font-semibold text-lg text-white">Selamat datang kembali</p>
-            <p className="text-sm text-blue-200/70">
-              {!loading && akunMenunggu > 0
-                ? `${akunMenunggu} akun menunggu persetujuan Anda.`
-                : 'Semua ringkasan data puskesmas ada di bawah ini.'}
+      <div className="space-y-6">
+        <div
+          className="bg-white rounded-2xl border border-emerald-900/10 p-5 sm:p-6 flex items-center gap-4 shadow-sm"
+          style={{ borderLeft: '5px solid #16A06E' }}
+        >
+          <span className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 grid place-items-center shrink-0">
+            <HeartPulse size={26} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-lg sm:text-xl font-extrabold text-slate-900">{salamWaktu()}</p>
+            <p className="text-sm text-slate-600 truncate">
+              {namaPuskesmas}
+              {!loading && akunMenunggu > 0 ? ` · ${akunMenunggu} akun menunggu persetujuan Anda` : ''}
             </p>
           </div>
-          <div className="relative hidden sm:block text-right shrink-0">
-            <p className="text-xs text-blue-200/60 capitalize">{hariIni}</p>
-          </div>
+          <p className="hidden sm:block text-xs text-slate-500 text-right shrink-0 capitalize">{hariIni}</p>
         </div>
 
         {loadError && <DataErrorBanner />}
@@ -912,30 +968,35 @@ function DashboardPuskesmas({ sekolahId }) {
         <StoryBar key={storyRefreshKey} />
         <StoryUploader onPosted={() => setStoryRefreshKey((k) => k + 1)} />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {cards.map(({ label, value, icon, theme, sublabel }, i) => (
-            <StatCard
-              key={label}
-              label={label}
-              value={value}
-              icon={icon}
-              theme={theme}
-              sublabel={sublabel}
-              loading={loading}
-              delay={i * 90}
-              patternId={`batikCardPuskesmas-${theme}-${i}`}
-            />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {cards.map((c) => (
+            <KartuStatPuskesmas key={c.label} {...c} loading={loading} />
           ))}
         </div>
 
-        <div className="dash-fade-in opacity-0 card p-6 mb-8" style={{ animationDelay: '450ms' }}>
-          <h3 className="font-display text-lg font-semibold mb-4">Pengumuman Terbaru</h3>
+        <div>
+          <h2 className="text-base font-bold text-slate-800 mb-3">Pintasan</h2>
+          <PintasanPuskesmas daftar={isAdmin ? PINTASAN_ADMIN : PINTASAN_PEGAWAI} />
+        </div>
+
+        <div className="bg-white rounded-2xl border border-emerald-900/10 p-6 shadow-sm">
+          <h3 className="text-base font-bold text-slate-800 mb-4">Pengumuman terbaru</h3>
           {loading ? (
-            <ChartSkeleton height={180} />
+            <ChartSkeleton height={160} />
           ) : pengumuman.length === 0 ? (
-            <p className="text-sm text-ink-700/50">Belum ada pengumuman.</p>
+            <p className="text-sm text-slate-500">
+              Belum ada pengumuman.
+              {isAdmin && (
+                <>
+                  {' '}
+                  <Link to="/pengumuman" className="font-semibold text-emerald-700 underline underline-offset-4">
+                    Buat pengumuman pertama
+                  </Link>
+                </>
+              )}
+            </p>
           ) : (
-            <ul className="divide-y divide-ink-900/[0.06]">
+            <ul className="divide-y divide-slate-100">
               {pengumuman.map((p) => (
                 <li key={p.id} className="py-3 flex items-center gap-3">
                   <span
@@ -945,23 +1006,20 @@ function DashboardPuskesmas({ sekolahId }) {
                   >
                     {p.kategori || 'Informasi'}
                   </span>
-                  <span className="text-sm text-ink-900 truncate flex-1">{p.judul}</span>
-                  <span className="text-xs text-ink-700/40 shrink-0">
-                    {formatRelativeDate(p.dibuat_pada)}
-                  </span>
+                  <span className="text-sm text-slate-800 truncate flex-1">{p.judul}</span>
+                  <span className="text-xs text-slate-400 shrink-0">{formatRelativeDate(p.dibuat_pada)}</span>
                 </li>
               ))}
             </ul>
           )}
         </div>
 
-        <h2 className="font-display text-xl font-semibold text-ink-950 mt-8 mb-4">Analitik</h2>
-        <div className="dash-fade-in opacity-0 card p-6" style={{ animationDelay: '520ms' }}>
-          <h3 className="font-display text-lg font-semibold mb-4">Tren Kehadiran Pegawai (14 Hari Terakhir)</h3>
+        <div className="bg-white rounded-2xl border border-emerald-900/10 p-6 shadow-sm">
+          <h3 className="text-base font-bold text-slate-800 mb-4">Kehadiran pegawai, 14 hari terakhir</h3>
           {loading ? (
             <ChartSkeleton height={240} />
           ) : attendanceTrend.length === 0 ? (
-            <p className="text-sm text-ink-700/50">Belum ada data presensi.</p>
+            <p className="text-sm text-slate-500">Belum ada data presensi. Grafik muncul setelah presensi pertama dicatat.</p>
           ) : (
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={attendanceTrend}>
@@ -969,7 +1027,7 @@ function DashboardPuskesmas({ sekolahId }) {
                 <XAxis dataKey="tanggal" tick={{ fontSize: 11 }} />
                 <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} unit="%" width={40} />
                 <Tooltip formatter={(v) => [`${v}%`, 'Kehadiran']} />
-                <Line type="monotone" dataKey="persen" stroke="#4C7A6E" strokeWidth={2} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="persen" stroke="#0E7A57" strokeWidth={2.5} dot={{ r: 3 }} />
               </LineChart>
             </ResponsiveContainer>
           )}
@@ -978,6 +1036,7 @@ function DashboardPuskesmas({ sekolahId }) {
     </Layout>
   )
 }
+
 /* ================================================================
    ==================  DASBOR POLRES  =================================
    ================================================================ */

@@ -48,20 +48,33 @@
   --sidebar-accent: #fbbf24;
 }
 
-/* Tema Puskesmas (biru muda) — jenis_organisasi === 'puskesmas' */
+/* Tema Puskesmas (hijau pinus) — jenis_organisasi === 'puskesmas'. SIMPUS-TEMA-BARU */
 :root[data-tema="puskesmas"] {
-  --color-primary: #4a90d9;
-  --color-primary-dark: #2f6fb0;
-  --color-primary-light: #6fb0ea;
-  --color-primary-soft: #e3eefb;
+  --color-primary: #0e7a57;
+  --color-primary-dark: #0b5f44;
+  --color-primary-light: #16a06e;
+  --color-primary-soft: #dcf3ea;
   --color-on-primary: #ffffff;
 
-  --sidebar-header-gradient: linear-gradient(135deg, #0c4a6e, #075985, #0e7490);
-  --sidebar-body-gradient: linear-gradient(180deg, #0c4a6e, #075985, #083344);
-  --sidebar-solid: #0c4a6e;
-  --sidebar-border: rgba(7, 89, 133, 0.5);
-  --sidebar-active-gradient: linear-gradient(90deg, #0ea5e9, #22d3ee);
-  --sidebar-accent: #fbbf24;
+  --sidebar-header-gradient: linear-gradient(135deg, #0c3b36, #0f4a43);
+  --sidebar-body-gradient: linear-gradient(180deg, #0c3b36, #0a302c);
+  --sidebar-solid: #0c3b36;
+  --sidebar-border: rgba(74, 208, 160, 0.18);
+  --sidebar-active-gradient: linear-gradient(90deg, #0e7a57, #139066);
+  --sidebar-accent: #4ad0a0;
+}
+/* Tanpa motif batik di sidebar puskesmas */
+:root[data-tema="puskesmas"] aside svg.absolute.inset-0.pointer-events-none {
+  display: none;
+}
+/* Label grup menu tidak huruf kapital semua */
+:root[data-tema="puskesmas"] aside nav button.uppercase {
+  text-transform: none;
+  letter-spacing: 0.01em;
+}
+/* Latar halaman putih kehijauan */
+:root[data-tema="puskesmas"] .bg-slate-50 {
+  background-color: #f3f8f6;
 }
 :root[data-tema="polres"] {
   --sidebar-solid: #0b1f3a;
