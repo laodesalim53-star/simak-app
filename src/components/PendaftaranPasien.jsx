@@ -231,7 +231,7 @@ export default function PendaftaranPasien({ profil, onTersimpan }) {
 
       const blobUnggah = versiAktif(foto).blob
       const ext = blobUnggah.type === 'image/png' ? 'png' : 'jpg'
-      const namaFile = `${profil.sekolah_id}/${form.nik}-${Date.now()}.${ext}`
+      const namaFile = `${profil.sekolah_id}/${crypto.randomUUID()}.${ext}`
 
       const { error: errUpload } = await supabase.storage
         .from('ktp-pasien')
