@@ -4,6 +4,10 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { Loader2, UserPlus, CheckCircle2, ListChecks, Info, Eye, EyeOff, ChevronDown } from 'lucide-react'
 
+// Build dengan VITE_APP_TIPE=kantor -> formulir untuk akun KUA.
+// Tipe lain (sekolah, dll) tetap memakai formulir sekolah.
+const IS_KANTOR = import.meta.env.VITE_APP_TIPE === 'kantor'
+
 // Jabatan yang tersedia untuk akun sekolah (SD & SMP).
 const JABATAN_SEKOLAH = [
   { value: 'guru', label: 'Guru' },
@@ -12,16 +16,29 @@ const JABATAN_SEKOLAH = [
   { value: 'orang_tua', label: 'Orang Tua / Wali Murid' },
 ]
 
+// Jabatan untuk akun KUA.
+// PENTING: sesuaikan value dengan role yang dipakai di AuthContext / RLS tenant kantor.
+const JABATAN_KUA = [
+  { value: 'admin', label: 'Admin / Operator' },
+  { value: 'kepala_kua', label: 'Kepala KUA' },
+  { value: 'penghulu', label: 'Penghulu' },
+  { value: 'penyuluh', label: 'Penyuluh Agama' },
+  { value: 'staf', label: 'Staf / Pelaksana' },
+]
+
+const JABATAN = IS_KANTOR ? JABATAN_KUA : JABATAN_SEKOLAH
+
 // Jenjang sekolah yang dilayani. Nilainya sama dengan ?jenjang= di beranda.
 const OPSI_JENJANG = [
   { value: 'sd', label: 'SD' },
   { value: 'smp', label: 'SMP' },
 ]
 
-// Nilai internal jenis_organisasi di database. Hanya 'sekolah' yang dipakai
-// di halaman ini; nilai lain (kantor, puskesmas, polres) tetap ada di
-// database/AuthContext tapi tidak lagi ditawarkan di formulir pendaftaran.
-const JENIS_ORGANISASI = 'sekolah'
+// Nilai internal jenis_organisasi di database.
+const JENIS_ORGANISASI = IS_KANTOR ? 'kantor' : 'sekolah'
+
+// Nama organisasi yang tampil di formulir.
+const NAMA_ORG = IS_KANTOR ? 'KUA' : 'Sekolah'
 
 const inputClass =
   'w-full bg-slate-900/60 border border-blue-500/30 rounded-lg px-3 py-2.5 min-h-[44px] text-base text-white placeholder-slate-400 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30 disabled:opacity-60'
@@ -167,7 +184,7 @@ export default function Register() {
 
   // Link dari beranda membawa ?jenjang=sd atau ?jenjang=smp, jadi pengunjung
   // yang sudah memilih jenjang di beranda tidak perlu memilih lagi.
-  // Tanpa parameter (atau "semua"), jenjang awalnya SD.
+  // Tanpa parameter (atau "semua"), jenjang awalnya SD. Tidak dipakai untuk KUA.
   const [searchParams] = useSearchParams()
   const jenjangParam = searchParams.get('jenjang')
   const jenjangAwal = jenjangParam === 'smp' ? 'smp' : 'sd'
@@ -182,7 +199,7 @@ export default function Register() {
     email: '',
     password: '',
     konfirmasi: '',
-    jabatan: JABATAN_SEKOLAH[0].value,
+    jabatan: JABATAN[0].value,
     sekolahId: '',
     namaSekolahBaru: '',
     siswaId: '',
@@ -198,10 +215,11 @@ export default function Register() {
   const [daftarSiswa, setDaftarSiswa] = useState([])
   const [loadingSiswa, setLoadingSiswa] = useState(false)
 
-  const isOrangTua = form.jabatan === 'orang_tua'
+  // Jabatan orang_tua tidak ada di daftar KUA, jadi otomatis false di sana.
+  const isOrangTua = !IS_KANTOR && form.jabatan === 'orang_tua'
   const labelJenjang = jenjang === 'smp' ? 'SMP' : 'SD'
 
-  // Muat daftar sekolah (tabel "sekolah", jenis_organisasi = 'sekolah').
+  // Muat daftar organisasi (tabel "sekolah", disaring per jenis_organisasi).
   useEffect(() => {
     let aktif = true
     setLoadingSekolah(true)
@@ -263,10 +281,10 @@ export default function Register() {
           <h1 className="text-lg font-semibold text-white tracking-wide">Pendaftaran Berhasil</h1>
           <p className="text-sm text-blue-100/80 mt-2 leading-relaxed">
             {mode === 'baru'
-              ? 'Sekolah dan akun Anda sudah dibuat, sedang menunggu persetujuan Superadmin. Anda akan bisa login setelah disetujui.'
+              ? `${NAMA_ORG} dan akun Anda sudah dibuat, sedang menunggu persetujuan Superadmin. Anda akan bisa login setelah disetujui.`
               : isOrangTua
                 ? 'Akun Anda sudah dibuat dan permintaan menghubungkan Anda dengan anak sedang menunggu persetujuan admin sekolah. Anda akan bisa login setelah disetujui.'
-                : 'Akun Anda sudah dibuat dan sedang menunggu persetujuan admin sekolah. Anda akan bisa login setelah disetujui.'}
+                : `Akun Anda sudah dibuat dan sedang menunggu persetujuan admin ${NAMA_ORG}. Anda akan bisa login setelah disetujui.`}
           </p>
           <Link to="/login" className="inline-block mt-4 text-sm font-medium text-blue-300 hover:text-white underline-offset-4 hover:underline">
             Kembali ke halaman Masuk
@@ -311,11 +329,11 @@ export default function Register() {
       return
     }
     if (mode === 'gabung' && !form.sekolahId) {
-      setError('Pilih sekolah terlebih dahulu.')
+      setError(`Pilih ${NAMA_ORG} terlebih dahulu.`)
       return
     }
     if (mode === 'baru' && !form.namaSekolahBaru.trim()) {
-      setError('Isi nama sekolah yang akan didaftarkan.')
+      setError(`Isi nama ${NAMA_ORG} yang akan didaftarkan.`)
       return
     }
     if (isOrangTua && !form.siswaId) {
@@ -332,7 +350,7 @@ export default function Register() {
     const { error: daftarError } = await daftar({
       mode,
       jenisOrganisasi: JENIS_ORGANISASI,
-      jenjang,
+      jenjang: IS_KANTOR ? undefined : jenjang,
       namaLengkap: nama,
       jabatan: form.jabatan,
       email,
@@ -353,22 +371,29 @@ export default function Register() {
     setSukses(true)
   }
 
-  // Teks pilihan awal pada daftar sekolah, sesuai keadaan pemuatan.
+  // Teks pilihan awal pada daftar organisasi, sesuai keadaan pemuatan.
   const teksPilihSekolah = loadingSekolah
     ? 'Memuat daftar...'
     : galatSekolah
       ? 'Gagal memuat daftar'
       : daftarSekolah.length === 0
-        ? 'Belum ada sekolah terdaftar'
-        : '-- Pilih Sekolah --'
+        ? `Belum ada ${NAMA_ORG} terdaftar`
+        : `-- Pilih ${NAMA_ORG} --`
 
-  const langkah = [
-    'Pilih jenjang sekolah: SD atau SMP.',
-    'Isi nama lengkap, lalu pilih jabatan: Guru, Admin, Kepala Sekolah, atau Orang Tua/Wali Murid.',
-    'Guru/Admin/Kepala Sekolah: pilih sekolah yang sudah terdaftar atau daftarkan sekolah baru. Orang Tua/Wali: pilih sekolah anak Anda, lalu pilih nama anak.',
-    'Isi email aktif (dipakai untuk login) dan buat kata sandi minimal 6 karakter.',
-    'Tunggu persetujuan admin, lalu masuk.',
-  ]
+  const langkah = IS_KANTOR
+    ? [
+        'Isi nama lengkap, lalu pilih jabatan: Admin/Operator, Kepala KUA, Penghulu, Penyuluh Agama, atau Staf.',
+        'Pilih KUA yang sudah terdaftar atau daftarkan KUA baru.',
+        'Isi email aktif (dipakai untuk login) dan buat kata sandi minimal 6 karakter.',
+        'Tunggu persetujuan admin KUA, lalu masuk.',
+      ]
+    : [
+        'Pilih jenjang sekolah: SD atau SMP.',
+        'Isi nama lengkap, lalu pilih jabatan: Guru, Admin, Kepala Sekolah, atau Orang Tua/Wali Murid.',
+        'Guru/Admin/Kepala Sekolah: pilih sekolah yang sudah terdaftar atau daftarkan sekolah baru. Orang Tua/Wali: pilih sekolah anak Anda, lalu pilih nama anak.',
+        'Isi email aktif (dipakai untuk login) dan buat kata sandi minimal 6 karakter.',
+        'Tunggu persetujuan admin, lalu masuk.',
+      ]
 
   return (
     <div className="relative min-h-screen flex items-center justify-center px-4 py-10">
@@ -398,19 +423,23 @@ export default function Register() {
               <UserPlus className="text-blue-300" size={24} />
             </div>
             <h1 className="text-xl font-bold text-white tracking-widest uppercase">Daftar Akun</h1>
-            <p className="text-sm text-blue-100/80 mt-1">Akun akan aktif setelah disetujui admin.</p>
+            <p className="text-sm text-blue-100/80 mt-1">
+              {IS_KANTOR ? 'Akun KUA akan aktif setelah disetujui admin.' : 'Akun akan aktif setelah disetujui admin.'}
+            </p>
           </div>
 
-          {/* Jenjang sekolah: SD atau SMP. */}
-          <div>
-            <span className={labelClass}>Jenjang Sekolah</span>
-            <Segmen
-              label="Jenjang sekolah"
-              opsi={OPSI_JENJANG}
-              nilai={jenjang}
-              onPilih={setJenjang}
-            />
-          </div>
+          {/* Jenjang sekolah: SD atau SMP. Tidak relevan untuk KUA. */}
+          {!IS_KANTOR && (
+            <div>
+              <span className={labelClass}>Jenjang Sekolah</span>
+              <Segmen
+                label="Jenjang sekolah"
+                opsi={OPSI_JENJANG}
+                nilai={jenjang}
+                onPilih={setJenjang}
+              />
+            </div>
+          )}
 
           <SelectField
             id="reg-jabatan"
@@ -421,11 +450,11 @@ export default function Register() {
               isOrangTua
                 ? 'Akun Orang Tua/Wali hanya dapat bergabung ke sekolah yang sudah terdaftar, lalu dihubungkan ke data anak Anda.'
                 : mode === 'baru'
-                  ? 'Karena mendaftarkan sekolah baru, akun Anda otomatis jadi Admin Utama sekolah ini.'
+                  ? `Karena mendaftarkan ${NAMA_ORG} baru, akun Anda otomatis jadi Admin Utama ${NAMA_ORG} ini.`
                   : undefined
             }
           >
-            {JABATAN_SEKOLAH.map((j) => (
+            {JABATAN.map((j) => (
               <option key={j.value} value={j.value} className="bg-slate-900">{j.label}</option>
             ))}
           </SelectField>
@@ -439,15 +468,15 @@ export default function Register() {
             onChange={(e) => ubah('nama', e.target.value)}
           />
 
-          {/* Mode: Gabung sekolah yang sudah ada / Daftar sekolah baru.
+          {/* Mode: Gabung yang sudah ada / Daftar baru.
               Disembunyikan untuk Orang Tua/Wali — mereka wajib gabung ke
               sekolah yang sudah ada. */}
           {!isOrangTua && (
             <Segmen
-              label="Gabung atau daftarkan sekolah"
+              label={`Gabung atau daftarkan ${NAMA_ORG}`}
               opsi={[
-                { value: 'gabung', label: 'Gabung Sekolah' },
-                { value: 'baru', label: 'Daftar Sekolah Baru' },
+                { value: 'gabung', label: `Gabung ${NAMA_ORG}` },
+                { value: 'baru', label: `Daftar ${NAMA_ORG} Baru` },
               ]}
               nilai={mode}
               onPilih={setMode}
@@ -457,14 +486,14 @@ export default function Register() {
           {mode === 'gabung' || isOrangTua ? (
             <SelectField
               id="reg-sekolah"
-              label="Sekolah"
+              label={NAMA_ORG}
               required
               value={form.sekolahId}
               onChange={(e) => ubah('sekolahId', e.target.value)}
               disabled={loadingSekolah}
               hint={
                 !loadingSekolah && !galatSekolah && daftarSekolah.length === 0
-                  ? 'Belum ada sekolah terdaftar. Pilih "Daftar Sekolah Baru" di atas.'
+                  ? `Belum ada ${NAMA_ORG} terdaftar. Pilih "Daftar ${NAMA_ORG} Baru" di atas.`
                   : galatSekolah
                     ? 'Daftar tidak bisa dimuat. Periksa koneksi internet lalu muat ulang halaman.'
                     : undefined
@@ -478,10 +507,12 @@ export default function Register() {
           ) : (
             <Field
               id="reg-nama-baru"
-              label="Nama Sekolah Baru"
+              label={`Nama ${NAMA_ORG} Baru`}
               required
               autoComplete="off"
-              placeholder={`Contoh: ${labelJenjang} Negeri Contoh`}
+              placeholder={
+                IS_KANTOR ? 'Contoh: KUA Kecamatan Contoh' : `Contoh: ${labelJenjang} Negeri Contoh`
+              }
               value={form.namaSekolahBaru}
               onChange={(e) => ubah('namaSekolahBaru', e.target.value)}
             />
@@ -572,12 +603,12 @@ export default function Register() {
           <div className="flex gap-2.5 rounded-lg border border-blue-400/20 bg-blue-500/5 p-3 text-[13px] leading-relaxed text-blue-100/85">
             <Info size={16} className="text-blue-300 shrink-0 mt-0.5" aria-hidden />
             <ul className="space-y-1">
-              <li>Akun baru berstatus "menunggu" sampai disetujui admin sekolah. Anda baru bisa masuk setelah disetujui.</li>
+              <li>Akun baru berstatus "menunggu" sampai disetujui admin {NAMA_ORG}. Anda baru bisa masuk setelah disetujui.</li>
               {mode === 'baru' && !isOrangTua && (
-                <li>Mendaftarkan sekolah baru menjadikan Anda Admin Utama sekolah ini.</li>
+                <li>Mendaftarkan {NAMA_ORG} baru menjadikan Anda Admin Utama {NAMA_ORG} ini.</li>
               )}
               {isOrangTua && <li>Akun Anda akan dihubungkan ke data anak yang dipilih.</li>}
-              <li>Ada kendala? Hubungi admin sekolah Anda secara langsung.</li>
+              <li>Ada kendala? Hubungi admin {NAMA_ORG} Anda secara langsung.</li>
             </ul>
           </div>
 
@@ -610,3 +641,4 @@ export default function Register() {
     </div>
   )
 }
+
