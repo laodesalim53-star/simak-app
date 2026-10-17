@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, useEffect, useState } from 'react'
 import { Link, Navigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
@@ -162,7 +162,7 @@ function Segmen({ label, opsi, nilai, onPilih }) {
   )
 }
 
-export default function Register() {
+function RegisterSekolah() {
   const { session, daftar } = useAuth()
 
   // Link dari beranda membawa ?jenjang=sd atau ?jenjang=smp, jadi pengunjung
@@ -609,4 +609,15 @@ export default function Register() {
       </div>
     </div>
   )
+}
+
+// Tenant puskesmas memakai formulir sendiri; tenant lain tetap formulir sekolah.
+const RegisterPuskesmas =
+  import.meta.env.VITE_APP_TIPE === 'puskesmas'
+    ? lazy(() => import('./RegisterPuskesmas'))
+    : null
+
+export default function Register() {
+  if (RegisterPuskesmas) return <RegisterPuskesmas />
+  return <RegisterSekolah />
 }
