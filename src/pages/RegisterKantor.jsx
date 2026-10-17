@@ -5,11 +5,11 @@ import { useAuth } from '../lib/AuthContext'
 import { APP } from '../lib/appConfig'
 import { Loader2, HeartPulse, CheckCircle2, Eye, EyeOff, ChevronDown, Info } from 'lucide-react'
 
-// Pendaftaran akun untuk tenant puskesmas. Jabatan mengikuti daftar yang
+// Pendaftaran akun untuk tenant kantor (KUA). Jabatan mengikuti daftar yang
 // diizinkan di AuthContext.daftar(): kepala_kantor, admin, pegawai.
 const JABATAN = [
-  { value: 'pegawai', label: 'Pegawai / Tenaga Kesehatan' },
-  { value: 'admin', label: 'Admin Puskesmas' },
+  { value: 'pegawai', label: 'Pegawai KUA' },
+  { value: 'admin', label: 'Admin KUA' },
   { value: 'kepala_kantor', label: 'Kepala KUA' },
 ]
 
@@ -112,7 +112,7 @@ export default function RegisterKantor() {
   const warna = APP.warna
 
   const [mode, setMode] = useState('gabung') // 'gabung' | 'baru'
-  const [daftarPuskesmas, setDaftarPuskesmas] = useState([])
+  const [daftarKantor, setDaftarKantor] = useState([])
   const [loadingDaftar, setLoadingDaftar] = useState(true)
   const [galatDaftar, setGalatDaftar] = useState(false)
   const [form, setForm] = useState({
@@ -129,12 +129,12 @@ export default function RegisterKantor() {
     supabase
       .from('sekolah')
       .select('id, nama_sekolah')
-      .eq('jenis_organisasi', 'puskesmas')
+      .eq('jenis_organisasi', 'kantor')
       .order('nama_sekolah')
       .then(({ data, error }) => {
         if (!aktif) return
         setGalatDaftar(Boolean(error))
-        setDaftarPuskesmas(data || [])
+        setDaftarKantor(data || [])
         setLoadingDaftar(false)
       })
     return () => { aktif = false }
@@ -161,7 +161,7 @@ export default function RegisterKantor() {
     setLoading(true)
     const { error: galat } = await daftar({
       mode,
-      jenisOrganisasi: 'puskesmas',
+      jenisOrganisasi: 'kantor',
       namaLengkap: nama,
       nip,
       jabatan: form.jabatan,
@@ -180,7 +180,7 @@ export default function RegisterKantor() {
     ? 'Memuat daftar...'
     : galatDaftar
       ? 'Gagal memuat daftar'
-      : daftarPuskesmas.length === 0
+      : daftarKantor.length === 0
         ? 'Belum ada KUA terdaftar'
         : '-- Pilih KUA --'
 
@@ -201,8 +201,8 @@ export default function RegisterKantor() {
           <h1 className="text-xl font-bold mt-3">Pendaftaran berhasil</h1>
           <p className="text-sm text-gray-600 mt-2 leading-relaxed">
             {mode === 'baru'
-              ? 'Puskesmas dan akun Anda sudah dibuat dan menunggu persetujuan Superadmin. Anda bisa masuk setelah disetujui.'
-              : 'Akun Anda sudah dibuat dan menunggu persetujuan admin puskesmas. Anda bisa masuk setelah disetujui.'}
+              ? 'KUA dan akun Anda sudah dibuat dan menunggu persetujuan Superadmin. Anda bisa masuk setelah disetujui.'
+              : 'Akun Anda sudah dibuat dan menunggu persetujuan admin KUA. Anda bisa masuk setelah disetujui.'}
           </p>
           <Link to="/login" className="inline-block mt-5 text-sm font-semibold underline underline-offset-4" style={{ color: warna }}>
             Kembali ke halaman masuk
@@ -219,8 +219,8 @@ export default function RegisterKantor() {
 
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl border shadow-sm p-6 sm:p-7 space-y-4">
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Daftar akun puskesmas</h1>
-            <p className="text-sm text-gray-600 mt-1">Akun aktif setelah disetujui admin puskesmas.</p>
+            <h1 className="text-xl font-bold text-gray-900">Daftar akun KUA</h1>
+            <p className="text-sm text-gray-600 mt-1">Akun aktif setelah disetujui admin KUA.</p>
           </div>
 
           <SelectField
@@ -240,14 +240,14 @@ export default function RegisterKantor() {
             required
             inputMode="numeric"
             autoComplete="off"
-            hint="Isi nomor induk pegawai Anda."
+            hint="Isi NIP Anda."
             value={form.nip}
             onChange={(e) => ubah('nip', e.target.value)}
           />
 
           <Segmen
-            label="Gabung atau daftarkan puskesmas"
-            opsi={[{ value: 'gabung', label: 'Gabung puskesmas' }, { value: 'baru', label: 'Puskesmas baru' }]}
+            label="Gabung atau daftarkan KUA"
+            opsi={[{ value: 'gabung', label: 'Gabung KUA' }, { value: 'baru', label: 'KUA baru' }]}
             nilai={mode}
             onPilih={setMode}
             warna={warna}
@@ -262,24 +262,24 @@ export default function RegisterKantor() {
               onChange={(e) => ubah('sekolahId', e.target.value)}
               disabled={loadingDaftar}
               hint={
-                !loadingDaftar && !galatDaftar && daftarPuskesmas.length === 0
-                  ? 'Belum ada KUA terdaftar. Pilih "Puskesmas baru" di atas.'
+                !loadingDaftar && !galatDaftar && daftarKantor.length === 0
+                  ? 'Belum ada KUA terdaftar. Pilih "KUA baru" di atas.'
                   : galatDaftar
                     ? 'Daftar tidak bisa dimuat. Periksa koneksi internet lalu muat ulang halaman.'
                     : undefined
               }
             >
               <option value="">{teksPilih}</option>
-              {daftarPuskesmas.map((s) => <option key={s.id} value={s.id}>{s.nama_sekolah}</option>)}
+              {daftarKantor.map((s) => <option key={s.id} value={s.id}>{s.nama_sekolah}</option>)}
             </SelectField>
           ) : (
             <Field
               id="reg-nama-baru"
-              label="Nama puskesmas"
+              label="Nama KUA"
               required
               autoComplete="off"
-              placeholder="Contoh: Puskesmas Contoh"
-              hint="Anda menjadi penanggung jawab akun untuk puskesmas ini."
+              placeholder="Contoh: KUA Kecamatan Contoh"
+              hint="Anda menjadi penanggung jawab akun untuk KUA ini."
               value={form.namaBaru}
               onChange={(e) => ubah('namaBaru', e.target.value)}
             />
@@ -306,7 +306,7 @@ export default function RegisterKantor() {
           <div className="flex gap-2.5 rounded-lg bg-gray-50 border p-3 text-[13px] leading-relaxed text-gray-600">
             <Info size={16} className="shrink-0 mt-0.5" style={{ color: warna }} aria-hidden />
             <span>
-              Akun baru berstatus menunggu sampai disetujui. Ada kendala? Hubungi admin puskesmas Anda.
+              Akun baru berstatus menunggu sampai disetujui. Ada kendala? Hubungi admin KUA Anda.
             </span>
           </div>
 
