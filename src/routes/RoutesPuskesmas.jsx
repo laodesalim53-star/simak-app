@@ -3,7 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { ProtectedRoute } from '../components/RouteGuards'
 import { commonRoutes, adminUmumRoutes } from './RoutesCommon'
 
-const BerandaGenerik = lazy(() => import('../pages/BerandaGenerik'))
+const BerandaPuskesmas = lazy(() => import('../pages/BerandaPuskesmas'))
 const ProfilPuskesmas = lazy(() => import('../pages/ProfilPuskesmas'))
 const StrSipPegawai = lazy(() => import('../pages/StrSipPegawai'))
 const JadwalPiketPegawai = lazy(() => import('../pages/JadwalPiketPegawai'))
@@ -19,7 +19,7 @@ const DaftarHadirPuskesmas = lazy(() => import('../pages/DaftarHadirPuskesmas'))
 export default function RoutesPuskesmas() {
   return (
     <Routes>
-      <Route path="/" element={<BerandaGenerik />} />
+      <Route path="/" element={<BerandaPuskesmas />} />
       {commonRoutes}
       {adminUmumRoutes}
 
