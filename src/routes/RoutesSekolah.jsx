@@ -88,6 +88,7 @@ const ArsipRPP = lazy(() => import('../pages/ArsipRPP'))
 const BankSoal = lazy(() => import('../pages/BankSoal'))
 const MateriKelas = lazy(() => import('../pages/MateriKelas'))
 const BuatUjian = lazy(() => import('../pages/BuatUjian'))
+const SimulasiTKA = lazy(() => import('../pages/SimulasiTKA'))
 const BuatKuisSeru = lazy(() => import('../pages/BuatKuisSeru'))
 const HasilKuisSeru = lazy(() => import('../pages/HasilKuisSeru'))
 const KartuSiswa = lazy(() => import('../pages/KartuSiswa'))
@@ -244,6 +245,7 @@ export default function RoutesSekolah() {
       <Route path="/bank-soal" element={<ProtectedRoute><BankSoal /></ProtectedRoute>} />
       <Route path="/materi-kelas" element={<MateriKelas />} />
       <Route path="/buat-ujian" element={<ProtectedRoute><BuatUjian /></ProtectedRoute>} />
+      <Route path="/simulasi-tka" element={<SimulasiTKA />} />
       <Route path="/buat-kuis-seru" element={<ProtectedRoute><BuatKuisSeru /></ProtectedRoute>} />
       <Route path="/hasil-kuis-seru" element={<ProtectedRoute><HasilKuisSeru /></ProtectedRoute>} />
       <Route path="/rapor-kumer" element={<ProtectedRoute><RaporKumer /></ProtectedRoute>} />                         
