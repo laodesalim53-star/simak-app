@@ -167,7 +167,7 @@ function getGroupsAdmin(
         { to: '/portofolio-siswa', label: 'Portofolio Siswa', icon: FolderHeart },
         { to: '/sertifikat', label: 'Sertifikat & Penghargaan', icon: Award },
         { to: '/buat-ujian', label: 'Buat Ujian', icon: FilePlus },
-        { to: '/hasil-ujian', label: 'Hasil Ujian', icon: ClipboardList },
+        { to: '/ujian-online?tab=hasil', label: 'Hasil Ujian', icon: ClipboardList },
         { to: '/bank-soal', label: 'Bank Soal', icon: Database },
         { to: '/materi-kelas', label: 'Materi Pembelajaran', icon: BookMarked },
         { to: '/buat-kuis-seru', label: 'Kuis Seru (Kls 1-3)', icon: Gamepad2 },
@@ -508,7 +508,7 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   // getLinksOrangTua di atas).
   { to: sekolahIdGuru ? `/ppdb/${sekolahIdGuru}` : '/ppdb', label: 'PPDB Siswa Baru', icon: UserPlus, external: true },
   { to: '/buat-ujian', label: 'Buat Ujian', icon: FilePlus },
-  { to: '/hasil-ujian', label: 'Hasil Ujian', icon: ClipboardList },
+  { to: '/ujian-online?tab=hasil', label: 'Hasil Ujian', icon: ClipboardList },
   { to: '/bank-soal', label: 'Bank Soal', icon: Database },
   { to: '/materi-kelas', label: 'Materi Pembelajaran', icon: BookMarked },
   { to: '/buat-kuis-seru', label: 'Kuis Seru (Kls 1-3)', icon: Gamepad2 },
