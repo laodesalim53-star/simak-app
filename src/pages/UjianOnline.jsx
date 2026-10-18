@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabaseClient'; // sesuaikan kalau nama/lokasi file berbeda
 import { useAuth } from '../lib/AuthContext';
 import Layout from '../components/Layout';
+import KopSurat from '../components/KopSurat'; // sesuaikan path kalau KopSurat.jsx ada di folder lain
 
 // Satu halaman, dua tab:
 //   1. "Kerjakan Ujian"  -> untuk siswa (tanpa login)
@@ -313,6 +314,14 @@ export function PanelKerjakan({ onTahapChange }) {
   const persenTerjawab = soalList.length > 0 ? Math.round((terjawab / soalList.length) * 100) : 0;
   const semuaTerjawab = soalList.length > 0 && terjawab === soalList.length;
 
+  // Kop surat sekolah pemilik ujian ini. Siswa tidak login, jadi id sekolah
+  // diambil dari data ujian (ujian.sekolah_id, berasal dari kelas.sekolah_id di
+  // view ujian_publik), bukan dari sesi login, dan datanya dibaca lewat fungsi
+  // publik kop_sekolah_publik. Kop disembunyikan kalau datanya belum ada.
+  const kopSekolah = ujian?.sekolah_id ? (
+    <KopSurat sekolahId={ujian.sekolah_id} publik sembunyikanJikaKosong />
+  ) : null;
+
   function renderTahap() {
     // ---------- TAHAP 1: MASUKKAN KODE UJIAN ----------
     if (tahap === 'masuk') {
@@ -355,72 +364,75 @@ export function PanelKerjakan({ onTahapChange }) {
     if (tahap === 'pilih-nama') {
       const sudahPernah = sudahMengerjakan !== null && sudahMengerjakan !== false;
       return (
-        <div key="pilih-nama" className="max-w-sm mx-auto mt-10 p-6 rounded-xl border shadow-sm text-center uo-fade-up">
-          <h1 className="text-xl font-semibold">{ujian.judul}</h1>
-          <p className="text-sm text-gray-500 mb-4">
-            {ujian.mata_pelajaran} · Kelas {ujian.nama_kelas}
-          </p>
-          <select
-            value={nisSiswa}
-            onChange={(e) => {
-              const nis = e.target.value;
-              setNisSiswa(nis);
-              const siswa = daftarSiswa.find((s) => s.nis === nis);
-              setNamaSiswa(siswa?.nama_lengkap || '');
-              setError('');
-              cekStatusUjian(nis);
-            }}
-            className="w-full border rounded-lg px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-blue-300 focus:border-blue-400"
-          >
-            <option value="">-- Pilih namamu --</option>
-            {daftarSiswa.map((s) => (
-              <option key={s.nis} value={s.nis}>
-                {s.nama_lengkap}
-              </option>
-            ))}
-          </select>
-
-          {cekStatusLoading && (
-            <p className="text-sm text-gray-400 mt-2 inline-flex items-center gap-2 justify-center">
-              <Spinner /> Mengecek status...
+        <div key="pilih-nama" className="uo-fade-up">
+          {kopSekolah && <div className="max-w-2xl mx-auto mt-6 px-4">{kopSekolah}</div>}
+          <div className="max-w-sm mx-auto mt-4 p-6 rounded-xl border shadow-sm text-center">
+            <h1 className="text-xl font-semibold">{ujian.judul}</h1>
+            <p className="text-sm text-gray-500 mb-4">
+              {ujian.mata_pelajaran} · Kelas {ujian.nama_kelas}
             </p>
-          )}
-
-          {sudahPernah && (
-            <div
-              key={String(sudahMengerjakan)}
-              className="mt-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 uo-fade-up"
+            <select
+              value={nisSiswa}
+              onChange={(e) => {
+                const nis = e.target.value;
+                setNisSiswa(nis);
+                const siswa = daftarSiswa.find((s) => s.nis === nis);
+                setNamaSiswa(siswa?.nama_lengkap || '');
+                setError('');
+                cekStatusUjian(nis);
+              }}
+              className="w-full border rounded-lg px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-blue-300 focus:border-blue-400"
             >
-              Kamu sudah mengerjakan ujian ini sebelumnya. Skor kamu:{' '}
-              <strong>{sudahMengerjakan}</strong>. Setiap siswa hanya bisa mengerjakan 1 kali.
-            </div>
-          )}
+              <option value="">-- Pilih namamu --</option>
+              {daftarSiswa.map((s) => (
+                <option key={s.nis} value={s.nis}>
+                  {s.nama_lengkap}
+                </option>
+              ))}
+            </select>
 
-          {error && (
-            <p key={getarKe} className="text-sm text-red-600 mt-2 uo-shake">
-              {error}
-            </p>
-          )}
-          <button
-            onClick={() => {
-              if (!nisSiswa) {
-                setError('Pilih namamu dulu.');
-                setGetarKe((k) => k + 1);
-                return;
-              }
-              if (sudahPernah) {
-                setError('Kamu sudah mengerjakan ujian ini sebelumnya.');
-                setGetarKe((k) => k + 1);
-                return;
-              }
-              setError('');
-              setTahap('kerjakan');
-            }}
-            disabled={cekStatusLoading || sudahPernah}
-            className="mt-4 w-full py-2 rounded-lg bg-blue-600 text-white font-medium transition-all duration-200 hover:bg-blue-700 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
-          >
-            Mulai Kerjakan
-          </button>
+            {cekStatusLoading && (
+              <p className="text-sm text-gray-400 mt-2 inline-flex items-center gap-2 justify-center">
+                <Spinner /> Mengecek status...
+              </p>
+            )}
+
+            {sudahPernah && (
+              <div
+                key={String(sudahMengerjakan)}
+                className="mt-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 uo-fade-up"
+              >
+                Kamu sudah mengerjakan ujian ini sebelumnya. Skor kamu:{' '}
+                <strong>{sudahMengerjakan}</strong>. Setiap siswa hanya bisa mengerjakan 1 kali.
+              </div>
+            )}
+
+            {error && (
+              <p key={getarKe} className="text-sm text-red-600 mt-2 uo-shake">
+                {error}
+              </p>
+            )}
+            <button
+              onClick={() => {
+                if (!nisSiswa) {
+                  setError('Pilih namamu dulu.');
+                  setGetarKe((k) => k + 1);
+                  return;
+                }
+                if (sudahPernah) {
+                  setError('Kamu sudah mengerjakan ujian ini sebelumnya.');
+                  setGetarKe((k) => k + 1);
+                  return;
+                }
+                setError('');
+                setTahap('kerjakan');
+              }}
+              disabled={cekStatusLoading || sudahPernah}
+              className="mt-4 w-full py-2 rounded-lg bg-blue-600 text-white font-medium transition-all duration-200 hover:bg-blue-700 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+            >
+              Mulai Kerjakan
+            </button>
+          </div>
         </div>
       );
     }
@@ -429,6 +441,9 @@ export function PanelKerjakan({ onTahapChange }) {
     if (tahap === 'kerjakan') {
       return (
         <div key="kerjakan" className="max-w-2xl mx-auto mt-8 p-6 space-y-6 uo-fade-up">
+          {/* Kop surat sekolah di bagian paling atas halaman pengerjaan */}
+          {kopSekolah}
+
           {/* Bar progres menempel di atas saat layar digulir */}
           <div className="sticky top-0 z-10 -mx-6 px-6 py-3 bg-white/90 backdrop-blur border-b border-gray-100">
             <div className="text-center">
