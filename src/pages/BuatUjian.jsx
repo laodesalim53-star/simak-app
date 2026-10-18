@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabaseClient'; // sesuaikan kalau nama/lokasi file berbeda
 import { useAuth } from '../lib/AuthContext';
 import Layout from '../components/Layout';
-import { PanelKerjakan, PanelHasil } from './UjianOnline';
+import { PanelKerjakan, PanelHasil } from './UjianOnline'; // sesuaikan path kalau beda folder
 
 // Membuat kode ujian acak 6 karakter, misal: X7K2QP
 function buatKodeUjian() {
@@ -50,6 +50,11 @@ function normalisasiPeran(nilai) {
     .replace(/[\s-]+/g, '_');
 }
 
+/* =====================================================================
+   TAB 1 — BUAT UJIAN
+   (isi form lama; pembungkus <Layout> dipindah ke komponen BuatUjian
+   di paling bawah file supaya sidebar tidak muncul dua kali)
+   ===================================================================== */
 function PanelBuat() {
   const { session } = useAuth();
   const guruId = session?.user?.id; // auth.uid() — HANYA dipakai untuk query profil, JANGAN disimpan sebagai guru_id di tabel lain
@@ -469,12 +474,12 @@ function PanelBuat() {
             </button>
           )}
         </div>
-      </Layout>
+      </>
     );
   }
 
   return (
-    <Layout title="Buat Ujian" subtitle="Buat ujian online baru dari Excel atau Bank Soal">
+    <>
       <div className="w-full max-w-xl space-y-4 bg-white rounded-xl border border-[#6b0f1a]/15 shadow-sm p-6">
         <h3 className="text-lg font-semibold text-[#3b0a0a] flex items-center gap-2">
           <span className="w-1.5 h-5 rounded-full bg-[#d4a017]"></span>
@@ -671,5 +676,62 @@ function PanelBuat() {
         </button>
       </div>
     </>
+  );
+}
+
+/* =====================================================================
+   HALAMAN GABUNGAN — tiga tab: Buat Ujian | Kerjakan Ujian | Hasil Ujian
+   (ini yang dipakai route /buat-ujian)
+   ===================================================================== */
+export default function BuatUjian() {
+  const { session } = useAuth();
+  const guruId = session?.user?.id;
+
+  const [tab, setTab] = useState(() => {
+    const t = new URLSearchParams(window.location.search).get('tab');
+    return t === 'hasil' || t === 'kerjakan' ? t : 'buat';
+  }); // buat | kerjakan | hasil
+  const [tahapSiswa, setTahapSiswa] = useState('masuk');
+
+  // Saat sedang mengerjakan soal (mode uji coba guru), tab disembunyikan
+  const sedangMengerjakan = tahapSiswa === 'kerjakan';
+  const tabAktif = sedangMengerjakan ? 'kerjakan' : tab;
+
+  const tombolTab = (id, label) => (
+    <button
+      key={id}
+      onClick={() => setTab(id)}
+      className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
+        tabAktif === id
+          ? 'bg-[#6b0f1a] text-white shadow-sm'
+          : 'border border-[#6b0f1a]/20 text-[#6b0f1a] hover:bg-[#6b0f1a]/5'
+      }`}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <Layout title="Ujian Online" subtitle="Buat ujian, kerjakan, dan lihat hasil pengerjaan siswa">
+      {!sedangMengerjakan && (
+        <div className="flex flex-wrap gap-2 mb-5">
+          {tombolTab('buat', 'Buat Ujian')}
+          {tombolTab('kerjakan', 'Kerjakan Ujian')}
+          {tombolTab('hasil', 'Hasil Ujian')}
+        </div>
+      )}
+
+      {/* Semua tab tetap "mounted" (hanya disembunyikan) supaya isian form
+          Buat Ujian tidak hilang saat guru berpindah tab. */}
+      <div className={tabAktif === 'buat' ? '' : 'hidden'}>
+        <PanelBuat />
+      </div>
+      <div className={tabAktif === 'kerjakan' ? '' : 'hidden'}>
+        <PanelKerjakan onTahapChange={setTahapSiswa} />
+      </div>
+      <div className={tabAktif === 'hasil' ? '' : 'hidden'}>
+        {guruId && <PanelHasil guruId={guruId} />}
+      </div>
+    </Layout>
   );
 }
