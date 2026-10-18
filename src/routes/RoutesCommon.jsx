@@ -8,9 +8,17 @@ import { ProtectedRoute, RouteMenunggu } from '../components/RouteGuards'
 //    <Routes> ... {commonRoutes} ... </Routes>
 // ============================================================
 const Login = lazy(() => import('../pages/Login'))
-const RegisterSekolah = lazy(() => import('../pages/Register'))
-const RegisterPuskesmas = lazy(() => import('../pages/RegisterPuskesmas'))
-const Register = import.meta.env.VITE_APP_TIPE === 'puskesmas' ? RegisterPuskesmas : RegisterSekolah
+
+// Halaman daftar dipilih saat BUILD lewat VITE_APP_TIPE. Perbandingan ditulis
+// langsung dengan import.meta.env.VITE_APP_TIPE supaya Vite mengganti nilainya
+// jadi string literal dan membuang cabang (dan chunk) yang tidak dipakai.
+// Sebelumnya RegisterPuskesmas selalu ikut menjadi chunk di build sekolah.
+const Register = lazy(() =>
+  import.meta.env.VITE_APP_TIPE === 'puskesmas'
+    ? import('../pages/RegisterPuskesmas')
+    : import('../pages/Register')
+)
+
 const Verifikasi = lazy(() => import('../pages/Verifikasi'))
 const MenungguPersetujuan = lazy(() => import('../pages/MenungguPersetujuan'))
 const PersetujuanAkun = lazy(() => import('../pages/PersetujuanAkun'))
