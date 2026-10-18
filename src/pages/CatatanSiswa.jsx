@@ -5,7 +5,7 @@ import Layout from '../components/Layout';
 
 // Halaman "Catatan Siswa": buku kasus & prestasi & bimbingan (BK) dalam satu tempat.
 // Route contoh: /catatan-siswa (di dalam <ProtectedRoute>)
-// Tabel Supabase: catatan_siswa (lihat catatan_siswa.sql). Tabel siswa dibaca dari
+// Tabel Supabase: catatan_perilaku_siswa (lihat catatan_perilaku_siswa.sql). Tabel siswa dibaca dari
 // tabel "siswa" (nis, nama_lengkap, kelas_id -> kelas.nama_kelas), sama seperti UjianOnline.
 
 const JENIS = {
@@ -80,7 +80,7 @@ export default function CatatanSiswa() {
     const [rSiswa, rCatatan] = await Promise.all([
       supabase.from('siswa').select('nis, nama_lengkap, kelas:kelas_id(nama_kelas)').order('nama_lengkap'),
       supabase
-        .from('catatan_siswa')
+        .from('catatan_perilaku_siswa')
         .select('*')
         .order('tanggal', { ascending: false })
         .order('created_at', { ascending: false })
@@ -187,8 +187,8 @@ export default function CatatanSiswa() {
     setMenyimpan(true);
     setErrForm('');
     const { error: err } = form.id
-      ? await supabase.from('catatan_siswa').update(payload).eq('id', form.id)
-      : await supabase.from('catatan_siswa').insert({ ...payload, dicatat_oleh: userId });
+      ? await supabase.from('catatan_perilaku_siswa').update(payload).eq('id', form.id)
+      : await supabase.from('catatan_perilaku_siswa').insert({ ...payload, dicatat_oleh: userId });
     setMenyimpan(false);
     if (err) {
       setErrForm(err.message || 'Gagal menyimpan catatan.');
@@ -199,7 +199,7 @@ export default function CatatanSiswa() {
   }
 
   async function hapusCatatan() {
-    const { error: err } = await supabase.from('catatan_siswa').delete().eq('id', hapus.id);
+    const { error: err } = await supabase.from('catatan_perilaku_siswa').delete().eq('id', hapus.id);
     if (err) {
       setError('Gagal menghapus: ' + err.message);
     }
