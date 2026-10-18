@@ -27,11 +27,24 @@ import {
 // menyimpan datanya (Data Guru, Inventaris, Gudang SK, dst).
 //
 // Tabel & kebijakan akses: lihat akreditasi_berkas.sql.
+//
+// PERUBAHAN:
+// 1) sekolahId & hak edit sekarang diambil langsung dari AuthContext
+//    (sekolahId, isAdmin), sama seperti halaman lain. Fallback query ke
+//    tabel "profil" dihapus. Hak edit memakai isAdmin, yang sudah mencakup
+//    admin, admin_utama, superadmin, dan kepala_sekolah (role).
+//    PASTIKAN kebijakan RLS tabel akreditasi_berkas & bucket "akreditasi"
+//    mengizinkan peran yang sama.
+// 2) Catatan/tautan yang belum disimpan tidak lagi hilang saat unggah
+//    berkas: isi draft ikut disimpan bersama unggahan.
+// 3) Kalau berkas sudah terunggah tapi penyimpanan ke tabel gagal,
+//    berkas di storage ikut dihapus (tidak jadi berkas yatim).
+// 4) Hitungan ARKAS, BKU, dan siswa disaring per sekolah (sekolah_id);
+//    siswa hanya yang berstatus aktif.
 // ============================================================
 
 const BUCKET = 'akreditasi'
 const BATAS_MB = 10
-const PERAN_EDIT = ['admin', 'admin_utama', 'superadmin']
 
 const OPSI_JENJANG = [
   { id: 'sd', label: 'SD' },
@@ -195,15 +208,37 @@ function BarisButir({ item, data, info = [], terbuka, onToggle, bisaEdit, sibuk,
     setGalat('')
   }, [terbuka, status, data?.tautan, data?.catatan])
 
-  async function simpanDraft() {
+  // Tautan harus http(s). Mengembalikan null kalau tidak valid.
+  function tautanBersih() {
     const tautan = draft.tautan.trim()
-    if (tautan && !/^https?:\/\//i.test(tautan)) {
+    if (tautan && !/^https?:\/\//i.test(tautan)) return null
+    return tautan
+  }
+
+  async function simpanDraft() {
+    const tautan = tautanBersih()
+    if (tautan === null) {
       setGalat('Tautan harus diawali http:// atau https://')
       return
     }
     setGalat('')
     await onSimpan(item.kode, {
       status: draft.status,
+      tautan: tautan || null,
+      catatan: draft.catatan.trim() || null,
+    })
+  }
+
+  function unggahBerkas(f) {
+    const tautan = tautanBersih()
+    if (tautan === null) {
+      setGalat('Tautan harus diawali http:// atau https://')
+      return
+    }
+    setGalat('')
+    // Isi draft ikut disimpan bersama unggahan, supaya catatan/tautan yang
+    // belum disimpan tidak hilang ketika status berubah otomatis.
+    onUnggah(item.kode, f, {
       tautan: tautan || null,
       catatan: draft.catatan.trim() || null,
     })
@@ -351,7 +386,7 @@ function BarisButir({ item, data, info = [], terbuka, onToggle, bisaEdit, sibuk,
                   onChange={(e) => {
                     const f = e.target.files?.[0]
                     e.target.value = ''
-                    if (f) onUnggah(item.kode, f)
+                    if (f) unggahBerkas(f)
                   }}
                 />
               </label>
@@ -408,9 +443,10 @@ export function KartuAkreditasi({ to = '/administrasi-kepsek/akreditasi' }) {
 
 // ---- Halaman utama --------------------------------------------------------
 export default function AkreditasiSekolah() {
-  const auth = useAuth()
-  const [profil, setProfil] = useState(auth?.profil || auth?.profile || null)
-  const [profilSelesai, setProfilSelesai] = useState(Boolean(auth?.profil || auth?.profile))
+  // sekolahId & isAdmin langsung dari AuthContext. isAdmin mencakup admin,
+  // admin_utama, superadmin, dan kepala_sekolah.
+  const { sekolahId, isAdmin, loading: loadingAuth } = useAuth()
+  const bisaEdit = Boolean(isAdmin)
 
   const [jenjang, setJenjang] = useState('sd')
   const [baris, setBaris] = useState({}) // kode -> baris tabel
@@ -420,31 +456,6 @@ export default function AkreditasiSekolah() {
   const [filter, setFilter] = useState('semua')
   const [terbuka, setTerbuka] = useState(null)
   const [sibuk, setSibuk] = useState('')
-
-  // Bila AuthContext tidak menyediakan profil, ambil sendiri dari tabel
-  // "profil" (kolom id = id pengguna Supabase). Sesuaikan bila beda.
-  useEffect(() => {
-    if (profil) return
-    const uid = auth?.session?.user?.id
-    if (!uid) return
-    let aktif = true
-    supabase
-      .from('profil')
-      .select('sekolah_id, role, jabatan')
-      .eq('id', uid)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!aktif) return
-        setProfil(data || null)
-        setProfilSelesai(true)
-      })
-    return () => {
-      aktif = false
-    }
-  }, [profil, auth?.session?.user?.id])
-
-  const sekolahId = profil?.sekolah_id || null
-  const bisaEdit = PERAN_EDIT.includes(profil?.role) || profil?.jabatan === 'kepala_sekolah'
 
   // Muat data tiap kali sekolah / jenjang berubah.
   useEffect(() => {
@@ -479,7 +490,9 @@ export default function AkreditasiSekolah() {
   // Tabel: arkas_anggaran, bku_kas, siswa (sama seperti yang dipakai Keuangan.jsx).
   // ARKAS dan BKU sering diisi untuk tahun yang bukan tahun berjalan, jadi yang
   // dihitung adalah tahun TERBARU yang ada datanya, bukan tahun kalender ini.
-  // Pembatasan per sekolah mengikuti RLS di Supabase, sama seperti halaman Keuangan.
+  // Semua query disaring per sekolah (sekolah_id) supaya akun superadmin tidak
+  // menjumlahkan data semua sekolah. Kalau salah satu tabel tidak punya kolom
+  // sekolah_id, query-nya gagal dan chip hitungannya tidak ditampilkan.
   const [hitung, setHitung] = useState({})
 
   useEffect(() => {
@@ -491,6 +504,7 @@ export default function AkreditasiSekolah() {
       const { data: t, error: e1 } = await supabase
         .from(tabel)
         .select(kolom)
+        .eq('sekolah_id', sekolahId)
         .order(kolom, { ascending: false })
         .limit(1)
       if (e1) return null
@@ -499,6 +513,7 @@ export default function AkreditasiSekolah() {
       const { count, error: e2 } = await supabase
         .from(tabel)
         .select('id', { count: 'exact', head: true })
+        .eq('sekolah_id', sekolahId)
         .eq(kolom, tahunSebagaiTeks ? String(tahun) : tahun)
       if (e2) return null
       return { tahun, n: count || 0 }
@@ -510,6 +525,8 @@ export default function AkreditasiSekolah() {
       supabase
         .from('siswa')
         .select('id', { count: 'exact', head: true })
+        .eq('sekolah_id', sekolahId)
+        .eq('status', 'aktif')
         .then((r) => (r.error ? null : r.count)),
     ]).then(([arkas, bku, siswa]) => {
       if (aktif) setHitung({ arkas, bku, siswa })
@@ -530,7 +547,7 @@ export default function AkreditasiSekolah() {
     if (kode === 'MAN-08') {
       const n = hitung.siswa
       if (n === null || n === undefined) return []
-      return [n > 0 ? `${n} siswa terdata` : 'Data siswa belum diisi']
+      return [n > 0 ? `${n} siswa aktif terdata` : 'Data siswa belum diisi']
     }
     return []
   }
@@ -569,7 +586,8 @@ export default function AkreditasiSekolah() {
     [baris, jenjang, sekolahId]
   )
 
-  async function unggah(kode, file) {
+  // draftSaatIni: { tautan, catatan } dari form, disimpan bersama unggahan.
+  async function unggah(kode, file, draftSaatIni = {}) {
     if (file.size > BATAS_MB * 1024 * 1024) {
       setGalat(`Ukuran berkas maksimal ${BATAS_MB} MB.`)
       return
@@ -585,6 +603,7 @@ export default function AkreditasiSekolah() {
     }
     const lamaPath = baris[kode]?.file_path
     const ok = await simpan(kode, {
+      ...draftSaatIni,
       file_path: path,
       file_nama: file.name,
       status: baris[kode]?.status === 'lengkap' ? 'lengkap' : 'proses',
@@ -592,6 +611,10 @@ export default function AkreditasiSekolah() {
     if (ok && lamaPath) {
       // Bersihkan berkas lama; kegagalan di sini tidak perlu ditampilkan.
       supabase.storage.from(BUCKET).remove([lamaPath])
+    }
+    if (!ok) {
+      // Penyimpanan ke tabel gagal: hapus berkas baru supaya tidak jadi yatim.
+      supabase.storage.from(BUCKET).remove([path])
     }
     setSibuk('')
   }
@@ -656,7 +679,18 @@ export default function AkreditasiSekolah() {
   const labelJenjang = jenjang === 'smp' ? 'SMP' : 'SD'
 
   // ---- Tampilan -------------------------------------------------------
-  if (profilSelesai && !sekolahId) {
+  if (loadingAuth) {
+    return (
+      <Layout title="Berkas Akreditasi" subtitle="Checklist dan arsip berkas persiapan akreditasi.">
+        <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-500">
+          <Loader2 size={16} className="animate-spin" />
+          Memuat...
+        </div>
+      </Layout>
+    )
+  }
+
+  if (!sekolahId) {
     return (
       <Layout title="Berkas Akreditasi" subtitle="Checklist dan arsip berkas persiapan akreditasi.">
         <div className="max-w-xl mx-auto p-6 text-center">
