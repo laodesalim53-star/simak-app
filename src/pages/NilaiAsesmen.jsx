@@ -23,7 +23,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
-   import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from '../lib/AuthContext";
 import Layout from "../components/Layout";
 import ImporNilaiAsesmenModal from "../components/ImporNilaiAsesmenModal";
 import DetailNilaiSiswaModal from "../components/DetailNilaiSiswaModal";
