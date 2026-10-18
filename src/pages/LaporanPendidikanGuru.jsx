@@ -25,15 +25,30 @@ import { supabase } from '../lib/supabaseClient'
 // index.css menyembunyikan .print-only lewat display:none di layar,
 // position:static tidak menolong elemen itu tampil.
 //
-// PERBAIKAN KOP SURAT: baris alamat lengkap (Jl. ..., Kecamatan ...,
-// Kabupaten ..., Provinsi ... Kode Pos) di bawah nama sekolah dihapus —
-// tidak dipakai di format kop surat referensi. Baris kontak
-// telepon/email/website di bawahnya tetap dipertahankan.
+// KOP SURAT: baris alamat lengkap (Jl. ..., Kecamatan ..., Kabupaten ...,
+// Provinsi ... Kode Pos) di bawah nama sekolah tidak dipakai di format kop
+// surat referensi. Baris kontak telepon/email/website tetap dipertahankan.
+//
+// PERBAIKAN LOGO KABUPATEN: kop surat sekarang menampilkan logo kabupaten
+// (profil_sekolah.logo_kabupaten_path) di KIRI dan logo sekolah
+// (profil_sekolah.logo_path) di KANAN, sama seperti komponen KopSurat.jsx.
+// Kalau hanya salah satu logo yang ada, logo itu tampil di kiri dan teks
+// tetap di tengah.
+
+// Ubah path/URL di database menjadi URL publik. Path berawalan http dipakai apa adanya.
+function ambilUrlLogo(path) {
+  if (!path) return ''
+  if (path.startsWith('http')) return path
+  const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(path)
+  return pub?.publicUrl || ''
+}
+
 export default function LaporanPendidikanGuru() {
   const navigate = useNavigate()
   const { sekolahId: sekolahIdSaya } = useAuth()
   const [profilSekolah, setProfilSekolah] = useState(null)
   const [logoUrl, setLogoUrl] = useState('')
+  const [logoKabupatenUrl, setLogoKabupatenUrl] = useState('')
   const [daftarGuru, setDaftarGuru] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -89,13 +104,8 @@ export default function LaporanPendidikanGuru() {
       ])
 
       setProfilSekolah(sekolah || null)
-
-      if (sekolah?.logo_path) {
-        const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(sekolah.logo_path)
-        setLogoUrl(pub?.publicUrl || '')
-      } else {
-        setLogoUrl('')
-      }
+      setLogoUrl(ambilUrlLogo(sekolah?.logo_path))
+      setLogoKabupatenUrl(ambilUrlLogo(sekolah?.logo_kabupaten_path))
 
       setDaftarGuru(urutkanGuru(guru || []))
       setLoading(false)
@@ -125,6 +135,14 @@ export default function LaporanPendidikanGuru() {
       </div>
     )
   }
+
+  // Logo kabupaten di kiri, logo sekolah di kanan. Grid 3 kolom dipakai
+  // (bukan flex + spacer) supaya teks tetap rata tengah apapun kombinasi
+  // logonya: dua logo, satu logo, atau tanpa logo.
+  const logoKiri = logoKabupatenUrl || logoUrl
+  const altKiri = logoKabupatenUrl ? 'Logo Kabupaten' : 'Logo Sekolah'
+  const logoKanan = logoKabupatenUrl ? logoUrl : ''
+  const sembunyikanJikaRusak = (e) => { e.currentTarget.style.visibility = 'hidden' }
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -173,11 +191,19 @@ export default function LaporanPendidikanGuru() {
       </div>
 
       <div className="lembar-cetak print-only bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '297mm', minHeight: '210mm' }}>
-        <div className="flex items-center gap-4 border-b-4 border-black pb-3 mb-4">
-          {logoUrl && (
-            <img src={logoUrl} alt="Logo" className="w-16 h-16 object-contain shrink-0" />
-          )}
-          <div className="text-center flex-1">
+        <div className="grid grid-cols-[64px_1fr_64px] items-center gap-4 border-b-4 border-black pb-3 mb-4">
+          <div className="flex justify-start">
+            {logoKiri && (
+              <img
+                src={logoKiri}
+                alt={altKiri}
+                onError={sembunyikanJikaRusak}
+                className="w-16 h-16 object-contain"
+              />
+            )}
+          </div>
+
+          <div className="text-center">
             <p className="text-sm font-medium uppercase">
               Pemerintah Kabupaten {formatKabupaten(profilSekolah?.kabupaten)}
             </p>
@@ -189,6 +215,17 @@ export default function LaporanPendidikanGuru() {
               <p className="text-xs">
                 {[profilSekolah?.telepon, profilSekolah?.email, profilSekolah?.website].filter(Boolean).join(' | ')}
               </p>
+            )}
+          </div>
+
+          <div className="flex justify-end">
+            {logoKanan && (
+              <img
+                src={logoKanan}
+                alt="Logo Sekolah"
+                onError={sembunyikanJikaRusak}
+                className="w-16 h-16 object-contain"
+              />
             )}
           </div>
         </div>
