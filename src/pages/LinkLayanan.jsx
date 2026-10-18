@@ -20,18 +20,21 @@ import {
   Shield,
   Gavel,
   Siren,
+  Sprout,
+  Wheat,
 } from 'lucide-react'
 
 // Halaman ini level ATAS (route: /link-layanan) — bisa diakses semua peran
 // (admin, guru, orang tua) lewat menu sidebar, BUKAN bagian dari Gudang SK
 // yang admin-only.
 //
-// Halaman dibagi menjadi 4 bagian (tab): "Link Sekolah", "Link KUA",
-// "Link Kesehatan", dan "Link Polri". Untuk menambah/mengubah link, cukup
-// edit array KELOMPOK_LINK_SEKOLAH / KELOMPOK_LINK_KUA /
-// KELOMPOK_LINK_KESEHATAN / KELOMPOK_LINK_POLRI di bawah ini — tidak perlu
-// menyentuh bagian tampilan. Untuk menambah kelompok baru, tambahkan juga
-// temanya di TEMA_KELOMPOK (kalau lupa, otomatis memakai tema 'kepegawaian').
+// Halaman dibagi menjadi 5 bagian (tab): "Link Sekolah", "Link KUA",
+// "Link Kesehatan", "Link Polri", dan "Link Pertanian". Untuk menambah/mengubah
+// link, cukup edit array KELOMPOK_LINK_SEKOLAH / KELOMPOK_LINK_KUA /
+// KELOMPOK_LINK_KESEHATAN / KELOMPOK_LINK_POLRI / KELOMPOK_LINK_PERTANIAN di
+// bawah ini — tidak perlu menyentuh bagian tampilan. Untuk menambah kelompok
+// baru, tambahkan juga temanya di TEMA_KELOMPOK (kalau lupa, otomatis memakai
+// tema 'kepegawaian').
 //
 // CATATAN TEKNIS soal deteksi "diblokir iframe":
 // Browser TIDAK mengizinkan JavaScript membaca isi iframe lintas-domain
@@ -304,12 +307,58 @@ const KELOMPOK_LINK_POLRI = [
   },
 ]
 
+// ─────────────────────────── BAGIAN 5: LINK PERTANIAN ───────────────────────────
+// Portal & aplikasi resmi Kementerian Pertanian (Kementan) untuk penyuluh dan
+// dinas pertanian. Semua ditandai bukaTabBaru karena portal pemerintah umumnya
+// menolak ditampilkan di iframe.
+// CATATAN: alamat SIMLUHTAN (simluh.pertanian.go.id) sudah terkonfirmasi dari
+// dokumen panduan resmi Kementan. Alamat lain mengikuti pola subdomain
+// pertanian.go.id — cek ulang secara berkala dan perbaiki bila ada yang sudah
+// berpindah/tidak aktif.
+const KELOMPOK_LINK_PERTANIAN = [
+  {
+    id: 'pertanian-penyuluhan',
+    judul: 'Penyuluhan & Data Pertanian',
+    tautan: [
+      {
+        id: 'simluhtan',
+        nama: 'SIMLUHTAN (Sistem Informasi Manajemen Penyuluhan Pertanian)',
+        url: 'https://simluh.pertanian.go.id',
+        bukaTabBaru: true,
+      },
+      {
+        id: 'bppsdmp',
+        nama: 'BPPSDMP (Badan Penyuluhan & Pengembangan SDM Pertanian)',
+        url: 'https://bppsdmp.pertanian.go.id',
+        bukaTabBaru: true,
+      },
+      {
+        id: 'satudata-pertanian',
+        nama: 'Satu Data Pertanian',
+        url: 'https://satudata.pertanian.go.id',
+        bukaTabBaru: true,
+      },
+    ],
+  },
+  {
+    id: 'pertanian-portal',
+    judul: 'Portal & Regulasi',
+    tautan: [
+      { id: 'kementan-pusat', nama: 'Kementerian Pertanian RI', url: 'https://pertanian.go.id', bukaTabBaru: true },
+      { id: 'psp-kementan', nama: 'Ditjen Prasarana & Sarana Pertanian (PSP)', url: 'https://psp.pertanian.go.id', bukaTabBaru: true },
+      { id: 'jdih-kementan', nama: 'JDIH Kementan (Regulasi)', url: 'https://jdih.pertanian.go.id', bukaTabBaru: true },
+      { id: 'lapor-pertanian', nama: 'LAPOR! (Pengaduan Layanan Publik)', url: 'https://lapor.go.id', bukaTabBaru: true },
+    ],
+  },
+]
+
 // Daftar tab di bagian atas halaman. Urutan di sini = urutan tab.
 const BAGIAN_LINK = [
   { id: 'sekolah', judul: 'Link Sekolah', ikon: GraduationCap, kelompok: KELOMPOK_LINK_SEKOLAH },
   { id: 'kua', judul: 'Link KUA', ikon: Building2, kelompok: KELOMPOK_LINK_KUA },
   { id: 'kesehatan', judul: 'Link Kesehatan', ikon: Stethoscope, kelompok: KELOMPOK_LINK_KESEHATAN },
   { id: 'polri', judul: 'Link Polri', ikon: Shield, kelompok: KELOMPOK_LINK_POLRI },
+  { id: 'pertanian', judul: 'Link Pertanian', ikon: Sprout, kelompok: KELOMPOK_LINK_PERTANIAN },
 ]
 
 // Tema per grup: dipetakan ke kelas Tailwind statis (bukan digabung secara
@@ -406,6 +455,20 @@ const TEMA_KELOMPOK = {
     tekanAktif: 'active:bg-stone-100 active:border-stone-300',
     hover: 'hover:border-stone-300 hover:bg-stone-100/60 hover:text-stone-700',
   },
+  'pertanian-penyuluhan': {
+    ikon: Sprout,
+    chip: 'bg-green-50 text-green-600',
+    aksen: 'border-l-green-400',
+    tekanAktif: 'active:bg-green-50 active:border-green-300',
+    hover: 'hover:border-green-300 hover:bg-green-50/40 hover:text-green-700',
+  },
+  'pertanian-portal': {
+    ikon: Wheat,
+    chip: 'bg-yellow-50 text-yellow-600',
+    aksen: 'border-l-yellow-400',
+    tekanAktif: 'active:bg-yellow-50 active:border-yellow-300',
+    hover: 'hover:border-yellow-300 hover:bg-yellow-50/40 hover:text-yellow-700',
+  },
 }
 
 // Berapa lama menunggu iframe memuat sebelum dianggap gagal & auto-fallback
@@ -450,11 +513,11 @@ function pastiDiblokirMixedContent(url) {
 export default function LinkLayanan() {
   // Tab awal mengikuti jenis tenant: polres → Link Polri, puskesmas → Link
   // Kesehatan, kantor (KUA) → Link KUA, selain itu → Link Sekolah. Pengguna
-  // tetap bisa berpindah tab secara manual.
+  // tetap bisa berpindah tab secara manual (termasuk ke Link Pertanian).
   const { isKantor, isPuskesmas, isPolres } = useAuth()
   const tabAwal = isPolres ? 'polri' : isPuskesmas ? 'kesehatan' : isKantor ? 'kua' : 'sekolah'
 
-  const [bagianAktif, setBagianAktif] = useState(tabAwal) // tab: 'sekolah' | 'kua' | 'kesehatan' | 'polri'
+  const [bagianAktif, setBagianAktif] = useState(tabAwal) // tab: 'sekolah' | 'kua' | 'kesehatan' | 'polri' | 'pertanian'
   const [aktif, setAktif] = useState(null) // { id, nama, url } atau null saat di daftar
   const [kunciIframe, setKunciIframe] = useState(0) // ganti key untuk memuat ulang iframe
   const [sedangMemuat, setSedangMemuat] = useState(false)
@@ -541,7 +604,7 @@ export default function LinkLayanan() {
   return (
     <Layout
       title="Link Layanan & Kepegawaian"
-      subtitle="Akses cepat ke portal layanan sekolah, KUA, kesehatan & kepolisian — dibuka langsung di dalam aplikasi bila memungkinkan, atau otomatis di tab baru bila situs menolak."
+      subtitle="Akses cepat ke portal layanan sekolah, KUA, kesehatan, kepolisian & pertanian — dibuka langsung di dalam aplikasi bila memungkinkan, atau otomatis di tab baru bila situs menolak."
     >
       {aktif ? (
         <div className="flex flex-col h-[calc(100vh-220px)] min-h-[420px] rounded-2xl border border-slate-200 bg-white overflow-hidden">
@@ -605,8 +668,8 @@ export default function LinkLayanan() {
         </div>
       ) : (
         <div className="space-y-6 sm:space-y-8">
-          {/* Tab pemilih bagian: Link Sekolah / KUA / Kesehatan / Polri.
-              overflow-x-auto + whitespace-nowrap supaya empat tab tetap muat
+          {/* Tab pemilih bagian: Link Sekolah / KUA / Kesehatan / Polri / Pertanian.
+              overflow-x-auto + whitespace-nowrap supaya lima tab tetap muat
               di layar HP yang sempit (bisa digeser bila perlu). */}
           <div role="tablist" className="flex gap-1 rounded-xl bg-slate-100 p-1 w-full sm:w-fit overflow-x-auto">
             {BAGIAN_LINK.map((b) => {
