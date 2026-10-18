@@ -1,0 +1,228 @@
+// Simpan di: src/data/tkaSoal.js
+//
+// Bank soal Simulasi TKA. Dropdown di halaman dibuat otomatis dari BANK_TKA,
+// jadi paket baru cukup ditambahkan sebagai entri baru di bawah.
+//
+// Cara menulis soal:  s('teks soal', ['pilihan A', 'pilihan B', 'pilihan C', 'pilihan D'], indeksKunci, 'pembahasan')
+// indeksKunci: 0 = A, 1 = B, 2 = C, 3 = D.
+//
+// CATATAN: soal di sini adalah soal latihan buatan sendiri (bukan soal resmi Pusmendik).
+// Sebaiknya guru memeriksa ulang sebelum dipakai ke siswa.
+
+const s = (q, opsi, kunci, bahas) => ({ q, opsi, kunci, bahas });
+
+export const JENJANG_TKA = {
+  sd: 'SD/MI/Sederajat',
+  smp: 'SMP/MTs/Sederajat',
+};
+
+export const JENIS_TKA = {
+  wajib: 'Mata Pelajaran Wajib',
+  pilihan: 'Mata Pelajaran Pilihan',
+};
+
+export const BANK_TKA = [
+  /* ===================== SD — WAJIB ===================== */
+  {
+    id: 'sd-wajib-mtk-1',
+    jenjang: 'sd',
+    jenis: 'wajib',
+    mapel: 'Matematika',
+    paket: 1,
+    durasiMenit: 30,
+    soal: [
+      s('Hasil dari 345 + 278 adalah ....', ['513', '523', '613', '623'], 3, '345 + 278 = 623.'),
+      s('Hasil dari 12 × 15 adalah ....', ['150', '170', '180', '190'], 2, '12 × 15 = 180.'),
+      s('Keliling persegi dengan panjang sisi 9 cm adalah ....', ['18 cm', '36 cm', '27 cm', '81 cm'], 1, 'Keliling persegi = 4 × sisi = 4 × 9 = 36 cm.'),
+      s('3/4 dari 20 adalah ....', ['15', '5', '10', '16'], 0, '20 ÷ 4 = 5, lalu 5 × 3 = 15.'),
+      s('Pecahan yang paling besar adalah ....', ['3/5', '3/4', '1/2', '2/3'], 1, 'Dalam desimal: 0,6; 0,75; 0,5; 0,67. Yang terbesar 3/4.'),
+      s('Hasil dari 1.000 − 456 adalah ....', ['554', '544', '644', '456'], 1, '1.000 − 456 = 544.'),
+      s('Hasil dari 144 ÷ 12 adalah ....', ['10', '11', '12', '14'], 2, '12 × 12 = 144, jadi 144 ÷ 12 = 12.'),
+      s('Persegi panjang berukuran panjang 12 cm dan lebar 8 cm. Luasnya adalah ....', ['40 cm²', '96 cm²', '20 cm²', '108 cm²'], 1, 'Luas = p × l = 12 × 8 = 96 cm².'),
+      s('Hasil dari 0,5 + 0,25 adalah ....', ['0,30', '0,75', '0,55', '0,80'], 1, '0,50 + 0,25 = 0,75.'),
+      s('FPB dari 12 dan 18 adalah ....', ['3', '4', '6', '9'], 2, 'Faktor 12: 1, 2, 3, 4, 6, 12. Faktor 18: 1, 2, 3, 6, 9, 18. FPB = 6.'),
+      s('KPK dari 4 dan 6 adalah ....', ['10', '12', '24', '2'], 1, 'Kelipatan 4: 4, 8, 12. Kelipatan 6: 6, 12. KPK = 12.'),
+      s('Pembulatan 3.467 ke ratusan terdekat adalah ....', ['3.400', '3.500', '3.470', '3.000'], 1, 'Angka puluhan 6 (≥ 5), maka ratusan naik: 3.500.'),
+      s('2 jam 30 menit sama dengan ... menit.', ['120', '130', '150', '230'], 2, '2 × 60 + 30 = 150 menit.'),
+      s('Budi memiliki 48 kelereng dan membaginya sama banyak kepada 6 anak. Setiap anak mendapat ... kelereng.', ['6', '7', '8', '9'], 2, '48 ÷ 6 = 8.'),
+      s('Sebuah motor menempuh jarak 120 km dalam 2 jam. Kecepatan motor tersebut adalah ....', ['240 km/jam', '40 km/jam', '50 km/jam', '60 km/jam'], 3, 'Kecepatan = jarak ÷ waktu = 120 ÷ 2 = 60 km/jam.'),
+    ],
+  },
+  {
+    id: 'sd-wajib-bind-1',
+    jenjang: 'sd',
+    jenis: 'wajib',
+    mapel: 'Bahasa Indonesia',
+    paket: 1,
+    durasiMenit: 25,
+    soal: [
+      s('Kata baku yang benar adalah ....', ['apotik', 'apotek', 'apoteck', 'appotek'], 1, 'Menurut KBBI, bentuk bakunya "apotek".'),
+      s('Lawan kata (antonim) dari "rajin" adalah ....', ['malas', 'giat', 'tekun', 'ulet'], 0, 'Rajin berlawanan dengan malas.'),
+      s('Persamaan kata (sinonim) dari "cantik" adalah ....', ['jelek', 'indah', 'kotor', 'kecil'], 1, 'Cantik bersinonim dengan indah.'),
+      s('Tanda baca yang tepat di akhir kalimat tanya adalah ....', ['titik (.)', 'koma (,)', 'tanda tanya (?)', 'tanda seru (!)'], 2, 'Kalimat tanya diakhiri dengan tanda tanya.'),
+      s('Kalimat yang menggunakan huruf kapital dengan benar adalah ....', ['Ibu pergi ke pasar Pagi ini.', 'Ibu pergi ke Pasar pagi ini.', 'Ibu pergi ke pasar pagi ini.', 'ibu pergi ke pasar pagi ini.'], 2, 'Huruf kapital dipakai di awal kalimat dan nama diri; "pasar" dan "pagi" bukan nama diri.'),
+      s('Kata berikut yang merupakan kata berimbuhan adalah ....', ['makan', 'berlari', 'meja', 'kursi'], 1, '"Berlari" terdiri dari awalan ber- dan kata dasar lari.'),
+      s('Kalimat tanya ditunjukkan oleh kalimat ....', ['Adik sedang tidur.', 'Kapan kamu pulang?', 'Tutup pintunya!', 'Hari ini cerah.'], 1, 'Kalimat tanya memakai kata tanya dan diakhiri tanda tanya.'),
+      s('Kata baku yang benar adalah ....', ['aktifitas', 'aktipitas', 'activitas', 'aktivitas'], 3, 'Bentuk baku: aktivitas.'),
+      s('Cerita yang menampilkan tokoh hewan dan mengandung pesan moral disebut ....', ['fabel', 'legenda', 'biografi', 'puisi'], 0, 'Cerita berisi hewan yang berperilaku seperti manusia disebut fabel.'),
+      s('Satu baris dalam puisi disebut ....', ['bait', 'larik', 'paragraf', 'bab'], 1, 'Baris puisi = larik; kumpulan larik = bait.'),
+      s('Kata ganti orang ketiga jamak adalah ....', ['kami', 'kita', 'kalian', 'mereka'], 3, 'Mereka dipakai untuk orang ketiga lebih dari satu.'),
+      s('Kalimat perintah ditunjukkan oleh ....', ['Tolong tutup jendela itu.', 'Dia menutup jendela.', 'Apakah jendela tertutup?', 'Jendela itu besar.'], 0, 'Kalimat perintah berisi permintaan atau suruhan untuk melakukan sesuatu.'),
+      s('"Panjang tangan" berarti ....', ['suka mencuri', 'tangannya panjang', 'suka menolong', 'rajin bekerja'], 0, 'Ungkapan "panjang tangan" bermakna suka mencuri.'),
+      s('Pada kalimat "Bunga itu sangat indah", kata "indah" termasuk kata ....', ['benda', 'sifat', 'kerja', 'depan'], 1, 'Kata "indah" menerangkan sifat bunga.'),
+      s('Kalimat pasif ditunjukkan oleh ....', ['Buku dibaca oleh Rina.', 'Rina membaca buku.', 'Rina suka membaca.', 'Rina membaca di taman.'], 0, 'Subjek "buku" dikenai pekerjaan (dibaca) sehingga kalimatnya pasif.'),
+    ],
+  },
+  {
+    id: 'sd-pilihan-ipas-1',
+    jenjang: 'sd',
+    jenis: 'pilihan',
+    mapel: 'IPAS',
+    paket: 1,
+    durasiMenit: 20,
+    soal: [
+      s('Planet yang paling dekat dengan Matahari adalah ....', ['Venus', 'Bumi', 'Mars', 'Merkurius'], 3, 'Urutan dari Matahari: Merkurius, Venus, Bumi, Mars, ...'),
+      s('Sumber energi utama bagi kehidupan di Bumi adalah ....', ['Bulan', 'angin', 'Matahari', 'air'], 2, 'Matahari memberi cahaya dan panas yang menopang kehidupan.'),
+      s('Hewan pemakan tumbuhan disebut ....', ['karnivora', 'omnivora', 'insektivora', 'herbivora'], 3, 'Herbivora = pemakan tumbuhan.'),
+      s('Perubahan wujud dari padat menjadi cair disebut ....', ['menguap', 'mencair', 'membeku', 'mengembun'], 1, 'Padat → cair = mencair.'),
+      s('Bagian tumbuhan yang berfungsi menyerap air dari dalam tanah adalah ....', ['daun', 'bunga', 'akar', 'buah'], 2, 'Akar menyerap air dan mineral dari tanah.'),
+      s('Alat pernapasan pada ikan adalah ....', ['paru-paru', 'trakea', 'kulit', 'insang'], 3, 'Ikan bernapas dengan insang.'),
+      s('Rantai makanan: rumput → belalang → katak → ular. Yang berperan sebagai produsen adalah ....', ['belalang', 'katak', 'ular', 'rumput'], 3, 'Produsen adalah makhluk hidup yang membuat makanannya sendiri, yaitu tumbuhan (rumput).'),
+      s('Berikut ini yang termasuk sumber daya alam tak terbarukan adalah ....', ['air', 'udara', 'sinar matahari', 'minyak bumi'], 3, 'Minyak bumi butuh jutaan tahun untuk terbentuk, sehingga tidak terbarukan.'),
+      s('Bahan yang dapat menghantarkan listrik dengan baik adalah ....', ['karet', 'plastik', 'besi', 'kayu'], 2, 'Logam seperti besi adalah konduktor listrik.'),
+      s('Petani yang menanam padi melakukan kegiatan ekonomi berupa ....', ['konsumsi', 'distribusi', 'produksi', 'menabung'], 2, 'Menghasilkan barang (padi) termasuk kegiatan produksi.'),
+      s('Gerak Bumi mengelilingi Matahari disebut ....', ['rotasi', 'refleksi', 'revolusi', 'gravitasi'], 2, 'Bumi berevolusi mengelilingi Matahari selama sekitar 365 hari.'),
+      s('Siang dan malam terjadi karena ....', ['revolusi Bumi', 'revolusi Bulan', 'rotasi Bumi', 'gerhana'], 2, 'Bumi berputar pada porosnya (rotasi) sehingga bagian yang terkena sinar Matahari bergantian.'),
+    ],
+  },
+
+  /* ===================== SMP — WAJIB ===================== */
+  {
+    id: 'smp-wajib-mtk-1',
+    jenjang: 'smp',
+    jenis: 'wajib',
+    mapel: 'Matematika',
+    paket: 1,
+    durasiMenit: 40,
+    soal: [
+      s('Nilai x yang memenuhi 2x + 3 = 11 adalah ....', ['3', '4', '5', '7'], 1, '2x = 8, sehingga x = 4.'),
+      s('Luas lingkaran berjari-jari 7 cm (π = 22/7) adalah ....', ['44 cm²', '154 cm²', '308 cm²', '22 cm²'], 1, 'L = π × r² = 22/7 × 7 × 7 = 154 cm².'),
+      s('Hasil dari (−8) + 5 − (−3) adalah ....', ['−6', '0', '6', '−16'], 1, '−8 + 5 = −3, lalu −3 + 3 = 0.'),
+      s('Gradien garis y = 3x − 2 adalah ....', ['−2', '2', '3', '−3'], 2, 'Pada y = mx + c, gradien adalah m = 3.'),
+      s('Segitiga siku-siku memiliki sisi tegak 6 cm dan 8 cm. Panjang sisi miringnya adalah ....', ['10 cm', '12 cm', '14 cm', '48 cm'], 0, '√(6² + 8²) = √100 = 10 cm.'),
+      s('Hasil dari 3/5 + 1/4 adalah ....', ['4/9', '17/20', '8/20', '3/20'], 1, '3/5 = 12/20 dan 1/4 = 5/20, jumlahnya 17/20.'),
+      s('25% dari 240 adalah ....', ['48', '60', '72', '80'], 1, '25% = 1/4, dan 240 ÷ 4 = 60.'),
+      s('Perbandingan uang Ani dan Budi 3 : 5. Jika jumlah uang mereka Rp48.000, uang Ani adalah ....', ['Rp18.000', 'Rp20.000', 'Rp24.000', 'Rp30.000'], 0, 'Jumlah perbandingan 8. Rp48.000 ÷ 8 = Rp6.000, maka Ani 3 × 6.000 = Rp18.000.'),
+      s('Volume kubus dengan panjang rusuk 5 cm adalah ....', ['25 cm³', '75 cm³', '125 cm³', '150 cm³'], 2, 'V = s³ = 5 × 5 × 5 = 125 cm³.'),
+      s('Rata-rata dari data 6, 7, 8, 9, 10 adalah ....', ['7', '8', '9', '7,5'], 1, 'Jumlah = 40, dibagi 5 = 8.'),
+      s('Median dari data 3, 5, 7, 9, 11 adalah ....', ['5', '6', '9', '7'], 3, 'Data sudah urut; nilai tengahnya 7.'),
+      s('Dua sudut segitiga besarnya 50° dan 70°. Sudut ketiga adalah ....', ['120°', '50°', '60°', '70°'], 2, '180° − (50° + 70°) = 60°.'),
+      s('Hasil dari 2⁵ adalah ....', ['10', '16', '32', '64'], 2, '2 × 2 × 2 × 2 × 2 = 32.'),
+      s('Bentuk faktorisasi dari x² − 9 adalah ....', ['(x − 3)(x − 3)', '(x + 3)(x + 3)', '(x − 3)(x + 3)', '(x − 9)(x + 1)'], 2, 'x² − 9 = x² − 3² = (x − 3)(x + 3).'),
+      s('Pada pelemparan sebuah dadu, peluang muncul mata dadu genap adalah ....', ['1/6', '1/2', '1/3', '2/3'], 1, 'Angka genap: 2, 4, 6 → 3 dari 6 = 1/2.'),
+    ],
+  },
+  {
+    id: 'smp-wajib-bind-1',
+    jenjang: 'smp',
+    jenis: 'wajib',
+    mapel: 'Bahasa Indonesia',
+    paket: 1,
+    durasiMenit: 30,
+    soal: [
+      s('Gagasan pokok paragraf umumnya terdapat pada ....', ['kalimat penjelas', 'kalimat utama', 'kalimat penutup', 'judul teks'], 1, 'Gagasan pokok dinyatakan dalam kalimat utama.'),
+      s('Kalimat "Dia bagai matahari di keluargaku" menggunakan majas ....', ['hiperbola', 'metafora', 'perumpamaan', 'personifikasi'], 2, 'Kata "bagai" menandakan perbandingan langsung, yaitu perumpamaan (simile).'),
+      s('Teks prosedur berisi ....', ['langkah-langkah melakukan sesuatu', 'cerita khayalan', 'pendapat penulis', 'berita peristiwa terkini'], 0, 'Teks prosedur menjelaskan urutan langkah untuk melakukan atau membuat sesuatu.'),
+      s('Kata dasar "tulis" setelah diberi awalan me- menjadi ....', ['menulis', 'mentulis', 'menullis', 'nulis'], 0, 'Me- + tulis menjadi "menulis".'),
+      s('Kata baku yang benar adalah ....', ['analisa', 'analisis', 'analisys', 'anilisis'], 1, 'Bentuk baku menurut KBBI: analisis.'),
+      s('Unsur 5W+1H yang menjawab pertanyaan "di mana" adalah ....', ['who', 'where', 'when', 'why'], 1, 'Where = di mana (tempat kejadian).'),
+      s('Teks eksposisi bertujuan untuk ....', ['menghibur pembaca', 'memaparkan atau menjelaskan informasi', 'menceritakan kisah khayalan', 'mengajak membeli produk'], 1, 'Eksposisi memaparkan informasi atau pengetahuan secara objektif.'),
+      s('Antonim kata "optimis" adalah ....', ['pesimis', 'realistis', 'antusias', 'yakin'], 0, 'Optimis berlawanan dengan pesimis.'),
+      s('Kalimat "Angin berbisik lembut di telingaku" menggunakan majas ....', ['hiperbola', 'ironi', 'personifikasi', 'litotes'], 2, 'Angin digambarkan berbuat seperti manusia (berbisik).'),
+      s('Kalimat majemuk setara ditunjukkan oleh ....', ['Ayah membaca koran.', 'Ayah membaca koran dan ibu memasak.', 'Ayah yang membaca koran duduk.', 'Ketika hujan, ayah pulang.'], 1, 'Dua klausa sederajat dihubungkan kata "dan".'),
+      s('Kata penghubung yang menyatakan sebab adalah ....', ['karena', 'tetapi', 'dan', 'atau'], 0, '"Karena" menyatakan hubungan sebab.'),
+      s('Tempat, waktu, dan suasana dalam sebuah cerita disebut ....', ['tema', 'alur', 'latar', 'amanat'], 2, 'Latar mencakup tempat, waktu, dan suasana.'),
+      s('Kalimat yang mengandung makna konotatif adalah ....', ['Dia anak yang kepala batu.', 'Kepalanya terbentur batu.', 'Batu itu keras.', 'Kepala sekolah baru datang.'], 0, '"Kepala batu" bermakna keras kepala, bukan arti sebenarnya.'),
+      s('Satu bait pantun terdiri atas ... baris.', ['2', '6', '4', '8'], 2, 'Pantun terdiri dari 4 baris: 2 sampiran dan 2 isi.'),
+      s('Teks yang bertujuan mengajak atau membujuk pembaca disebut teks ....', ['deskripsi', 'persuasi', 'berita', 'prosedur'], 1, 'Teks persuasi bertujuan memengaruhi pembaca agar mau melakukan sesuatu.'),
+    ],
+  },
+
+  /* ===================== SMP — PILIHAN ===================== */
+  {
+    id: 'smp-pilihan-ipa-1',
+    jenjang: 'smp',
+    jenis: 'pilihan',
+    mapel: 'IPA',
+    paket: 1,
+    durasiMenit: 30,
+    soal: [
+      s('Satuan gaya dalam Sistem Internasional (SI) adalah ....', ['Joule', 'Newton', 'Watt', 'Pascal'], 1, 'Satuan gaya adalah Newton (N).'),
+      s('Proses fotosintesis pada tumbuhan terutama terjadi di ....', ['akar', 'batang', 'daun', 'bunga'], 2, 'Daun memiliki banyak kloroplas tempat fotosintesis berlangsung.'),
+      s('Perubahan wujud dari cair menjadi gas disebut ....', ['membeku', 'menguap', 'mengembun', 'menyublim'], 1, 'Cair → gas = menguap.'),
+      s('Mobil melaju dengan kecepatan 60 km/jam selama 3 jam. Jarak yang ditempuh adalah ....', ['120 km', '200 km', '180 km', '63 km'], 2, 's = v × t = 60 × 3 = 180 km.'),
+      s('Organel sel yang berfungsi menghasilkan energi adalah ....', ['ribosom', 'mitokondria', 'nukleus', 'lisosom'], 1, 'Mitokondria adalah tempat respirasi sel yang menghasilkan energi (ATP).'),
+      s('Zat makanan yang berfungsi sebagai zat pengatur adalah ....', ['karbohidrat', 'lemak', 'vitamin', 'protein'], 2, 'Vitamin dan mineral berperan mengatur proses di dalam tubuh.'),
+      s('Sifat bayangan pada cermin datar adalah ....', ['nyata, terbalik', 'nyata, tegak', 'maya, terbalik, diperkecil', 'maya, tegak, sama besar'], 3, 'Cermin datar membentuk bayangan maya, tegak, sama besar, dan sama jauh.'),
+      s('Lapisan atmosfer tempat terjadinya cuaca adalah ....', ['stratosfer', 'mesosfer', 'troposfer', 'termosfer'], 2, 'Cuaca (awan, hujan, angin) terjadi di troposfer.'),
+      s('Larutan yang bersifat asam memiliki pH ....', ['lebih dari 7', 'sama dengan 7', 'kurang dari 7', 'tepat 14'], 2, 'pH < 7 asam, pH = 7 netral, pH > 7 basa.'),
+      s('Perubahan energi yang terjadi pada setrika listrik adalah ....', ['listrik menjadi kalor', 'kimia menjadi listrik', 'kalor menjadi gerak', 'cahaya menjadi listrik'], 0, 'Setrika mengubah energi listrik menjadi energi kalor (panas).'),
+      s('Hukum I Newton disebut juga hukum ....', ['aksi-reaksi', 'gravitasi', 'kelembaman', 'percepatan'], 2, 'Hukum I Newton: benda mempertahankan keadaannya (hukum kelembaman/inersia).'),
+      s('Sebuah gaya 100 N bekerja pada bidang seluas 2 m². Tekanannya adalah ....', ['50 Pa', '200 Pa', '98 Pa', '0,02 Pa'], 0, 'P = F ÷ A = 100 ÷ 2 = 50 Pa.'),
+      s('Jaringan yang mengangkut air dan mineral dari akar ke daun adalah ....', ['floem', 'xilem', 'epidermis', 'kambium'], 1, 'Xilem mengangkut air dan mineral; floem mengangkut hasil fotosintesis.'),
+      s('Ciri utama hewan mamalia adalah ....', ['berambut dan menyusui anaknya', 'bertelur dan bersisik', 'bernapas dengan insang', 'berdarah dingin'], 0, 'Mamalia berambut, melahirkan, dan menyusui anaknya.'),
+      s('Contoh perubahan kimia adalah ....', ['es mencair', 'kertas dirobek', 'besi berkarat', 'gula larut dalam air'], 2, 'Besi berkarat menghasilkan zat baru (karat), jadi perubahan kimia.'),
+    ],
+  },
+  {
+    id: 'smp-pilihan-ips-1',
+    jenjang: 'smp',
+    jenis: 'pilihan',
+    mapel: 'IPS',
+    paket: 1,
+    durasiMenit: 25,
+    soal: [
+      s('Pedagang yang menyalurkan barang dari produsen ke konsumen melakukan kegiatan ....', ['produksi', 'konsumsi', 'distribusi', 'inflasi'], 2, 'Menyalurkan barang dari produsen ke konsumen = distribusi.'),
+      s('Garis lintang 0° disebut ....', ['khatulistiwa', 'meridian', 'kutub', 'garis tropis'], 0, 'Garis lintang 0° adalah khatulistiwa (ekuator).'),
+      s('Proklamasi kemerdekaan Indonesia dibacakan pada tanggal ....', ['1 Juni 1945', '28 Oktober 1928', '17 Agustus 1945', '10 November 1945'], 2, 'Proklamasi dibacakan pada 17 Agustus 1945.'),
+      s('Sumpah Pemuda diikrarkan pada tahun ....', ['1908', '1928', '1945', '1966'], 1, 'Sumpah Pemuda diikrarkan pada 28 Oktober 1928.'),
+      s('Menurut hukum permintaan, jika harga barang naik maka jumlah barang yang diminta cenderung ....', ['naik', 'tetap', 'turun', 'tak terbatas'], 2, 'Harga naik → permintaan cenderung turun (ceteris paribus).'),
+      s('Syarat terjadinya interaksi sosial adalah ....', ['persaingan dan konflik', 'kontak sosial dan komunikasi', 'kerja sama saja', 'akulturasi dan asimilasi'], 1, 'Interaksi sosial membutuhkan kontak sosial dan komunikasi.'),
+      s('Benua terluas di dunia adalah ....', ['Afrika', 'Asia', 'Amerika', 'Eropa'], 1, 'Asia adalah benua terluas.'),
+      s('Indonesia terletak di antara dua benua dan dua samudra, yaitu ....', ['Asia–Australia dan Hindia–Pasifik', 'Eropa–Afrika dan Atlantik–Pasifik', 'Amerika–Asia dan Hindia–Atlantik', 'Asia–Afrika dan Pasifik–Arktik'], 0, 'Indonesia di antara Benua Asia dan Australia serta Samudra Hindia dan Pasifik.'),
+      s('Tokoh yang dijuluki Bapak Pendidikan Nasional adalah ....', ['R.A. Kartini', 'Ki Hajar Dewantara', 'Dewi Sartika', 'Mohammad Hatta'], 1, 'Ki Hajar Dewantara, pendiri Taman Siswa.'),
+      s('Fungsi uang yang memudahkan kegiatan jual beli adalah sebagai ....', ['alat penimbun kekayaan', 'satuan hitung', 'alat tukar', 'standar pembayaran utang'], 2, 'Uang berfungsi sebagai alat tukar.'),
+      s('Kerajaan Hindu tertua di Indonesia adalah ....', ['Majapahit', 'Sriwijaya', 'Kutai', 'Mataram Kuno'], 2, 'Kerajaan Kutai di Kalimantan Timur umumnya dianggap yang tertua.'),
+      s('Faktor pendorong urbanisasi dari desa ke kota adalah ....', ['lapangan kerja terbatas di desa', 'upah tinggi di kota', 'fasilitas lengkap di kota', 'pendidikan lebih baik di kota'], 0, 'Faktor pendorong berasal dari daerah asal; tiga pilihan lain adalah faktor penarik kota.'),
+    ],
+  },
+  {
+    id: 'smp-pilihan-big-1',
+    jenjang: 'smp',
+    jenis: 'pilihan',
+    mapel: 'Bahasa Inggris',
+    paket: 1,
+    durasiMenit: 25,
+    soal: [
+      s('She ___ to school every day.', ['go', 'goes', 'going', 'gone'], 1, 'Subjek tunggal (she) pada simple present memakai verb + s/es: goes.'),
+      s('The past tense of "buy" is ....', ['buyed', 'buying', 'boughten', 'bought'], 3, '"Buy" adalah kata kerja tak beraturan: buy – bought – bought.'),
+      s('They are ___ football now.', ['play', 'plays', 'played', 'playing'], 3, 'Present continuous: are + verb-ing.'),
+      s('The opposite of "hot" is ....', ['cold', 'warm', 'cool', 'boiling'], 0, 'Hot (panas) berlawanan dengan cold (dingin).'),
+      s('"Library" artinya ....', ['toko buku', 'perpustakaan', 'sekolah', 'kantin'], 1, 'Library = perpustakaan.'),
+      s('There ___ two books on the table.', ['is', 'be', 'are', 'am'], 2, 'Two books (jamak) memakai "are".'),
+      s('"How much is this pen?" Jawaban yang tepat adalah ....', ["It's five thousand rupiah.", 'Yes, it is.', 'He is my teacher.', 'At the market.'], 0, '"How much" menanyakan harga.'),
+      s('My sister is taller ___ me.', ['that', 'then', 'than', 'as'], 2, 'Perbandingan lebih: adjective-er + than.'),
+      s('The plural form of "child" is ....', ['childs', 'children', 'childrens', 'childes'], 1, 'Child – children adalah bentuk jamak tak beraturan.'),
+      s('07.30 dibaca ....', ['half past seven', 'seven past half', 'half to seven', 'a quarter to seven'], 0, '07.30 = half past seven.'),
+      s('The ball is below the table. Artinya, the ball is ___ the table.', ['on', 'under', 'above', 'beside'], 1, 'Below = under (di bawah).'),
+      s('My father is a doctor. He works in a ____.', ['school', 'market', 'bank', 'hospital'], 3, 'Dokter bekerja di rumah sakit (hospital).'),
+      s('If it rains tomorrow, I ___ at home.', ['stay', 'stayed', 'will stay', 'staying'], 2, 'Conditional type 1: if + present, will + verb.'),
+      s('Kata yang termasuk kata kerja (verb) adalah ....', ['beautiful', 'quickly', 'run', 'table'], 2, 'Run (berlari) adalah verb.'),
+      s('Persamaan kata (synonym) dari "big" adalah ....', ['small', 'large', 'tiny', 'short'], 1, 'Big bersinonim dengan large.'),
+    ],
+  },
+];
+
+export function labelPaket(p) {
+  return `${p.mapel} - ${JENJANG_TKA[p.jenjang]} (Paket ${p.paket})`;
+}
