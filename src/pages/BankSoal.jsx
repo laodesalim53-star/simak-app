@@ -4,10 +4,149 @@ import JSZip from 'jszip'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
-import { Upload, Loader2, Trash2, Database, ChevronDown, ChevronUp, ImagePlus, X, FolderArchive } from 'lucide-react'
+import {
+  Upload,
+  Loader2,
+  Trash2,
+  Database,
+  ChevronDown,
+  ChevronUp,
+  ImagePlus,
+  X,
+  FolderArchive,
+  Printer,
+  FileText,
+  FileSpreadsheet,
+  Key,
+} from 'lucide-react'
 
 const HURUF_JAWABAN = ['A', 'B', 'C', 'D']
 const EKSTENSI_GAMBAR = /\.(jpg|jpeg|png|webp|gif)$/i
+
+// ===================== CETAK & UNDUH (untuk asesmen manual) =====================
+// Semua dokumen dibuat dari HTML sederhana supaya:
+//  - Cetak: dibuka di tab baru lalu otomatis memanggil dialog print browser
+//    (dari dialog itu guru juga bisa memilih "Simpan sebagai PDF").
+//  - Unduh Word: file HTML yang dibungkus sebagai .doc, bisa dibuka & diedit di
+//    Microsoft Word / WPS / LibreOffice tanpa library tambahan.
+
+function esc(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+// Soal diurutkan dari yang paling lama dibuat, supaya urutan nomor di kertas
+// stabil (daftar di layar sendiri diurutkan dari yang terbaru).
+function urutkanSoal(list) {
+  return [...list].sort((a, b) => String(a.dibuat_pada || '').localeCompare(String(b.dibuat_pada || '')))
+}
+
+function namaFileAman(teks) {
+  return String(teks).replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+}
+
+const CSS_DOKUMEN = `
+  @page { size: A4; margin: 2cm; }
+  body { font-family: 'Times New Roman', serif; font-size: 12pt; color: #000; line-height: 1.4; }
+  .kop { text-align: center; border-bottom: 3px double #000; padding-bottom: 8px; margin-bottom: 12px; }
+  .kop .sekolah { font-size: 14pt; font-weight: bold; }
+  .kop .judul { font-size: 13pt; font-weight: bold; margin-top: 4px; }
+  .kop .sub { font-size: 11pt; }
+  table.identitas { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+  table.identitas td { padding: 3px 4px; font-size: 11pt; }
+  .petunjuk { font-size: 11pt; font-style: italic; margin: 8px 0 12px; }
+  .soal { margin-bottom: 12px; page-break-inside: avoid; }
+  .soal .teks { margin: 0 0 4px; }
+  .soal img { max-height: 160px; max-width: 70%; display: block; margin: 4px 0 6px 24px; }
+  .opsi { margin: 1px 0 1px 24px; }
+  table.kunci { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  table.kunci td { border: 1px solid #000; padding: 6px 8px; text-align: center; font-size: 12pt; }
+  .catatan { font-size: 10pt; margin-top: 10px; }
+`
+
+function bangunIsiDokumen(grup, mode, namaSekolah) {
+  const urut = urutkanSoal(grup.soal)
+  const judul = mode === 'kunci' ? 'KUNCI JAWABAN' : 'LEMBAR SOAL'
+
+  const kop = `
+    <div class="kop">
+      ${namaSekolah ? `<div class="sekolah">${esc(namaSekolah.toUpperCase())}</div>` : ''}
+      <div class="judul">${judul}</div>
+      <div class="sub">Mata Pelajaran: ${esc(grup.mata_pelajaran)} &nbsp;·&nbsp; Kelas: ${esc(grup.kelas)}</div>
+    </div>`
+
+  if (mode === 'kunci') {
+    const sel = urut.map((s, i) => `<td><b>${i + 1}.</b> ${esc(s.jawaban_benar)}</td>`)
+    const perBaris = 5
+    const baris = []
+    for (let i = 0; i < sel.length; i += perBaris) {
+      const potong = sel.slice(i, i + perBaris)
+      while (potong.length < perBaris) potong.push('<td></td>')
+      baris.push(`<tr>${potong.join('')}</tr>`)
+    }
+    return `${kop}
+      <p class="catatan">Jumlah soal: ${urut.length}</p>
+      <table class="kunci">${baris.join('')}</table>`
+  }
+
+  const identitas = `
+    <table class="identitas">
+      <tr>
+        <td style="width:50%">Nama : ..........................................</td>
+        <td>Hari/Tanggal : ..................................</td>
+      </tr>
+      <tr>
+        <td>No. Absen : ......................................</td>
+        <td>Nilai : ..............................................</td>
+      </tr>
+    </table>`
+
+  const petunjuk = `<p class="petunjuk">Petunjuk: Pilihlah satu jawaban yang paling benar dengan memberi tanda silang (X) pada huruf A, B, C, atau D!</p>`
+
+  const soalHtml = urut
+    .map(
+      (s, i) => `
+      <div class="soal">
+        <p class="teks"><b>${i + 1}.</b> ${esc(s.soal)}</p>
+        ${s.gambar_url ? `<img src="${esc(s.gambar_url)}" alt="">` : ''}
+        <p class="opsi">A. ${esc(s.pilihan_a)}</p>
+        <p class="opsi">B. ${esc(s.pilihan_b)}</p>
+        <p class="opsi">C. ${esc(s.pilihan_c)}</p>
+        <p class="opsi">D. ${esc(s.pilihan_d)}</p>
+      </div>`
+    )
+    .join('')
+
+  return `${kop}${identitas}${petunjuk}${soalHtml}`
+}
+
+function bungkusDokumen(judul, isi, { untukWord = false, autoPrint = false } = {}) {
+  const atributWord = untukWord
+    ? ' xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"'
+    : ''
+  // Cetak otomatis setelah semua gambar selesai dimuat (event load).
+  const skripCetak = autoPrint
+    ? '<script>window.onload=function(){setTimeout(function(){window.print()},400)}<\/script>'
+    : ''
+  return `<!DOCTYPE html><html${atributWord}><head><meta charset="utf-8"><title>${esc(judul)}</title><style>${CSS_DOKUMEN}</style></head><body>${isi}${skripCetak}</body></html>`
+}
+
+function unduhBlob(blob, namaFile) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = namaFile
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  setTimeout(() => URL.revokeObjectURL(url), 1500)
+}
+
+const TOMBOL_AKSI =
+  'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-ink-900/[0.06] text-ink-700 hover:bg-ink-900/10'
 
 export default function BankSoal() {
   const { profil, isAdmin } = useAuth()
@@ -18,6 +157,7 @@ export default function BankSoal() {
   const [mapelFilter, setMapelFilter] = useState('')
   const [expanded, setExpanded] = useState({})
   const [deletingMapel, setDeletingMapel] = useState('')
+  const [namaSekolah, setNamaSekolah] = useState('') // untuk kop lembar soal cetak/unduh
 
   // --- Form tambah 1 soal manual, bisa disertai gambar (mis. soal tebak gambar) ---
   const [formTerbuka, setFormTerbuka] = useState(false)
@@ -114,6 +254,57 @@ export default function BankSoal() {
   useEffect(() => {
     load()
   }, [])
+
+  // Nama sekolah untuk kop lembar soal. Kalau gagal dimuat, kop dicetak tanpa nama sekolah.
+  useEffect(() => {
+    async function muatNamaSekolah() {
+      const { data } = await supabase.from('profil_sekolah').select('nama_sekolah').eq('id', 1).maybeSingle()
+      setNamaSekolah(data?.nama_sekolah || '')
+    }
+    muatNamaSekolah()
+  }, [])
+
+  // ---------- Cetak & unduh per folder (kelas + mata pelajaran) ----------
+  // mode: 'soal' = lembar soal untuk siswa, 'kunci' = kunci jawaban untuk guru.
+  function cetakDokumen(grup, mode) {
+    const judul = `${mode === 'kunci' ? 'Kunci Jawaban' : 'Lembar Soal'} ${grup.mata_pelajaran} Kelas ${grup.kelas}`
+    const html = bungkusDokumen(judul, bangunIsiDokumen(grup, mode, namaSekolah), { autoPrint: true })
+    const w = window.open('', '_blank')
+    if (!w) {
+      alert('Pop-up diblokir browser. Izinkan pop-up untuk situs ini lalu klik Cetak lagi.')
+      return
+    }
+    w.document.open()
+    w.document.write(html)
+    w.document.close()
+  }
+
+  function unduhWord(grup) {
+    const judul = `Lembar Soal ${grup.mata_pelajaran} Kelas ${grup.kelas}`
+    const html = bungkusDokumen(judul, bangunIsiDokumen(grup, 'soal', namaSekolah), { untukWord: true })
+    const blob = new Blob(['\ufeff', html], { type: 'application/msword' })
+    unduhBlob(blob, `Soal_${namaFileAman(grup.mata_pelajaran)}_Kelas_${namaFileAman(grup.kelas)}.doc`)
+  }
+
+  // Excel berisi soal + kunci jawaban, dengan nama kolom yang sama seperti
+  // format upload Excel, jadi bisa diedit lalu diupload ulang bila perlu.
+  function unduhExcel(grup) {
+    const baris = urutkanSoal(grup.soal).map((s) => ({
+      kelas: s.kelas,
+      mata_pelajaran: s.mata_pelajaran,
+      soal: s.soal,
+      pilihan_a: s.pilihan_a,
+      pilihan_b: s.pilihan_b,
+      pilihan_c: s.pilihan_c,
+      pilihan_d: s.pilihan_d,
+      jawaban_benar: s.jawaban_benar,
+      gambar_url: s.gambar_url || '',
+    }))
+    const ws = XLSX.utils.json_to_sheet(baris)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Soal')
+    XLSX.writeFile(wb, `Soal_${namaFileAman(grup.mata_pelajaran)}_Kelas_${namaFileAman(grup.kelas)}.xlsx`)
+  }
 
   // Nama file soal biasanya mengandung info kelas & mapel, contoh:
   // "soal_BAHASA_INDONESIA_KLS6_SMT1.xlsx" -> mata_pelajaran: "Bahasa Indonesia", kelas: "6"
@@ -713,6 +904,39 @@ export default function BankSoal() {
                     </button>
                   )}
                 </div>
+
+                {/* Tombol cetak & unduh — untuk asesmen manual (kertas) */}
+                <div className="flex flex-wrap items-center gap-2 px-4 pb-3">
+                  <button
+                    onClick={() => cetakDokumen(grup, 'soal')}
+                    className={TOMBOL_AKSI}
+                    title="Cetak lembar soal untuk siswa (bisa juga disimpan sebagai PDF dari dialog cetak)"
+                  >
+                    <Printer size={13} /> Cetak Soal
+                  </button>
+                  <button
+                    onClick={() => cetakDokumen(grup, 'kunci')}
+                    className={TOMBOL_AKSI}
+                    title="Cetak kunci jawaban untuk guru"
+                  >
+                    <Key size={13} /> Cetak Kunci
+                  </button>
+                  <button
+                    onClick={() => unduhWord(grup)}
+                    className={TOMBOL_AKSI}
+                    title="Unduh lembar soal sebagai file Word (.doc) yang bisa diedit"
+                  >
+                    <FileText size={13} /> Unduh Word
+                  </button>
+                  <button
+                    onClick={() => unduhExcel(grup)}
+                    className={TOMBOL_AKSI}
+                    title="Unduh soal beserta kunci jawaban sebagai file Excel (.xlsx)"
+                  >
+                    <FileSpreadsheet size={13} /> Unduh Excel
+                  </button>
+                </div>
+
                 {isOpen && (
                   <ul className="divide-y divide-ink-900/[0.06] border-t border-ink-900/[0.06]">
                     {soalFolder.map((item, i) => (
