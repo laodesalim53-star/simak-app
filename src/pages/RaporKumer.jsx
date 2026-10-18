@@ -4,6 +4,9 @@
 //   pilih Kelas + Mapel + Semester + Tahun Ajaran -> isi Tugas / UTS / UAS
 //   -> Nilai Akhir, Predikat & Deskripsi terisi otomatis -> Simpan.
 //
+// Deskripsi Capaian: ada dropdown pilihan siap pakai per jenjang (Kelas 1–6 SD
+// dan Kelas 7–9 SMP) + predikat, dan tetap bisa diketik/diedit manual.
+//
 // SINKRON DENGAN HALAMAN LAMA (tanpa tabel baru):
 //   - Tugas/UTS/UAS disimpan ke tabel `nilai` (kompetensi 'Pengetahuan'),
 //     jadi langsung muncul di halaman Nilai lama (tab Input / Lihat & Hapus).
@@ -20,6 +23,7 @@ import Layout from '../components/Layout'
 import { Loader2, Save, Printer } from 'lucide-react'
 import { MAPEL_IJAZAH } from '../components/IjazahPrintTemplate'
 import { kanonikkanOpsiMapel, TOKEN_IPAS_GABUNGAN } from '../utils/mapelIjazahAlias'
+import { JENJANG_OPTS, tebakJenjang, opsiDeskripsi } from '../utils/deskripsiCapaian'
 
 const KOMPETENSI = 'Pengetahuan'
 
@@ -128,6 +132,7 @@ export default function RaporKumer() {
   const [mataPelajaran, setMataPelajaran] = useState('')
   const [semester, setSemester] = useState('Ganjil')
   const [tahunAjaran, setTahunAjaran] = useState(TA_OPTS[1])
+  const [jenjang, setJenjang] = useState('') // '1'..'9' untuk dropdown deskripsi
 
   // Tiap baris: { siswaId, nama, Tugas, UTS, UAS, deskripsi } (semua string)
   const [baris, setBaris] = useState([])
@@ -150,6 +155,12 @@ export default function RaporKumer() {
       if (data?.length) setKelasId(data[0].id)
     })
   }, [isAdmin, profil])
+
+  // ---- Jenjang otomatis ditebak dari nama kelas (bisa diganti manual) ----
+  useEffect(() => {
+    const k = kelasList.find((x) => x.id === kelasId)
+    setJenjang(tebakJenjang(k?.nama_kelas) || '')
+  }, [kelasId, kelasList])
 
   // ---- Mapel: guru -> mapel di profilnya (dikanonikkan ke nama resmi ijazah,
   // sama seperti halaman Nilai); admin -> semua mapel resmi ----
@@ -428,6 +439,8 @@ export default function RaporKumer() {
     navigate(`/rapor/cetak?${params.toString()}`)
   }
 
+  const namaMapelTerpilih = mapelOpts.find((o) => o.value === mataPelajaran)?.label || ''
+
   return (
     <Layout title="Raport Kumer" subtitle="Input nilai cepat — otomatis sinkron dengan Nilai & Rapor">
       {mapelTidakDikenal.length > 0 && (
@@ -437,7 +450,7 @@ export default function RaporKumer() {
         </div>
       )}
 
-      <div className="card p-5 mb-5 grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="card p-5 mb-5 grid grid-cols-2 md:grid-cols-5 gap-3">
         <div>
           <label className="label-field">Kelas</label>
           <select className="input-field" value={kelasId} onChange={(e) => setKelasId(e.target.value)}>
@@ -482,12 +495,23 @@ export default function RaporKumer() {
             ))}
           </select>
         </div>
+        <div>
+          <label className="label-field">Jenjang (Deskripsi)</label>
+          <select className="input-field" value={jenjang} onChange={(e) => setJenjang(e.target.value)}>
+            <option value="">Pilih jenjang</option>
+            {JENJANG_OPTS.map((j) => (
+              <option key={j.value} value={j.value}>
+                {j.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <p className="text-xs text-ink-700/50 mb-3">
         Isi Tugas, UTS, dan UAS (0–100). Nilai Akhir = Tugas 20% + UTS 30% + UAS 50%; komponen yang dikosongkan
-        dilewati. Predikat dan Deskripsi terisi otomatis, deskripsi boleh diketik sendiri. Tekan Enter untuk pindah
-        ke siswa berikutnya.
+        dilewati. Predikat terisi otomatis. Deskripsi bisa dipilih dari dropdown (sesuai jenjang &amp; predikat),
+        diketik sendiri, atau dikosongkan agar terisi otomatis. Tekan Enter untuk pindah ke siswa berikutnya.
       </p>
 
       {pesan && (
@@ -514,7 +538,7 @@ export default function RaporKumer() {
               ))}
               <th className="w-20 text-center">Akhir</th>
               <th className="w-20 text-center">Predikat</th>
-              <th className="min-w-[260px]">Deskripsi Capaian</th>
+              <th className="min-w-[300px]">Deskripsi Capaian</th>
               <th className="w-12 text-center"></th>
             </tr>
           </thead>
@@ -544,6 +568,8 @@ export default function RaporKumer() {
               baris.map((r, idx) => {
                 const akhir = hitungAkhir(r)
                 const predikat = predikatDariNilai(akhir)
+                const pilihanDeskripsi =
+                  jenjang && predikat ? opsiDeskripsi(jenjang, predikat, namaMapelTerpilih) : []
                 return (
                   <tr key={r.siswaId}>
                     <td className="font-medium whitespace-nowrap">{r.nama}</td>
@@ -572,10 +598,31 @@ export default function RaporKumer() {
                       )}
                     </td>
                     <td>
+                      <select
+                        className="input-field !py-1 text-xs mb-1"
+                        disabled={!jenjang || !predikat}
+                        value=""
+                        onChange={(e) => {
+                          if (e.target.value !== '') ubahBaris(idx, 'deskripsi', e.target.value)
+                        }}
+                      >
+                        <option value="">
+                          {!jenjang
+                            ? 'Pilih jenjang dulu'
+                            : !predikat
+                            ? 'Isi nilai dulu'
+                            : 'Pilih deskripsi…'}
+                        </option>
+                        {pilihanDeskripsi.map((o, i) => (
+                          <option key={i} value={o.teks}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
                       <textarea
                         rows={2}
                         className="input-field !py-1 text-xs"
-                        placeholder={akhir !== null ? 'Otomatis sesuai predikat (boleh diketik sendiri)' : ''}
+                        placeholder={akhir !== null ? 'Pilih dari dropdown, ketik sendiri, atau kosongkan (otomatis)' : ''}
                         value={r.deskripsi}
                         onChange={(e) => ubahBaris(idx, 'deskripsi', e.target.value)}
                       />
