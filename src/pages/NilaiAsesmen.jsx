@@ -15,13 +15,24 @@
 // - Nama siswa ditampilkan dalam format Title Case (huruf awal tiap kata
 //   kapital) via formatNama(), supaya tampilan konsisten walau data di
 //   database tersimpan ALL CAPS atau format campuran.
+// - AKSES TERBATAS: laman hanya tampil untuk (1) admin, dan (2) guru yang
+//   menjadi wali kelas tingkat 6 / 9. Selain itu dialihkan ke /dashboard.
+//   Admin memuat kelas VI (fallback kelas tingkat 6/9 lain); guru memuat
+//   kelasnya sendiri. Catatan: ini hanya pembatas tampilan — amankan juga
+//   tabel `nilai_ijazah` lewat RLS di Supabase.
 import { useEffect, useMemo, useState } from "react";
+import { Navigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
+import { useAuth } from "../context/AuthContext"; // SESUAIKAN path/nama hook dengan project
 import Layout from "../components/Layout";
 import ImporNilaiAsesmenModal from "../components/ImporNilaiAsesmenModal";
 import DetailNilaiSiswaModal from "../components/DetailNilaiSiswaModal";
 import { MAPEL_IJAZAH, jumlahNilai, rataRataNilai } from "../components/IjazahPrintTemplate";
 import { Loader2, Save, FileSpreadsheet, FileEdit } from "lucide-react";
+
+// Tingkat kelas yang boleh mengakses (Romawi maupun angka diterima).
+const TINGKAT_BOLEH = ["VI", "6", "IX", "9"];
+const normTingkat = (t) => String(t ?? "").trim().toUpperCase();
 
 // Tahun pelajaran default: kalau sekarang Juli-Des, "thn/thn+1"; kalau Jan-Jun, "thn-1/thn".
 function tahunPelajaranDefault() {
@@ -45,8 +56,12 @@ function formatNama(nama) {
 }
 
 export default function NilaiAsesmen() {
+  // SESUAIKAN nama field dengan AuthContext Anda (profil, isAdmin, loading).
+  const { profil, isAdmin, loading: authLoading } = useAuth();
+
+  const [aksesBoleh, setAksesBoleh] = useState(null); // null = masih dicek
   const [tahunPelajaran, setTahunPelajaran] = useState(tahunPelajaranDefault());
-  const [kelasAktif, setKelasAktif] = useState(null); // hanya kelas 6, tidak ada pilihan lain
+  const [kelasAktif, setKelasAktif] = useState(null); // kelas 6/9 sesuai hak akses
   const [siswaList, setSiswaList] = useState([]);
   const [nilaiMap, setNilaiMap] = useState({}); // siswa_id -> {pend_agama: .., ...}
   const [sekolah, setSekolah] = useState(null);
@@ -55,22 +70,44 @@ export default function NilaiAsesmen() {
   const [saved, setSaved] = useState(false);
   const [detailSiswa, setDetailSiswa] = useState(null); // siswa yang lagi dibuka di modal Detail & Cetak
 
+  // Cek hak akses + tentukan kelas yang dimuat.
   useEffect(() => {
-    loadKelas6();
+    if (authLoading) return;
+    cekAksesDanMuatKelas();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authLoading, profil?.id, isAdmin]);
 
   useEffect(() => {
-    if (kelasAktif) loadAll();
+    if (aksesBoleh && kelasAktif) loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tahunPelajaran, kelasAktif]);
+  }, [tahunPelajaran, kelasAktif, aksesBoleh]);
 
-  // Ambil kelas dengan tingkat "VI" secara otomatis — tidak ada dropdown
-  // karena laman ini memang dikhususkan untuk kelas 6.
-  async function loadKelas6() {
+  async function cekAksesDanMuatKelas() {
     const { data: kelas } = await supabase.from("kelas").select("*").order("nama_kelas");
-    const kelas6 = (kelas || []).find((k) => String(k.tingkat).trim().toUpperCase() === "VI");
-    setKelasAktif(kelas6 || (kelas || [])[0] || null);
+    const semua = kelas || [];
+    const kelasBoleh = semua.filter((k) => TINGKAT_BOLEH.includes(normTingkat(k.tingkat)));
+
+    if (isAdmin) {
+      // Admin: cari kelas VI/6 dulu, fallback ke kelas 6/9 lain, lalu kelas pertama.
+      const kelas6 = semua.find((k) => ["VI", "6"].includes(normTingkat(k.tingkat)));
+      setKelasAktif(kelas6 || kelasBoleh[0] || semua[0] || null);
+      setAksesBoleh(true);
+      return;
+    }
+
+    // Non-admin (guru): hanya boleh jika wali kelas dari kelas tingkat 6/9.
+    // ASUMSI: kelas.wali_kelas_id = id guru, dan profil.guru_id = id guru
+    // akun yang login. Sesuaikan jika nama kolom di database berbeda.
+    const kelasSaya = kelasBoleh.find(
+      (k) => profil?.guru_id && k.wali_kelas_id === profil.guru_id
+    );
+    if (kelasSaya) {
+      setKelasAktif(kelasSaya);
+      setAksesBoleh(true);
+    } else {
+      setAksesBoleh(false);
+      setLoading(false);
+    }
   }
 
   async function loadAll() {
@@ -83,7 +120,7 @@ export default function NilaiAsesmen() {
       .order("nama_lengkap");
     if (kelasAktif?.id) siswaQuery = siswaQuery.eq("kelas_id", kelasAktif.id);
 
-    const [{ data: siswa }, { data: nilai }, { data: profil }] = await Promise.all([
+    const [{ data: siswa }, { data: nilai }, { data: profilSekolah }] = await Promise.all([
       siswaQuery,
       supabase.from("nilai_ijazah").select("*").eq("tahun_pelajaran", tahunPelajaran),
       supabase.from("profil_sekolah").select("*").eq("id", 1).maybeSingle(),
@@ -94,7 +131,7 @@ export default function NilaiAsesmen() {
       map[n.siswa_id] = n;
     });
     setNilaiMap(map);
-    setSekolah(profil || null);
+    setSekolah(profilSekolah || null);
     setLoading(false);
   }
 
@@ -144,6 +181,18 @@ export default function NilaiAsesmen() {
         : null,
     [sekolah]
   );
+
+  // ===== Penjagaan akses (setelah semua hook) =====
+  if (authLoading || aksesBoleh === null) {
+    return (
+      <Layout title="Nilai Asesmen">
+        <p>Memeriksa akses...</p>
+      </Layout>
+    );
+  }
+  if (!aksesBoleh) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   return (
     <Layout
