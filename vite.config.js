@@ -37,16 +37,23 @@ export default defineConfig(({ mode }) => {
   const info = MANIFEST_TIPE[tipe]
 
   return {
+    build: {
+      rollupOptions: {
+        output: {
+          // Nama berkas entri dibuat pasti (app-<hash>.js) supaya bisa
+          // dipilih tepat di workbox.globPatterns di bawah, tanpa ikut
+          // mencocokkan chunk lain yang kebetulan bernama "index-...".
+          entryFileNames: 'assets/app-[hash].js'
+        }
+      }
+    },
     plugins: [
       react(),
       VitePWA({
-        // PERBAIKAN: 'autoUpdate' mengganti service worker diam-diam di
-        // tengah sesi (bisa pas kamu lagi klik-klik menu), membuat kode lama
-        // yang masih berjalan di browser tiba-tiba nyangkut ke file yang
-        // sudah tidak ada di server -> terasa macet lalu "keluar sendiri".
-        // 'prompt' menunda pergantian sampai kita yang memicu lewat
-        // updateSW() di bawah, di titik yang aman (baru refresh, bukan
-        // di tengah interaksi).
+        // 'autoUpdate' mengganti service worker diam-diam di tengah sesi,
+        // membuat kode lama nyangkut ke file yang sudah tidak ada di server.
+        // 'prompt' menunda pergantian sampai dipicu lewat updateSW()
+        // (registerSW dari 'virtual:pwa-register' di main.jsx).
         registerType: 'prompt',
         includeAssets: ['favicon.ico', 'icon-192.png', 'icon-512.png'],
         manifest: {
@@ -83,13 +90,48 @@ export default defineConfig(({ mode }) => {
           ]
         },
         workbox: {
+          // PERBAIKAN BERAT SAAT MEMUAT: bawaan vite-plugin-pwa mem-precache
+          // SEMUA berkas js/css/html hasil build, termasuk ratusan chunk
+          // halaman lazy dan pustaka besar (tesseract, pdfjs, xlsx, livekit,
+          // dst). Akibatnya begitu aplikasi pertama dibuka, browser
+          // mengunduh seluruh aplikasi di latar belakang, dan tiap deploy
+          // mengunduh ulang chunk yang berubah. Lazy loading jadi tidak
+          // berguna. Sekarang yang di-precache hanya "kerangka": index.html,
+          // berkas entri, CSS, dan ikon. Chunk halaman di-cache saat
+          // pertama dibuka (runtimeCaching di bawah).
+          globPatterns: [
+            'index.html',
+            'assets/app-*.js',
+            'assets/*.css',
+            '*.{ico,png,svg,webmanifest}'
+          ],
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+
           // Jangan cache respons Supabase sama sekali (data berubah terus).
           // Berkas unduhan (APK dll.) dikecualikan dari fallback navigasi
           // supaya service worker tidak menyajikan index.html sebagai
           // pengganti file yang diminta.
           navigateFallbackDenylist: [/^\/api\//, /\.(?:apk|msix|pdf|zip)$/],
-          runtimeCaching: []
+
+          runtimeCaching: [
+            {
+              // Chunk JS/CSS/font hasil build bernama ber-hash, jadi isinya
+              // tidak pernah berubah: aman memakai CacheFirst.
+              urlPattern: ({ url, sameOrigin }) =>
+                sameOrigin &&
+                url.pathname.startsWith('/assets/') &&
+                /\.(?:js|css|woff2?)$/.test(url.pathname),
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'aset-build',
+                expiration: {
+                  maxEntries: 150,
+                  maxAgeSeconds: 30 * 24 * 60 * 60
+                },
+                cacheableResponse: { statuses: [0, 200] }
+              }
+            }
+          ]
         }
       })
     ],
