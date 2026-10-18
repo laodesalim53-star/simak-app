@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabaseClient'; // sesuaikan kalau nama/lokasi file berbeda
 import { useAuth } from '../lib/AuthContext';
 import Layout from '../components/Layout';
+import { PanelKerjakan, PanelHasil } from './UjianOnline';
 
 // Membuat kode ujian acak 6 karakter, misal: X7K2QP
 function buatKodeUjian() {
@@ -49,7 +50,7 @@ function normalisasiPeran(nilai) {
     .replace(/[\s-]+/g, '_');
 }
 
-export default function BuatUjian() {
+function PanelBuat() {
   const { session } = useAuth();
   const guruId = session?.user?.id; // auth.uid() — HANYA dipakai untuk query profil, JANGAN disimpan sebagai guru_id di tabel lain
 
@@ -426,7 +427,7 @@ export default function BuatUjian() {
   if (status === 'selesai' && ujianDibuat) {
     const namaKelasDibuat = daftarKelas.find((k) => k.id === ujianDibuat.kelas_id)?.nama_kelas;
     return (
-      <Layout title="Buat Ujian" subtitle="Ujian baru berhasil dibuat">
+      <>
         <div className="w-full max-w-xl p-6 rounded-xl border border-[#6b0f1a]/15 bg-white shadow-sm">
           <h3 className="text-lg font-semibold text-[#3b0a0a] flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-[#d4a017]"></span>
@@ -669,6 +670,6 @@ export default function BuatUjian() {
           {status === 'menyimpan' ? 'Menyimpan...' : 'Simpan Ujian'}
         </button>
       </div>
-    </Layout>
+    </>
   );
 }
