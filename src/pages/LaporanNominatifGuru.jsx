@@ -37,21 +37,25 @@ import KopSurat from '../components/KopSurat'
 // total tabel melebihi 297mm (lebar A4 landscape), sehingga saat print
 // kontennya terdorong keluar area halaman pertama — tampak seolah
 // halaman cetak kosong padahal isinya overflow ke luar page. Diperbaiki
-// dengan `table-fixed` + lebar kolom dalam persen (total 100%) dan
-// `break-words` supaya teks panjang membungkus, bukan memperlebar
-// kolom. Dengan ini tabel dijamin selalu pas dalam satu halaman,
-// persis seperti perilaku tabel di LaporanPendidikanGuru.jsx.
+// dengan `table-fixed` + lebar kolom dalam persen dan `break-words`
+// supaya teks panjang membungkus, bukan memperlebar kolom.
 //
-// CATATAN ASUMSI: kop surat & data instansi diasumsikan tetap memakai
-// tabel `profil_sekolah` yang sama (relasi lewat sekolah_id), hanya
-// label "Kepala Sekolah" pada blok tanda tangan diganti "Pimpinan"
-// supaya tidak rancu untuk instansi non-sekolah. Kalau tabel/kolom
-// profil kantor kamu ternyata berbeda, kabari saya untuk disesuaikan.
+// FIX (logo kabupaten): kop surat sekarang memakai komponen bersama
+// <KopSurat /> (src/components/KopSurat.jsx). Sebelumnya kop ditulis manual
+// di file ini dan hanya memakai profil_sekolah.logo_path, sehingga logo
+// kabupaten tidak pernah tampil (import KopSurat sudah ada tapi belum
+// dipakai). KopSurat mengambil data & logo instansi sendiri sesuai jenis
+// tenant (sekolah: logo kabupaten kiri + logo sekolah kanan), jadi state
+// logoUrl dan pengambilan logo di sini dihapus.
+//
+// CATATAN: blok identitas (Instansi/Kecamatan/Kabupaten) dan tanda tangan
+// di bawah masih membaca tabel `profil_sekolah` (relasi lewat sekolah_id),
+// hanya label "Kepala Sekolah" diganti "Pimpinan" supaya tidak rancu untuk
+// instansi non-sekolah.
 export default function LaporanNominatifPegawai() {
   const navigate = useNavigate()
   const { sekolahId: sekolahIdSaya } = useAuth()
   const [profilKantor, setProfilKantor] = useState(null)
-  const [logoUrl, setLogoUrl] = useState('')
   const [daftarPegawai, setDaftarPegawai] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -110,13 +114,6 @@ export default function LaporanNominatifPegawai() {
       ])
 
       setProfilKantor(kantor || null)
-
-      if (kantor?.logo_path) {
-        const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(kantor.logo_path)
-        setLogoUrl(pub?.publicUrl || '')
-      } else {
-        setLogoUrl('')
-      }
 
       // Baris dari `guru` tidak punya kolom `jabatan` (itu khas
       // `pegawai_kantor`) — dipetakan dari tugas_tambahan/jenis_ptk,
@@ -195,31 +192,7 @@ export default function LaporanNominatifPegawai() {
       </div>
 
       <div className="lembar-cetak print-only bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '297mm', minHeight: '210mm' }}>
-        <div className="flex items-center gap-4 border-b-4 border-black pb-3 mb-4">
-          {logoUrl && (
-            <img src={logoUrl} alt="Logo" className="w-16 h-16 object-contain shrink-0" />
-          )}
-          <div className="text-center flex-1">
-            <p className="text-sm font-medium uppercase">
-              Pemerintah Kabupaten {formatKabupaten(profilKantor?.kabupaten)}
-            </p>
-            <p className="text-sm font-medium uppercase">
-              {profilKantor?.dinas_pendidikan || profilKantor?.instansi_induk || ''}
-            </p>
-            <p className="text-lg font-bold uppercase">{profilKantor?.nama_sekolah || 'Nama Instansi'}</p>
-            <p className="text-xs">
-              {[profilKantor?.alamat, profilKantor?.kecamatan, profilKantor?.kabupaten, profilKantor?.provinsi]
-                .filter(Boolean)
-                .join(', ')}
-              {profilKantor?.kode_pos ? ` ${profilKantor.kode_pos}` : ''}
-            </p>
-            {(profilKantor?.telepon || profilKantor?.email || profilKantor?.website) && (
-              <p className="text-xs">
-                {[profilKantor?.telepon, profilKantor?.email, profilKantor?.website].filter(Boolean).join(' | ')}
-              </p>
-            )}
-          </div>
-        </div>
+        <KopSurat />
 
         <h1 className="text-center font-bold text-base uppercase underline mb-4">
           Daftar Nominatif Pegawai
@@ -234,11 +207,11 @@ export default function LaporanNominatifPegawai() {
           <span>: {formatKabupaten(profilKantor?.kabupaten)}</span>
         </div>
 
-        {/* table-fixed + lebar kolom dalam % (total 100%) supaya tabel
-            18-kolom ini SELALU pas dalam satu halaman A4 landscape,
-            tidak overflow seperti sebelumnya (penyebab halaman print
-            tampak kosong). break-words di td mengizinkan teks panjang
-            membungkus alih-alih memperlebar kolom. */}
+        {/* table-fixed + lebar kolom dalam % supaya tabel 18-kolom ini
+            SELALU pas dalam satu halaman A4 landscape, tidak overflow
+            seperti sebelumnya (penyebab halaman print tampak kosong).
+            break-words di td mengizinkan teks panjang membungkus alih-alih
+            memperlebar kolom. */}
         <table className="w-full table-fixed text-[9px] border-collapse border border-black">
           <thead>
             <tr className="text-center">
