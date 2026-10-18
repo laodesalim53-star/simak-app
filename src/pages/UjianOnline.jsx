@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabaseClient'; // sesuaikan kalau nama/lokasi file berbeda
 import { useAuth } from '../lib/AuthContext';
 import Layout from '../components/Layout';
@@ -22,6 +22,109 @@ function acakUrutan(arr) {
 }
 
 /* =====================================================================
+   ANIMASI — CSS murni (tanpa library tambahan), otomatis dimatikan untuk
+   pengguna yang mengaktifkan "kurangi gerakan" (prefers-reduced-motion).
+   ===================================================================== */
+const ANIMASI_CSS = `
+@keyframes uo-fade-up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes uo-pop { 0% { transform: scale(0.6); } 60% { transform: scale(1.18); } 100% { transform: scale(1); } }
+@keyframes uo-shake { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-6px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(4px); } }
+@keyframes uo-ring { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55); } 100% { box-shadow: 0 0 0 14px rgba(239, 68, 68, 0); } }
+@keyframes uo-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+@keyframes uo-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.45); } 50% { box-shadow: 0 0 0 10px rgba(22, 163, 74, 0); } }
+@keyframes uo-bounce-in { 0% { opacity: 0; transform: scale(0.3); } 50% { opacity: 1; transform: scale(1.12); } 70% { transform: scale(0.95); } 100% { transform: scale(1); } }
+@keyframes uo-konfeti { 0% { opacity: 1; transform: translateY(-20px) rotate(0deg); } 100% { opacity: 0.9; transform: translateY(105vh) rotate(720deg); } }
+
+.uo-fade-up { animation: uo-fade-up 0.45s ease-out backwards; }
+.uo-pop { animation: uo-pop 0.35s ease-out; }
+.uo-shake { animation: uo-shake 0.45s ease-in-out; }
+.uo-sorot { animation: uo-shake 0.45s ease-in-out, uo-ring 1s ease-out 2; border-color: #ef4444 !important; }
+.uo-float { display: inline-block; animation: uo-float 2.4s ease-in-out infinite; }
+.uo-glow { animation: uo-glow 1.6s ease-in-out infinite; }
+.uo-bounce-in { animation: uo-bounce-in 0.7s ease-out backwards; }
+.uo-konfeti { position: absolute; top: -20px; border-radius: 2px; opacity: 0; animation-name: uo-konfeti; animation-timing-function: ease-in; animation-fill-mode: forwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .uo-fade-up, .uo-pop, .uo-shake, .uo-sorot, .uo-float, .uo-glow, .uo-bounce-in, .uo-konfeti { animation: none !important; }
+}
+`;
+
+// Spinner kecil untuk tombol yang sedang memproses.
+function Spinner() {
+  return (
+    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+    </svg>
+  );
+}
+
+// Angka skor yang naik pelan-pelan dari 0 sampai nilai akhir.
+function AngkaHitung({ nilai }) {
+  const target = Number(nilai);
+  const valid = !isNaN(target);
+  const [tampil, setTampil] = useState(0);
+
+  useEffect(() => {
+    if (!valid) return;
+    const kurangiGerak = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (kurangiGerak) {
+      setTampil(target);
+      return;
+    }
+    const mulai = performance.now();
+    const durasi = 1200;
+    let raf;
+    const langkah = (t) => {
+      const p = Math.min((t - mulai) / durasi, 1);
+      const eased = 1 - Math.pow(1 - p, 3); // easeOutCubic
+      setTampil(target * eased);
+      if (p < 1) raf = requestAnimationFrame(langkah);
+    };
+    raf = requestAnimationFrame(langkah);
+    return () => cancelAnimationFrame(raf);
+  }, [target, valid]);
+
+  if (!valid) return <>{nilai}</>;
+  return <>{Number.isInteger(target) ? Math.round(tampil) : tampil.toFixed(1)}</>;
+}
+
+// Hujan konfeti untuk layar "Selesai" (hanya dipakai kalau skor bagus).
+const WARNA_KONFETI = ['#2563eb', '#16a34a', '#f59e0b', '#ef4444', '#a855f7', '#06b6d4'];
+function Konfeti() {
+  const potongan = useMemo(
+    () =>
+      Array.from({ length: 28 }, (_, i) => ({
+        id: i,
+        kiri: Math.random() * 100,
+        tunda: Math.random() * 0.8,
+        durasi: 2.4 + Math.random() * 1.8,
+        warna: WARNA_KONFETI[i % WARNA_KONFETI.length],
+        lebar: 6 + Math.random() * 6,
+      })),
+    []
+  );
+  return (
+    <div className="fixed inset-0 pointer-events-none overflow-hidden z-50" aria-hidden="true">
+      {potongan.map((p) => (
+        <span
+          key={p.id}
+          className="uo-konfeti"
+          style={{
+            left: `${p.kiri}%`,
+            width: p.lebar,
+            height: p.lebar * 1.6,
+            background: p.warna,
+            animationDelay: `${p.tunda}s`,
+            animationDuration: `${p.durasi}s`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* =====================================================================
    TAB 1 — KERJAKAN UJIAN (siswa)
    ===================================================================== */
 export function PanelKerjakan({ onTahapChange }) {
@@ -34,6 +137,8 @@ export function PanelKerjakan({ onTahapChange }) {
   const [namaSiswa, setNamaSiswa] = useState('');
   const [jawaban, setJawaban] = useState({});
   const [error, setError] = useState('');
+  const [getarKe, setGetarKe] = useState(0); // naik 1 tiap error baru supaya animasi getar selalu terulang
+  const [soalSorot, setSoalSorot] = useState(null); // soal yang disorot saat belum dijawab
   const [memuat, setMemuat] = useState(false);
   const [skorAkhir, setSkorAkhir] = useState(null);
   const [sudahMengerjakan, setSudahMengerjakan] = useState(null); // null = belum dicek, angka = skor lama, false = belum pernah
@@ -65,6 +170,7 @@ export function PanelKerjakan({ onTahapChange }) {
     const kodeInput = (kodeOverride ?? kodeUjian).trim();
     if (!kodeInput) {
       setError('Masukkan kode ujian dulu.');
+      setGetarKe((k) => k + 1);
       return;
     }
     setMemuat(true);
@@ -79,12 +185,14 @@ export function PanelKerjakan({ onTahapChange }) {
 
     if (errUjian || !ujianData) {
       setError('Kode ujian tidak ditemukan. Cek lagi kode dari gurumu.');
+      setGetarKe((k) => k + 1);
       setMemuat(false);
       return;
     }
 
     if (ujianData.status !== 'aktif') {
       setError('Ujian ini belum diaktifkan oleh guru. Tanyakan ke gurumu.');
+      setGetarKe((k) => k + 1);
       setMemuat(false);
       return;
     }
@@ -97,6 +205,7 @@ export function PanelKerjakan({ onTahapChange }) {
 
     if (errSoal || !soalData || soalData.length === 0) {
       setError('Soal untuk ujian ini belum tersedia.');
+      setGetarKe((k) => k + 1);
       setMemuat(false);
       return;
     }
@@ -110,6 +219,7 @@ export function PanelKerjakan({ onTahapChange }) {
 
     if (errSiswa || !siswaData) {
       setError('Gagal mengambil daftar siswa kelas ini.');
+      setGetarKe((k) => k + 1);
       setMemuat(false);
       return;
     }
@@ -158,11 +268,22 @@ export function PanelKerjakan({ onTahapChange }) {
   async function kirimJawaban() {
     if (!nisSiswa) {
       setError('Pilih namamu dulu dari daftar.');
+      setGetarKe((k) => k + 1);
       return;
     }
+    // soalList sudah dalam urutan tampil, jadi soal pertama di daftar ini
+    // adalah soal belum terjawab yang paling atas di layar.
     const belumDijawab = soalList.filter((s) => !jawaban[s.id]);
     if (belumDijawab.length > 0) {
       setError(`Masih ada ${belumDijawab.length} soal yang belum dijawab.`);
+      setGetarKe((k) => k + 1);
+      // Gulir otomatis ke soal pertama yang belum dijawab dan sorot sebentar.
+      const pertama = belumDijawab[0];
+      setSoalSorot(pertama.id);
+      document
+        .getElementById(`soal-${pertama.id}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => setSoalSorot(null), 2200);
       return;
     }
 
@@ -180,6 +301,7 @@ export function PanelKerjakan({ onTahapChange }) {
 
     if (errSubmit) {
       setError(errSubmit.message || 'Gagal mengirim jawaban.');
+      setGetarKe((k) => k + 1);
       return;
     }
 
@@ -187,160 +309,260 @@ export function PanelKerjakan({ onTahapChange }) {
     setTahap('selesai');
   }
 
-  // ---------- TAHAP 1: MASUKKAN KODE UJIAN ----------
-  if (tahap === 'masuk') {
-    return (
-      <div className="max-w-sm mx-auto mt-10 p-6 rounded-xl border shadow-sm text-center">
-        <h1 className="text-xl font-semibold mb-4">Ujian Online</h1>
-        <input
-          value={kodeUjian}
-          onChange={(e) => setKodeUjian(e.target.value)}
-          placeholder="Masukkan Kode Ujian"
-          className="w-full border rounded-lg px-3 py-2 text-center text-lg font-mono tracking-widest uppercase"
-          maxLength={6}
-        />
-        {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
-        <button
-          onClick={() => cariUjian()}
-          disabled={memuat}
-          className="mt-4 w-full py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50"
-        >
-          {memuat ? 'Mencari...' : 'Lanjut'}
-        </button>
-      </div>
-    );
-  }
+  const terjawab = Object.keys(jawaban).length;
+  const persenTerjawab = soalList.length > 0 ? Math.round((terjawab / soalList.length) * 100) : 0;
+  const semuaTerjawab = soalList.length > 0 && terjawab === soalList.length;
 
-  // ---------- TAHAP 2: PILIH NAMA ----------
-  if (tahap === 'pilih-nama') {
-    return (
-      <div className="max-w-sm mx-auto mt-10 p-6 rounded-xl border shadow-sm text-center">
-        <h1 className="text-xl font-semibold">{ujian.judul}</h1>
-        <p className="text-sm text-gray-500 mb-4">
-          {ujian.mata_pelajaran} · Kelas {ujian.nama_kelas}
-        </p>
-        <select
-          value={nisSiswa}
-          onChange={(e) => {
-            const nis = e.target.value;
-            setNisSiswa(nis);
-            const siswa = daftarSiswa.find((s) => s.nis === nis);
-            setNamaSiswa(siswa?.nama_lengkap || '');
-            setError('');
-            cekStatusUjian(nis);
-          }}
-          className="w-full border rounded-lg px-3 py-2"
-        >
-          <option value="">-- Pilih namamu --</option>
-          {daftarSiswa.map((s) => (
-            <option key={s.nis} value={s.nis}>
-              {s.nama_lengkap}
-            </option>
-          ))}
-        </select>
-
-        {cekStatusLoading && (
-          <p className="text-sm text-gray-400 mt-2">Mengecek status...</p>
-        )}
-
-        {sudahMengerjakan !== null && sudahMengerjakan !== false && (
-          <div className="mt-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
-            Kamu sudah mengerjakan ujian ini sebelumnya. Skor kamu:{' '}
-            <strong>{sudahMengerjakan}</strong>. Setiap siswa hanya bisa mengerjakan 1 kali.
+  function renderTahap() {
+    // ---------- TAHAP 1: MASUKKAN KODE UJIAN ----------
+    if (tahap === 'masuk') {
+      return (
+        <div key="masuk" className="max-w-sm mx-auto mt-10 p-6 rounded-xl border shadow-sm text-center uo-fade-up">
+          <div className="text-4xl mb-2 uo-float" aria-hidden="true">
+            📝
           </div>
-        )}
-
-        {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
-        <button
-          onClick={() => {
-            if (!nisSiswa) {
-              setError('Pilih namamu dulu.');
-              return;
-            }
-            if (sudahMengerjakan !== null && sudahMengerjakan !== false) {
-              setError('Kamu sudah mengerjakan ujian ini sebelumnya.');
-              return;
-            }
-            setError('');
-            setTahap('kerjakan');
-          }}
-          disabled={cekStatusLoading || (sudahMengerjakan !== null && sudahMengerjakan !== false)}
-          className="mt-4 w-full py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Mulai Kerjakan
-        </button>
-      </div>
-    );
-  }
-
-  // ---------- TAHAP 3: KERJAKAN SOAL ----------
-  if (tahap === 'kerjakan') {
-    return (
-      <div className="max-w-2xl mx-auto mt-8 p-6 space-y-6">
-        <div className="text-center">
-          <h1 className="text-lg font-semibold">{ujian.judul}</h1>
-          <p className="text-sm text-gray-500">
-            {namaSiswa} · {Object.keys(jawaban).length}/{soalList.length} terjawab
-          </p>
-        </div>
-
-        {soalList.map((s, i) => (
-          <div key={s.id} className="border rounded-xl p-4">
-            <p className="font-medium mb-3">
-              {i + 1}. {s.soal}
+          <h1 className="text-xl font-semibold mb-4">Ujian Online</h1>
+          <input
+            value={kodeUjian}
+            onChange={(e) => setKodeUjian(e.target.value)}
+            placeholder="Masukkan Kode Ujian"
+            className="w-full border rounded-lg px-3 py-2 text-center text-lg font-mono tracking-widest uppercase outline-none transition-shadow focus:ring-2 focus:ring-blue-300 focus:border-blue-400"
+            maxLength={6}
+          />
+          {error && (
+            <p key={getarKe} className="text-sm text-red-600 mt-2 uo-shake">
+              {error}
             </p>
-            {['a', 'b', 'c', 'd'].map((huruf, idx) => {
-              const petaSoal = pemetaanPilihan[s.id];
-              const hurufAsli = petaSoal ? petaSoal[idx] : huruf.toUpperCase();
-              const kontenPilihan = s[`pilihan_${hurufAsli.toLowerCase()}`];
-              return (
-                <label
-                  key={huruf}
-                  className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer mb-1 ${
-                    jawaban[s.id] === hurufAsli ? 'bg-blue-50 border border-blue-300' : ''
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name={`soal-${s.id}`}
-                    checked={jawaban[s.id] === hurufAsli}
-                    onChange={() => pilihJawaban(s.id, hurufAsli)}
-                  />
-                  <span>
-                    {huruf.toUpperCase()}. {kontenPilihan}
-                  </span>
-                </label>
-              );
-            })}
+          )}
+          <button
+            onClick={() => cariUjian()}
+            disabled={memuat}
+            className="mt-4 w-full py-2 rounded-lg bg-blue-600 text-white font-medium transition-all duration-200 hover:bg-blue-700 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-[0.98] disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+          >
+            {memuat ? (
+              <span className="inline-flex items-center justify-center gap-2">
+                <Spinner /> Mencari...
+              </span>
+            ) : (
+              'Lanjut'
+            )}
+          </button>
+        </div>
+      );
+    }
+
+    // ---------- TAHAP 2: PILIH NAMA ----------
+    if (tahap === 'pilih-nama') {
+      const sudahPernah = sudahMengerjakan !== null && sudahMengerjakan !== false;
+      return (
+        <div key="pilih-nama" className="max-w-sm mx-auto mt-10 p-6 rounded-xl border shadow-sm text-center uo-fade-up">
+          <h1 className="text-xl font-semibold">{ujian.judul}</h1>
+          <p className="text-sm text-gray-500 mb-4">
+            {ujian.mata_pelajaran} · Kelas {ujian.nama_kelas}
+          </p>
+          <select
+            value={nisSiswa}
+            onChange={(e) => {
+              const nis = e.target.value;
+              setNisSiswa(nis);
+              const siswa = daftarSiswa.find((s) => s.nis === nis);
+              setNamaSiswa(siswa?.nama_lengkap || '');
+              setError('');
+              cekStatusUjian(nis);
+            }}
+            className="w-full border rounded-lg px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-blue-300 focus:border-blue-400"
+          >
+            <option value="">-- Pilih namamu --</option>
+            {daftarSiswa.map((s) => (
+              <option key={s.nis} value={s.nis}>
+                {s.nama_lengkap}
+              </option>
+            ))}
+          </select>
+
+          {cekStatusLoading && (
+            <p className="text-sm text-gray-400 mt-2 inline-flex items-center gap-2 justify-center">
+              <Spinner /> Mengecek status...
+            </p>
+          )}
+
+          {sudahPernah && (
+            <div
+              key={String(sudahMengerjakan)}
+              className="mt-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 uo-fade-up"
+            >
+              Kamu sudah mengerjakan ujian ini sebelumnya. Skor kamu:{' '}
+              <strong>{sudahMengerjakan}</strong>. Setiap siswa hanya bisa mengerjakan 1 kali.
+            </div>
+          )}
+
+          {error && (
+            <p key={getarKe} className="text-sm text-red-600 mt-2 uo-shake">
+              {error}
+            </p>
+          )}
+          <button
+            onClick={() => {
+              if (!nisSiswa) {
+                setError('Pilih namamu dulu.');
+                setGetarKe((k) => k + 1);
+                return;
+              }
+              if (sudahPernah) {
+                setError('Kamu sudah mengerjakan ujian ini sebelumnya.');
+                setGetarKe((k) => k + 1);
+                return;
+              }
+              setError('');
+              setTahap('kerjakan');
+            }}
+            disabled={cekStatusLoading || sudahPernah}
+            className="mt-4 w-full py-2 rounded-lg bg-blue-600 text-white font-medium transition-all duration-200 hover:bg-blue-700 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+          >
+            Mulai Kerjakan
+          </button>
+        </div>
+      );
+    }
+
+    // ---------- TAHAP 3: KERJAKAN SOAL ----------
+    if (tahap === 'kerjakan') {
+      return (
+        <div key="kerjakan" className="max-w-2xl mx-auto mt-8 p-6 space-y-6 uo-fade-up">
+          {/* Bar progres menempel di atas saat layar digulir */}
+          <div className="sticky top-0 z-10 -mx-6 px-6 py-3 bg-white/90 backdrop-blur border-b border-gray-100">
+            <div className="text-center">
+              <h1 className="text-lg font-semibold">{ujian.judul}</h1>
+              <p className="text-sm text-gray-500">
+                {namaSiswa} · {terjawab}/{soalList.length} terjawab
+                {semuaTerjawab && <span className="ml-1 text-green-600">✓</span>}
+              </p>
+            </div>
+            <div
+              className="mt-2 h-2 rounded-full bg-gray-200 overflow-hidden"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={persenTerjawab}
+            >
+              <div
+                className={`h-full rounded-full transition-all duration-500 ease-out ${
+                  semuaTerjawab ? 'bg-green-500' : 'bg-blue-500'
+                }`}
+                style={{ width: `${persenTerjawab}%` }}
+              />
+            </div>
           </div>
-        ))}
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+          {soalList.map((s, i) => {
+            const sudahDijawab = !!jawaban[s.id];
+            return (
+              <div
+                key={s.id}
+                id={`soal-${s.id}`}
+                // Kartu muncul bergantian (maks. 8 kartu pertama), sisanya langsung
+                // tampil supaya soal di bagian bawah tidak terasa lambat.
+                style={{ animationDelay: `${Math.min(i, 8) * 70}ms` }}
+                className={`border rounded-xl p-4 transition-colors duration-300 uo-fade-up ${
+                  sudahDijawab ? 'border-green-200 bg-green-50/30' : ''
+                } ${soalSorot === s.id ? 'uo-sorot' : ''}`}
+              >
+                <p className="font-medium mb-3">
+                  {i + 1}. {s.soal}
+                </p>
+                {['a', 'b', 'c', 'd'].map((huruf, idx) => {
+                  const petaSoal = pemetaanPilihan[s.id];
+                  const hurufAsli = petaSoal ? petaSoal[idx] : huruf.toUpperCase();
+                  const kontenPilihan = s[`pilihan_${hurufAsli.toLowerCase()}`];
+                  const terpilih = jawaban[s.id] === hurufAsli;
+                  return (
+                    <label
+                      key={huruf}
+                      className={`group flex items-center gap-3 p-2.5 rounded-lg cursor-pointer mb-1.5 border transition-all duration-200 ${
+                        terpilih
+                          ? 'bg-blue-50 border-blue-300 shadow-sm'
+                          : 'border-transparent hover:bg-gray-50 hover:border-gray-200 hover:translate-x-0.5'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        className="sr-only peer"
+                        name={`soal-${s.id}`}
+                        checked={terpilih}
+                        onChange={() => pilihJawaban(s.id, hurufAsli)}
+                      />
+                      <span
+                        // key berubah saat dipilih -> animasi "pop" berjalan sekali
+                        key={terpilih ? 'on' : 'off'}
+                        className={`w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-xs font-semibold border transition-colors duration-200 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-400 ${
+                          terpilih
+                            ? 'bg-blue-600 border-blue-600 text-white uo-pop'
+                            : 'border-gray-300 text-gray-500 group-hover:border-blue-300'
+                        }`}
+                      >
+                        {huruf.toUpperCase()}
+                      </span>
+                      <span>{kontenPilihan}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            );
+          })}
 
-        <button
-          onClick={kirimJawaban}
-          disabled={memuat}
-          className="w-full py-3 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 disabled:opacity-50"
-        >
-          {memuat ? 'Mengirim...' : 'Selesai & Kumpulkan'}
-        </button>
-      </div>
-    );
+          {error && (
+            <p key={getarKe} className="text-sm text-red-600 uo-shake">
+              {error}
+            </p>
+          )}
+
+          <button
+            onClick={kirimJawaban}
+            disabled={memuat}
+            className={`w-full py-3 rounded-lg bg-green-600 text-white font-semibold transition-all duration-200 hover:bg-green-700 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-[0.98] disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none ${
+              semuaTerjawab && !memuat ? 'uo-glow' : ''
+            }`}
+          >
+            {memuat ? (
+              <span className="inline-flex items-center justify-center gap-2">
+                <Spinner /> Mengirim...
+              </span>
+            ) : (
+              'Selesai & Kumpulkan'
+            )}
+          </button>
+        </div>
+      );
+    }
+
+    // ---------- TAHAP 4: SELESAI ----------
+    if (tahap === 'selesai') {
+      return (
+        <>
+          {/* Konfeti hanya untuk skor 75 ke atas; diletakkan di luar kartu supaya
+              posisinya tetap menutupi seluruh layar */}
+          {Number(skorAkhir) >= 75 && <Konfeti />}
+          <div key="selesai" className="max-w-sm mx-auto mt-10 p-6 rounded-xl border shadow-sm text-center uo-fade-up">
+            <h1 className="text-xl font-semibold mb-2 uo-bounce-in">Selesai! 🎉</h1>
+            <p className="text-gray-600 mb-4">Terima kasih, {namaSiswa}.</p>
+            <div className="text-4xl font-bold text-green-600 uo-bounce-in" style={{ animationDelay: '200ms' }}>
+              <AngkaHitung nilai={skorAkhir} />
+            </div>
+            <p className="text-sm text-gray-500 mt-1">Skor kamu</p>
+          </div>
+        </>
+      );
+    }
+
+    return null;
   }
 
-  // ---------- TAHAP 4: SELESAI ----------
-  if (tahap === 'selesai') {
-    return (
-      <div className="max-w-sm mx-auto mt-10 p-6 rounded-xl border shadow-sm text-center">
-        <h1 className="text-xl font-semibold mb-2">Selesai! 🎉</h1>
-        <p className="text-gray-600 mb-4">Terima kasih, {namaSiswa}.</p>
-        <div className="text-4xl font-bold text-green-600">{skorAkhir}</div>
-        <p className="text-sm text-gray-500 mt-1">Skor kamu</p>
-      </div>
-    );
-  }
-
-  return null;
+  return (
+    <>
+      <style>{ANIMASI_CSS}</style>
+      {renderTahap()}
+    </>
+  );
 }
 
 /* =====================================================================
@@ -656,7 +878,7 @@ export default function UjianOnline() {
     <button
       key={id}
       onClick={() => setTab(id)}
-      className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
+      className={`px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
         tabAktif === id
           ? 'bg-[#6b0f1a] text-white shadow-sm'
           : 'border border-[#6b0f1a]/20 text-[#6b0f1a] hover:bg-[#6b0f1a]/5'
@@ -676,12 +898,13 @@ export default function UjianOnline() {
       )}
 
       {/* Kedua tab tetap "mounted" (hanya disembunyikan) supaya progres siswa
-          tidak hilang ketika berpindah tab. */}
-      <div className={tabAktif === 'kerjakan' ? '' : 'hidden'}>
+          tidak hilang ketika berpindah tab. Animasi fade berjalan ulang setiap
+          panel muncul kembali dari kondisi tersembunyi. */}
+      <div className={tabAktif === 'kerjakan' ? 'uo-fade-up' : 'hidden'}>
         <PanelKerjakan onTahapChange={setTahapSiswa} />
       </div>
 
-      <div className={`mt-6 px-4 ${tabAktif === 'hasil' ? '' : 'hidden'}`}>
+      <div className={`mt-6 px-4 ${tabAktif === 'hasil' ? 'uo-fade-up' : 'hidden'}`}>
         {guruId ? (
           <PanelHasil guruId={guruId} />
         ) : (
