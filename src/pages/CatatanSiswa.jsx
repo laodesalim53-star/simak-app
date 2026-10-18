@@ -62,6 +62,8 @@ export default function CatatanSiswa() {
   const [catatan, setCatatan] = useState([]);
   const [memuat, setMemuat] = useState(true);
   const [error, setError] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false); // admin / kepala sekolah: semua kelas
+  const [tanpaKelas, setTanpaKelas] = useState(false); // guru yang belum punya kelas
 
   const [tab, setTab] = useState('catatan'); // catatan | rekap
   const [filterJenis, setFilterJenis] = useState('semua');
@@ -77,8 +79,29 @@ export default function CatatanSiswa() {
   async function muat() {
     setMemuat(true);
     setError('');
+    // Siapa saya? Admin / kepala sekolah melihat semua kelas; guru hanya kelas yang diampu
+    // (wali kelas atau tercantum di jadwal). Penegakan sebenarnya ada di RLS database;
+    // filter di sini hanya supaya dropdown dan daftar siswa sesuai.
+    const [rAdmin, rKelas] = await Promise.all([
+      supabase.rpc('is_admin_sekolah'),
+      supabase.rpc('kelas_diampu_saya'),
+    ]);
+    const admin = rAdmin.data === true;
+    // setof uuid bisa kembali sebagai array nilai atau array objek; dukung keduanya
+    const idKelas = (rKelas.data || [])
+      .map((x) => (x && typeof x === 'object' ? Object.values(x)[0] : x))
+      .filter(Boolean);
+    setIsAdmin(admin);
+    setTanpaKelas(!admin && idKelas.length === 0);
+
+    let qSiswa = supabase
+      .from('siswa')
+      .select('nis, nama_lengkap, kelas_id, kelas:kelas_id(nama_kelas)')
+      .order('nama_lengkap');
+    if (!admin) qSiswa = qSiswa.in('kelas_id', idKelas);
+
     const [rSiswa, rCatatan] = await Promise.all([
-      supabase.from('siswa').select('nis, nama_lengkap, kelas:kelas_id(nama_kelas)').order('nama_lengkap'),
+      !admin && idKelas.length === 0 ? Promise.resolve({ data: [], error: null }) : qSiswa,
       supabase
         .from('catatan_perilaku_siswa')
         .select('*')
@@ -86,8 +109,10 @@ export default function CatatanSiswa() {
         .order('created_at', { ascending: false })
         .limit(1000),
     ]);
-    if (rSiswa.error || rCatatan.error) {
-      setError(rCatatan.error?.message || rSiswa.error?.message || 'Gagal memuat data.');
+    if (rKelas.error || rSiswa.error || rCatatan.error) {
+      setError(
+        rCatatan.error?.message || rSiswa.error?.message || rKelas.error?.message || 'Gagal memuat data.'
+      );
     }
     setSiswa(
       (rSiswa.data || []).map((s) => {
@@ -293,6 +318,17 @@ export default function CatatanSiswa() {
         </p>
       )}
       {error && <p className="tanpa-cetak text-sm text-red-600 mt-2">{error}</p>}
+      {tanpaKelas && !memuat && (
+        <p className="tanpa-cetak text-sm mt-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800">
+          Akunmu belum terdaftar sebagai wali kelas atau pengajar di jadwal kelas mana pun, jadi belum ada siswa
+          yang bisa dicatat. Hubungi admin sekolah untuk mengatur kelas yang kamu ampu.
+        </p>
+      )}
+      {!isAdmin && !tanpaKelas && !memuat && (
+        <p className="tanpa-cetak text-xs mt-2 text-[#6b0f1a]/60">
+          Hanya menampilkan siswa dari kelas yang kamu ampu.
+        </p>
+      )}
 
       <div id="area-cetak" className="mt-4 bg-white rounded-xl border border-[#6b0f1a]/15 p-4">
         <h2 className="font-semibold text-[#3b0a0a]">
@@ -351,7 +387,7 @@ export default function CatatanSiswa() {
                         <button onClick={() => bukaEdit(c)} className="text-[#6b0f1a] hover:underline mr-3">
                           Ubah
                         </button>
-                        {c.dicatat_oleh === userId && (
+                        {(c.dicatat_oleh === userId || isAdmin) && (
                           <button onClick={() => setHapus(c)} className="text-red-600 hover:underline">
                             Hapus
                           </button>
