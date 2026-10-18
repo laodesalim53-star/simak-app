@@ -51,10 +51,18 @@ function namaFileAman(teks) {
 const CSS_DOKUMEN = `
   @page { size: A4; margin: 2cm; }
   body { font-family: 'Times New Roman', serif; font-size: 12pt; color: #000; line-height: 1.4; }
-  .kop { text-align: center; border-bottom: 3px double #000; padding-bottom: 8px; margin-bottom: 12px; }
-  .kop .sekolah { font-size: 14pt; font-weight: bold; }
-  .kop .judul { font-size: 13pt; font-weight: bold; margin-top: 4px; }
-  .kop .sub { font-size: 11pt; }
+  table.kop-resmi { width: 100%; border-collapse: collapse; border-bottom: 3px double #000; margin-bottom: 6px; }
+  table.kop-resmi td { vertical-align: middle; padding: 0 0 6px; }
+  table.kop-resmi td.logo { width: 80px; }
+  table.kop-resmi img { width: 72px; height: 72px; object-fit: contain; }
+  .kop-teks { text-align: center; line-height: 1.25; }
+  .kop-teks .k1 { font-size: 12pt; font-weight: bold; }
+  .kop-teks .k3 { font-size: 14pt; font-weight: bold; }
+  .kop-teks .k2 { font-size: 10pt; font-weight: bold; }
+  .kop-teks .kecil { font-size: 9pt; margin-top: 2px; }
+  .judul-dok { text-align: center; margin: 10px 0 12px; }
+  .judul-dok .judul { font-size: 13pt; font-weight: bold; }
+  .judul-dok .sub { font-size: 11pt; }
   table.identitas { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
   table.identitas td { padding: 3px 4px; font-size: 11pt; }
   .petunjuk { font-size: 11pt; font-style: italic; margin: 8px 0 12px; }
@@ -67,13 +75,51 @@ const CSS_DOKUMEN = `
   .catatan { font-size: 10pt; margin-top: 10px; }
 `
 
-function bangunIsiDokumen(grup, mode, namaSekolah) {
+// Ubah path/URL logo di database menjadi URL publik (sama seperti urlLogo di KopSurat.jsx).
+function urlLogoSekolah(path) {
+  if (!path) return null
+  if (path.startsWith('http')) return path
+  return supabase.storage.from('profil-sekolah').getPublicUrl(path).data.publicUrl
+}
+
+// Kop surat resmi sekolah dalam bentuk HTML (tabel, supaya aman dibuka di Word).
+// Aturan logo mengikuti KopSurat.jsx: kalau ada logo kabupaten -> logo kabupaten
+// di KIRI & logo sekolah di KANAN; kalau tidak ada -> logo sekolah di kiri saja.
+function bangunKopSekolahHtml(p) {
+  if (!p) return ''
+  const logoKab = urlLogoSekolah(p.logo_kabupaten_path)
+  const logoSek = urlLogoSekolah(p.logo_path)
+  const kiri = logoKab || logoSek
+  const kanan = logoKab ? logoSek : null
+
+  const kontak = [p.email && `Email: ${p.email}`, p.telepon && `Telp/HP: ${p.telepon}`]
+    .filter(Boolean)
+    .join('  |  ')
+  const barisAlamat = [p.alamat, kontak].filter(Boolean).join('  —  ')
+
+  return `
+    <table class="kop-resmi">
+      <tr>
+        <td class="logo">${kiri ? `<img src="${esc(kiri)}" alt="">` : ''}</td>
+        <td class="kop-teks">
+          ${p.dinas_pendidikan ? `<div class="k1">${esc(p.dinas_pendidikan.toUpperCase())}</div>` : ''}
+          ${p.kabupaten ? `<div class="k1">${esc(p.kabupaten.toUpperCase())}</div>` : ''}
+          <div class="k3">${esc((p.nama_sekolah || '').toUpperCase())}</div>
+          ${p.kecamatan ? `<div class="k2">${esc(p.kecamatan.toUpperCase())}</div>` : ''}
+          ${barisAlamat ? `<div class="kecil">${esc(barisAlamat)}</div>` : ''}
+        </td>
+        <td class="logo">${kanan ? `<img src="${esc(kanan)}" alt="">` : ''}</td>
+      </tr>
+    </table>`
+}
+
+function bangunIsiDokumen(grup, mode, profilKop) {
   const urut = urutkanSoal(grup.soal)
   const judul = mode === 'kunci' ? 'KUNCI JAWABAN' : 'LEMBAR SOAL'
 
   const kop = `
-    <div class="kop">
-      ${namaSekolah ? `<div class="sekolah">${esc(namaSekolah.toUpperCase())}</div>` : ''}
+    ${bangunKopSekolahHtml(profilKop)}
+    <div class="judul-dok">
       <div class="judul">${judul}</div>
       <div class="sub">Mata Pelajaran: ${esc(grup.mata_pelajaran)} &nbsp;·&nbsp; Kelas: ${esc(grup.kelas)}</div>
     </div>`
@@ -149,7 +195,7 @@ const TOMBOL_AKSI =
   'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-ink-900/[0.06] text-ink-700 hover:bg-ink-900/10'
 
 export default function BankSoal() {
-  const { profil, isAdmin } = useAuth()
+  const { profil, isAdmin, sekolahId } = useAuth()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -157,7 +203,7 @@ export default function BankSoal() {
   const [mapelFilter, setMapelFilter] = useState('')
   const [expanded, setExpanded] = useState({})
   const [deletingMapel, setDeletingMapel] = useState('')
-  const [namaSekolah, setNamaSekolah] = useState('') // untuk kop lembar soal cetak/unduh
+  const [profilKop, setProfilKop] = useState(null) // data kop surat sekolah untuk lembar soal cetak/unduh
 
   // --- Form tambah 1 soal manual, bisa disertai gambar (mis. soal tebak gambar) ---
   const [formTerbuka, setFormTerbuka] = useState(false)
@@ -255,20 +301,29 @@ export default function BankSoal() {
     load()
   }, [])
 
-  // Nama sekolah untuk kop lembar soal. Kalau gagal dimuat, kop dicetak tanpa nama sekolah.
+  // Data kop surat sekolah (sumber yang sama dengan KopSurat.jsx: profil_sekolah per
+  // sekolah_id). Kalau gagal dimuat, lembar soal tetap bisa dicetak tanpa kop.
   useEffect(() => {
-    async function muatNamaSekolah() {
-      const { data } = await supabase.from('profil_sekolah').select('nama_sekolah').eq('id', 1).maybeSingle()
-      setNamaSekolah(data?.nama_sekolah || '')
+    if (!sekolahId) {
+      setProfilKop(null)
+      return
     }
-    muatNamaSekolah()
-  }, [])
+    supabase
+      .from('profil_sekolah')
+      .select('dinas_pendidikan, nama_sekolah, alamat, kabupaten, kecamatan, telepon, email, logo_path, logo_kabupaten_path')
+      .eq('sekolah_id', sekolahId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (error) console.error('BankSoal: gagal memuat profil_sekolah untuk kop:', error)
+        setProfilKop(data || null)
+      })
+  }, [sekolahId])
 
   // ---------- Cetak & unduh per folder (kelas + mata pelajaran) ----------
   // mode: 'soal' = lembar soal untuk siswa, 'kunci' = kunci jawaban untuk guru.
   function cetakDokumen(grup, mode) {
     const judul = `${mode === 'kunci' ? 'Kunci Jawaban' : 'Lembar Soal'} ${grup.mata_pelajaran} Kelas ${grup.kelas}`
-    const html = bungkusDokumen(judul, bangunIsiDokumen(grup, mode, namaSekolah), { autoPrint: true })
+    const html = bungkusDokumen(judul, bangunIsiDokumen(grup, mode, profilKop), { autoPrint: true })
     const w = window.open('', '_blank')
     if (!w) {
       alert('Pop-up diblokir browser. Izinkan pop-up untuk situs ini lalu klik Cetak lagi.')
@@ -281,7 +336,7 @@ export default function BankSoal() {
 
   function unduhWord(grup) {
     const judul = `Lembar Soal ${grup.mata_pelajaran} Kelas ${grup.kelas}`
-    const html = bungkusDokumen(judul, bangunIsiDokumen(grup, 'soal', namaSekolah), { untukWord: true })
+    const html = bungkusDokumen(judul, bangunIsiDokumen(grup, 'soal', profilKop), { untukWord: true })
     const blob = new Blob(['\ufeff', html], { type: 'application/msword' })
     unduhBlob(blob, `Soal_${namaFileAman(grup.mata_pelajaran)}_Kelas_${namaFileAman(grup.kelas)}.doc`)
   }
