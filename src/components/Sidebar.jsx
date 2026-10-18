@@ -497,7 +497,6 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   // PERBAIKAN: baris "Administrasi Kelas" sebelumnya terduplikasi di sini
   // (sudah ada satu di atas, sebelum "Rapat Video") — duplikat dihapus.
   { to: '/siswa', label: 'Data Siswa', icon: Users },
-  { to: '/nilai-asesmen', label: 'Nilai Asesmen', icon: FileSpreadsheet },
   // PERBAIKAN: baris "Rapor Siswa" (/rapor) dihapus dari sini — sudah bisa
   // diakses lewat kartu "Rapor" di halaman Administrasi Kelas (menu di
   // atas), jadi baris ini dulu bikin dobel untuk guru.
