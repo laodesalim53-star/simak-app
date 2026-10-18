@@ -25,10 +25,7 @@ import { supabase } from '../lib/supabaseClient'
 // (termasuk isian Masuk/Keluar Dalam Bulan Ini); saat window.print()
 // dipanggil, CSS @media print menampilkan semua bagian sekaligus.
 //
-// PERBAIKAN KOP SURAT: format kop surat sebelumnya menampilkan
-// "DINAS PENDIDIKAN DAN KEBUDAYAAN" lalu nama sekolah lalu baris alamat
-// lengkap (jalan, kecamatan, kabupaten, provinsi, kode pos). Format
-// referensi yang benar (4 baris, tanpa baris alamat) adalah:
+// KOP SURAT: format referensi (4 baris, tanpa baris alamat):
 //   PEMERINTAH KABUPATEN {kabupaten}
 //   {dinas_pendidikan}
 //   {NAMA SEKOLAH}            <- lebih besar & tebal
@@ -36,6 +33,12 @@ import { supabase } from '../lib/supabaseClient'
 // formatPemerintah/formatKecamatan dibuat defensif supaya tidak
 // menduplikasi kata "KABUPATEN"/"KOTA"/"KECAMATAN" kalau field profil
 // sekolah kebetulan sudah menyertakannya sendiri.
+//
+// PERBAIKAN LOGO KABUPATEN: kop surat sekarang menampilkan logo kabupaten
+// (profil_sekolah.logo_kabupaten_path) di KIRI dan logo sekolah
+// (profil_sekolah.logo_path) di KANAN, sama seperti komponen KopSurat.jsx
+// yang dipakai halaman cetak lain. Kalau hanya salah satu logo yang ada,
+// logo itu tampil di kiri dan teks tetap di tengah.
 function formatPemerintah(kabupaten) {
   const v = (kabupaten || '').toString().trim().toUpperCase()
   if (!v) return 'PEMERINTAH KABUPATEN'
@@ -53,6 +56,14 @@ function formatKecamatan(kecamatan) {
   return v.startsWith('KECAMATAN') ? v : `KECAMATAN ${v}`
 }
 
+// Ubah path/URL di database menjadi URL publik. Path berawalan http dipakai apa adanya.
+function ambilUrlLogo(path) {
+  if (!path) return ''
+  if (path.startsWith('http')) return path
+  const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(path)
+  return pub?.publicUrl || ''
+}
+
 export default function LaporanKeadaanMurid() {
   const navigate = useNavigate()
   const { sekolahId: sekolahIdSaya } = useAuth()
@@ -61,12 +72,11 @@ export default function LaporanKeadaanMurid() {
 
   const [profilSekolah, setProfilSekolah] = useState(null)
   const [logoUrl, setLogoUrl] = useState('')
+  const [logoKabupatenUrl, setLogoKabupatenUrl] = useState('')
   const [loading, setLoading] = useState(true)
-  // PERBAIKAN: sebelumnya error dari Supabase diabaikan begitu saja, jadi
+  // Error dari Supabase ditangkap dan ditampilkan sebagai banner supaya
   // kalau salah satu query gagal (mis. kolom yang di-select belum ada di
-  // tabel), halaman ini diam-diam menampilkan SEMUA laporan bernilai 0
-  // tanpa petunjuk apa pun kenapa. Sekarang errornya ditangkap dan
-  // ditampilkan sebagai banner supaya langsung ketahuan.
+  // tabel), halaman tidak diam-diam menampilkan SEMUA laporan bernilai 0.
   const [errorMuat, setErrorMuat] = useState('')
 
   const [kelasList, setKelasList] = useState([])
@@ -169,10 +179,7 @@ export default function LaporanKeadaanMurid() {
           .eq('status', 'aktif'),
       ])
 
-      // PERBAIKAN: errornya sekarang dicatat DAN ditampilkan, bukan diam-diam
-      // ditelan. Sebelumnya kalau query siswa gagal (mis. kolom yang
-      // di-select belum ada di tabel), `siswa` bernilai null, lalu jatuh ke
-      // `[]` di bawah — hasilnya semua laporan tampil 0 tanpa keterangan.
+      // Errornya dicatat DAN ditampilkan, bukan diam-diam ditelan.
       if (sekolahError) console.error('Gagal memuat profil sekolah:', sekolahError)
       if (kelasError) console.error('Gagal memuat data kelas:', kelasError)
       if (siswaError) console.error('Gagal memuat data siswa:', siswaError)
@@ -192,12 +199,8 @@ export default function LaporanKeadaanMurid() {
       }
 
       setProfilSekolah(sekolah || null)
-      if (sekolah?.logo_path) {
-        const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(sekolah.logo_path)
-        setLogoUrl(pub?.publicUrl || '')
-      } else {
-        setLogoUrl('')
-      }
+      setLogoUrl(ambilUrlLogo(sekolah?.logo_path))
+      setLogoKabupatenUrl(ambilUrlLogo(sekolah?.logo_kabupaten_path))
 
       const daftarKelas = kelas || []
       const daftarSiswa = siswa || []
@@ -394,12 +397,9 @@ export default function LaporanKeadaanMurid() {
   }, [tingkatList, dataAgama])
 
   // ---------- Data tab "Usia" ----------
-  // PERBAIKAN: kolom usia sebelumnya HANYA dibuat dari rentang usia yang
-  // valid (0-25 tahun) berdasarkan siswa yang tanggal lahirnya terisi.
-  // Siswa dengan tanggal_lahir kosong/tidak valid tidak masuk kolom manapun
-  // -> "hilang" dari tabel ini, sehingga totalnya lebih kecil dari total di
-  // tab Keadaan Murid. Sekarang mereka masuk ke kolom "Tidak diketahui" di
-  // ujung tabel supaya totalnya selalu sinkron dengan jumlah siswa aktif.
+  // Siswa dengan tanggal_lahir kosong/tidak valid masuk ke kolom
+  // "Tidak diketahui" di ujung tabel supaya totalnya selalu sinkron dengan
+  // jumlah siswa aktif.
   const usiaKolom = useMemo(() => {
     const usiaSiswa = siswaList
       .map((s) => hitungUsia(s.tanggal_lahir))
@@ -476,38 +476,63 @@ export default function LaporanKeadaanMurid() {
     )
   }
 
-  // PERBAIKAN KOP SURAT: format lama menampilkan
-  //   DINAS PENDIDIKAN DAN KEBUDAYAAN
-  //   NAMA SEKOLAH
-  //   Jl. ..., Kecamatan ..., Kabupaten ..., Provinsi ... Kode Pos
-  // Format referensi yang benar (4 baris, tanpa baris alamat):
+  // KOP SURAT (4 baris, tanpa baris alamat), dengan logo kabupaten di kiri
+  // dan logo sekolah di kanan:
   //   PEMERINTAH KABUPATEN {kabupaten}
   //   {dinas_pendidikan}
   //   NAMA SEKOLAH            <- lebih besar & tebal
   //   KECAMATAN {kecamatan}
-  const KopSurat = () => (
-    <div className="flex items-center gap-4 border-b-4 border-black pb-3 mb-4">
-      {logoUrl && <img src={logoUrl} alt="Logo" className="w-16 h-16 object-contain shrink-0" />}
-      <div className="text-center flex-1">
-        <p className="text-sm font-bold uppercase leading-tight">
-          {formatPemerintah(profilSekolah?.kabupaten)}
-        </p>
-        <p className="text-sm font-bold uppercase leading-tight">
-          {profilSekolah?.dinas_pendidikan || 'DINAS PENDIDIKAN DAN KEBUDAYAAN'}
-        </p>
-        <p className="text-xl font-bold uppercase leading-tight mt-1">
-          {profilSekolah?.nama_sekolah || 'Nama Sekolah'}
-        </p>
-        {formatKecamatan(profilSekolah?.kecamatan) && (
-          <p className="text-sm font-bold uppercase leading-tight mt-1">
-            {formatKecamatan(profilSekolah?.kecamatan)}
+  // Grid 3 kolom dipakai (bukan flex + spacer) supaya teks tetap rata
+  // tengah apapun kombinasi logonya: dua logo, satu logo, atau tanpa logo.
+  const KopSurat = () => {
+    const logoKiri = logoKabupatenUrl || logoUrl
+    const altKiri = logoKabupatenUrl ? 'Logo Kabupaten' : 'Logo Sekolah'
+    const logoKanan = logoKabupatenUrl ? logoUrl : ''
+    const sembunyikanJikaRusak = (e) => { e.currentTarget.style.visibility = 'hidden' }
+
+    return (
+      <div className="grid grid-cols-[64px_1fr_64px] items-center gap-4 border-b-4 border-black pb-3 mb-4">
+        <div className="flex justify-start">
+          {logoKiri && (
+            <img
+              src={logoKiri}
+              alt={altKiri}
+              onError={sembunyikanJikaRusak}
+              className="w-16 h-16 object-contain"
+            />
+          )}
+        </div>
+
+        <div className="text-center">
+          <p className="text-sm font-bold uppercase leading-tight">
+            {formatPemerintah(profilSekolah?.kabupaten)}
           </p>
-        )}
+          <p className="text-sm font-bold uppercase leading-tight">
+            {profilSekolah?.dinas_pendidikan || 'DINAS PENDIDIKAN DAN KEBUDAYAAN'}
+          </p>
+          <p className="text-xl font-bold uppercase leading-tight mt-1">
+            {profilSekolah?.nama_sekolah || 'Nama Sekolah'}
+          </p>
+          {formatKecamatan(profilSekolah?.kecamatan) && (
+            <p className="text-sm font-bold uppercase leading-tight mt-1">
+              {formatKecamatan(profilSekolah?.kecamatan)}
+            </p>
+          )}
+        </div>
+
+        <div className="flex justify-end">
+          {logoKanan && (
+            <img
+              src={logoKanan}
+              alt="Logo Sekolah"
+              onError={sembunyikanJikaRusak}
+              className="w-16 h-16 object-contain"
+            />
+          )}
+        </div>
       </div>
-      {/* spacer supaya logo di kiri tidak membuat teks tengah bergeser */}
-      {logoUrl && <div className="w-16 shrink-0" />}
-    </div>
-  )
+    )
+  }
 
   const TandaTangan = () => (
     <div className="flex justify-end mt-10">
@@ -525,12 +550,11 @@ export default function LaporanKeadaanMurid() {
     </div>
   )
 
-  // Tiap bagian laporan sekarang membawa judulnya sendiri (bukan satu judul
-  // tunggal di luar), karena saat cetak keempatnya tampil berurutan seperti
-  // pada dokumen referensi. className "laporan-section" + "tab-aktif"/
-  // "tab-nonaktif" mengatur mana yang tampil di LAYAR (hanya tab terpilih),
-  // sedangkan aturan @media print di bawah menampilkan SEMUA bagian saat
-  // dicetak, tanpa memengaruhi cara komponen ini dipanggil dari luar.
+  // Tiap bagian laporan membawa judulnya sendiri, karena saat cetak
+  // keempatnya tampil berurutan seperti pada dokumen referensi.
+  // className "laporan-section" + "tab-aktif"/"tab-nonaktif" mengatur mana
+  // yang tampil di LAYAR (hanya tab terpilih), sedangkan aturan @media print
+  // di bawah menampilkan SEMUA bagian saat dicetak.
   function kelasBagian(kunciTab) {
     return `laporan-section ${tab === kunciTab ? 'tab-aktif' : 'tab-nonaktif'}`
   }
@@ -594,17 +618,14 @@ export default function LaporanKeadaanMurid() {
           menyembunyikan SEMUA elemen saat print kecuali yang berkelas
           print-only: body * { visibility: hidden } lalu .print-only,
           .print-only * { visibility: visible }).
-          PERBAIKAN: index.css TERNYATA juga punya
-          `@media screen { .print-only { display: none } }` — aturan ini
-          didesain untuk PrintTemplate terpisah (mis. KuitansiPrintTemplate)
-          yang memang tidak pernah tampil di layar. Halaman ini beda: satu
-          komponen sekaligus jadi form isian (Masuk/Keluar Dalam Bulan Ini)
-          DAN tampilan cetak, jadi div ini HARUS tampil normal di layar.
-          Override selector 2-class (.lembar-cetak.print-only) di <style>
-          bawah dipakai supaya menang dari aturan global tanpa mengubah
-          index.css — pola sama seperti LaporanSemester.jsx. Sebelum
-          perbaikan ini, halaman ini blank total di layar dan baru terlihat
-          saat print preview dibuka. */}
+          index.css juga punya `@media screen { .print-only { display: none } }`
+          yang didesain untuk PrintTemplate terpisah (mis. KuitansiPrintTemplate).
+          Halaman ini beda: satu komponen sekaligus jadi form isian
+          (Masuk/Keluar Dalam Bulan Ini) DAN tampilan cetak, jadi div ini
+          HARUS tampil normal di layar. Override selector 2-class
+          (.lembar-cetak.print-only) di <style> bawah dipakai supaya menang
+          dari aturan global tanpa mengubah index.css — pola sama seperti
+          LaporanSemester.jsx. */}
       <div className="lembar-cetak print-only bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '297mm' }}>
         <KopSurat />
 
@@ -936,14 +957,11 @@ export default function LaporanKeadaanMurid() {
         .laporan-section.tab-nonaktif { display: none; }
         .only-print { display: none; }
 
-        /* PERBAIKAN: override aturan global "@media screen { .print-only
-           { display: none } }" di index.css. Aturan itu didesain untuk
-           PrintTemplate terpisah (KuitansiPrintTemplate dkk) yang memang
-           tidak pernah tampil di layar. Halaman ini beda kebutuhan — kertas
-           laporan di sini MEMANG harus tampil di layar supaya bisa diisi
-           manual (Masuk/Keluar Dalam Bulan Ini). Selector 2-class ini lebih
-           spesifik daripada ".print-only" saja, jadi menang tanpa perlu
-           ubah index.css. */
+        /* Override aturan global "@media screen { .print-only
+           { display: none } }" di index.css. Kertas laporan di sini MEMANG
+           harus tampil di layar supaya bisa diisi manual (Masuk/Keluar
+           Dalam Bulan Ini). Selector 2-class ini lebih spesifik daripada
+           ".print-only" saja, jadi menang tanpa perlu ubah index.css. */
         @media screen {
           .lembar-cetak.print-only {
             display: block !important;
