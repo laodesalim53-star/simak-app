@@ -170,6 +170,7 @@ function getGroupsAdmin(
         { to: '/bank-soal', label: 'Bank Soal', icon: Database },
         { to: '/materi-kelas', label: 'Materi Pembelajaran', icon: BookMarked },
         { to: '/buat-kuis-seru', label: 'Kuis Seru (Kls 1-3)', icon: Gamepad2 },
+        { to: '/rapor-kumer', label: 'Raport Kumer', icon: FileBadge },
       ],
     },
     {
@@ -510,6 +511,7 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   { to: '/bank-soal', label: 'Bank Soal', icon: Database },
   { to: '/materi-kelas', label: 'Materi Pembelajaran', icon: BookMarked },
   { to: '/buat-kuis-seru', label: 'Kuis Seru (Kls 1-3)', icon: Gamepad2 },
+  { to: '/rapor-kumer', label: 'Raport Kumer', icon: FileBadge },
   { to: '/perpustakaan', label: 'Perpustakaan', icon: Library },
   { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
   // BARU: Daftar Hadir Guru & Tendik (guru hanya bisa melihat & mencetak)
