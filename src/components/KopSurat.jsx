@@ -75,9 +75,24 @@ function KopHeader({ logoUtama, logoKabupaten, altUtama, children }) {
 //
 // Pastikan AuthContext menyediakan flag isPolres
 // (isPolres = jenis_organisasi === 'polres').
-export default function KopSurat() {
-  const { sekolahId, isPuskesmas, isKantor, isPolres } = useAuth()
-  const jenis = isPolres
+//
+// PROP OPSIONAL (semua boleh dikosongkan — pemakaian lama <KopSurat /> tidak berubah):
+//  - sekolahId              : id sekolah yang dipakai. Kalau diisi, menimpa sekolahId
+//                             dari useAuth (berguna untuk halaman publik tanpa login,
+//                             mis. Ujian Online siswa).
+//  - publik                 : true -> paksa kop SEKOLAH dan ambil datanya lewat fungsi
+//                             database kop_sekolah_publik(p_sekolah_id), karena
+//                             pengunjung tanpa login tidak boleh membaca tabel
+//                             profil_sekolah secara langsung.
+//  - sembunyikanJikaKosong  : true -> kop tidak ditampilkan sama sekali selama data
+//                             sekolah belum termuat / tidak ditemukan (bukan menampilkan
+//                             tulisan "Nama Sekolah Belum Diatur").
+export default function KopSurat({ sekolahId: sekolahIdProp, publik = false, sembunyikanJikaKosong = false } = {}) {
+  const { sekolahId: sekolahIdAuth, isPuskesmas, isKantor, isPolres } = useAuth()
+  const sekolahId = sekolahIdProp ?? sekolahIdAuth
+  const jenis = publik
+    ? 'sekolah'
+    : isPolres
     ? 'polres'
     : isPuskesmas
     ? 'puskesmas'
@@ -127,17 +142,22 @@ export default function KopSurat() {
         .maybeSingle()
         .then(({ data }) => setProfilKantor(data))
     } else {
-      supabase
-        .from('profil_sekolah')
-        .select('dinas_pendidikan, nama_sekolah, alamat, kabupaten, kecamatan, telepon, email, logo_path, logo_kabupaten_path')
-        .eq('sekolah_id', sekolahId)
-        .maybeSingle()
-        .then(({ data, error }) => {
-          if (error) console.error('KopSurat: gagal memuat profil_sekolah:', error)
-          setProfilSekolah(data)
-        })
+      // Mode publik (siswa tanpa login): lewat fungsi database yang hanya
+      // mengembalikan kolom kop untuk SATU sekolah. Mode biasa: baca langsung
+      // dari tabel profil_sekolah seperti sebelumnya.
+      const permintaan = publik
+        ? supabase.rpc('kop_sekolah_publik', { p_sekolah_id: sekolahId })
+        : supabase
+            .from('profil_sekolah')
+            .select('dinas_pendidikan, nama_sekolah, alamat, kabupaten, kecamatan, telepon, email, logo_path, logo_kabupaten_path')
+            .eq('sekolah_id', sekolahId)
+
+      permintaan.maybeSingle().then(({ data, error }) => {
+        if (error) console.error('KopSurat: gagal memuat profil_sekolah:', error)
+        setProfilSekolah(data)
+      })
     }
-  }, [sekolahId, jenis])
+  }, [sekolahId, jenis, publik])
 
   // ==== Cabang POLRES: 3 tingkat ala Polri ====
   // KEPOLISIAN NEGARA REPUBLIK INDONESIA / DAERAH <POLDA> / RESOR <SATUAN>
@@ -205,6 +225,9 @@ export default function KopSurat() {
 
   // ==== Cabang SEKOLAH: logo kabupaten (kiri) + logo sekolah (kanan) ====
   if (jenis === 'sekolah') {
+    // Halaman publik: jangan tampilkan placeholder selama data belum ada.
+    if (sembunyikanJikaKosong && !profilSekolah) return null
+
     const logoUrl = urlLogo(LOGO_BUCKET_SEKOLAH, profilSekolah?.logo_path)
     const logoKabupatenUrl = urlLogo(LOGO_BUCKET_SEKOLAH, profilSekolah?.logo_kabupaten_path)
 
