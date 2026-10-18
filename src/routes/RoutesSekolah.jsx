@@ -13,7 +13,7 @@ const Beranda = lazy(() => import('../pages/Beranda'))
 const PPDBPublik = lazy(() => import('../pages/PPDBPublik'))
 const UjianOnline = lazy(() => import('../pages/UjianOnline'))
 const KuisSeru = lazy(() => import('../pages/KuisSeru'))
-
+const RaporKumer = lazy(() => import('../pages/RaporKumer'))
 const Siswa = lazy(() => import('../pages/Siswa'))
 const HasilUjian = lazy(() => import('../pages/HasilUjian'))
 const Guru = lazy(() => import('../pages/Guru'))
@@ -246,6 +246,7 @@ export default function RoutesSekolah() {
       <Route path="/buat-ujian" element={<ProtectedRoute><BuatUjian /></ProtectedRoute>} />
       <Route path="/buat-kuis-seru" element={<ProtectedRoute><BuatKuisSeru /></ProtectedRoute>} />
       <Route path="/hasil-kuis-seru" element={<ProtectedRoute><HasilKuisSeru /></ProtectedRoute>} />
+      <Route path="/rapor-kumer" element={<ProtectedRoute><RaporKumer /></ProtectedRoute>} />                         
       <Route path="/kartu" element={<ProtectedRoute adminOnly><KartuSiswa /></ProtectedRoute>} />
       <Route path="/dokumen-pip" element={<ProtectedRoute adminOnly><DokumenPIP /></ProtectedRoute>} />
       <Route path="/hari-libur" element={<ProtectedRoute adminOnly><HariLibur /></ProtectedRoute>} />
