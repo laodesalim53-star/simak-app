@@ -165,6 +165,7 @@ function getGroupsAdmin(
         // bisa diakses lewat kartu "Rapor" di halaman Administrasi Kelas
         // (menu di atas), jadi baris ini dulu bikin dobel untuk admin.
         { to: '/portofolio-siswa', label: 'Portofolio Siswa', icon: FolderHeart },
+        { to: '/catatan-siswa', label: 'Catatan Siswa', icon: NotebookPen },
         { to: '/sertifikat', label: 'Sertifikat & Penghargaan', icon: Award },
         { to: '/buat-ujian', label: 'Buat Ujian', icon: FilePlus },
         { to: '/bank-soal', label: 'Bank Soal', icon: Database },
