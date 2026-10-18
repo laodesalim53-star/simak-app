@@ -5,54 +5,40 @@ import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import KopSurat from '../components/KopSurat'
 
-// Halaman cetak "DAFTAR NOMINATIF PEGAWAI" — versi KANTOR dari
-// LaporanNominatifGuru.jsx. Bedanya:
-// - Judul tidak menyebut "Guru" sama sekali.
-// - Tidak ada input/label Semester & Tahun Pelajaran (konsep akademik,
-//   tidak relevan untuk kantor).
-// - Kolom NUPTK dihapus: NUPTK hanya relevan untuk guru, tidak dipakai
-//   oleh pegawai kantor.
-// Pola cetak lainnya (window.print() + CSS @media print) mengikuti
-// persis LaporanNominatifGuru.jsx / LaporanPendidikanGuru.jsx.
+// Halaman cetak "BIODATA PEGAWAI" — versi KANTOR dari LaporanBiodataGuru.jsx.
+// Bedanya:
+// - Judul tidak menyebut "Guru" sama sekali ("Biodata Pegawai").
+// - Panel & label Semester / Tahun Pelajaran (konsep akademik) DIHAPUS
+//   total — tidak ada state semester/tahunAwal/tahunAkhir, tidak ada
+//   panel input, dan tidak ada baris keterangan semester di kop cetak.
+// - Label "Kepala Sekolah" pada blok tanda tangan diganti "Pimpinan".
 //
-// FIX (halaman kosong untuk tenant sekolah): "Nominatif Pegawai" harus
-// menampilkan SEMUA pegawai suatu instansi, bukan cuma satu jenis.
-// Untuk tenant kantor (mis. KUA) pegawainya ada di tabel
-// `pegawai_kantor`. Untuk tenant sekolah, pegawainya (guru) ada di
-// tabel `guru`, BUKAN `pegawai_kantor` — makanya sebelumnya laporan
-// ini selalu kosong untuk sekolah walau data guru-nya ada. Tidak ada
-// kolom penanda "jenis instansi" di profil_sekolah, jadi solusinya:
-// query KEDUA tabel berdasarkan sekolah_id yang sama lalu digabung.
-// Kalau instansinya sekolah, hasilnya otomatis cuma dari `guru`. Kalau
-// instansinya kantor, otomatis cuma dari `pegawai_kantor`. Kalau sekolah
-// itu juga punya staf TU/kantor tersendiri di `pegawai_kantor`, keduanya
-// tergabung dalam satu daftar. Kolom `jabatan` tidak ada di tabel `guru`,
-// jadi untuk baris asal guru dipakai `tugas_tambahan || jenis_ptk ||
-// 'Guru'` sebagai gantinya.
-//
-// FIX (halaman print kosong karena overflow): tabel di laporan ini punya
-// 18 kolom, jauh lebih banyak dari LaporanPendidikanGuru.jsx (9 kolom).
-// Dengan table-layout default (auto), teks panjang di kolom seperti
-// "Tempat, Tgl Lahir", "SK Pengangkatan", "Pangkat/Gol" memaksa lebar
-// total tabel melebihi 297mm (lebar A4 landscape), sehingga saat print
-// kontennya terdorong keluar area halaman pertama — tampak seolah
-// halaman cetak kosong padahal isinya overflow ke luar page. Diperbaiki
-// dengan `table-fixed` + lebar kolom dalam persen dan `break-words`
-// supaya teks panjang membungkus, bukan memperlebar kolom.
+// FIX (halaman kosong untuk tenant sekolah): sama seperti
+// LaporanNominatifPegawai.jsx — "Biodata Pegawai" harus menampilkan SEMUA
+// pegawai suatu instansi. Untuk tenant kantor (mis. KUA) pegawainya ada
+// di tabel `pegawai_kantor`. Untuk tenant sekolah, pegawainya (guru) ada
+// di tabel `guru`. Tidak ada kolom penanda "jenis instansi" di
+// profil_sekolah, jadi query KEDUA tabel berdasarkan sekolah_id yang
+// sama lalu digabung. Kolom alamat (alamat_jalan, rt, rw, nama_dusun,
+// desa_kelurahan, kecamatan, kode_pos) sudah dicek ADA juga di tabel
+// `guru` (skema sama persis dengan `pegawai_kantor`), jadi tidak perlu
+// migration tambahan. Kolom `jabatan` tidak ada di `guru`, dipetakan
+// dari `tugas_tambahan || jenis_ptk || 'Guru'`.
 //
 // FIX (logo kabupaten): kop surat sekarang memakai komponen bersama
-// <KopSurat /> (src/components/KopSurat.jsx). Sebelumnya kop ditulis manual
-// di file ini dan hanya memakai profil_sekolah.logo_path, sehingga logo
-// kabupaten tidak pernah tampil (import KopSurat sudah ada tapi belum
-// dipakai). KopSurat mengambil data & logo instansi sendiri sesuai jenis
-// tenant (sekolah: logo kabupaten kiri + logo sekolah kanan), jadi state
-// logoUrl dan pengambilan logo di sini dihapus.
+// <KopSurat /> (src/components/KopSurat.jsx), mengikuti pola
+// LaporanNominatifPegawai.jsx. Sebelumnya kop ditulis manual di file ini
+// dan hanya memakai profil_sekolah.logo_path, sehingga logo kabupaten
+// tidak pernah tampil. KopSurat mengambil data & logo instansi sendiri
+// sesuai jenis tenant (sekolah/puskesmas: logo kabupaten kiri + logo
+// instansi kanan), jadi state logoUrl dan pengambilan logo di sini
+// dihapus. KopSurat.jsx sendiri TIDAK diubah.
 //
 // CATATAN: blok identitas (Instansi/Kecamatan/Kabupaten) dan tanda tangan
 // di bawah masih membaca tabel `profil_sekolah` (relasi lewat sekolah_id),
 // hanya label "Kepala Sekolah" diganti "Pimpinan" supaya tidak rancu untuk
 // instansi non-sekolah.
-export default function LaporanNominatifPegawai() {
+export default function LaporanBiodataPegawai() {
   const navigate = useNavigate()
   const { sekolahId: sekolahIdSaya } = useAuth()
   const [profilKantor, setProfilKantor] = useState(null)
@@ -89,7 +75,6 @@ export default function LaporanNominatifPegawai() {
   useEffect(() => {
     async function muat() {
       setLoading(true)
-
       const sekolahId = sekolahIdSaya
 
       if (!sekolahId) {
@@ -102,22 +87,21 @@ export default function LaporanNominatifPegawai() {
         supabase
           .from('pegawai_kantor')
           .select(
-            'id, nip, nama_lengkap, jenis_kelamin, tempat_lahir, tanggal_lahir, pangkat_golongan, status_kepegawaian, jenis_ptk, pendidikan_terakhir, tugas_tambahan, jabatan, agama, sk_pengangkatan, tmt_pengangkatan, status'
+            'id, nama_lengkap, jenis_kelamin, tempat_lahir, tanggal_lahir, agama, status_kepegawaian, jenis_ptk, tugas_tambahan, jabatan, alamat_jalan, rt, rw, nama_dusun, desa_kelurahan, kecamatan, kode_pos, status'
           )
           .eq('sekolah_id', sekolahId),
         supabase
           .from('guru')
           .select(
-            'id, nip, nama_lengkap, jenis_kelamin, tempat_lahir, tanggal_lahir, pangkat_golongan, status_kepegawaian, jenis_ptk, pendidikan_terakhir, tugas_tambahan, agama, sk_pengangkatan, tmt_pengangkatan, status'
+            'id, nama_lengkap, jenis_kelamin, tempat_lahir, tanggal_lahir, agama, status_kepegawaian, jenis_ptk, tugas_tambahan, alamat_jalan, rt, rw, nama_dusun, desa_kelurahan, kecamatan, kode_pos, status'
           )
           .eq('sekolah_id', sekolahId),
       ])
 
       setProfilKantor(kantor || null)
 
-      // Baris dari `guru` tidak punya kolom `jabatan` (itu khas
-      // `pegawai_kantor`) — dipetakan dari tugas_tambahan/jenis_ptk,
-      // fallback "Guru", supaya tampil wajar di kolom Jabatan.
+      // `guru` tidak punya kolom `jabatan` — dipetakan dari
+      // tugas_tambahan/jenis_ptk, fallback "Guru".
       const guruSebagaiPegawai = (guru || []).map((g) => ({
         ...g,
         jabatan: g.tugas_tambahan || g.jenis_ptk || 'Guru',
@@ -145,25 +129,21 @@ export default function LaporanNominatifPegawai() {
     )
   }
 
-  function hitungMasaKerja(tmt) {
-    if (!tmt) return { tahun: '—', bulan: '—' }
-    const mulai = new Date(tmt)
-    const sekarang = new Date()
-    let tahun = sekarang.getFullYear() - mulai.getFullYear()
-    let bulan = sekarang.getMonth() - mulai.getMonth()
-    if (bulan < 0) {
-      tahun -= 1
-      bulan += 12
-    }
-    return { tahun, bulan }
+  function alamatLengkap(p) {
+    return (
+      [p.alamat_jalan, p.rt && `RT ${p.rt}`, p.rw && `RW ${p.rw}`, p.nama_dusun, p.desa_kelurahan, p.kecamatan, p.kode_pos]
+        .filter(Boolean)
+        .join(', ') || '—'
+    )
   }
 
-  function tandaiStatus(statusText, target) {
-    const t = (statusText || '').toLowerCase()
-    if (target === 'pns') return t.includes('pns') ? 'v' : '-'
-    if (target === 'pppk') return t.includes('pppk') || t.includes('kontrak') ? 'v' : '-'
-    if (target === 'gty' || target === 'honor') return t.includes('gty') || t.includes('honor') ? 'v' : '-'
-    return '-'
+  function kolomPns(p) {
+    return (p.status_kepegawaian || '').toLowerCase().includes('pns') ? 'PNS' : ''
+  }
+  function kolomPs(p) {
+    const t = (p.status_kepegawaian || '').toLowerCase()
+    if (t.includes('pns')) return '-'
+    return p.status_kepegawaian || '-'
   }
 
   if (loading) {
@@ -191,11 +171,11 @@ export default function LaporanNominatifPegawai() {
         </button>
       </div>
 
-      <div className="lembar-cetak print-only bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '297mm', minHeight: '210mm' }}>
+      <div className="lembar-cetak print-only bg-white mx-auto my-6 p-8 shadow-sm" style={{ width: '210mm', minHeight: '297mm' }}>
         <KopSurat />
 
         <h1 className="text-center font-bold text-base uppercase underline mb-4">
-          Daftar Nominatif Pegawai
+          Biodata Pegawai
         </h1>
 
         <div className="text-xs mb-4 grid grid-cols-[120px_1fr] gap-y-0.5 max-w-xs">
@@ -207,72 +187,49 @@ export default function LaporanNominatifPegawai() {
           <span>: {formatKabupaten(profilKantor?.kabupaten)}</span>
         </div>
 
-        {/* table-fixed + lebar kolom dalam % supaya tabel 18-kolom ini
-            SELALU pas dalam satu halaman A4 landscape, tidak overflow
-            seperti sebelumnya (penyebab halaman print tampak kosong).
-            break-words di td mengizinkan teks panjang membungkus alih-alih
-            memperlebar kolom. */}
-        <table className="w-full table-fixed text-[9px] border-collapse border border-black">
+        <table className="w-full text-[10px] border-collapse border border-black">
           <thead>
             <tr className="text-center">
-              <th rowSpan={2} className="border border-black px-1 py-1" style={{ width: '3%' }}>No</th>
-              <th rowSpan={2} className="border border-black px-1 py-1" style={{ width: '9%' }}>Nama</th>
-              <th rowSpan={2} className="border border-black px-1 py-1" style={{ width: '7%' }}>NIP</th>
-              <th colSpan={2} className="border border-black px-1 py-1" style={{ width: '5%' }}>L/P</th>
-              <th rowSpan={2} className="border border-black px-1 py-1" style={{ width: '9%' }}>Tempat, Tgl Lahir</th>
-              <th rowSpan={2} className="border border-black px-1 py-1" style={{ width: '6%' }}>Pangkat/Gol</th>
-              <th colSpan={3} className="border border-black px-1 py-1" style={{ width: '9%' }}>Status Kepegawaian</th>
-              <th rowSpan={2} className="border border-black px-1 py-1" style={{ width: '8%' }}>SK Pengangkatan</th>
-              <th rowSpan={2} className="border border-black px-1 py-1" style={{ width: '7%' }}>TMT</th>
-              <th colSpan={2} className="border border-black px-1 py-1" style={{ width: '6%' }}>Masa Kerja</th>
-              <th rowSpan={2} className="border border-black px-1 py-1" style={{ width: '8%' }}>Pendidikan Terakhir</th>
-              <th rowSpan={2} className="border border-black px-1 py-1" style={{ width: '8%' }}>Jabatan</th>
-              <th rowSpan={2} className="border border-black px-1 py-1" style={{ width: '5%' }}>Agama</th>
-              <th rowSpan={2} className="border border-black px-1 py-1" style={{ width: '5%' }}>Ket</th>
+              <th rowSpan={2} className="border border-black px-1 py-1 w-6">No</th>
+              <th rowSpan={2} className="border border-black px-1 py-1">Nama Pegawai</th>
+              <th rowSpan={2} className="border border-black px-1 py-1">Tempat, Tanggal Lahir</th>
+              <th colSpan={2} className="border border-black px-1 py-1">L/P</th>
+              <th rowSpan={2} className="border border-black px-1 py-1">Agama</th>
+              <th colSpan={2} className="border border-black px-1 py-1">Status Pegawai</th>
+              <th rowSpan={2} className="border border-black px-1 py-1">Jabatan</th>
+              <th rowSpan={2} className="border border-black px-1 py-1">Alamat</th>
             </tr>
             <tr className="text-center">
-              <th className="border border-black px-1 py-1" style={{ width: '2.5%' }}>L</th>
-              <th className="border border-black px-1 py-1" style={{ width: '2.5%' }}>P</th>
-              <th className="border border-black px-1 py-1" style={{ width: '3%' }}>PNS</th>
-              <th className="border border-black px-1 py-1" style={{ width: '3%' }}>PPPK</th>
-              <th className="border border-black px-1 py-1" style={{ width: '3%' }}>GTY</th>
-              <th className="border border-black px-1 py-1" style={{ width: '3%' }}>Thn</th>
-              <th className="border border-black px-1 py-1" style={{ width: '3%' }}>Bln</th>
+              <th className="border border-black px-1 py-1 w-5">L</th>
+              <th className="border border-black px-1 py-1 w-5">P</th>
+              <th className="border border-black px-1 py-1 w-8">PNS</th>
+              <th className="border border-black px-1 py-1 w-8">PS</th>
             </tr>
           </thead>
           <tbody>
             {daftarPegawai.length === 0 ? (
               <tr>
-                <td colSpan={18} className="border border-black text-center py-4 text-slate-400">
+                <td colSpan={10} className="border border-black text-center py-4 text-slate-400">
                   Belum ada data pegawai untuk instansi ini.
                 </td>
               </tr>
             ) : (
               daftarPegawai.map((p, i) => {
-                const masaKerja = hitungMasaKerja(p.tmt_pengangkatan)
                 const lp = (p.jenis_kelamin || '').toLowerCase()
                 return (
                   <tr key={p.id}>
                     <td className="border border-black px-1 py-1 text-center">{i + 1}</td>
-                    <td className="border border-black px-1 py-1 break-words">{p.nama_lengkap || '—'}</td>
-                    <td className="border border-black px-1 py-1 break-words">{p.nip || '—'}</td>
-                    <td className="border border-black px-1 py-1 text-center">{lp === 'l' || lp === 'laki-laki' ? 'v' : ''}</td>
-                    <td className="border border-black px-1 py-1 text-center">{lp === 'p' || lp === 'perempuan' ? 'v' : ''}</td>
-                    <td className="border border-black px-1 py-1 break-words">
+                    <td className="border border-black px-1 py-1">{p.nama_lengkap || '—'}</td>
+                    <td className="border border-black px-1 py-1">
                       {p.tempat_lahir || '—'}, {formatTanggal(p.tanggal_lahir)}
                     </td>
-                    <td className="border border-black px-1 py-1 break-words">{p.pangkat_golongan || '—'}</td>
-                    <td className="border border-black px-1 py-1 text-center">{tandaiStatus(p.status_kepegawaian, 'pns')}</td>
-                    <td className="border border-black px-1 py-1 text-center">{tandaiStatus(p.status_kepegawaian, 'pppk')}</td>
-                    <td className="border border-black px-1 py-1 text-center">{tandaiStatus(p.status_kepegawaian, 'gty')}</td>
-                    <td className="border border-black px-1 py-1 break-words">{p.sk_pengangkatan || '—'}</td>
-                    <td className="border border-black px-1 py-1 break-words">{formatTanggal(p.tmt_pengangkatan)}</td>
-                    <td className="border border-black px-1 py-1 text-center">{masaKerja.tahun}</td>
-                    <td className="border border-black px-1 py-1 text-center">{masaKerja.bulan}</td>
-                    <td className="border border-black px-1 py-1 break-words">{p.pendidikan_terakhir || '—'}</td>
-                    <td className="border border-black px-1 py-1 break-words">{p.jabatan || p.tugas_tambahan || p.jenis_ptk || '—'}</td>
-                    <td className="border border-black px-1 py-1 break-words">{p.agama || '—'}</td>
-                    <td className="border border-black px-1 py-1"></td>
+                    <td className="border border-black px-1 py-1 text-center">{lp === 'l' || lp === 'laki-laki' ? 'v' : ''}</td>
+                    <td className="border border-black px-1 py-1 text-center">{lp === 'p' || lp === 'perempuan' ? 'v' : ''}</td>
+                    <td className="border border-black px-1 py-1">{p.agama || '—'}</td>
+                    <td className="border border-black px-1 py-1 text-center">{kolomPns(p)}</td>
+                    <td className="border border-black px-1 py-1 text-center">{kolomPs(p)}</td>
+                    <td className="border border-black px-1 py-1">{p.jabatan || p.tugas_tambahan || p.jenis_ptk || '—'}</td>
+                    <td className="border border-black px-1 py-1">{alamatLengkap(p)}</td>
                   </tr>
                 )
               })
@@ -295,21 +252,9 @@ export default function LaporanNominatifPegawai() {
         </div>
       </div>
 
+      {/* CSS cetak — A4 portrait, sesuai jumlah kolom Biodata yang lebih
+          sedikit dibanding Daftar Nominatif (yang perlu landscape). */}
       <style>{`
-        .lembar-cetak.print-only {
-          position: static !important;
-          top: auto !important;
-          left: auto !important;
-          right: auto !important;
-          margin-left: auto !important;
-          margin-right: auto !important;
-        }
-
-        @media screen {
-          .lembar-cetak.print-only {
-            display: block !important;
-          }
-        }
         @media print {
           .no-print { display: none !important; }
           body { background: white; }
@@ -318,10 +263,41 @@ export default function LaporanNominatifPegawai() {
             margin: 0 !important;
             width: 100% !important;
           }
+
+          /* CSS global (index.css) punya aturan:
+               body * { visibility: hidden; }
+               .print-only, .print-only * { visibility: visible; }
+             yang tadinya dibuat khusus untuk Kuitansi/Nota (1 lembar) dan
+             kemungkinan memberi .print-only posisi "fixed" secara default.
+             Di sini di-override jadi "static" supaya kalau daftar pegawai
+             panjang (lebih dari 1 halaman A4), isinya tetap mengalir
+             normal mengikuti page-break bawaan browser, bukan terpotong
+             atau menumpuk di satu titik fixed. Pola sama seperti
+             Cetak8355.jsx yang sudah terbukti berhasil. */
+          .lembar-cetak.print-only {
+            position: static !important;
+            top: auto !important;
+            left: auto !important;
+            right: auto !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
+          }
+        }
+
+        /* Override aturan global "@media screen { .print-only { display: none } }"
+           (index.css) — override position di dalam @media print di atas
+           saja TIDAK CUKUP kalau aturan global menyembunyikan .print-only
+           lewat display:none saat @media screen; elemen display:none
+           tetap tidak terlihat di layar meski posisinya static. Ditambahkan
+           di sini, mengikuti pola LaporanSemester.jsx. */
+        @media screen {
+          .lembar-cetak.print-only {
+            display: block !important;
+          }
         }
         @page {
-          size: A4 landscape;
-          margin: 12mm;
+          size: A4 portrait;
+          margin: 15mm;
         }
       `}</style>
     </div>
