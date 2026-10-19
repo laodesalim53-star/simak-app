@@ -6,6 +6,7 @@ import Layout from '../components/Layout'
 import StoryBar from '../components/StoryBar'
 import StoryUploader from '../components/StoryUploader'
 import PintasanKUA from '../components/PintasanKUA'
+import PengumumanAturanKepegawaian from '../components/PengumumanAturanKepegawaian'
 import { Users, GraduationCap, DoorOpen, Megaphone, LayoutDashboard, ClipboardCheck, FileClock, Briefcase, UserCheck, AlertTriangle, Link2, ArrowRight, Gavel, FileText } from 'lucide-react'
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
@@ -413,10 +414,14 @@ function DashboardSekolah({ sekolahId }) {
 
         {loadError && <DataErrorBanner />}
 
-        <StoryBar key={storyRefreshKey} />
-        <StoryUploader onPosted={() => setStoryRefreshKey((k) => k + 1)} />
+<StoryBar key={storyRefreshKey} />
+<StoryUploader onPosted={() => setStoryRefreshKey((k) => k + 1)} />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
+<div className="mb-6 empty:hidden">
+  <PengumumanAturanKepegawaian />
+</div>
+
+<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
           {cards.map(({ label, value, icon, theme, sublabel }, i) => (
             <StatCard
               key={label}
