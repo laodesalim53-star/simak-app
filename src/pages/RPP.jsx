@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
-import { Upload, FileText, Download, CheckCircle2, XCircle, Clock, Loader2, NotebookPen, Wand2, Users } from 'lucide-react'
+import { Upload, FileText, Download, CheckCircle2, XCircle, Clock, Loader2, NotebookPen, Wand2, Users, List, Archive, BookOpen } from 'lucide-react'
 import { findRppTemplate } from '../data/rppTemplates'
 import { buildRppDocxFile } from '../lib/generateRppDocx'
+import ArsipRppTab from '../components/rpp/ArsipRppTab'
+import ModulAjarTab from '../components/rpp/ModulAjarTab'
 
 const STATUS_STYLE = {
   menunggu: 'bg-brass-400/15 text-brass-600',
@@ -27,6 +30,14 @@ export default function RPP() {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [processingId, setProcessingId] = useState(null)
+
+  // Tab aktif: 'daftar' | 'upload'
+  // Bisa dibuka langsung ke tab tertentu: /rpp?tab=arsip | modul | upload | daftar
+  const [searchParams] = useSearchParams()
+  const initialTab = ['daftar', 'upload', 'arsip', 'modul'].includes(searchParams.get('tab'))
+    ? searchParams.get('tab')
+    : 'daftar'
+  const [tab, setTab] = useState(initialTab)
 
   // Form upload (guru)
   const [form, setForm] = useState({
@@ -201,6 +212,8 @@ export default function RPP() {
       setKelasIsNew(false)
       setMateriPilihan('')
       await load()
+      // Berhasil -> pindah ke tab Daftar supaya guru langsung lihat statusnya
+      setTab('daftar')
     }
     setUploading(false)
   }
@@ -389,6 +402,22 @@ export default function RPP() {
 
   const menungguCount = items.filter((i) => i.status === 'menunggu').length
 
+  // RPP yang sudah disetujui -> dipakai tab Arsip (tidak perlu query ulang)
+  const disetujuiItems = useMemo(
+    () =>
+      items
+        .filter((i) => i.status === 'disetujui')
+        .sort((a, b) => new Date(b.disetujui_pada || 0) - new Date(a.disetujui_pada || 0)),
+    [items]
+  )
+
+  const TABS = [
+    { key: 'daftar', label: 'Daftar RPP', icon: List, badge: isAdmin && menungguCount > 0 ? menungguCount : null },
+    { key: 'upload', label: isAdmin ? 'Upload Massal' : 'Upload RPP', icon: Upload },
+    { key: 'arsip', label: 'Arsip RPP', icon: Archive },
+    { key: 'modul', label: 'Modul Ajar', icon: BookOpen },
+  ]
+
   return (
     <Layout title="RPP" subtitle={isAdmin ? 'Tinjau dan setujui RPP dari guru' : 'Upload dan pantau status persetujuan RPP Anda'}>
       {/* Banner biru — senada dengan Dokumen & Presensi */}
@@ -411,451 +440,526 @@ export default function RPP() {
         <NotebookPen size={120} className="absolute -right-4 -bottom-6 text-white/5 rotate-12" />
       </div>
 
-      {!isAdmin && (
-        <form onSubmit={handleUpload} className="card p-6 mb-6 space-y-3">
-          <h3 className="font-display text-lg font-semibold mb-1">Upload RPP Baru</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* ---- Mata Pelajaran: dropdown, bisa tambah baru ---- */}
-            {mapelIsNew || mapelOptions.length === 0 ? (
-              <div className="flex gap-2">
-                <input
-                  className="input-field"
-                  placeholder="Mata Pelajaran baru"
-                  value={form.mata_pelajaran}
-                  onChange={(e) => setForm({ ...form, mata_pelajaran: e.target.value })}
-                  autoFocus={mapelIsNew}
-                />
-                {mapelOptions.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMapelIsNew(false)
-                      setForm((f) => ({ ...f, mata_pelajaran: '' }))
-                    }}
-                    className="text-xs text-ink-700/50 shrink-0 px-2"
-                  >
-                    Pilih dari daftar
-                  </button>
-                )}
-              </div>
-            ) : (
-              <select
-                className="input-field"
-                value={form.mata_pelajaran}
-                onChange={(e) => handleMapelSelect(e.target.value)}
-              >
-                <option value="">Pilih Mata Pelajaran</option>
-                {mapelOptions.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-                <option value={NEW_VALUE}>+ Mata Pelajaran baru...</option>
-              </select>
-            )}
-
-            {/* ---- Kelas: dropdown, bisa tambah baru ---- */}
-            {kelasIsNew || kelasOptions.length === 0 ? (
-              <div className="flex gap-2">
-                <input
-                  className="input-field"
-                  placeholder="Kelas baru"
-                  value={form.kelas}
-                  onChange={(e) => setForm({ ...form, kelas: e.target.value })}
-                  autoFocus={kelasIsNew}
-                />
-                {kelasOptions.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setKelasIsNew(false)
-                      setForm((f) => ({ ...f, kelas: '' }))
-                    }}
-                    className="text-xs text-ink-700/50 shrink-0 px-2"
-                  >
-                    Pilih dari daftar
-                  </button>
-                )}
-              </div>
-            ) : (
-              <select
-                className="input-field"
-                value={form.kelas}
-                onChange={(e) => handleKelasSelect(e.target.value)}
-              >
-                <option value="">Pilih Kelas</option>
-                {kelasOptions.map((k) => (
-                  <option key={k} value={k}>
-                    {k}
-                  </option>
-                ))}
-                <option value={NEW_VALUE}>+ Kelas baru...</option>
-              </select>
-            )}
-
-            {/* ---- Template siap pakai: muncul kalau ada template untuk mapel+kelas ini ---- */}
-            {rppTemplate && (
-              <div className="sm:col-span-2 flex items-center justify-between gap-3 rounded-xl bg-sage-500/10 px-3 py-2.5">
-                <p className="text-xs text-ink-700">
-                  Template RPP <strong>{rppTemplate.materiPokok}</strong> tersedia untuk {rppTemplate.mataPelajaran} Kelas {rppTemplate.kelas}.
-                </p>
-                <button
-                  type="button"
-                  onClick={handleGenerateTemplate}
-                  disabled={generatingTemplate}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-sage-500 text-white disabled:opacity-50 shrink-0"
-                >
-                  {generatingTemplate ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
-                  Pakai Template
-                </button>
-              </div>
-            )}
-
-            {/* ---- Materi: muncul otomatis begitu Mata Pelajaran + Kelas terpilih ---- */}
-            {materiOptions.length > 0 && (
-              <div className="sm:col-span-2">
-                <select
-                  className="input-field"
-                  value={materiPilihan}
-                  onChange={(e) => handleMateriSelect(e.target.value)}
-                >
-                  <option value="">Pilih Materi yang sudah ada (opsional)</option>
-                  {materiOptions.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                  <option value={NEW_VALUE}>+ Materi baru...</option>
-                </select>
-                <p className="text-[11px] text-ink-700/40 mt-1">
-                  Memilih materi akan mengisi otomatis kolom Judul RPP di bawah.
-                </p>
-              </div>
-            )}
-
-            <input
-              className="input-field"
-              placeholder="Judul RPP"
-              value={form.judul}
-              onChange={(e) => {
-                setForm({ ...form, judul: e.target.value })
-                setMateriPilihan(NEW_VALUE)
-              }}
-              required
-            />
-            <input
-              className="input-field"
-              placeholder="Tahun Ajaran (mis. 2026/2027)"
-              value={form.tahun_ajaran}
-              onChange={(e) => setForm({ ...form, tahun_ajaran: e.target.value })}
-            />
-            <select
-              className="input-field"
-              value={form.semester}
-              onChange={(e) => setForm({ ...form, semester: e.target.value })}
+      {/* ---- Tab bar ---- */}
+      <div className="flex gap-1.5 mb-6 p-1 rounded-xl bg-ink-900/[0.05] w-fit max-w-full overflow-x-auto">
+        {TABS.map((t) => {
+          const Icon = t.icon
+          const active = tab === t.key
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setTab(t.key)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition ${
+                active ? 'bg-white text-ink-900 shadow-sm' : 'text-ink-700/60 hover:text-ink-900'
+              }`}
             >
-              <option value="Ganjil">Ganjil</option>
-              <option value="Genap">Genap</option>
-            </select>
-            <div>
-              <input
-                className="input-field"
-                type="file"
-                accept=".pdf,.doc,.docx"
-                onChange={(e) => setForm({ ...form, file: e.target.files?.[0] || null })}
-                required
-              />
-              {form.file && rppTemplate && form.file.name.startsWith('RPP_') && (
-                <p className="text-[11px] text-sage-500 mt-1">File dibuat otomatis dari template.</p>
+              <Icon size={15} />
+              {t.label}
+              {t.badge && (
+                <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-md bg-brass-400/20 text-brass-600">
+                  {t.badge}
+                </span>
               )}
-            </div>
-          </div>
-          <button type="submit" disabled={uploading} className="btn-primary">
-            {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-            {uploading ? 'Mengunggah...' : 'Upload RPP'}
-          </button>
-        </form>
-      )}
+            </button>
+          )
+        })}
+      </div>
 
-      {isAdmin && (
-        <div className="card p-4 mb-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <input
-            className="input-field"
-            placeholder="Nama penandatangan (mis. Siti Aminah, S.Pd.)"
-            value={approvalForm.nama}
-            onChange={(e) => setApprovalForm({ ...approvalForm, nama: e.target.value })}
-          />
-          <input
-            className="input-field"
-            placeholder="Jabatan"
-            value={approvalForm.jabatan}
-            onChange={(e) => setApprovalForm({ ...approvalForm, jabatan: e.target.value })}
-          />
-          <p className="sm:col-span-2 text-xs text-ink-700/50">
-            Nama & jabatan ini akan otomatis dipakai setiap kali Anda menyetujui RPP di bawah.
-          </p>
-        </div>
-      )}
-
-      {/* ---- Upload Massal RPP (admin) ---- */}
-      {isAdmin && (
-        <div className="card p-6 mb-6">
-          <h3 className="font-display text-lg font-semibold mb-1">Upload Massal RPP</h3>
-          <p className="text-xs text-ink-700/50 mb-4">
-            Upload banyak file RPP sekaligus untuk beberapa guru. Mata Pelajaran, Kelas, Semester, dan Tahun
-            Ajaran di bawah berlaku sama untuk semua file — tinggal tentukan Guru dan Judul per file sebelum
-            diupload.
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-4">
-            <input
-              className="input-field"
-              placeholder="Mata Pelajaran"
-              list="mapel-list-bulk"
-              value={bulkCommon.mata_pelajaran}
-              onChange={(e) => setBulkCommon({ ...bulkCommon, mata_pelajaran: e.target.value })}
-            />
-            <datalist id="mapel-list-bulk">
-              {mapelOptions.map((m) => (
-                <option key={m} value={m} />
-              ))}
-            </datalist>
-
-            <input
-              className="input-field"
-              placeholder="Kelas"
-              list="kelas-list-bulk"
-              value={bulkCommon.kelas}
-              onChange={(e) => setBulkCommon({ ...bulkCommon, kelas: e.target.value })}
-            />
-            <datalist id="kelas-list-bulk">
-              {kelasOptions.map((k) => (
-                <option key={k} value={k} />
-              ))}
-            </datalist>
-
-            <select
-              className="input-field"
-              value={bulkCommon.semester}
-              onChange={(e) => setBulkCommon({ ...bulkCommon, semester: e.target.value })}
-            >
-              <option value="Ganjil">Ganjil</option>
-              <option value="Genap">Genap</option>
-            </select>
-
-            <input
-              className="input-field"
-              placeholder="Tahun Ajaran (mis. 2026/2027)"
-              value={bulkCommon.tahun_ajaran}
-              onChange={(e) => setBulkCommon({ ...bulkCommon, tahun_ajaran: e.target.value })}
-            />
-          </div>
-
-          <div className="mb-4">
-            <label className="btn-primary inline-flex items-center gap-2 cursor-pointer w-fit">
-              <Upload size={16} />
-              Pilih File RPP
-              <input
-                type="file"
-                multiple
-                accept=".pdf,.doc,.docx"
-                className="hidden"
-                onChange={handleBulkFilesSelect}
-              />
-            </label>
-            <span className="text-xs text-ink-700/50 ml-3">
-              {bulkFiles.length > 0 ? `${bulkFiles.length} file dipilih` : 'Belum ada file dipilih'}
-            </span>
-          </div>
-
-          {bulkFiles.length > 0 && (
-            <>
-              <div className="flex flex-wrap items-center gap-2 mb-3">
-                <Users size={14} className="text-ink-700/40" />
-                <select
-                  className="input-field !py-1.5 !text-xs w-56"
-                  value={bulkApplyGuru}
-                  onChange={(e) => setBulkApplyGuru(e.target.value)}
-                >
-                  <option value="">Set guru untuk semua file...</option>
-                  {guruList.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.nama_lengkap}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={applyGuruToAll}
-                  className="text-xs font-medium text-ink-700 px-2.5 py-1.5 rounded-lg hover:bg-ink-900/[0.05]"
-                >
-                  Terapkan ke semua
-                </button>
-              </div>
-
-              <ul className="divide-y divide-ink-900/[0.06] mb-4">
-                {bulkFiles.map((bf) => {
-                  const result = bulkResults.find((r) => r.id === bf.id)
-                  return (
-                    <li key={bf.id} className="py-3 flex flex-col sm:flex-row sm:items-center gap-2">
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <FileText size={14} className="text-ink-700/40 shrink-0" />
-                        <span className="text-xs text-ink-700 truncate">{bf.file.name}</span>
-                      </div>
-                      <select
-                        className="input-field !py-1.5 !text-xs sm:w-48 shrink-0"
-                        value={bf.guru_id}
-                        onChange={(e) => updateBulkFile(bf.id, { guru_id: e.target.value })}
-                      >
-                        <option value="">Pilih Guru</option>
-                        {guruList.map((g) => (
-                          <option key={g.id} value={g.id}>
-                            {g.nama_lengkap}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        className="input-field !py-1.5 !text-xs sm:w-56 shrink-0"
-                        placeholder="Judul RPP"
-                        value={bf.judul}
-                        onChange={(e) => updateBulkFile(bf.id, { judul: e.target.value })}
-                      />
+      {/* =================== TAB: UPLOAD =================== */}
+      {tab === 'upload' && (
+        <>
+          {!isAdmin && (
+            <form onSubmit={handleUpload} className="card p-6 mb-6 space-y-3">
+              <h3 className="font-display text-lg font-semibold mb-1">Upload RPP Baru</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* ---- Mata Pelajaran: dropdown, bisa tambah baru ---- */}
+                {mapelIsNew || mapelOptions.length === 0 ? (
+                  <div className="flex gap-2">
+                    <input
+                      className="input-field"
+                      placeholder="Mata Pelajaran baru"
+                      value={form.mata_pelajaran}
+                      onChange={(e) => setForm({ ...form, mata_pelajaran: e.target.value })}
+                      autoFocus={mapelIsNew}
+                    />
+                    {mapelOptions.length > 0 && (
                       <button
                         type="button"
-                        onClick={() => removeBulkFile(bf.id)}
-                        className="text-ink-700/40 hover:text-red-600 shrink-0 p-1"
-                        title="Hapus dari daftar"
+                        onClick={() => {
+                          setMapelIsNew(false)
+                          setForm((f) => ({ ...f, mata_pelajaran: '' }))
+                        }}
+                        className="text-xs text-ink-700/50 shrink-0 px-2"
                       >
-                        <XCircle size={16} />
+                        Pilih dari daftar
                       </button>
-                      {result && (
-                        <span
-                          className={`text-[11px] font-medium shrink-0 flex items-center gap-1 ${
-                            result.ok ? 'text-sage-500' : 'text-red-600'
-                          }`}
-                        >
-                          {result.ok ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
-                          {result.ok ? 'Berhasil' : result.message}
-                        </span>
-                      )}
-                    </li>
-                  )
-                })}
-              </ul>
-
-              <button
-                type="button"
-                onClick={handleBulkSubmit}
-                disabled={bulkUploading}
-                className="btn-primary"
-              >
-                {bulkUploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-                {bulkUploading ? 'Mengunggah...' : `Upload ${bulkFiles.length} File`}
-              </button>
-
-              {bulkResults.length > 0 && bulkResults.some((r) => !r.ok) && (
-                <p className="text-xs text-red-600 mt-2">
-                  Beberapa file gagal diupload — lihat keterangan di samping masing-masing file di atas. File
-                  yang gagal tetap ada di daftar supaya bisa dicoba lagi tanpa perlu memilih ulang filenya.
-                </p>
-              )}
-            </>
-          )}
-        </div>
-      )}
-
-      <div className="card p-6">
-        <h3 className="font-display text-lg font-semibold mb-4">Daftar RPP</h3>
-        {loading ? (
-          <p className="text-sm text-ink-700/50">Memuat...</p>
-        ) : items.length === 0 ? (
-          <p className="text-sm text-ink-700/50">Belum ada RPP diupload.</p>
-        ) : (
-          <ul className="divide-y divide-ink-900/[0.06]">
-            {items.map((item) => (
-              <li key={item.id} className="py-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`text-[11px] font-medium px-2 py-0.5 rounded-md ${STATUS_STYLE[item.status]}`}>
-                      {STATUS_LABEL[item.status]}
-                    </span>
-                    <span className="text-sm font-medium text-ink-900 truncate">{item.judul}</span>
+                    )}
                   </div>
-                  <p className="text-xs text-ink-700/50 mt-1">
-                    {isAdmin && <>{item.guru?.nama_lengkap || 'Guru'} · </>}
-                    {item.mata_pelajaran} · Kelas {item.kelas} · {item.semester} {item.tahun_ajaran}
-                  </p>
-                  {item.status === 'ditolak' && item.catatan_admin && (
-                    <p className="text-xs text-red-600 mt-1">Alasan: {item.catatan_admin}</p>
+                ) : (
+                  <select
+                    className="input-field"
+                    value={form.mata_pelajaran}
+                    onChange={(e) => handleMapelSelect(e.target.value)}
+                  >
+                    <option value="">Pilih Mata Pelajaran</option>
+                    {mapelOptions.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                    <option value={NEW_VALUE}>+ Mata Pelajaran baru...</option>
+                  </select>
+                )}
+
+                {/* ---- Kelas: dropdown, bisa tambah baru ---- */}
+                {kelasIsNew || kelasOptions.length === 0 ? (
+                  <div className="flex gap-2">
+                    <input
+                      className="input-field"
+                      placeholder="Kelas baru"
+                      value={form.kelas}
+                      onChange={(e) => setForm({ ...form, kelas: e.target.value })}
+                      autoFocus={kelasIsNew}
+                    />
+                    {kelasOptions.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setKelasIsNew(false)
+                          setForm((f) => ({ ...f, kelas: '' }))
+                        }}
+                        className="text-xs text-ink-700/50 shrink-0 px-2"
+                      >
+                        Pilih dari daftar
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <select
+                    className="input-field"
+                    value={form.kelas}
+                    onChange={(e) => handleKelasSelect(e.target.value)}
+                  >
+                    <option value="">Pilih Kelas</option>
+                    {kelasOptions.map((k) => (
+                      <option key={k} value={k}>
+                        {k}
+                      </option>
+                    ))}
+                    <option value={NEW_VALUE}>+ Kelas baru...</option>
+                  </select>
+                )}
+
+                {/* ---- Template siap pakai: muncul kalau ada template untuk mapel+kelas ini ---- */}
+                {rppTemplate && (
+                  <div className="sm:col-span-2 flex items-center justify-between gap-3 rounded-xl bg-sage-500/10 px-3 py-2.5">
+                    <p className="text-xs text-ink-700">
+                      Template RPP <strong>{rppTemplate.materiPokok}</strong> tersedia untuk {rppTemplate.mataPelajaran} Kelas {rppTemplate.kelas}.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleGenerateTemplate}
+                      disabled={generatingTemplate}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-sage-500 text-white disabled:opacity-50 shrink-0"
+                    >
+                      {generatingTemplate ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
+                      Pakai Template
+                    </button>
+                  </div>
+                )}
+
+                {/* ---- Materi: muncul otomatis begitu Mata Pelajaran + Kelas terpilih ---- */}
+                {materiOptions.length > 0 && (
+                  <div className="sm:col-span-2">
+                    <select
+                      className="input-field"
+                      value={materiPilihan}
+                      onChange={(e) => handleMateriSelect(e.target.value)}
+                    >
+                      <option value="">Pilih Materi yang sudah ada (opsional)</option>
+                      {materiOptions.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                      <option value={NEW_VALUE}>+ Materi baru...</option>
+                    </select>
+                    <p className="text-[11px] text-ink-700/40 mt-1">
+                      Memilih materi akan mengisi otomatis kolom Judul RPP di bawah.
+                    </p>
+                  </div>
+                )}
+
+                <input
+                  className="input-field"
+                  placeholder="Judul RPP"
+                  value={form.judul}
+                  onChange={(e) => {
+                    setForm({ ...form, judul: e.target.value })
+                    setMateriPilihan(NEW_VALUE)
+                  }}
+                  required
+                />
+                <input
+                  className="input-field"
+                  placeholder="Tahun Ajaran (mis. 2026/2027)"
+                  value={form.tahun_ajaran}
+                  onChange={(e) => setForm({ ...form, tahun_ajaran: e.target.value })}
+                />
+                <select
+                  className="input-field"
+                  value={form.semester}
+                  onChange={(e) => setForm({ ...form, semester: e.target.value })}
+                >
+                  <option value="Ganjil">Ganjil</option>
+                  <option value="Genap">Genap</option>
+                </select>
+                <div>
+                  <input
+                    className="input-field"
+                    type="file"
+                    accept=".pdf,.doc,.docx"
+                    onChange={(e) => setForm({ ...form, file: e.target.files?.[0] || null })}
+                    required={!form.file}
+                  />
+                  {form.file && (
+                    <p className="text-[11px] text-ink-700/50 mt-1 truncate">
+                      File: {form.file.name}
+                      {rppTemplate && form.file.name.startsWith('RPP_') && (
+                        <span className="text-sage-500"> — dibuat otomatis dari template.</span>
+                      )}
+                    </p>
                   )}
                 </div>
+              </div>
+              <button type="submit" disabled={uploading} className="btn-primary">
+                {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                {uploading ? 'Mengunggah...' : 'Upload RPP'}
+              </button>
+            </form>
+          )}
 
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => handleDownload(item.file_path, item.file_nama)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-ink-700 hover:bg-ink-900/[0.05]"
-                  >
-                    <FileText size={14} /> File RPP
-                  </button>
+          {/* ---- Upload Massal RPP (admin) ---- */}
+          {isAdmin && (
+            <div className="card p-6 mb-6">
+              <h3 className="font-display text-lg font-semibold mb-1">Upload Massal RPP</h3>
+              <p className="text-xs text-ink-700/50 mb-4">
+                Upload banyak file RPP sekaligus untuk beberapa guru. Mata Pelajaran, Kelas, Semester, dan Tahun
+                Ajaran di bawah berlaku sama untuk semua file — tinggal tentukan Guru dan Judul per file sebelum
+                diupload.
+              </p>
 
-                  {item.status === 'disetujui' && item.lembar_persetujuan_path && (
-                    <button
-                      onClick={() => handleDownload(item.lembar_persetujuan_path, `Lembar-Persetujuan-${item.judul}.pdf`)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-sage-500 hover:bg-sage-500/10"
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-4">
+                <input
+                  className="input-field"
+                  placeholder="Mata Pelajaran"
+                  list="mapel-list-bulk"
+                  value={bulkCommon.mata_pelajaran}
+                  onChange={(e) => setBulkCommon({ ...bulkCommon, mata_pelajaran: e.target.value })}
+                />
+                <datalist id="mapel-list-bulk">
+                  {mapelOptions.map((m) => (
+                    <option key={m} value={m} />
+                  ))}
+                </datalist>
+
+                <input
+                  className="input-field"
+                  placeholder="Kelas"
+                  list="kelas-list-bulk"
+                  value={bulkCommon.kelas}
+                  onChange={(e) => setBulkCommon({ ...bulkCommon, kelas: e.target.value })}
+                />
+                <datalist id="kelas-list-bulk">
+                  {kelasOptions.map((k) => (
+                    <option key={k} value={k} />
+                  ))}
+                </datalist>
+
+                <select
+                  className="input-field"
+                  value={bulkCommon.semester}
+                  onChange={(e) => setBulkCommon({ ...bulkCommon, semester: e.target.value })}
+                >
+                  <option value="Ganjil">Ganjil</option>
+                  <option value="Genap">Genap</option>
+                </select>
+
+                <input
+                  className="input-field"
+                  placeholder="Tahun Ajaran (mis. 2026/2027)"
+                  value={bulkCommon.tahun_ajaran}
+                  onChange={(e) => setBulkCommon({ ...bulkCommon, tahun_ajaran: e.target.value })}
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="btn-primary inline-flex items-center gap-2 cursor-pointer w-fit">
+                  <Upload size={16} />
+                  Pilih File RPP
+                  <input
+                    type="file"
+                    multiple
+                    accept=".pdf,.doc,.docx"
+                    className="hidden"
+                    onChange={handleBulkFilesSelect}
+                  />
+                </label>
+                <span className="text-xs text-ink-700/50 ml-3">
+                  {bulkFiles.length > 0 ? `${bulkFiles.length} file dipilih` : 'Belum ada file dipilih'}
+                </span>
+              </div>
+
+              {bulkFiles.length > 0 && (
+                <>
+                  <div className="flex flex-wrap items-center gap-2 mb-3">
+                    <Users size={14} className="text-ink-700/40" />
+                    <select
+                      className="input-field !py-1.5 !text-xs w-56"
+                      value={bulkApplyGuru}
+                      onChange={(e) => setBulkApplyGuru(e.target.value)}
                     >
-                      <Download size={14} /> Lembar Persetujuan
+                      <option value="">Set guru untuk semua file...</option>
+                      {guruList.map((g) => (
+                        <option key={g.id} value={g.id}>
+                          {g.nama_lengkap}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={applyGuruToAll}
+                      className="text-xs font-medium text-ink-700 px-2.5 py-1.5 rounded-lg hover:bg-ink-900/[0.05]"
+                    >
+                      Terapkan ke semua
                     </button>
-                  )}
+                  </div>
 
-                  {isAdmin && item.status === 'menunggu' && (
-                    <>
-                      <button
-                        onClick={() => handleApprove(item)}
-                        disabled={processingId === item.id}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-sage-500/15 text-sage-500 disabled:opacity-50"
-                      >
-                        {processingId === item.id ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-                        Setujui
-                      </button>
-
-                      {rejectingId === item.id ? (
-                        <div className="flex items-center gap-1.5">
+                  <ul className="divide-y divide-ink-900/[0.06] mb-4">
+                    {bulkFiles.map((bf) => {
+                      const result = bulkResults.find((r) => r.id === bf.id)
+                      return (
+                        <li key={bf.id} className="py-3 flex flex-col sm:flex-row sm:items-center gap-2">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <FileText size={14} className="text-ink-700/40 shrink-0" />
+                            <span className="text-xs text-ink-700 truncate">{bf.file.name}</span>
+                          </div>
+                          <select
+                            className="input-field !py-1.5 !text-xs sm:w-48 shrink-0"
+                            value={bf.guru_id}
+                            onChange={(e) => updateBulkFile(bf.id, { guru_id: e.target.value })}
+                          >
+                            <option value="">Pilih Guru</option>
+                            {guruList.map((g) => (
+                              <option key={g.id} value={g.id}>
+                                {g.nama_lengkap}
+                              </option>
+                            ))}
+                          </select>
                           <input
-                            className="input-field !py-1.5 !text-xs w-40"
-                            placeholder="Alasan tolak"
-                            value={catatanTolak}
-                            onChange={(e) => setCatatanTolak(e.target.value)}
+                            className="input-field !py-1.5 !text-xs sm:w-56 shrink-0"
+                            placeholder="Judul RPP"
+                            value={bf.judul}
+                            onChange={(e) => updateBulkFile(bf.id, { judul: e.target.value })}
                           />
                           <button
-                            onClick={() => handleReject(item)}
-                            disabled={processingId === item.id}
-                            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-100 text-red-600"
+                            type="button"
+                            onClick={() => removeBulkFile(bf.id)}
+                            className="text-ink-700/40 hover:text-red-600 shrink-0 p-1"
+                            title="Hapus dari daftar"
                           >
-                            Kirim
+                            <XCircle size={16} />
                           </button>
-                        </div>
-                      ) : (
+                          {result && (
+                            <span
+                              className={`text-[11px] font-medium shrink-0 flex items-center gap-1 ${
+                                result.ok ? 'text-sage-500' : 'text-red-600'
+                              }`}
+                            >
+                              {result.ok ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
+                              {result.ok ? 'Berhasil' : result.message}
+                            </span>
+                          )}
+                        </li>
+                      )
+                    })}
+                  </ul>
+
+                  <button
+                    type="button"
+                    onClick={handleBulkSubmit}
+                    disabled={bulkUploading}
+                    className="btn-primary"
+                  >
+                    {bulkUploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                    {bulkUploading ? 'Mengunggah...' : `Upload ${bulkFiles.length} File`}
+                  </button>
+
+                  {bulkResults.length > 0 && bulkResults.some((r) => !r.ok) && (
+                    <p className="text-xs text-red-600 mt-2">
+                      Beberapa file gagal diupload — lihat keterangan di samping masing-masing file di atas. File
+                      yang gagal tetap ada di daftar supaya bisa dicoba lagi tanpa perlu memilih ulang filenya.
+                    </p>
+                  )}
+                </>
+              )}
+
+              {/* Ringkasan setelah semua file berhasil (daftar file sudah kosong) */}
+              {bulkFiles.length === 0 && bulkResults.length > 0 && bulkResults.every((r) => r.ok) && (
+                <div className="flex items-center justify-between gap-3 rounded-xl bg-sage-500/10 px-3 py-2.5">
+                  <p className="text-xs text-sage-500 font-medium">
+                    {bulkResults.length} file berhasil diupload.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setTab('daftar')}
+                    className="text-xs font-medium text-sage-500 underline"
+                  >
+                    Lihat di Daftar RPP
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* =================== TAB: DAFTAR =================== */}
+      {tab === 'daftar' && (
+        <>
+          {isAdmin && (
+            <div className="card p-4 mb-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <input
+                className="input-field"
+                placeholder="Nama penandatangan (mis. Siti Aminah, S.Pd.)"
+                value={approvalForm.nama}
+                onChange={(e) => setApprovalForm({ ...approvalForm, nama: e.target.value })}
+              />
+              <input
+                className="input-field"
+                placeholder="Jabatan"
+                value={approvalForm.jabatan}
+                onChange={(e) => setApprovalForm({ ...approvalForm, jabatan: e.target.value })}
+              />
+              <p className="sm:col-span-2 text-xs text-ink-700/50">
+                Nama & jabatan ini akan otomatis dipakai setiap kali Anda menyetujui RPP di bawah.
+              </p>
+            </div>
+          )}
+
+          <div className="card p-6">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <h3 className="font-display text-lg font-semibold">Daftar RPP</h3>
+              {!isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setTab('upload')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-ink-700 hover:bg-ink-900/[0.05]"
+                >
+                  <Upload size={14} /> Upload RPP
+                </button>
+              )}
+            </div>
+            {loading ? (
+              <p className="text-sm text-ink-700/50">Memuat...</p>
+            ) : items.length === 0 ? (
+              <p className="text-sm text-ink-700/50">Belum ada RPP diupload.</p>
+            ) : (
+              <ul className="divide-y divide-ink-900/[0.06]">
+                {items.map((item) => (
+                  <li key={item.id} className="py-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-md ${STATUS_STYLE[item.status]}`}>
+                          {STATUS_LABEL[item.status]}
+                        </span>
+                        <span className="text-sm font-medium text-ink-900 truncate">{item.judul}</span>
+                      </div>
+                      <p className="text-xs text-ink-700/50 mt-1">
+                        {isAdmin && <>{item.guru?.nama_lengkap || 'Guru'} · </>}
+                        {item.mata_pelajaran} · Kelas {item.kelas} · {item.semester} {item.tahun_ajaran}
+                      </p>
+                      {item.status === 'ditolak' && item.catatan_admin && (
+                        <p className="text-xs text-red-600 mt-1">Alasan: {item.catatan_admin}</p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                      <button
+                        onClick={() => handleDownload(item.file_path, item.file_nama)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-ink-700 hover:bg-ink-900/[0.05]"
+                      >
+                        <FileText size={14} /> File RPP
+                      </button>
+
+                      {item.status === 'disetujui' && item.lembar_persetujuan_path && (
                         <button
-                          onClick={() => setRejectingId(item.id)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-100 text-red-600"
+                          onClick={() => handleDownload(item.lembar_persetujuan_path, `Lembar-Persetujuan-${item.judul}.pdf`)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-sage-500 hover:bg-sage-500/10"
                         >
-                          <XCircle size={14} /> Tolak
+                          <Download size={14} /> Lembar Persetujuan
                         </button>
                       )}
-                    </>
-                  )}
 
-                  {item.status === 'menunggu' && !isAdmin && (
-                    <span className="flex items-center gap-1.5 text-xs text-ink-700/40">
-                      <Clock size={14} /> Menunggu persetujuan
-                    </span>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+                      {isAdmin && item.status === 'menunggu' && (
+                        <>
+                          <button
+                            onClick={() => handleApprove(item)}
+                            disabled={processingId === item.id}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-sage-500/15 text-sage-500 disabled:opacity-50"
+                          >
+                            {processingId === item.id ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                            Setujui
+                          </button>
+
+                          {rejectingId === item.id ? (
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                className="input-field !py-1.5 !text-xs w-40"
+                                placeholder="Alasan tolak"
+                                value={catatanTolak}
+                                onChange={(e) => setCatatanTolak(e.target.value)}
+                              />
+                              <button
+                                onClick={() => handleReject(item)}
+                                disabled={processingId === item.id}
+                                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-100 text-red-600"
+                              >
+                                Kirim
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setRejectingId(item.id)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-100 text-red-600"
+                            >
+                              <XCircle size={14} /> Tolak
+                            </button>
+                          )}
+                        </>
+                      )}
+
+                      {item.status === 'menunggu' && !isAdmin && (
+                        <span className="flex items-center gap-1.5 text-xs text-ink-700/40">
+                          <Clock size={14} /> Menunggu persetujuan
+                        </span>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </>
+      )}
+      {/* =================== TAB: ARSIP RPP =================== */}
+      {tab === 'arsip' && (
+        <ArsipRppTab disetujuiItems={disetujuiItems} loadingDisetujui={loading} onReloadRpp={load} />
+      )}
+
+      {/* =================== TAB: MODUL AJAR =================== */}
+      {tab === 'modul' && <ModulAjarTab />}
     </Layout>
   )
 }
