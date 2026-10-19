@@ -24,7 +24,7 @@ const KUNCI_TUTUP = 'notif_kepegawaian_ditutup'
 function bacaGuru(g) {
   return {
     id: String(g.id),
-    nama: g.nama_lengkap ? String(g.nama_lengkap) : '',
+    nama: g.nama_lengkap ? rapikanNama(g.nama_lengkap) : '',
     statusMentah: g.status_kepegawaian ? String(g.status_kepegawaian) : '',
     tmtPangkat: g.tmt_pangkat || '',
     tmtKgb: g.tmt_kgb || '',
@@ -43,6 +43,23 @@ function jenisKepegawaian(raw) {
   if (/p3k|pppk/.test(s)) return 'pppk'
   if (/pns|cpns|asn/.test(s)) return 'pns'
   return null
+}
+// "SELVIA PUTRI HARDI FID,S.PdI" -> "Selvia Putri Hardi Fid, S.PdI"
+// Gelar (mengandung titik, mis. S.Pd, M.Pd.) dibiarkan apa adanya.
+function rapikanNama(raw) {
+  const s = String(raw || '').trim().replace(/\s*,\s*/g, ', ').replace(/\s+/g, ' ')
+  if (!s) return ''
+  return s
+    .split(' ')
+    .map((t) => {
+      if (t.includes('.')) return t
+      const m = t.match(/^(.*?)(,?)$/)
+      const kata = m[1]
+      const seragam = kata === kata.toUpperCase() || kata === kata.toLowerCase()
+      const hasil = seragam ? kata.charAt(0).toUpperCase() + kata.slice(1).toLowerCase() : kata
+      return hasil + m[2]
+    })
+    .join(' ')
 }
 
 // ============================================================
@@ -121,7 +138,6 @@ function susunPengingat(g, jenis, sekarang) {
   const hasil = []
 
   function tambah(kode, label, due, perkiraan = false) {
-    if (perkiraan && sekarang > tambahBulan(due, 12)) return
     const batas = tambahBulan(due, -BULAN_PERINGATAN)
     let tahap = null
     if (sekarang >= due) tahap = 'sudah'
@@ -220,8 +236,9 @@ function KartuAturan({ aturan, tampilkanDataBelumLengkap, nama, onTutup }) {
   const [terbuka, setTerbuka] = useState(false)
   return (
     <Kartu warna="biru" label="Pemberitahuan untuk Anda" judul={aturan.judul} onTutup={onTutup}>
-      <p className="mt-1 text-sm">
-        {nama ? `Bapak/Ibu ${nama}, ` : ''}berikut ketentuan terbaru yang berkaitan dengan status kepegawaian Anda.
+      {nama && <p className="mt-1 text-sm font-medium">Yth. Bapak/Ibu {nama}</p>}
+      <p className={`${nama ? 'mt-0.5' : 'mt-1'} text-sm`}>
+        Berikut ketentuan terbaru yang berkaitan dengan status kepegawaian Anda.
       </p>
       {tampilkanDataBelumLengkap && (
         <p className="mt-2 rounded bg-white/70 p-2 text-xs text-slate-600">
