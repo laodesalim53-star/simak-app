@@ -223,6 +223,7 @@ export const BANK_TKA = [
   },
 ];
 
-export function labelPaket(p) {
-  return `${p.mapel} - ${JENJANG_TKA[p.jenjang]} (Paket ${p.paket})`;
-}
+      s('Persamaan kata (synonym) dari "big" adalah ....', ['small', 'large', 'tiny', 'short'], 1, 'Big bersinonim dengan large.'),
+    ],
+  },
+];
