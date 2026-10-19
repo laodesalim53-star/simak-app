@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../lib/AuthContext';
 import Layout from '../components/Layout';
+import KopSurat from '../components/KopSurat';
 import { BANK_TKA, JENJANG_TKA, JENIS_TKA, labelPaket } from '../data/tkaSoal';
 
 // Halaman "Simulasi TKA" untuk SD dan SMP.
@@ -21,8 +22,14 @@ const inputSelect =
   'w-full rounded-xl px-4 py-3 border border-[#6b0f1a]/15 bg-white focus:border-[#6b0f1a] focus:ring-2 focus:ring-[#6b0f1a]/20 outline-none transition-colors';
 
 // embedded = true  -> dipakai sebagai tab di halaman lain (tanpa Layout sendiri).
-export default function SimulasiTKA({ embedded = false }) {
+// sekolahId        -> id sekolah untuk kop surat (dikirim dari halaman induk,
+//                     mis. UjianOnline). Wajib diisi untuk siswa tanpa login.
+export default function SimulasiTKA({ embedded = false, sekolahId: sekolahIdProp = null }) {
   const { session } = useAuth();
+  // Urutan sumber id sekolah: prop dari halaman induk, lalu ?sekolah= di URL
+  // (link yang dibagikan guru ke siswa tanpa login).
+  const sekolahId =
+    sekolahIdProp || new URLSearchParams(window.location.search).get('sekolah') || null;
 
   const [tahap, setTahap] = useState('pilih'); // pilih | kerjakan | hasil
   const [jenjang, setJenjang] = useState('sd');
@@ -56,9 +63,10 @@ export default function SimulasiTKA({ embedded = false }) {
 
   // Salin link halaman simulasi agar bisa dibagikan ke siswa.
   async function salinLink() {
+    const sekolahQuery = sekolahId ? `sekolah=${encodeURIComponent(sekolahId)}` : '';
     const url = embedded
-      ? `${window.location.origin}/ujian-online?tab=tka`
-      : `${window.location.origin}/simulasi-tka`;
+      ? `${window.location.origin}/ujian-online?tab=tka${sekolahQuery ? `&${sekolahQuery}` : ''}`
+      : `${window.location.origin}/simulasi-tka${sekolahQuery ? `?${sekolahQuery}` : ''}`;
     try {
       await navigator.clipboard.writeText(url);
       setTersalin(true);
@@ -197,6 +205,15 @@ export default function SimulasiTKA({ embedded = false }) {
 
     isi = (
       <div className="max-w-4xl mx-auto mt-4 px-4 pb-10">
+        {/* Kop surat: siswa tanpa login memakai mode publik (lewat sekolahId). */}
+        <div className={`${kartu} p-4 pb-1 mb-4`}>
+          <KopSurat
+            sekolahId={sekolahId}
+            publik={!session?.user?.id}
+            sembunyikanJikaKosong
+          />
+        </div>
+
         <div className={`${kartu} p-4 flex items-center justify-between gap-3 flex-wrap`}>
           <div>
             <h1 className="font-semibold text-[#3b0a0a]">{labelPaket(paket)}</h1>
