@@ -2,12 +2,17 @@ import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../lib/AuthContext';
 import Layout from '../components/Layout';
 import KopSurat from '../components/KopSurat';
-import { BANK_TKA, JENJANG_TKA, JENIS_TKA, labelPaket } from '../data/tkaSoal';
+import { BANK_TKA as BANK_DASAR, JENJANG_TKA, JENIS_TKA, labelPaket } from '../data/tkaSoal';
+import { PAKET_TAMBAHAN } from '../data/paketTambahan';
+
+// Gabungan soal lama + paket tambahan bergambar.
+const BANK_TKA = [...BANK_DASAR, ...PAKET_TAMBAHAN];
 
 // Halaman "Simulasi TKA" untuk SD dan SMP.
 // Alur: pilih jenjang -> jenis mapel -> mapel/paket -> kerjakan (ada timer) -> hasil + pembahasan.
 // Route contoh: /simulasi-tka
-// Soal diambil dari src/data/tkaSoal.js, jadi paket baru cukup ditambahkan di sana.
+// Soal diambil dari src/data/tkaSoal.js dan src/data/paketTambahan.js,
+// jadi paket baru cukup ditambahkan di salah satu file tersebut.
 
 const HURUF = ['A', 'B', 'C', 'D'];
 
@@ -237,7 +242,16 @@ export default function SimulasiTKA({ embedded = false, sekolahId: sekolahIdProp
             <p className="text-xs text-[#6b0f1a]/60 mb-2">
               Soal {no + 1} dari {paket.soal.length}
             </p>
-            <p className="font-medium text-[#3b0a0a] mb-4 leading-relaxed">{soal.q}</p>
+            <p className="font-medium text-[#3b0a0a] mb-4 leading-relaxed whitespace-pre-line">
+              {soal.q}
+            </p>
+            {soal.gambar && (
+              <img
+                src={soal.gambar}
+                alt={soal.alt || 'Gambar soal'}
+                className="max-w-full h-auto mb-4 rounded-lg border border-[#6b0f1a]/15"
+              />
+            )}
 
             <div className="space-y-2">
               {soal.opsi.map((teks, i) => {
@@ -429,7 +443,7 @@ export default function SimulasiTKA({ embedded = false, sekolahId: sekolahIdProp
           return (
             <div key={i} className={`${kartu} p-4`}>
               <div className="flex items-start justify-between gap-2">
-                <p className="font-medium text-[#3b0a0a]">
+                <p className="font-medium text-[#3b0a0a] whitespace-pre-line">
                   {i + 1}. {s.q}
                 </p>
                 <span
@@ -444,6 +458,13 @@ export default function SimulasiTKA({ embedded = false, sekolahId: sekolahIdProp
                   {kosong ? 'Kosong' : benar ? 'Benar' : 'Salah'}
                 </span>
               </div>
+              {s.gambar && (
+                <img
+                  src={s.gambar}
+                  alt={s.alt || 'Gambar soal'}
+                  className="max-w-full h-auto mt-3 rounded-lg border border-[#6b0f1a]/15"
+                />
+              )}
               <div className="mt-2 space-y-1 text-sm">
                 {s.opsi.map((teks, j) => (
                   <p
