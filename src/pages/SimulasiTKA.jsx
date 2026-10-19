@@ -20,7 +20,8 @@ const kartu = 'bg-white rounded-2xl border border-[#6b0f1a]/15 shadow-sm';
 const inputSelect =
   'w-full rounded-xl px-4 py-3 border border-[#6b0f1a]/15 bg-white focus:border-[#6b0f1a] focus:ring-2 focus:ring-[#6b0f1a]/20 outline-none transition-colors';
 
-export default function SimulasiTKA() {
+// embedded = true  -> dipakai sebagai tab di halaman lain (tanpa Layout sendiri).
+export default function SimulasiTKA({ embedded = false }) {
   const { session } = useAuth();
 
   const [tahap, setTahap] = useState('pilih'); // pilih | kerjakan | hasil
@@ -30,6 +31,7 @@ export default function SimulasiTKA() {
     () => BANK_TKA.find((p) => p.jenjang === 'sd' && p.jenis === 'wajib')?.id || ''
   );
   const [error, setError] = useState('');
+  const [tersalin, setTersalin] = useState(false);
 
   const [no, setNo] = useState(0);
   const [jawaban, setJawaban] = useState({}); // { [indeksSoal]: indeksPilihan }
@@ -50,6 +52,20 @@ export default function SimulasiTKA() {
     const pertama = BANK_TKA.find((p) => p.jenjang === jenjangBaru && p.jenis === jenisBaru);
     setPaketId(pertama?.id || '');
     setError('');
+  }
+
+  // Salin link halaman simulasi agar bisa dibagikan ke siswa.
+  async function salinLink() {
+    const url = embedded
+      ? `${window.location.origin}/ujian-online?tab=tka`
+      : `${window.location.origin}/simulasi-tka`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setTersalin(true);
+      setTimeout(() => setTersalin(false), 2000);
+    } catch {
+      window.prompt('Salin link ini:', url);
+    }
   }
 
   function mulai() {
@@ -160,6 +176,14 @@ export default function SimulasiTKA() {
           className="mt-6 w-full py-3 rounded-xl bg-[#6b0f1a] text-white font-semibold hover:opacity-90 disabled:opacity-40 transition-opacity"
         >
           ▶ Mulai Simulasi
+        </button>
+
+        <button
+          type="button"
+          onClick={salinLink}
+          className="mt-3 w-full py-2 rounded-xl border border-[#6b0f1a]/20 text-[#6b0f1a] text-sm hover:bg-[#6b0f1a]/5"
+        >
+          {tersalin ? '✓ Link tersalin' : '🔗 Salin Link Simulasi'}
         </button>
       </div>
     );
@@ -434,7 +458,7 @@ export default function SimulasiTKA() {
   }
 
   // Guru/pengguna yang sudah login mendapat Layout (sidebar/header); siswa tanpa login melihat halaman polos.
-  if (session?.user?.id) {
+  if (!embedded && session?.user?.id) {
     return (
       <Layout title="Simulasi TKA" subtitle="Latihan soal TKA untuk SD dan SMP">
         {isi}
