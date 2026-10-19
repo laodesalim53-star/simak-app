@@ -128,15 +128,15 @@ function susunPengingat(g, jenis, sekarang) {
     else if (sekarang >= batas) tahap = 'segera'
     if (!tahap) return
     hasil.push({
-      id: `${g.id}-${kode}-${isoTanggal(due)}`,
-      tahap,
-      judul: tahap === 'sudah' ? `${label}: sudah dapat diusulkan` : `${label}: segera jatuh tempo`,
-      teks:
-        tahap === 'sudah'
-          ? `Berdasarkan data TMT Anda, perkiraan syarat masa waktu terpenuhi sejak ${bulanTahun(due)}. Segera siapkan berkas dan hubungi operator sekolah.`
-          : `Berdasarkan data TMT Anda, perkiraan syarat masa waktu terpenuhi pada ${bulanTahun(due)}. Mulai siapkan berkas dari sekarang.`,
+    id: `${g.id}-${kode}-${isoTanggal(due)}`,
+    tahap,
+    perkiraan,
+    judul: tahap === 'sudah' ? `${label}: sudah dapat diusulkan` : `${label}: segera jatuh tempo`,
+    teks:
+    tahap === 'sudah'
+      ? `Berdasarkan data TMT Anda, perkiraan syarat masa waktu terpenuhi sejak ${bulanTahun(due)}. Segera siapkan berkas dan hubungi operator sekolah.`
+      : `Berdasarkan data TMT Anda, perkiraan syarat masa waktu terpenuhi pada ${bulanTahun(due)}. Mulai siapkan berkas dari sekarang.`,
     })
-  }
 
   const tmtPangkat = parseTanggal(g.tmtPangkat)
   const tmtKgb = parseTanggal(g.tmtKgb)
@@ -322,12 +322,12 @@ export default function PengumumanAturanKepegawaian() {
           judul={p.judul}
           onTutup={() => tutup(p.id)}
         >
-          <p className="mt-1 text-sm">{p.teks}</p>
-          <p className="mt-2 text-xs text-slate-500">
-            Perkiraan dihitung dari TMT pada data guru; angka kredit dan penilaian kinerja belum diperhitungkan.
-          </p>
-        </Kartu>
-      ))}
+        <p className="mt-1 text-sm">{p.teks}</p>
+        <p className="mt-2 text-xs text-slate-500">
+        {p.perkiraan
+        ? 'Perkiraan awal dari TMT pengangkatan/CPNS. Jika KGB sudah pernah diproses, mohon perbarui data TMT Anda atau hubungi operator.'
+        : 'Perkiraan dihitung dari TMT pada data guru; angka kredit dan penilaian kinerja belum diperhitungkan.'}
+        </p>
       {tampilAturan && (
         <KartuAturan
           aturan={ATURAN[jenis]}
