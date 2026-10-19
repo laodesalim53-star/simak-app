@@ -1,12 +1,16 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { supabase } from '../lib/supabaseClient'; // sesuaikan kalau nama/lokasi file berbeda
 import { useAuth } from '../lib/AuthContext';
 import Layout from '../components/Layout';
 import KopSurat from '../components/KopSurat'; // sesuaikan path kalau KopSurat.jsx ada di folder lain
 
-// Satu halaman, dua tab:
+// Simulasi TKA dimuat sebagai tab (tidak punya halaman sendiri di sini).
+const SimulasiTKA = lazy(() => import('./SimulasiTKA'));
+
+// Satu halaman, tiga tab:
 //   1. "Kerjakan Ujian"  -> untuk siswa (tanpa login)
-//   2. "Hasil Ujian"     -> untuk guru (perlu login)
+//   2. "Simulasi TKA"    -> untuk siswa SD/SMP (tanpa login)
+//   3. "Hasil Ujian"     -> untuk guru (perlu login)
 //
 // Route contoh: /ujian-online
 // Halaman ini HARUS di luar <ProtectedRoute> di App.jsx (karena siswa tidak login),
@@ -581,7 +585,7 @@ export function PanelKerjakan({ onTahapChange }) {
 }
 
 /* =====================================================================
-   TAB 2 — HASIL UJIAN (guru, perlu login)
+   TAB 3 — HASIL UJIAN (guru, perlu login)
    ===================================================================== */
 export function PanelHasil({ guruId }) {
   const [daftarUjian, setDaftarUjian] = useState([]);
@@ -872,17 +876,26 @@ export function PanelHasil({ guruId }) {
 }
 
 /* =====================================================================
-   HALAMAN GABUNGAN — dua tab
+   HALAMAN GABUNGAN — tiga tab
    ===================================================================== */
 export default function UjianOnline() {
   const { session } = useAuth();
   const guruId = session?.user?.id;
 
-  // Tab awal: ?tab=hasil membuka tab Hasil Ujian (dipakai menu sidebar guru)
-  const [tab, setTab] = useState(() =>
-    new URLSearchParams(window.location.search).get('tab') === 'hasil' ? 'hasil' : 'kerjakan'
-  ); // kerjakan | hasil
+  // Tab awal: ?tab=hasil membuka Hasil Ujian (menu sidebar guru),
+  // ?tab=tka membuka Simulasi TKA (link yang dibagikan ke siswa).
+  const [tab, setTab] = useState(() => {
+    const t = new URLSearchParams(window.location.search).get('tab');
+    return t === 'hasil' || t === 'tka' ? t : 'kerjakan';
+  }); // kerjakan | tka | hasil
   const [tahapSiswa, setTahapSiswa] = useState('masuk');
+  // Simulasi TKA baru dimuat saat tab pertama kali dibuka, lalu tetap "mounted"
+  // supaya timer dan jawaban tidak hilang ketika berpindah tab.
+  const [tkaDibuka, setTkaDibuka] = useState(tab === 'tka');
+
+  useEffect(() => {
+    if (tab === 'tka') setTkaDibuka(true);
+  }, [tab]);
 
   // Selama siswa sedang mengerjakan soal, tab disembunyikan dan dikunci di
   // "kerjakan" supaya tidak salah pencet / pindah halaman di tengah ujian.
@@ -906,17 +919,28 @@ export default function UjianOnline() {
   const isi = (
     <div className="w-full">
       {!sedangMengerjakan && (
-        <div className="flex justify-center gap-2 mt-6">
+        <div className="flex justify-center gap-2 mt-6 flex-wrap px-4">
           {tombolTab('kerjakan', 'Kerjakan Ujian')}
+          {tombolTab('tka', '🎓 Simulasi TKA')}
           {tombolTab('hasil', 'Hasil Ujian')}
         </div>
       )}
 
-      {/* Kedua tab tetap "mounted" (hanya disembunyikan) supaya progres siswa
+      {/* Semua tab tetap "mounted" (hanya disembunyikan) supaya progres siswa
           tidak hilang ketika berpindah tab. Animasi fade berjalan ulang setiap
           panel muncul kembali dari kondisi tersembunyi. */}
       <div className={tabAktif === 'kerjakan' ? 'uo-fade-up' : 'hidden'}>
         <PanelKerjakan onTahapChange={setTahapSiswa} />
+      </div>
+
+      <div className={tabAktif === 'tka' ? 'uo-fade-up' : 'hidden'}>
+        {tkaDibuka && (
+          <Suspense
+            fallback={<div className="text-center text-sm text-[#6b0f1a]/60 mt-10">Memuat...</div>}
+          >
+            <SimulasiTKA embedded />
+          </Suspense>
+        )}
       </div>
 
       <div className={`mt-6 px-4 ${tabAktif === 'hasil' ? 'uo-fade-up' : 'hidden'}`}>
