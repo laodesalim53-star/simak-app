@@ -128,15 +128,16 @@ function susunPengingat(g, jenis, sekarang) {
     else if (sekarang >= batas) tahap = 'segera'
     if (!tahap) return
     hasil.push({
-    id: `${g.id}-${kode}-${isoTanggal(due)}`,
-    tahap,
-    perkiraan,
-    judul: tahap === 'sudah' ? `${label}: sudah dapat diusulkan` : `${label}: segera jatuh tempo`,
-    teks:
-    tahap === 'sudah'
-      ? `Berdasarkan data TMT Anda, perkiraan syarat masa waktu terpenuhi sejak ${bulanTahun(due)}. Segera siapkan berkas dan hubungi operator sekolah.`
-      : `Berdasarkan data TMT Anda, perkiraan syarat masa waktu terpenuhi pada ${bulanTahun(due)}. Mulai siapkan berkas dari sekarang.`,
+      id: `${g.id}-${kode}-${isoTanggal(due)}`,
+      tahap,
+      perkiraan,
+      judul: tahap === 'sudah' ? `${label}: sudah dapat diusulkan` : `${label}: segera jatuh tempo`,
+      teks:
+        tahap === 'sudah'
+          ? `Berdasarkan data TMT Anda, perkiraan syarat masa waktu terpenuhi sejak ${bulanTahun(due)}. Segera siapkan berkas dan hubungi operator sekolah.`
+          : `Berdasarkan data TMT Anda, perkiraan syarat masa waktu terpenuhi pada ${bulanTahun(due)}. Mulai siapkan berkas dari sekarang.`,
     })
+  }
 
   const tmtPangkat = parseTanggal(g.tmtPangkat)
   const tmtKgb = parseTanggal(g.tmtKgb)
@@ -255,7 +256,7 @@ function KartuAturan({ aturan, tampilkanDataBelumLengkap, nama, onTutup }) {
   )
 }
 
-// Pasang di halaman Beranda:  <PengumumanAturanKepegawaian />
+// Pasang di Dasbor (DashboardSekolah):  <PengumumanAturanKepegawaian />
 // Hanya tampil bila akun yang login tertaut ke data guru (profil.guru_id)
 // berstatus PNS/PPPK. Admin/operator/orang tua/pegawai kantor tanpa guru_id
 // tidak melihat apa-apa.
@@ -322,12 +323,14 @@ export default function PengumumanAturanKepegawaian() {
           judul={p.judul}
           onTutup={() => tutup(p.id)}
         >
-        <p className="mt-1 text-sm">{p.teks}</p>
-        <p className="mt-2 text-xs text-slate-500">
-        {p.perkiraan
-        ? 'Perkiraan awal dari TMT pengangkatan/CPNS. Jika KGB sudah pernah diproses, mohon perbarui data TMT Anda atau hubungi operator.'
-        : 'Perkiraan dihitung dari TMT pada data guru; angka kredit dan penilaian kinerja belum diperhitungkan.'}
-        </p>
+          <p className="mt-1 text-sm">{p.teks}</p>
+          <p className="mt-2 text-xs text-slate-500">
+            {p.perkiraan
+              ? 'Perkiraan awal dari TMT pengangkatan/CPNS. Jika KGB sudah pernah diproses, mohon perbarui data TMT Anda atau hubungi operator.'
+              : 'Perkiraan dihitung dari TMT pada data guru; angka kredit dan penilaian kinerja belum diperhitungkan.'}
+          </p>
+        </Kartu>
+      ))}
       {tampilAturan && (
         <KartuAturan
           aturan={ATURAN[jenis]}
