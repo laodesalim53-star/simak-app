@@ -21,6 +21,11 @@ export const JENIS_TKA = {
   pilihan: 'Mata Pelajaran Pilihan',
 };
 
+export function labelPaket(p) {
+  if (p.label) return `${p.label} - ${JENJANG_TKA[p.jenjang]}`;
+  return `${p.mapel} - ${JENJANG_TKA[p.jenjang]} (Paket ${p.paket})`;
+}
+
 export const BANK_TKA = [
   /* ===================== SD — WAJIB ===================== */
   {
