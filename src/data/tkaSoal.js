@@ -222,8 +222,3 @@ export const BANK_TKA = [
     ],
   },
 ];
-
-      s('Persamaan kata (synonym) dari "big" adalah ....', ['small', 'large', 'tiny', 'short'], 1, 'Big bersinonim dengan large.'),
-    ],
-  },
-];
