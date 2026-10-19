@@ -1,471 +1,486 @@
-// Paket soal TKA tambahan (SD & SMP) dengan soal bergambar.
-// Gambar dibuat sebagai SVG "data URI" lewat fungsi di bawah, jadi tidak perlu
-// file gambar terpisah, tidak butuh upload ke storage, dan tetap tajam di layar HP.
-//
-// Cara pakai: SimulasiTKA.jsx menggabungkan PAKET_TAMBAHAN ini dengan BANK_TKA.
-// Menambah soal baru: salin satu objek soal di dalam `soal`, ganti isinya.
-//   - q       : teks soal (boleh pakai \n untuk paragraf bacaan)
-//   - opsi    : 4 pilihan jawaban
-//   - kunci   : indeks jawaban benar (0 = A, 1 = B, 2 = C, 3 = D)
-//   - bahas   : pembahasan
-//   - gambar  : (opsional) hasil salah satu fungsi gambar di bawah, atau data URI lain
-//   - alt     : (opsional) deskripsi gambar untuk pembaca layar
+import { useState, useEffect, useMemo } from 'react';
+import { useAuth } from '../lib/AuthContext';
+import Layout from '../components/Layout';
+import KopSurat from '../components/KopSurat';
+import { BANK_TKA, JENJANG_TKA, JENIS_TKA, labelPaket } from '../data/tkaSoal';
 
-/* ======================= PEMBUAT GAMBAR (SVG) ======================= */
+// Halaman "Simulasi TKA" untuk SD dan SMP.
+// Alur: pilih jenjang -> jenis mapel -> mapel/paket -> kerjakan (ada timer) -> hasil + pembahasan.
+// Route contoh: /simulasi-tka
+// Soal diambil dari src/data/tkaSoal.js, jadi paket baru cukup ditambahkan di sana.
 
-const bungkus = (w, h, isi) =>
-  'data:image/svg+xml;charset=utf-8,' +
-  encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" font-family="Arial, sans-serif" font-size="14" fill="#3b0a0a"><rect width="${w}" height="${h}" fill="#ffffff"/>${isi}</svg>`
+const HURUF = ['A', 'B', 'C', 'D'];
+
+function formatWaktu(detik) {
+  const m = Math.floor(detik / 60);
+  const s = detik % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+const kartu = 'bg-white rounded-2xl border border-[#6b0f1a]/15 shadow-sm';
+const inputSelect =
+  'w-full rounded-xl px-4 py-3 border border-[#6b0f1a]/15 bg-white focus:border-[#6b0f1a] focus:ring-2 focus:ring-[#6b0f1a]/20 outline-none transition-colors';
+
+// embedded = true  -> dipakai sebagai tab di halaman lain (tanpa Layout sendiri).
+// sekolahId        -> id sekolah untuk kop surat (dikirim dari halaman induk,
+//                     mis. UjianOnline). Wajib diisi untuk siswa tanpa login.
+export default function SimulasiTKA({ embedded = false, sekolahId: sekolahIdProp = null }) {
+  const { session } = useAuth();
+  // Urutan sumber id sekolah: prop dari halaman induk, lalu ?sekolah= di URL
+  // (link yang dibagikan guru ke siswa tanpa login).
+  const sekolahId =
+    sekolahIdProp || new URLSearchParams(window.location.search).get('sekolah') || null;
+
+  const [tahap, setTahap] = useState('pilih'); // pilih | kerjakan | hasil
+  const [jenjang, setJenjang] = useState('sd');
+  const [jenis, setJenis] = useState('wajib');
+  const [paketId, setPaketId] = useState(
+    () => BANK_TKA.find((p) => p.jenjang === 'sd' && p.jenis === 'wajib')?.id || ''
   );
+  const [error, setError] = useState('');
+  const [tersalin, setTersalin] = useState(false);
 
-const rad = (d) => (d * Math.PI) / 180;
+  const [no, setNo] = useState(0);
+  const [jawaban, setJawaban] = useState({}); // { [indeksSoal]: indeksPilihan }
+  const [ragu, setRagu] = useState({}); // { [indeksSoal]: true }
+  const [berakhir, setBerakhir] = useState(0);
+  const [sisa, setSisa] = useState(0);
+  const [konfirmasi, setKonfirmasi] = useState(false);
 
-// Diagram batang dengan label nilai di atas tiap batang.
-function diagramBatang(judul, data, maks, langkah) {
-  const x0 = 50;
-  const y0 = 190;
-  const tinggi = 150;
-  const lebar = 290;
-  const slot = lebar / data.length;
-  let isi = `<text x="195" y="22" text-anchor="middle" font-weight="bold">${judul}</text>`;
-  for (let v = 0; v <= maks; v += langkah) {
-    const y = y0 - (v / maks) * tinggi;
-    isi += `<line x1="${x0}" y1="${y}" x2="${x0 + lebar}" y2="${y}" stroke="#d1d5db"/><text x="${x0 - 6}" y="${y + 4}" text-anchor="end" font-size="12">${v}</text>`;
+  const opsiPaket = useMemo(
+    () => BANK_TKA.filter((p) => p.jenjang === jenjang && p.jenis === jenis),
+    [jenjang, jenis]
+  );
+  const paket = BANK_TKA.find((p) => p.id === paketId);
+
+  function ubahFilter(jenjangBaru, jenisBaru) {
+    setJenjang(jenjangBaru);
+    setJenis(jenisBaru);
+    const pertama = BANK_TKA.find((p) => p.jenjang === jenjangBaru && p.jenis === jenisBaru);
+    setPaketId(pertama?.id || '');
+    setError('');
   }
-  data.forEach((d, i) => {
-    const bw = slot * 0.55;
-    const bx = x0 + i * slot + (slot - bw) / 2;
-    const bh = (d.nilai / maks) * tinggi;
-    isi += `<rect x="${bx}" y="${y0 - bh}" width="${bw}" height="${bh}" fill="#6b0f1a"/>`;
-    isi += `<text x="${bx + bw / 2}" y="${y0 - bh - 5}" text-anchor="middle" font-size="12" font-weight="bold">${d.nilai}</text>`;
-    isi += `<text x="${bx + bw / 2}" y="${y0 + 16}" text-anchor="middle" font-size="12">${d.label}</text>`;
-  });
-  return bungkus(380, 220, isi);
-}
 
-// Pita pecahan: `bagian` kotak berwarna dari `total` kotak.
-function gambarPecahan(bagian, total) {
-  const cw = 36;
-  let isi = '';
-  for (let i = 0; i < total; i++) {
-    isi += `<rect x="${10 + i * cw}" y="10" width="${cw}" height="50" fill="${i < bagian ? '#d4a017' : '#ffffff'}" stroke="#3b0a0a" stroke-width="2"/>`;
+  // Salin link halaman simulasi agar bisa dibagikan ke siswa.
+  async function salinLink() {
+    const sekolahQuery = sekolahId ? `sekolah=${encodeURIComponent(sekolahId)}` : '';
+    const url = embedded
+      ? `${window.location.origin}/ujian-online?tab=tka${sekolahQuery ? `&${sekolahQuery}` : ''}`
+      : `${window.location.origin}/simulasi-tka${sekolahQuery ? `?${sekolahQuery}` : ''}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setTersalin(true);
+      setTimeout(() => setTersalin(false), 2000);
+    } catch {
+      window.prompt('Salin link ini:', url);
+    }
   }
-  return bungkus(20 + total * cw, 70, isi);
-}
 
-// Jam analog.
-function gambarJam(jam, menit) {
-  const garis = (sudut, p, tebal, warna) =>
-    `<line x1="80" y1="80" x2="${(80 + p * Math.sin(rad(sudut))).toFixed(1)}" y2="${(80 - p * Math.cos(rad(sudut))).toFixed(1)}" stroke="${warna}" stroke-width="${tebal}" stroke-linecap="round"/>`;
-  let isi = `<circle cx="80" cy="80" r="72" fill="#ffffff" stroke="#3b0a0a" stroke-width="4"/>`;
-  for (let n = 1; n <= 12; n++) {
-    const s = n * 30;
-    isi += `<text x="${(80 + 57 * Math.sin(rad(s))).toFixed(1)}" y="${(80 - 57 * Math.cos(rad(s)) + 5).toFixed(1)}" text-anchor="middle" font-weight="bold">${n}</text>`;
+  function mulai() {
+    if (!paket) {
+      setError('Belum ada soal untuk pilihan ini. Pilih jenis atau jenjang lain.');
+      return;
+    }
+    setError('');
+    setJawaban({});
+    setRagu({});
+    setNo(0);
+    setKonfirmasi(false);
+    setSisa(paket.durasiMenit * 60);
+    setBerakhir(Date.now() + paket.durasiMenit * 60000);
+    setTahap('kerjakan');
   }
-  isi += garis(((jam % 12) + menit / 60) * 30, 36, 5, '#3b0a0a');
-  isi += garis(menit * 6, 55, 3, '#6b0f1a');
-  isi += `<circle cx="80" cy="80" r="4" fill="#3b0a0a"/>`;
-  return bungkus(160, 160, isi);
-}
 
-// Persegi panjang dengan ukuran sisi (gambar tidak berskala).
-function gambarPersegiPanjang(p, l) {
-  const isi =
-    `<rect x="40" y="30" width="200" height="100" fill="#f7e6e3" stroke="#3b0a0a" stroke-width="3"/>` +
-    `<text x="140" y="22" text-anchor="middle" font-weight="bold">${p} cm</text>` +
-    `<text x="252" y="85" font-weight="bold">${l} cm</text>`;
-  return bungkus(310, 150, isi);
-}
+  // Hitung mundur berdasarkan waktu berakhir (tetap akurat walau tab sempat tidak aktif).
+  useEffect(() => {
+    if (tahap !== 'kerjakan') return;
+    const id = setInterval(() => {
+      const s = Math.max(0, Math.round((berakhir - Date.now()) / 1000));
+      setSisa(s);
+      if (s <= 0) setTahap('hasil');
+    }, 1000);
+    return () => clearInterval(id);
+  }, [tahap, berakhir]);
 
-// Segitiga siku-siku dengan dua sisi tegak diketahui, sisi miring = x.
-function gambarSegitigaSiku(tegak, alas) {
-  const isi =
-    `<polygon points="40,170 40,20 240,170" fill="#f7e6e3" stroke="#3b0a0a" stroke-width="3"/>` +
-    `<polyline points="40,150 60,150 60,170" fill="none" stroke="#3b0a0a" stroke-width="2"/>` +
-    `<text x="30" y="100" text-anchor="end" font-weight="bold">${tegak} cm</text>` +
-    `<text x="140" y="192" text-anchor="middle" font-weight="bold">${alas} cm</text>` +
-    `<text x="158" y="86" font-weight="bold">x</text>`;
-  return bungkus(290, 200, isi);
-}
+  const hasil = useMemo(() => {
+    if (tahap !== 'hasil' || !paket) return null;
+    let benar = 0;
+    let kosong = 0;
+    paket.soal.forEach((s, i) => {
+      if (jawaban[i] === undefined) kosong++;
+      else if (jawaban[i] === s.kunci) benar++;
+    });
+    const salah = paket.soal.length - benar - kosong;
+    return { benar, salah, kosong, skor: Math.round((benar / paket.soal.length) * 100) };
+  }, [tahap, paket, jawaban]);
 
-// Lingkaran dengan jari-jari.
-function gambarLingkaran(r) {
-  const isi =
-    `<circle cx="100" cy="90" r="70" fill="#f7e6e3" stroke="#3b0a0a" stroke-width="3"/>` +
-    `<line x1="100" y1="90" x2="170" y2="90" stroke="#6b0f1a" stroke-width="3"/>` +
-    `<circle cx="100" cy="90" r="4" fill="#3b0a0a"/>` +
-    `<text x="135" y="82" text-anchor="middle" font-weight="bold">${r} cm</text>`;
-  return bungkus(220, 180, isi);
-}
+  /* ---------------------- TAHAP 1: PILIH SIMULASI ---------------------- */
+  let isi = null;
 
-// Bidang koordinat dengan garis melalui dua titik: A(1, 2) dan B(3, 8).
-function gambarKoordinat() {
-  const ox = 40;
-  const oy = 200;
-  const sx = 50;
-  const sy = 20;
-  let isi =
-    `<line x1="${ox}" y1="${oy}" x2="270" y2="${oy}" stroke="#3b0a0a" stroke-width="2"/>` +
-    `<line x1="${ox}" y1="${oy}" x2="${ox}" y2="10" stroke="#3b0a0a" stroke-width="2"/>` +
-    `<text x="276" y="${oy + 4}" font-weight="bold">x</text><text x="${ox - 4}" y="8" font-weight="bold">y</text>`;
-  for (let x = 1; x <= 4; x++) {
-    isi += `<line x1="${ox + x * sx}" y1="${oy - 3}" x2="${ox + x * sx}" y2="${oy + 3}" stroke="#3b0a0a"/><text x="${ox + x * sx}" y="${oy + 18}" text-anchor="middle" font-size="12">${x}</text>`;
+  if (tahap === 'pilih') {
+    isi = (
+      <div className={`max-w-md mx-auto mt-8 p-6 sm:p-8 ${kartu}`}>
+        <div className="mx-auto w-20 h-20 rounded-full bg-[#6b0f1a] flex items-center justify-center text-4xl shadow-md">
+          🎓
+        </div>
+        <h1 className="text-2xl font-semibold text-center text-[#3b0a0a] mt-4">Simulasi TKA</h1>
+        <p className="text-sm text-center text-[#6b0f1a]/60 mt-1 mb-6">
+          Pilih jenjang dan mata pelajaran untuk memulai simulasi.
+        </p>
+
+        <label className="block text-sm font-semibold text-[#3b0a0a] mb-1.5">Jenjang Pendidikan</label>
+        <select
+          value={jenjang}
+          onChange={(e) => ubahFilter(e.target.value, jenis)}
+          className={inputSelect}
+        >
+          {Object.entries(JENJANG_TKA).map(([k, v]) => (
+            <option key={k} value={k}>
+              {v}
+            </option>
+          ))}
+        </select>
+
+        <label className="block text-sm font-semibold text-[#3b0a0a] mt-4 mb-1.5">
+          Jenis Mata Pelajaran
+        </label>
+        <select
+          value={jenis}
+          onChange={(e) => ubahFilter(jenjang, e.target.value)}
+          className={inputSelect}
+        >
+          {Object.entries(JENIS_TKA).map(([k, v]) => (
+            <option key={k} value={k}>
+              {v}
+            </option>
+          ))}
+        </select>
+
+        <label className="block text-sm font-semibold text-[#3b0a0a] mt-4 mb-1.5">Mata Pelajaran</label>
+        <select
+          value={paketId}
+          onChange={(e) => setPaketId(e.target.value)}
+          disabled={opsiPaket.length === 0}
+          className={`${inputSelect} disabled:opacity-50`}
+        >
+          {opsiPaket.length === 0 && <option value="">Belum ada soal untuk pilihan ini</option>}
+          {opsiPaket.map((p) => (
+            <option key={p.id} value={p.id}>
+              {labelPaket(p)}
+            </option>
+          ))}
+        </select>
+
+        {paket && (
+          <p className="text-xs text-[#6b0f1a]/60 mt-2">
+            {paket.soal.length} soal · waktu {paket.durasiMenit} menit
+          </p>
+        )}
+        {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
+
+        <button
+          onClick={mulai}
+          disabled={!paket}
+          className="mt-6 w-full py-3 rounded-xl bg-[#6b0f1a] text-white font-semibold hover:opacity-90 disabled:opacity-40 transition-opacity"
+        >
+          ▶ Mulai Simulasi
+        </button>
+
+        <button
+          type="button"
+          onClick={salinLink}
+          className="mt-3 w-full py-2 rounded-xl border border-[#6b0f1a]/20 text-[#6b0f1a] text-sm hover:bg-[#6b0f1a]/5"
+        >
+          {tersalin ? '✓ Link tersalin' : '🔗 Salin Link Simulasi'}
+        </button>
+      </div>
+    );
   }
-  for (let y = 2; y <= 8; y += 2) {
-    isi += `<line x1="${ox - 3}" y1="${oy - y * sy}" x2="${ox + 3}" y2="${oy - y * sy}" stroke="#3b0a0a"/><text x="${ox - 8}" y="${oy - y * sy + 4}" text-anchor="end" font-size="12">${y}</text>`;
+
+  /* ---------------------- TAHAP 2: KERJAKAN ---------------------- */
+  if (tahap === 'kerjakan' && paket) {
+    const soal = paket.soal[no];
+    const terjawab = Object.keys(jawaban).length;
+    const waktuHampirHabis = sisa <= 60;
+
+    isi = (
+      <div className="max-w-4xl mx-auto mt-4 px-4 pb-10">
+        {/* Kop surat: siswa tanpa login memakai mode publik (lewat sekolahId). */}
+        <div className={`${kartu} p-4 pb-1 mb-4`}>
+          <KopSurat
+            sekolahId={sekolahId}
+            publik={!session?.user?.id}
+            sembunyikanJikaKosong
+          />
+        </div>
+
+        <div className={`${kartu} p-4 flex items-center justify-between gap-3 flex-wrap`}>
+          <div>
+            <h1 className="font-semibold text-[#3b0a0a]">{labelPaket(paket)}</h1>
+            <p className="text-xs text-[#6b0f1a]/60">
+              {terjawab}/{paket.soal.length} soal terjawab
+            </p>
+          </div>
+          <div
+            className={`px-4 py-2 rounded-xl font-mono text-lg font-semibold ${
+              waktuHampirHabis ? 'bg-red-100 text-red-700' : 'bg-[#d4a017]/15 text-[#8a6a0d]'
+            }`}
+            aria-live="off"
+          >
+            ⏱ {formatWaktu(sisa)}
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-[1fr_220px] gap-4 mt-4">
+          {/* Soal */}
+          <div className={`${kartu} p-5`}>
+            <p className="text-xs text-[#6b0f1a]/60 mb-2">
+              Soal {no + 1} dari {paket.soal.length}
+            </p>
+            <p className="font-medium text-[#3b0a0a] mb-4 leading-relaxed">{soal.q}</p>
+
+            <div className="space-y-2">
+              {soal.opsi.map((teks, i) => {
+                const dipilih = jawaban[no] === i;
+                return (
+                  <label
+                    key={i}
+                    className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                      dipilih
+                        ? 'border-[#6b0f1a] bg-[#f7e6e3]/60'
+                        : 'border-[#6b0f1a]/15 hover:bg-[#6b0f1a]/5'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name={`soal-${no}`}
+                      checked={dipilih}
+                      onChange={() => setJawaban({ ...jawaban, [no]: i })}
+                      className="mt-1"
+                    />
+                    <span>
+                      <strong>{HURUF[i]}.</strong> {teks}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+
+            <label className="flex items-center gap-2 mt-4 text-sm text-[#6b0f1a] cursor-pointer w-fit">
+              <input
+                type="checkbox"
+                checked={!!ragu[no]}
+                onChange={(e) => setRagu({ ...ragu, [no]: e.target.checked })}
+              />
+              Ragu-ragu
+            </label>
+
+            <div className="flex items-center justify-between gap-2 mt-5">
+              <button
+                onClick={() => setNo(no - 1)}
+                disabled={no === 0}
+                className="px-4 py-2 rounded-lg border border-[#6b0f1a]/20 text-[#6b0f1a] hover:bg-[#6b0f1a]/5 disabled:opacity-40"
+              >
+                ← Sebelumnya
+              </button>
+              {no < paket.soal.length - 1 ? (
+                <button
+                  onClick={() => setNo(no + 1)}
+                  className="px-4 py-2 rounded-lg bg-[#6b0f1a] text-white hover:opacity-90"
+                >
+                  Berikutnya →
+                </button>
+              ) : (
+                <button
+                  onClick={() => setKonfirmasi(true)}
+                  className="px-4 py-2 rounded-lg bg-green-600 text-white font-medium hover:bg-green-700"
+                >
+                  Selesai
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Navigasi nomor */}
+          <div className={`${kartu} p-4 h-fit`}>
+            <p className="text-sm font-semibold text-[#3b0a0a] mb-3">Daftar Soal</p>
+            <div className="grid grid-cols-5 gap-2">
+              {paket.soal.map((_, i) => {
+                const sudah = jawaban[i] !== undefined;
+                let warna = 'border border-[#6b0f1a]/20 text-[#6b0f1a]';
+                if (sudah) warna = 'bg-[#6b0f1a] text-white';
+                if (ragu[i]) warna = 'bg-[#d4a017] text-white';
+                return (
+                  <button
+                    key={i}
+                    onClick={() => setNo(i)}
+                    aria-label={`Soal ${i + 1}`}
+                    className={`h-9 rounded-lg text-sm font-medium ${warna} ${
+                      i === no ? 'ring-2 ring-offset-1 ring-[#3b0a0a]' : ''
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-3 space-y-1 text-xs text-[#6b0f1a]/70">
+              <p>
+                <span className="inline-block w-3 h-3 rounded bg-[#6b0f1a] align-middle mr-1" />
+                Sudah dijawab
+              </p>
+              <p>
+                <span className="inline-block w-3 h-3 rounded bg-[#d4a017] align-middle mr-1" />
+                Ragu-ragu
+              </p>
+              <p>
+                <span className="inline-block w-3 h-3 rounded border border-[#6b0f1a]/30 align-middle mr-1" />
+                Belum dijawab
+              </p>
+            </div>
+            <button
+              onClick={() => setKonfirmasi(true)}
+              className="mt-4 w-full py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700"
+            >
+              Selesai & Kumpulkan
+            </button>
+          </div>
+        </div>
+
+        {konfirmasi && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-2xl p-6 max-w-sm w-full text-center shadow-xl">
+              <h2 className="text-lg font-semibold text-[#3b0a0a]">Kumpulkan jawaban?</h2>
+              <p className="text-sm text-[#6b0f1a]/70 mt-2">
+                {terjawab} dari {paket.soal.length} soal sudah dijawab
+                {Object.values(ragu).filter(Boolean).length > 0 &&
+                  `, ${Object.values(ragu).filter(Boolean).length} masih ditandai ragu-ragu`}
+                .
+              </p>
+              <div className="flex gap-2 mt-5">
+                <button
+                  onClick={() => setKonfirmasi(false)}
+                  className="flex-1 py-2 rounded-lg border border-[#6b0f1a]/20 text-[#6b0f1a] hover:bg-[#6b0f1a]/5"
+                >
+                  Kembali
+                </button>
+                <button
+                  onClick={() => {
+                    setKonfirmasi(false);
+                    setTahap('hasil');
+                  }}
+                  className="flex-1 py-2 rounded-lg bg-green-600 text-white font-medium hover:bg-green-700"
+                >
+                  Kumpulkan
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
   }
-  const ax = ox + 1 * sx;
-  const ay = oy - 2 * sy;
-  const bx = ox + 3 * sx;
-  const by = oy - 8 * sy;
-  isi += `<line x1="${ax - 25}" y1="${ay + 30}" x2="${bx + 12.5}" y2="${by - 18.75}" stroke="#6b0f1a" stroke-width="3"/>`;
-  isi += `<circle cx="${ax}" cy="${ay}" r="5" fill="#d4a017" stroke="#3b0a0a"/><text x="${ax + 8}" y="${ay + 16}" font-weight="bold">A(1, 2)</text>`;
-  isi += `<circle cx="${bx}" cy="${by}" r="5" fill="#d4a017" stroke="#3b0a0a"/><text x="${bx + 8}" y="${by + 4}" font-weight="bold">B(3, 8)</text>`;
-  return bungkus(310, 232, isi);
+
+  /* ---------------------- TAHAP 3: HASIL + PEMBAHASAN ---------------------- */
+  if (tahap === 'hasil' && paket && hasil) {
+    isi = (
+      <div className="max-w-3xl mx-auto mt-6 px-4 pb-10 space-y-5">
+        <div className={`${kartu} p-6 text-center`}>
+          <p className="text-sm text-[#6b0f1a]/60">{labelPaket(paket)}</p>
+          <div className="text-5xl font-bold text-[#6b0f1a] mt-2">{hasil.skor}</div>
+          <p className="text-sm text-[#6b0f1a]/60 mt-1">Skor kamu (skala 0–100)</p>
+
+          <div className="grid grid-cols-3 gap-3 mt-5">
+            <div className="rounded-xl p-3 bg-green-50 border border-green-200">
+              <div className="text-xl font-bold text-green-700">{hasil.benar}</div>
+              <div className="text-xs text-green-700/80">Benar</div>
+            </div>
+            <div className="rounded-xl p-3 bg-red-50 border border-red-200">
+              <div className="text-xl font-bold text-red-700">{hasil.salah}</div>
+              <div className="text-xs text-red-700/80">Salah</div>
+            </div>
+            <div className="rounded-xl p-3 bg-gray-50 border border-gray-200">
+              <div className="text-xl font-bold text-gray-600">{hasil.kosong}</div>
+              <div className="text-xs text-gray-600/80">Kosong</div>
+            </div>
+          </div>
+
+          <div className="flex gap-2 justify-center mt-6 flex-wrap">
+            <button
+              onClick={mulai}
+              className="px-4 py-2 rounded-lg bg-[#6b0f1a] text-white font-medium hover:opacity-90"
+            >
+              Ulangi Simulasi
+            </button>
+            <button
+              onClick={() => setTahap('pilih')}
+              className="px-4 py-2 rounded-lg border border-[#6b0f1a]/20 text-[#6b0f1a] hover:bg-[#6b0f1a]/5"
+            >
+              Pilih Simulasi Lain
+            </button>
+          </div>
+        </div>
+
+        <h2 className="text-lg font-semibold text-[#3b0a0a]">Pembahasan</h2>
+        {paket.soal.map((s, i) => {
+          const dipilih = jawaban[i];
+          const benar = dipilih === s.kunci;
+          const kosong = dipilih === undefined;
+          return (
+            <div key={i} className={`${kartu} p-4`}>
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-medium text-[#3b0a0a]">
+                  {i + 1}. {s.q}
+                </p>
+                <span
+                  className={`shrink-0 text-xs px-2 py-1 rounded-full font-medium ${
+                    kosong
+                      ? 'bg-gray-100 text-gray-600'
+                      : benar
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-red-100 text-red-700'
+                  }`}
+                >
+                  {kosong ? 'Kosong' : benar ? 'Benar' : 'Salah'}
+                </span>
+              </div>
+              <div className="mt-2 space-y-1 text-sm">
+                {s.opsi.map((teks, j) => (
+                  <p
+                    key={j}
+                    className={
+                      j === s.kunci
+                        ? 'text-green-700 font-medium'
+                        : j === dipilih
+                        ? 'text-red-600 line-through'
+                        : 'text-[#6b0f1a]/70'
+                    }
+                  >
+                    {HURUF[j]}. {teks}
+                    {j === s.kunci && ' ✓'}
+                    {j === dipilih && j !== s.kunci && ' (jawabanmu)'}
+                  </p>
+                ))}
+              </div>
+              {s.bahas && (
+                <p className="text-sm mt-3 p-3 rounded-lg bg-[#f7e6e3]/50 text-[#3b0a0a]">
+                  <strong>Pembahasan:</strong> {s.bahas}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // Guru/pengguna yang sudah login mendapat Layout (sidebar/header); siswa tanpa login melihat halaman polos.
+  if (!embedded && session?.user?.id) {
+    return (
+      <Layout title="Simulasi TKA" subtitle="Latihan soal TKA untuk SD dan SMP">
+        {isi}
+      </Layout>
+    );
+  }
+  return isi;
 }
-
-// Pengumuman / pamflet sederhana.
-function gambarPamflet(judul, barisList) {
-  const h = 74 + barisList.length * 26;
-  let isi =
-    `<rect x="6" y="6" width="368" height="${h - 12}" rx="10" fill="#fff8e6" stroke="#6b0f1a" stroke-width="3"/>` +
-    `<text x="190" y="42" text-anchor="middle" font-size="20" font-weight="bold" fill="#6b0f1a">${judul}</text>` +
-    `<line x1="30" y1="54" x2="350" y2="54" stroke="#d4a017" stroke-width="2"/>`;
-  barisList.forEach((b, i) => {
-    isi += `<text x="24" y="${82 + i * 26}">${b}</text>`;
-  });
-  return bungkus(380, h, isi);
-}
-
-/* ============================ PAKET SOAL ============================ */
-
-export const PAKET_TAMBAHAN = [
-  /* ---------------------------- SD: MATEMATIKA ---------------------------- */
-  {
-    id: 'tbh-sd-wajib-mtk',
-    jenjang: 'sd',
-    jenis: 'wajib',
-    mapel: 'Matematika',
-    label: 'Matematika (Latihan Bergambar)',
-    durasiMenit: 25,
-    soal: [
-      {
-        q: 'Hasil dari 345 + 278 adalah ...',
-        opsi: ['723', '613', '633', '623'],
-        kunci: 3,
-        bahas: '345 + 278 = 623. Jumlahkan satuan, puluhan, lalu ratusan: 5+8=13 (tulis 3, simpan 1), 4+7+1=12 (tulis 2, simpan 1), 3+2+1=6.',
-      },
-      {
-        q: 'Hasil dari 12 × 15 adalah ...',
-        opsi: ['170', '190', '180', '160'],
-        kunci: 2,
-        bahas: '12 × 15 = 12 × 10 + 12 × 5 = 120 + 60 = 180.',
-      },
-      {
-        q: 'Perhatikan gambar berikut! Bagian yang berwarna kuning menunjukkan pecahan ...',
-        gambar: gambarPecahan(3, 8),
-        alt: 'Pita dibagi menjadi 8 bagian sama besar, 3 bagian berwarna kuning',
-        opsi: ['5/8', '3/8', '3/5', '8/3'],
-        kunci: 1,
-        bahas: 'Pita terbagi 8 bagian sama besar dan 3 bagian diwarnai, sehingga pecahannya 3/8.',
-      },
-      {
-        q: 'Jam pada gambar berikut menunjukkan pukul ...',
-        gambar: gambarJam(7, 30),
-        alt: 'Jam analog dengan jarum pendek di antara angka 7 dan 8, jarum panjang di angka 6',
-        opsi: ['06.30', '07.15', '08.30', '07.30'],
-        kunci: 3,
-        bahas: 'Jarum pendek berada di antara angka 7 dan 8, jarum panjang menunjuk angka 6 (30 menit). Jadi pukul 07.30.',
-      },
-      {
-        q: 'Perhatikan gambar berikut! Keliling persegi panjang tersebut adalah ...',
-        gambar: gambarPersegiPanjang(12, 7),
-        alt: 'Persegi panjang dengan panjang 12 cm dan lebar 7 cm',
-        opsi: ['38 cm', '19 cm', '84 cm', '76 cm'],
-        kunci: 0,
-        bahas: 'Keliling = 2 × (p + l) = 2 × (12 + 7) = 2 × 19 = 38 cm. (84 cm adalah luasnya.)',
-      },
-      {
-        q: 'Perhatikan diagram batang jumlah buah yang terjual dalam satu hari! Selisih penjualan buah terbanyak dan tersedikit adalah ...',
-        gambar: diagramBatang(
-          'Buah Terjual (kg)',
-          [
-            { label: 'Apel', nilai: 15 },
-            { label: 'Jeruk', nilai: 25 },
-            { label: 'Mangga', nilai: 20 },
-            { label: 'Pisang', nilai: 10 },
-          ],
-          30,
-          5
-        ),
-        alt: 'Diagram batang: apel 15, jeruk 25, mangga 20, pisang 10',
-        opsi: ['10 kg', '20 kg', '15 kg', '25 kg'],
-        kunci: 2,
-        bahas: 'Terbanyak: jeruk 25 kg. Tersedikit: pisang 10 kg. Selisihnya 25 − 10 = 15 kg.',
-      },
-      {
-        q: 'Kelipatan Persekutuan Terkecil (KPK) dari 6 dan 8 adalah ...',
-        opsi: ['12', '24', '36', '48'],
-        kunci: 1,
-        bahas: 'Kelipatan 6: 6, 12, 18, 24. Kelipatan 8: 8, 16, 24. KPK = 24.',
-      },
-      {
-        q: 'Sebuah motor melaju dengan kecepatan 40 km/jam selama 3 jam. Jarak yang ditempuh adalah ...',
-        opsi: ['120 km', '43 km', '80 km', '140 km'],
-        kunci: 0,
-        bahas: 'Jarak = kecepatan × waktu = 40 × 3 = 120 km.',
-      },
-    ],
-  },
-
-  /* ------------------------ SD: BAHASA INDONESIA ------------------------ */
-  {
-    id: 'tbh-sd-wajib-bin',
-    jenjang: 'sd',
-    jenis: 'wajib',
-    mapel: 'Bahasa Indonesia',
-    label: 'Bahasa Indonesia (Latihan Bergambar)',
-    durasiMenit: 25,
-    soal: [
-      {
-        q: 'Sinonim (persamaan kata) dari kata "pandai" adalah ...',
-        opsi: ['bodoh', 'malas', 'pintar', 'rajin'],
-        kunci: 2,
-        bahas: '"Pandai" bermakna sama dengan "pintar".',
-      },
-      {
-        q: 'Antonim (lawan kata) dari kata "rajin" adalah ...',
-        opsi: ['malas', 'tekun', 'giat', 'ulet'],
-        kunci: 0,
-        bahas: 'Tekun, giat, dan ulet bermakna sama dengan rajin. Lawan katanya adalah malas.',
-      },
-      {
-        q: 'Kata baku yang tepat adalah ...',
-        opsi: ['aktifitas', 'aktivitas', 'aktipitas', 'aktivites'],
-        kunci: 1,
-        bahas: 'Penulisan baku menurut KBBI adalah "aktivitas".',
-      },
-      {
-        q: 'Bacalah paragraf berikut!\nKucing adalah hewan peliharaan yang populer. Kucing mudah dirawat dan jinak. Banyak orang memelihara kucing di rumah. Selain lucu, kucing juga membantu mengusir tikus.\n\nIde pokok paragraf tersebut adalah ...',
-        opsi: [
-          'Kucing dapat mengusir tikus.',
-          'Cara merawat kucing.',
-          'Kucing hewan peliharaan yang populer.',
-          'Kucing itu lucu dan jinak.',
-        ],
-        kunci: 2,
-        bahas: 'Ide pokok terdapat pada kalimat pertama (kalimat utama), yaitu kucing adalah hewan peliharaan yang populer. Kalimat lain menjelaskan kalimat tersebut.',
-      },
-      {
-        q: 'Perhatikan pengumuman berikut! Kegiatan kerja bakti akan dilaksanakan pada ...',
-        gambar: gambarPamflet('PENGUMUMAN', [
-          'Kerja Bakti Membersihkan Sekolah',
-          'Hari/Tanggal : Sabtu, 17 Oktober 2026',
-          'Pukul : 07.00 WIB',
-          'Tempat : Halaman SD Negeri 1',
-          'Bawa : sapu, cangkul, dan kantong sampah',
-        ]),
-        alt: 'Pengumuman kerja bakti Sabtu 17 Oktober 2026 pukul 07.00 WIB di halaman SD Negeri 1',
-        opsi: [
-          'Sabtu, 17 Oktober 2026, pukul 07.00 WIB',
-          'Minggu, 17 Oktober 2026, pukul 07.00 WIB',
-          'Sabtu, 17 Oktober 2026, pukul 09.00 WIB',
-          'Sabtu, 7 Oktober 2026, pukul 07.00 WIB',
-        ],
-        kunci: 0,
-        bahas: 'Pada pengumuman tertulis hari/tanggal Sabtu, 17 Oktober 2026 dan pukul 07.00 WIB.',
-      },
-      {
-        q: 'Penulisan tanda baca yang tepat adalah ...',
-        opsi: [
-          'Ibu membeli apel jeruk, dan mangga di pasar.',
-          'Ibu membeli apel, jeruk, dan mangga di pasar.',
-          'Ibu, membeli apel jeruk dan mangga di pasar.',
-          'Ibu membeli, apel jeruk dan mangga, di pasar.',
-        ],
-        kunci: 1,
-        bahas: 'Tanda koma dipakai untuk memisahkan unsur dalam perincian: apel, jeruk, dan mangga.',
-      },
-      {
-        q: 'Kata dasar dari kata "menyapu" adalah ...',
-        opsi: ['nyapu', 'apu', 'sapu', 'menyap'],
-        kunci: 2,
-        bahas: 'Menyapu = me- + sapu. Huruf s luluh menjadi ny. Kata dasarnya "sapu".',
-      },
-      {
-        q: 'Kata tanya yang tepat untuk menanyakan "naik sepeda" pada kalimat "Budi pergi ke sekolah naik sepeda" adalah ...',
-        opsi: ['Siapa', 'Kapan', 'Bagaimana', 'Mengapa'],
-        kunci: 2,
-        bahas: '"Naik sepeda" menjelaskan cara Budi pergi ke sekolah, sehingga ditanyakan dengan "bagaimana".',
-      },
-    ],
-  },
-
-  /* ---------------------------- SMP: MATEMATIKA ---------------------------- */
-  {
-    id: 'tbh-smp-wajib-mtk',
-    jenjang: 'smp',
-    jenis: 'wajib',
-    mapel: 'Matematika',
-    label: 'Matematika (Latihan Bergambar)',
-    durasiMenit: 30,
-    soal: [
-      {
-        q: 'Hasil dari (−8) + 15 − (−3) adalah ...',
-        opsi: ['4', '20', '−4', '10'],
-        kunci: 3,
-        bahas: '(−8) + 15 = 7. Lalu 7 − (−3) = 7 + 3 = 10.',
-      },
-      {
-        q: 'Hasil dari 2/3 + 3/4 adalah ...',
-        opsi: ['5/7', '5/12', '17/12', '1/12'],
-        kunci: 2,
-        bahas: 'Samakan penyebut 12: 8/12 + 9/12 = 17/12 = 1 5/12.',
-      },
-      {
-        q: 'Nilai x yang memenuhi persamaan 3x − 7 = 11 adalah ...',
-        opsi: ['4', '6', '5', '18'],
-        kunci: 1,
-        bahas: '3x − 7 = 11 → 3x = 18 → x = 6.',
-      },
-      {
-        q: 'Perhatikan segitiga siku-siku berikut! Panjang sisi miring (x) adalah ...',
-        gambar: gambarSegitigaSiku(6, 8),
-        alt: 'Segitiga siku-siku dengan sisi tegak 6 cm dan alas 8 cm',
-        opsi: ['12 cm', '14 cm', '10 cm', '48 cm'],
-        kunci: 2,
-        bahas: 'Teorema Pythagoras: x² = 6² + 8² = 36 + 64 = 100, sehingga x = 10 cm.',
-      },
-      {
-        q: 'Perhatikan diagram batang nilai ulangan lima siswa! Rata-rata nilai mereka adalah ...',
-        gambar: diagramBatang(
-          'Nilai Ulangan Matematika',
-          [
-            { label: 'Ani', nilai: 70 },
-            { label: 'Budi', nilai: 85 },
-            { label: 'Cici', nilai: 90 },
-            { label: 'Dedi', nilai: 75 },
-            { label: 'Eka', nilai: 80 },
-          ],
-          100,
-          20
-        ),
-        alt: 'Diagram batang nilai: Ani 70, Budi 85, Cici 90, Dedi 75, Eka 80',
-        opsi: ['80', '75', '78', '82'],
-        kunci: 0,
-        bahas: 'Jumlah = 70 + 85 + 90 + 75 + 80 = 400. Rata-rata = 400 ÷ 5 = 80.',
-      },
-      {
-        q: 'Perhatikan gambar lingkaran berikut! Luas lingkaran tersebut (π = 22/7) adalah ...',
-        gambar: gambarLingkaran(7),
-        alt: 'Lingkaran dengan jari-jari 7 cm',
-        opsi: ['44 cm²', '154 cm²', '308 cm²', '49 cm²'],
-        kunci: 1,
-        bahas: 'Luas = π × r² = 22/7 × 7 × 7 = 154 cm². (44 cm adalah kelilingnya.)',
-      },
-      {
-        q: 'Perhatikan gambar berikut! Gradien garis yang melalui titik A dan B adalah ...',
-        gambar: gambarKoordinat(),
-        alt: 'Bidang koordinat dengan garis melalui titik A(1, 2) dan B(3, 8)',
-        opsi: ['6', '4', '2', '3'],
-        kunci: 3,
-        bahas: 'Gradien m = (y₂ − y₁) ÷ (x₂ − x₁) = (8 − 2) ÷ (3 − 1) = 6 ÷ 2 = 3.',
-      },
-      {
-        q: 'Uang Rp60.000 dibagi untuk Ani dan Budi dengan perbandingan 2 : 3. Bagian uang Ani adalah ...',
-        opsi: ['Rp36.000', 'Rp40.000', 'Rp20.000', 'Rp24.000'],
-        kunci: 3,
-        bahas: 'Jumlah perbandingan = 2 + 3 = 5. Bagian Ani = 2/5 × 60.000 = Rp24.000.',
-      },
-    ],
-  },
-
-  /* ------------------------ SMP: BAHASA INDONESIA ------------------------ */
-  {
-    id: 'tbh-smp-wajib-bin',
-    jenjang: 'smp',
-    jenis: 'wajib',
-    mapel: 'Bahasa Indonesia',
-    label: 'Bahasa Indonesia (Latihan Bergambar)',
-    durasiMenit: 30,
-    soal: [
-      {
-        q: 'Bacalah teks berikut!\nSampah plastik membutuhkan waktu ratusan tahun untuk terurai. Di laut, sampah ini mengancam kehidupan penyu dan ikan yang sering salah mengira plastik sebagai makanan. Karena itu, kita perlu mengurangi penggunaan kantong plastik sekali pakai dan membiasakan membawa tas belanja sendiri.\n\nGagasan utama teks tersebut adalah ...',
-        opsi: [
-          'Sampah plastik membahayakan penyu.',
-          'Pentingnya mengurangi sampah plastik karena sulit terurai dan membahayakan hewan laut.',
-          'Cara membuat tas belanja sendiri.',
-          'Plastik terbuat dari minyak bumi.',
-        ],
-        kunci: 1,
-        bahas: 'Teks memaparkan sulitnya plastik terurai, dampaknya bagi hewan laut, dan ajakan mengurangi pemakaian plastik. Gagasan utamanya mencakup semua hal itu.',
-      },
-      {
-        q: 'Kalimat yang berisi fakta adalah ...',
-        opsi: [
-          'Durian adalah buah yang paling enak.',
-          'Film itu sangat membosankan.',
-          'Batik pasti lebih indah daripada kain lain.',
-          'Air membeku pada suhu 0 derajat Celsius.',
-        ],
-        kunci: 3,
-        bahas: 'Fakta dapat dibuktikan kebenarannya. Kalimat lainnya berupa pendapat (opini) karena bergantung pada penilaian pribadi.',
-      },
-      {
-        q: 'Majas yang digunakan pada kalimat "Angin berbisik lembut di telinga malam" adalah ...',
-        opsi: ['Hiperbola', 'Metafora', 'Personifikasi', 'Ironi'],
-        kunci: 2,
-        bahas: 'Angin digambarkan dapat berbisik seperti manusia, sehingga majasnya personifikasi.',
-      },
-      {
-        q: 'Kalimat dengan penulisan kata depan "di" yang benar adalah ...',
-        opsi: [
-          'Buku itu diletakkan di atas meja.',
-          'Buku itu di letakkan di atas meja.',
-          'Buku itu diletakkan diatas meja.',
-          'Buku itu di letakkan diatas meja.',
-        ],
-        kunci: 0,
-        bahas: '"Diletakkan" adalah kata kerja pasif sehingga "di-" ditulis serangkai. "Di atas" adalah kata depan sehingga ditulis terpisah.',
-      },
-      {
-        q: 'Perhatikan pamflet berikut! Peserta yang ingin mengikuti lomba harus mendaftar paling lambat tanggal ...',
-        gambar: gambarPamflet('LOMBA MENDONGENG', [
-          'Tingkat SMP se-Kabupaten',
-          'Sabtu, 24 Oktober 2026 | 08.00 WIB',
-          'Tempat : Aula SMP Negeri 1',
-          'Pendaftaran gratis',
-          'Batas pendaftaran : 20 Oktober 2026',
-        ]),
-        alt: 'Pamflet lomba mendongeng, batas pendaftaran 20 Oktober 2026',
-        opsi: ['17 Oktober 2026', '20 Oktober 2026', '24 Oktober 2026', '8 Oktober 2026'],
-        kunci: 1,
-        bahas: 'Pada pamflet tertulis batas pendaftaran 20 Oktober 2026. Tanggal 24 Oktober adalah hari pelaksanaan lomba.',
-      },
-      {
-        q: 'Makna ungkapan "membanting tulang" adalah ...',
-        opsi: ['Bermalas-malasan', 'Mematahkan tulang', 'Sakit parah', 'Bekerja sangat keras'],
-        kunci: 3,
-        bahas: '"Membanting tulang" adalah ungkapan yang berarti bekerja keras.',
-      },
-      {
-        q: 'Kata penghubung yang menyatakan hubungan pertentangan adalah ...',
-        opsi: ['karena', 'tetapi', 'dan', 'sehingga'],
-        kunci: 1,
-        bahas: '"Tetapi" menghubungkan dua hal yang berlawanan. "Karena" menyatakan sebab, "dan" penambahan, "sehingga" akibat.',
-      },
-      {
-        q: 'Kalimat efektif di bawah ini adalah ...',
-        opsi: [
-          'Siswa-siswa para berkumpul di lapangan.',
-          'Para siswa-siswa berkumpul di lapangan.',
-          'Para siswa berkumpul di lapangan.',
-          'Para siswa berkumpul-kumpul di lapangan.',
-        ],
-        kunci: 2,
-        bahas: '"Para" sudah menyatakan jamak, sehingga tidak perlu diikuti bentuk ulang "siswa-siswa" (pemborosan kata).',
-      },
-    ],
-  },
-];
