@@ -85,7 +85,6 @@ const RaporCetak = lazy(() => import('../pages/RaporCetak'))
 const Ijazah = lazy(() => import('../pages/Ijazah'))
 const SuratKeteranganLulus = lazy(() => import('../pages/SuratKeteranganLulus'))
 const RPP = lazy(() => import('../pages/RPP'))
-const ArsipRPP = lazy(() => import('../pages/ArsipRPP'))
 const BankSoal = lazy(() => import('../pages/BankSoal'))
 const MateriKelas = lazy(() => import('../pages/MateriKelas'))
 const BuatUjian = lazy(() => import('../pages/BuatUjian'))
@@ -241,8 +240,9 @@ export default function RoutesSekolah() {
       <Route path="/rapor/cetak" element={<ProtectedRoute><RaporCetak /></ProtectedRoute>} />
       <Route path="/ijazah" element={<ProtectedRoute><Ijazah /></ProtectedRoute>} />
       <Route path="/skl" element={<ProtectedRoute><SuratKeteranganLulus /></ProtectedRoute>} />
+      {/* RPP: Daftar, Upload, Arsip, dan Modul Ajar kini jadi tab di satu halaman (?tab=daftar|upload|arsip|modul) */}
       <Route path="/rpp" element={<ProtectedRoute><RPP /></ProtectedRoute>} />
-      <Route path="/arsip-rpp" element={<ProtectedRoute><ArsipRPP /></ProtectedRoute>} />
+      <Route path="/arsip-rpp" element={<Navigate to="/rpp?tab=arsip" replace />} />
       <Route path="/bank-soal" element={<ProtectedRoute><BankSoal /></ProtectedRoute>} />
       <Route path="/materi-kelas" element={<MateriKelas />} />
       <Route path="/buat-ujian" element={<ProtectedRoute><BuatUjian /></ProtectedRoute>} />
@@ -250,7 +250,7 @@ export default function RoutesSekolah() {
       <Route path="/simulasi-tka" element={<SimulasiTKA />} />
       <Route path="/buat-kuis-seru" element={<ProtectedRoute><BuatKuisSeru /></ProtectedRoute>} />
       <Route path="/hasil-kuis-seru" element={<ProtectedRoute><HasilKuisSeru /></ProtectedRoute>} />
-      <Route path="/rapor-kumer" element={<ProtectedRoute><RaporKumer /></ProtectedRoute>} />                         
+      <Route path="/rapor-kumer" element={<ProtectedRoute><RaporKumer /></ProtectedRoute>} />
       <Route path="/kartu" element={<ProtectedRoute adminOnly><KartuSiswa /></ProtectedRoute>} />
       <Route path="/dokumen-pip" element={<ProtectedRoute adminOnly><DokumenPIP /></ProtectedRoute>} />
       <Route path="/hari-libur" element={<ProtectedRoute adminOnly><HariLibur /></ProtectedRoute>} />
