@@ -251,7 +251,7 @@ export default function RoutesSekolah() {
       <Route path="/buat-kuis-seru" element={<ProtectedRoute><BuatKuisSeru /></ProtectedRoute>} />
       <Route path="/hasil-kuis-seru" element={<ProtectedRoute><HasilKuisSeru /></ProtectedRoute>} />
       <Route path="/rapor-kumer" element={<ProtectedRoute><RaporKumer /></ProtectedRoute>} />
-      <Route path="/kartu" element={<ProtectedRoute adminOnly><KartuSiswa /></ProtectedRoute>} />
+      <Route path="/kartu" element={<ProtectedRoute><KartuSiswa /></ProtectedRoute>} />
       <Route path="/dokumen-pip" element={<ProtectedRoute adminOnly><DokumenPIP /></ProtectedRoute>} />
       <Route path="/hari-libur" element={<ProtectedRoute adminOnly><HariLibur /></ProtectedRoute>} />
       <Route path="/kalender-pendidikan" element={<ProtectedRoute><KalenderPendidikan /></ProtectedRoute>} />
