@@ -44,6 +44,9 @@ import {
 //    Status manual selain "Belum ada" selalu menang, jadi pengguna tetap
 //    bisa menimpa hasil otomatis. Menggantikan hitungan ARKAS/BKU/siswa
 //    yang lama. Lihat akreditasi_otomatis.sql.
+// 5) MAN-04 (Struktur Organisasi) dan MAN-07 (Tata Tertib) kini punya
+//    halaman sendiri di bawah Administrasi Kepsek dan dihitung otomatis
+//    dari tabel struktur_organisasi dan tata_tertib.
 // ============================================================
 
 const BUCKET = 'akreditasi'
@@ -125,7 +128,7 @@ const KOMPONEN = [
 ]
 
 // Butir akreditasi -> halaman di aplikasi yang menyimpan datanya.
-// Alamat (to) harus sama dengan rute di App.jsx. Ubah bebas bila ada yang kurang pas.
+// Alamat (to) harus sama dengan rute di RoutesSekolah.jsx. Ubah bebas bila ada yang kurang pas.
 const SUMBER_APP = {
   'LEG-01': [{ to: '/profil-sekolah', label: 'Profil Sekolah' }],
   'LEG-02': [{ to: '/dokumen', label: 'Dokumen Penting' }],
@@ -164,6 +167,7 @@ const SUMBER_APP = {
     { to: '/gudang-sk/bendahara-bos', label: 'SK Bendahara BOS' },
   ],
   'MAN-04': [
+    { to: '/administrasi-kepsek/struktur-organisasi', label: 'Struktur Organisasi' },
     { to: '/gudang-sk/tim-bos', label: 'SK Tim BOS' },
     { to: '/gudang-sk/panitia-ujian', label: 'SK Panitia Ujian' },
     { to: '/gudang-sk/panitia-ppdb', label: 'SK Panitia PPDB' },
@@ -173,7 +177,7 @@ const SUMBER_APP = {
     { to: '/bangunan', label: 'Kondisi Bangunan' },
   ],
   'MAN-06': [{ to: '/gudang-sk', label: 'Gudang SK' }],
-  'MAN-07': [{ to: '/administrasi-kepsek', label: 'Administrasi Kepsek' }],
+  'MAN-07': [{ to: '/administrasi-kepsek/tata-tertib', label: 'Tata Tertib' }],
   'MAN-08': [
     { to: '/siswa', label: 'Data Siswa' },
     { to: '/ppdb-admin', label: 'PPDB Siswa Baru' },
