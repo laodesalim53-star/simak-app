@@ -20,12 +20,35 @@ import {
 // Hasilnya tetap bisa diubah bebas. Penempatan komite di bawah kepala
 // sekolah hanya kerangka awal; ubah atasannya bila perlu.
 //
+// CETAK: gaya @media print di bawah menyembunyikan seluruh halaman
+// (sidebar, header, tombol) dan hanya menampilkan elemen #cetak-struktur,
+// supaya hasil cetak tidak kosong walaupun Layout punya aturan cetak sendiri.
+//
 // Tabel & RLS: lihat tata_tertib_struktur.sql (tabel struktur_organisasi).
-// Rute: /struktur-organisasi
+// Rute: /administrasi-kepsek/struktur-organisasi
 // Dipakai oleh butir akreditasi MAN-04.
 // ============================================================
 
 const FORM_KOSONG = { id: null, jabatan: '', nama: '', nip: '', atasan_id: '' }
+
+// Gaya cetak: hanya #cetak-struktur yang tampil di kertas.
+const GAYA_CETAK = `
+  @page { size: A4 portrait; margin: 15mm; }
+  @media print {
+    body * { visibility: hidden !important; }
+    #cetak-struktur, #cetak-struktur * { visibility: visible !important; }
+    #cetak-struktur {
+      position: absolute !important;
+      left: 0 !important;
+      top: 0 !important;
+      width: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: 0 !important;
+      box-shadow: none !important;
+    }
+  }
+`
 
 // ---- Satu simpul (rekursif, di LUAR komponen utama) ---------------------
 function Simpul({ node, peta, bisaEdit, onEdit, onTambahAnak, onHapus }) {
@@ -334,6 +357,8 @@ export default function StrukturOrganisasi() {
 
   return (
     <Layout title="Struktur Organisasi" subtitle="Bagan organisasi dan tim kerja sekolah.">
+      <style>{GAYA_CETAK}</style>
+
       <div className="max-w-3xl mx-auto space-y-5">
         <div className="print:hidden flex flex-wrap items-center justify-end gap-2">
           {bisaEdit && (
@@ -447,7 +472,10 @@ export default function StrukturOrganisasi() {
           </form>
         )}
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm print:border-0 print:shadow-none print:p-0">
+        <section
+          id="cetak-struktur"
+          className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm print:border-0 print:shadow-none print:p-0"
+        >
           <div className="text-center mb-5">
             <p className="hidden print:block text-sm font-semibold uppercase">{sekolah?.nama_sekolah || 'Sekolah'}</p>
             <h2 className="inline-flex items-center gap-2 text-base font-extrabold text-slate-900 print:text-lg">
