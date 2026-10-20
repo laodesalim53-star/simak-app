@@ -29,18 +29,21 @@ import {
 // Tabel & kebijakan akses: lihat akreditasi_berkas.sql.
 //
 // PERUBAHAN:
-// 1) sekolahId & hak edit sekarang diambil langsung dari AuthContext
-//    (sekolahId, isAdmin), sama seperti halaman lain. Fallback query ke
-//    tabel "profil" dihapus. Hak edit memakai isAdmin, yang sudah mencakup
+// 1) sekolahId & hak edit diambil langsung dari AuthContext
+//    (sekolahId, isAdmin), sama seperti halaman lain. isAdmin mencakup
 //    admin, admin_utama, superadmin, dan kepala_sekolah (role).
 //    PASTIKAN kebijakan RLS tabel akreditasi_berkas & bucket "akreditasi"
 //    mengizinkan peran yang sama.
-// 2) Catatan/tautan yang belum disimpan tidak lagi hilang saat unggah
-//    berkas: isi draft ikut disimpan bersama unggahan.
+// 2) Catatan/tautan yang belum disimpan tidak hilang saat unggah berkas.
 // 3) Kalau berkas sudah terunggah tapi penyimpanan ke tabel gagal,
 //    berkas di storage ikut dihapus (tidak jadi berkas yatim).
-// 4) Hitungan ARKAS, BKU, dan siswa disaring per sekolah (sekolah_id);
-//    siswa hanya yang berstatus aktif.
+// 4) STATUS OTOMATIS: fungsi SQL akreditasi_otomatis(p_sekolah_id)
+//    menghitung data yang sudah ada di aplikasi (guru, siswa, ARKAS, BKU,
+//    inventaris, dst) per sekolah untuk tiap butir. Bila status manual masih
+//    "Belum ada", yang dipakai adalah status otomatis (ditandai "otomatis").
+//    Status manual selain "Belum ada" selalu menang, jadi pengguna tetap
+//    bisa menimpa hasil otomatis. Menggantikan hitungan ARKAS/BKU/siswa
+//    yang lama. Lihat akreditasi_otomatis.sql.
 // ============================================================
 
 const BUCKET = 'akreditasi'
@@ -196,9 +199,14 @@ function Batang({ persen, warna = 'bg-blue-600' }) {
 }
 
 // ---- Satu baris butir (di LUAR komponen utama supaya state-nya stabil) --
-function BarisButir({ item, data, info = [], terbuka, onToggle, bisaEdit, sibuk, onSimpan, onUnggah, onHapusFile, onBukaFile }) {
+function BarisButir({
+  item, data, info = [], statusOtomatis, statusEfektif, terbuka, onToggle,
+  bisaEdit, sibuk, onSimpan, onUnggah, onHapusFile, onBukaFile,
+}) {
+  // status = pilihan manual (dipakai di form); statusEfektif = yang ditampilkan.
   const status = data?.status || 'belum'
-  const st = STATUS.find((s) => s.v === status) || STATUS[0]
+  const st = STATUS.find((s) => s.v === statusEfektif) || STATUS[0]
+  const dariOtomatis = status === 'belum' && !!statusOtomatis && statusOtomatis !== 'belum'
   const [draft, setDraft] = useState({ status, tautan: data?.tautan || '', catatan: data?.catatan || '' })
   const [galat, setGalat] = useState('')
   const sumber = SUMBER_APP[item.kode]
@@ -264,7 +272,9 @@ function BarisButir({ item, data, info = [], terbuka, onToggle, bisaEdit, sibuk,
             </span>
           )}
         </span>
-        <span className={`shrink-0 text-[11px] font-semibold px-2 py-1 rounded-full border ${st.cls}`}>{st.label}</span>
+        <span className={`shrink-0 text-[11px] font-semibold px-2 py-1 rounded-full border ${st.cls}`}>
+          {st.label}{dariOtomatis ? ' · otomatis' : ''}
+        </span>
         <ChevronDown size={16} className={`shrink-0 mt-1 text-slate-400 transition-transform ${terbuka ? 'rotate-180' : ''}`} />
       </button>
 
@@ -284,6 +294,11 @@ function BarisButir({ item, data, info = [], terbuka, onToggle, bisaEdit, sibuk,
                   <option key={s.v} value={s.v}>{s.label}</option>
                 ))}
               </select>
+              {dariOtomatis && (
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Status ditampilkan "{st.label}" karena datanya sudah ada di aplikasi. Pilih status lain lalu Simpan untuk menimpa.
+                </p>
+              )}
             </div>
             <div>
               <label htmlFor={`tl-${item.kode}`} className="block text-xs font-medium text-slate-600 mb-1">
@@ -318,10 +333,10 @@ function BarisButir({ item, data, info = [], terbuka, onToggle, bisaEdit, sibuk,
             />
           </div>
 
-          {sumber && (
+          {(sumber || info.length > 0) && (
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="text-slate-500">Data di aplikasi:</span>
-              {sumber.map((s) => (
+              {(sumber || []).map((s) => (
                 <Link
                   key={s.to + s.label}
                   to={s.to}
@@ -486,71 +501,51 @@ export default function AkreditasiSekolah() {
     }
   }, [sekolahId, jenjang])
 
-  // Hitungan data dari halaman lain di aplikasi (hanya tampilan, tidak mengubah status).
-  // Tabel: arkas_anggaran, bku_kas, siswa (sama seperti yang dipakai Keuangan.jsx).
-  // ARKAS dan BKU sering diisi untuk tahun yang bukan tahun berjalan, jadi yang
-  // dihitung adalah tahun TERBARU yang ada datanya, bukan tahun kalender ini.
-  // Semua query disaring per sekolah (sekolah_id) supaya akun superadmin tidak
-  // menjumlahkan data semua sekolah. Kalau salah satu tabel tidak punya kolom
-  // sekolah_id, query-nya gagal dan chip hitungannya tidak ditampilkan.
-  const [hitung, setHitung] = useState({})
+  // Status otomatis dari data aplikasi (fungsi SQL akreditasi_otomatis),
+  // dihitung per sekolah. Bentuk: kode -> { status, info[] }
+  // Aturan: semua sumber sebuah butir berisi data -> lengkap; sebagian -> proses;
+  // kosong -> belum. Hanya tampilan, tidak ditulis ke tabel akreditasi_berkas.
+  // Bila fungsi belum dipasang / gagal, halaman tetap jalan secara manual.
+  const [otomatis, setOtomatis] = useState({})
 
   useEffect(() => {
     if (!sekolahId) return
     let aktif = true
-
-    // Cari tahun terbaru pada tabel, lalu hitung baris pada tahun itu.
-    async function terbaru(tabel, kolom, tahunSebagaiTeks) {
-      const { data: t, error: e1 } = await supabase
-        .from(tabel)
-        .select(kolom)
-        .eq('sekolah_id', sekolahId)
-        .order(kolom, { ascending: false })
-        .limit(1)
-      if (e1) return null
-      if (!t || t.length === 0) return { tahun: null, n: 0 }
-      const tahun = t[0][kolom]
-      const { count, error: e2 } = await supabase
-        .from(tabel)
-        .select('id', { count: 'exact', head: true })
-        .eq('sekolah_id', sekolahId)
-        .eq(kolom, tahunSebagaiTeks ? String(tahun) : tahun)
-      if (e2) return null
-      return { tahun, n: count || 0 }
-    }
-
-    Promise.all([
-      terbaru('arkas_anggaran', 'tahun_anggaran', true),
-      terbaru('bku_kas', 'tahun', false),
-      supabase
-        .from('siswa')
-        .select('id', { count: 'exact', head: true })
-        .eq('sekolah_id', sekolahId)
-        .eq('status', 'aktif')
-        .then((r) => (r.error ? null : r.count)),
-    ]).then(([arkas, bku, siswa]) => {
-      if (aktif) setHitung({ arkas, bku, siswa })
+    supabase.rpc('akreditasi_otomatis', { p_sekolah_id: sekolahId }).then(({ data, error }) => {
+      if (!aktif || error) return
+      const perKode = {}
+      ;(data || []).forEach((r) => {
+        ;(perKode[r.kode] ||= []).push(r)
+      })
+      const hasil = {}
+      Object.entries(perKode).forEach(([kode, sumber]) => {
+        const terisi = sumber.filter((s) => Number(s.jumlah) > 0).length
+        hasil[kode] = {
+          status: terisi === sumber.length ? 'lengkap' : terisi > 0 ? 'proses' : 'belum',
+          info: sumber.map((s) =>
+            Number(s.jumlah) > 0
+              ? `${s.sumber}${s.tahun ? ' ' + s.tahun : ''}: ${s.jumlah} baris`
+              : `${s.sumber} belum diisi`
+          ),
+        }
+      })
+      setOtomatis(hasil)
     })
     return () => {
       aktif = false
     }
   }, [sekolahId])
 
-  function infoUntuk(kode) {
-    if (kode === 'MAN-03') {
-      const label = (d, nama) => {
-        if (!d) return null
-        return d.n > 0 ? `${nama} ${d.tahun}: ${d.n} baris` : `${nama} belum diisi`
-      }
-      return [label(hitung.arkas, 'ARKAS'), label(hitung.bku, 'BKU')].filter(Boolean)
-    }
-    if (kode === 'MAN-08') {
-      const n = hitung.siswa
-      if (n === null || n === undefined) return []
-      return [n > 0 ? `${n} siswa aktif terdata` : 'Data siswa belum diisi']
-    }
-    return []
-  }
+  // Status yang dipakai untuk tampilan, ringkasan, dan filter:
+  // pilihan manual bila sudah bukan "belum", selain itu hasil otomatis.
+  const statusEfektif = useCallback(
+    (kode) => {
+      const manual = baris[kode]?.status || 'belum'
+      if (manual !== 'belum') return manual
+      return otomatis[kode]?.status || 'belum'
+    },
+    [baris, otomatis]
+  )
 
   const simpan = useCallback(
     async (kode, patch) => {
@@ -606,7 +601,8 @@ export default function AkreditasiSekolah() {
       ...draftSaatIni,
       file_path: path,
       file_nama: file.name,
-      status: baris[kode]?.status === 'lengkap' ? 'lengkap' : 'proses',
+      // Yang sudah tampil "Lengkap" (manual atau otomatis) tidak diturunkan.
+      status: statusEfektif(kode) === 'lengkap' ? 'lengkap' : 'proses',
     })
     if (ok && lamaPath) {
       // Bersihkan berkas lama; kegagalan di sini tidak perlu ditampilkan.
@@ -653,19 +649,19 @@ export default function AkreditasiSekolah() {
     kelompok.forEach((k) =>
       k.daftar.forEach((it) => {
         total += 1
-        const s = baris[it.kode]?.status || 'belum'
+        const s = statusEfektif(it.kode)
         if (s === 'lengkap') lengkap += 1
         else if (s === 'proses') proses += 1
       })
     )
     return { total, lengkap, proses, belum: total - lengkap - proses }
-  }, [kelompok, baris])
+  }, [kelompok, statusEfektif])
 
   const persen = ringkasan.total ? Math.round((ringkasan.lengkap / ringkasan.total) * 100) : 0
   const kataCari = cari.trim().toLowerCase()
 
   function lolos(it) {
-    const s = baris[it.kode]?.status || 'belum'
+    const s = statusEfektif(it.kode)
     if (filter !== 'semua' && s !== filter) return false
     if (!kataCari) return true
     return (
@@ -790,7 +786,7 @@ export default function AkreditasiSekolah() {
         kelompok.map((k) => {
           const tampil = k.daftar.filter(lolos)
           if (tampil.length === 0) return null
-          const lengkapK = k.daftar.filter((it) => baris[it.kode]?.status === 'lengkap').length
+          const lengkapK = k.daftar.filter((it) => statusEfektif(it.kode) === 'lengkap').length
           const persenK = k.daftar.length ? Math.round((lengkapK / k.daftar.length) * 100) : 0
           return (
             <section key={k.id} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -809,7 +805,9 @@ export default function AkreditasiSekolah() {
                     key={it.kode}
                     item={it}
                     data={baris[it.kode]}
-                    info={infoUntuk(it.kode)}
+                    info={otomatis[it.kode]?.info || []}
+                    statusOtomatis={otomatis[it.kode]?.status || null}
+                    statusEfektif={statusEfektif(it.kode)}
                     terbuka={terbuka === it.kode}
                     onToggle={() => setTerbuka((t) => (t === it.kode ? null : it.kode))}
                     bisaEdit={bisaEdit}
@@ -827,6 +825,7 @@ export default function AkreditasiSekolah() {
       )}
 
       <p className="text-xs text-slate-400 leading-relaxed">
+        Status bertanda "otomatis" dihitung dari data yang sudah ada di aplikasi; itu hanya menunjukkan datanya ada, bukan bahwa isinya sudah memenuhi instrumen.
         Daftar butir ini adalah panduan kerja. Selalu cocokkan dengan instrumen dan petunjuk teknis akreditasi terbaru dari BAN-S/M.
       </p>
     </div>
