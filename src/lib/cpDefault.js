@@ -178,3 +178,30 @@ export const CP_DEFAULT = {
 
   'Muatan Lokal': { A: MULOK, B: MULOK, C: MULOK },
 }
+
+// ---- Helper untuk form manual di Silabus.jsx ----
+const ROMAWI = { I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6 }
+
+export function faseDariNamaKelas(nama) {
+  if (!nama) return null
+  const s = String(nama)
+  let t = null
+  const angka = s.match(/\d+/)
+  if (angka) t = Number(angka[0])
+  else {
+    const r = s.toUpperCase().match(/\b(VI|IV|V|III|II|I)\b/)
+    if (r) t = ROMAWI[r[1]]
+  }
+  if (!t || t < 1 || t > 6) return null
+  return t <= 2 ? 'A' : t <= 4 ? 'B' : 'C'
+}
+
+// Cari CP & TP default berdasarkan nama mapel (tidak peka huruf besar/kecil) dan nama kelas.
+export function cariCpDefault(mapel, namaKelas) {
+  const fase = faseDariNamaKelas(namaKelas)
+  if (!fase || !mapel) return null
+  const kunci = Object.keys(CP_DEFAULT).find(
+    (k) => k.toLowerCase() === String(mapel).trim().toLowerCase()
+  )
+  return kunci ? CP_DEFAULT[kunci][fase] || null : null
+}
