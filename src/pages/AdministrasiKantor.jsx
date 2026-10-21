@@ -6,6 +6,7 @@ import {
   CalendarClock,
   ClipboardCheck,
   BookOpenCheck,
+  BookOpenText,
   NotebookPen,
   Archive,
   CalendarDays,
@@ -59,6 +60,12 @@ const SEMUA_KARTU = [
     label: 'Rapor',
     icon: FileBadge,
     desc: 'Kelola nilai akhir, deskripsi capaian, P5 & catatan wali kelas.',
+  },
+  {
+    to: '/silabus',
+    label: 'Silabus',
+    icon: BookOpenText,
+    desc: 'Susun silabus per mata pelajaran untuk kelas yang Anda ampu.',
   },
   {
     to: '/rpp',
