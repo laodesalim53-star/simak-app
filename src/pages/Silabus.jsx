@@ -11,11 +11,9 @@ import SilabusOtomatis from '../components/SilabusOtomatis'
 import SilabusSalin from '../components/SilabusSalin'
 import { ALOKASI_WAKTU, PENILAIAN, SUMBER_BELAJAR, cariMateriDefault } from '../lib/pilihanSilabus'
 import {
-  Save, Loader2, BookOpenText, Trash2, Pencil, ChevronDown, ChevronUp, Printer, X, NotebookPen,
+  Save, Loader2, BookOpenText, Trash2, Pencil, ChevronDown, ChevronUp, Printer, X, NotebookPen, BookOpen,
 } from 'lucide-react'
 
-// Tab di halaman /rpp tempat RPP dibuat. Sesuaikan: daftar | upload | arsip | modul
-const TAB_RPP = 'upload'
 
 const SEMESTER_OPTIONS = ['Ganjil', 'Genap']
 
@@ -132,8 +130,9 @@ export default function Silabus() {
   }
 
   // Buka halaman RPP dengan data silabus terbawa lewat router state.
-  function buatRpp(item) {
-    navigate(`/rpp?tab=${TAB_RPP}`, {
+  // tab: 'upload' (Upload RPP) atau 'modul' (Modul Ajar)
+  function buatRpp(item, tab = 'upload') {
+    navigate(`/rpp?tab=${tab}`, {
       state: {
         dariSilabus: {
           silabus_id: item.id,
@@ -523,6 +522,14 @@ export default function Silabus() {
                           title="Buat RPP dari silabus ini"
                         >
                           <NotebookPen size={14} /> Buat RPP
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => buatRpp(item, 'modul')}
+                          className="shrink-0 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-brass-600 bg-brass-400/15 hover:bg-brass-400/25 print:hidden"
+                          title="Buat Modul Ajar dari silabus ini"
+                        >
+                          <BookOpen size={14} /> Modul Ajar
                         </button>
 
                         {bolehEditItem && (
