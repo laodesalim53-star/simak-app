@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useLocation } from 'react-router-dom'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
@@ -7,6 +7,7 @@ import Layout from '../components/Layout'
 import { Upload, FileText, Download, CheckCircle2, XCircle, Clock, Loader2, NotebookPen, Wand2, Users, List, Archive, BookOpen } from 'lucide-react'
 import { findRppTemplate } from '../data/rppTemplates'
 import { buildRppDocxFile } from '../lib/generateRppDocx'
+import { siapkanDariSilabus } from '../lib/dariSilabus'
 import ArsipRppTab from '../components/rpp/ArsipRppTab'
 import ModulAjarTab from '../components/rpp/ModulAjarTab'
 
@@ -112,6 +113,38 @@ export default function RPP() {
       a.localeCompare(b, undefined, { numeric: true })
     )
   }, [items])
+
+  // ---- Data kiriman dari halaman Silabus (tombol "Buat RPP") ----
+  const location = useLocation()
+  const dariSilabus = location.state?.dariSilabus
+  const [silabusDipakai, setSilabusDipakai] = useState(false)
+
+  useEffect(() => {
+    if (!dariSilabus || loading || silabusDipakai) return
+    const d = siapkanDariSilabus(dariSilabus, mapelOptions, kelasOptions)
+    if (isAdmin) {
+      setBulkCommon((c) => ({
+        ...c,
+        mata_pelajaran: d.mata_pelajaran,
+        kelas: d.kelas,
+        semester: d.semester,
+        tahun_ajaran: d.tahun_ajaran,
+      }))
+    } else {
+      setForm((f) => ({
+        ...f,
+        mata_pelajaran: d.mata_pelajaran,
+        kelas: d.kelas,
+        semester: d.semester,
+        tahun_ajaran: d.tahun_ajaran,
+        judul: d.judul,
+      }))
+      setMapelIsNew(d.mapelBaru)
+      setKelasIsNew(d.kelasBaru)
+      setMateriPilihan(NEW_VALUE)
+    }
+    setSilabusDipakai(true)
+  }, [dariSilabus, loading, silabusDipakai, mapelOptions, kelasOptions, isAdmin])
 
   // ---- Daftar Materi (judul RPP) yang cocok dengan Mata Pelajaran + Kelas terpilih ----
   const materiOptions = useMemo(() => {
@@ -472,6 +505,24 @@ export default function RPP() {
           {!isAdmin && (
             <form onSubmit={handleUpload} className="card p-6 mb-6 space-y-3">
               <h3 className="font-display text-lg font-semibold mb-1">Upload RPP Baru</h3>
+
+              {/* Rujukan dari Silabus (muncul kalau dibuka lewat tombol "Buat RPP" di halaman Silabus) */}
+              {silabusDipakai && dariSilabus && (
+                <div className="rounded-xl bg-sage-500/10 px-3 py-2.5 text-xs text-ink-700 space-y-1">
+                  <p className="font-medium text-sage-500">Data diisi dari Silabus {dariSilabus.mata_pelajaran}</p>
+                  {dariSilabus.tujuan_pembelajaran && (
+                    <p className="whitespace-pre-line">
+                      <strong>Tujuan:</strong> {dariSilabus.tujuan_pembelajaran}
+                    </p>
+                  )}
+                  {dariSilabus.materi_pokok && (
+                    <p className="whitespace-pre-line">
+                      <strong>Materi:</strong> {dariSilabus.materi_pokok}
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* ---- Mata Pelajaran: dropdown, bisa tambah baru ---- */}
                 {mapelIsNew || mapelOptions.length === 0 ? (
