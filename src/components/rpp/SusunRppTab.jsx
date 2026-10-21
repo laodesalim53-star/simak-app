@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Download, Printer, Loader2, RotateCcw, Sparkles } from 'lucide-react'
+import { supabase } from '../../lib/supabaseClient'
 import { buatRppDocxFile, buatRppHtml, CSS_CETAK_RPP } from '../../lib/rppDokumen'
 import {
   DIMENSI,
@@ -119,6 +120,32 @@ export default function SusunRppTab({ awal, profil }) {
     const nama = profil?.nama_lengkap || profil?.nama || ''
     if (nama) setD((p) => (p.penyusun ? p : { ...p, penyusun: nama }))
   }, [profil])
+
+  // Kepala sekolah, NIP kepsek, dan nama sekolah dari profil_sekolah;
+  // NIP penyusun dari tabel guru. Hanya mengisi kolom yang masih kosong.
+  useEffect(() => {
+    let batal = false
+    async function ambil() {
+      const { data: sk } = await supabase.from('profil_sekolah').select('*').limit(1).maybeSingle()
+      let nipGuru = ''
+      if (profil?.guru_id) {
+        const { data: g } = await supabase.from('guru').select('*').eq('id', profil.guru_id).maybeSingle()
+        nipGuru = g?.nip || ''
+      }
+      if (batal) return
+      setD((p) => ({
+        ...p,
+        kepsek: p.kepsek || sk?.kepala_sekolah || '',
+        nipKepsek: p.nipKepsek || sk?.nip_kepala_sekolah || '',
+        satuan: p.satuan || sk?.nama_sekolah || sk?.nama || '',
+        nipPenyusun: p.nipPenyusun || nipGuru,
+      }))
+    }
+    ambil().catch(() => {})
+    return () => {
+      batal = true
+    }
+  }, [profil?.guru_id])
 
   // Fase otomatis dari kelas (kalau fase masih kosong)
   useEffect(() => {
