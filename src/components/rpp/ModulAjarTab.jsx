@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
 import { useAuth } from '../../lib/AuthContext'
+import { siapkanDariSilabus } from '../../lib/dariSilabus'
 import { Download, Search, Upload, Loader2, Eye, Trash2, BookOpen } from 'lucide-react'
 import PreviewModal from './PreviewModal'
 import { getSignedUrl, downloadRppFile } from './rppStorage'
@@ -53,6 +55,26 @@ export default function ModulAjarTab() {
   const [query, setQuery] = useState('')
   const [filterFase, setFilterFase] = useState('')
   const [preview, setPreview] = useState(null)
+
+  // ---- Data kiriman dari halaman Silabus (tombol "Modul Ajar") ----
+  const location = useLocation()
+  const dariSilabus = location.state?.dariSilabus
+  const [silabusDipakai, setSilabusDipakai] = useState(false)
+
+  useEffect(() => {
+    if (!dariSilabus || silabusDipakai) return
+    const d = siapkanDariSilabus(dariSilabus)
+    setForm((f) => ({
+      ...f,
+      judul: d.judulModul,
+      mata_pelajaran: d.mata_pelajaran,
+      kelas: d.kelas,
+      fase: faseDariKelas(d.kelas),
+      semester: d.semester,
+      tahun_ajaran: d.tahun_ajaran,
+    }))
+    setSilabusDipakai(true)
+  }, [dariSilabus, silabusDipakai])
 
   async function load() {
     setLoading(true)
@@ -166,6 +188,23 @@ export default function ModulAjarTab() {
           Simpan Modul Ajar (Kurikulum Merdeka) langsung ke arsip, tanpa perlu persetujuan admin. Bisa diisi guru
           maupun admin.
         </p>
+
+        {/* Rujukan dari Silabus (muncul kalau dibuka lewat tombol "Modul Ajar" di halaman Silabus) */}
+        {silabusDipakai && dariSilabus && (
+          <div className="rounded-xl bg-sage-500/10 px-3 py-2.5 text-xs text-ink-700 space-y-1">
+            <p className="font-medium text-sage-500">Data diisi dari Silabus {dariSilabus.mata_pelajaran}</p>
+            {dariSilabus.capaian_pembelajaran && (
+              <p className="whitespace-pre-line">
+                <strong>Capaian:</strong> {dariSilabus.capaian_pembelajaran}
+              </p>
+            )}
+            {dariSilabus.tujuan_pembelajaran && (
+              <p className="whitespace-pre-line">
+                <strong>Tujuan:</strong> {dariSilabus.tujuan_pembelajaran}
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <input
