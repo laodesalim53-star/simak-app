@@ -49,7 +49,12 @@ export default function SilabusCetak({ items, kelas, waliId, onCetak, onTutup })
   const nipKepsek = sekolah?.nip_kepala_sekolah || sekolah?.nip_kepala || ''
   const namaWali = wali?.nama_lengkap || ''
   const nipWali = wali?.nip || ''
-  const kota = sekolah?.kabupaten || ''
+  // "PEMERINTAH KABUPATEN KEPULAUAN ARU" -> "Kepulauan Aru"
+  const kota = (sekolah?.kabupaten || '')
+    .replace(/^pemerintah\s+/i, '')
+    .replace(/^kabupaten\s+/i, '')
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase())
 
   return (
     <div className="bg-white text-slate-900" style={{ fontFamily: 'serif' }}>
@@ -62,7 +67,11 @@ export default function SilabusCetak({ items, kelas, waliId, onCetak, onTutup })
         .tabel-silabus tr { page-break-inside: avoid; }
         .tabel-silabus thead { display: table-header-group; }
         .blok-ttd { page-break-inside: avoid; }
-        @media print { .no-print { display: none !important; } }
+        @media print {
+          .no-print { display: none !important; }
+          html, body { visibility: visible !important; display: block !important; height: auto !important; overflow: visible !important; background: #fff !important; }
+          body * { visibility: visible !important; }
+        }
       `}</style>
 
       {/* Bilah alat: tidak ikut tercetak */}
