@@ -9,6 +9,7 @@ import {
   WidthType,
   AlignmentType,
   BorderStyle,
+  ImageRun,
 } from 'docx'
 
 // Data RPP yang disusun di aplikasi -> dokumen Word (.docx) dan HTML (untuk cetak/PDF).
@@ -17,7 +18,12 @@ import {
 //   satuan, mapel, kelas, fase, semester, tahunAjaran, alokasi, materi,
 //   penyusun, nipPenyusun, kepsek, nipKepsek, kota, tanggal,
 //   capaian, tujuan, profil: [..], model, media, sumber,
-//   pendahuluan, inti, penutup, asesmen
+//   pendahuluan, inti, penutup, asesmen,
+//   kop (opsional): {
+//     dinas, kabupaten, nama, kecamatan, alamat, kontak,
+//     kiri:  { data: Uint8Array, type: 'png'|'jpg'|'gif', w, h, dataUrl } | null,
+//     kanan: { ...sama } | null,
+//   }
 // }
 
 const FONT = 'Times New Roman'
@@ -55,6 +61,69 @@ function sel(teks, lebar, { bold, borders = semuaGaris } = {}) {
     margins: { top: 40, bottom: 40, left: 80, right: 80 },
     children: baris(teks).length ? baris(teks).map((s) => tp(s, { bold, after: 20 })) : [tp('', { after: 20 })],
   })
+}
+
+// ---------- Kop surat untuk Word ----------
+function logoParagraf(logo, align) {
+  if (!logo) return new Paragraph({ children: [] })
+  return new Paragraph({
+    alignment: align,
+    children: [
+      new ImageRun({
+        type: logo.type,
+        data: logo.data,
+        transformation: { width: logo.w || 70, height: logo.h || 70 },
+      }),
+    ],
+  })
+}
+
+function kopDocx(kop) {
+  if (!kop || !kop.nama) return []
+
+  const kontak = kop.kontak ? [kop.alamat, kop.kontak].filter(Boolean).join('  —  ') : kop.alamat || ''
+  const tengah = []
+  if (kop.dinas) tengah.push(tp(kop.dinas.toUpperCase(), { bold: true, size: 24, align: AlignmentType.CENTER, after: 0 }))
+  if (kop.kabupaten) tengah.push(tp(kop.kabupaten.toUpperCase(), { bold: true, size: 24, align: AlignmentType.CENTER, after: 0 }))
+  tengah.push(tp(kop.nama.toUpperCase(), { bold: true, size: 28, align: AlignmentType.CENTER, after: 0 }))
+  if (kop.kecamatan) tengah.push(tp(kop.kecamatan.toUpperCase(), { size: 20, align: AlignmentType.CENTER, after: 0 }))
+  if (kontak) tengah.push(tp(kontak, { size: 18, align: AlignmentType.CENTER, after: 0 }))
+
+  const tabelKop = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: { ...tanpaSemua, insideHorizontal: tanpaGaris, insideVertical: tanpaGaris },
+    rows: [
+      new TableRow({
+        cantSplit: true,
+        children: [
+          new TableCell({
+            width: { size: 15, type: WidthType.PERCENTAGE },
+            borders: tanpaSemua,
+            children: [logoParagraf(kop.kiri, AlignmentType.LEFT)],
+          }),
+          new TableCell({
+            width: { size: 70, type: WidthType.PERCENTAGE },
+            borders: tanpaSemua,
+            children: tengah,
+          }),
+          new TableCell({
+            width: { size: 15, type: WidthType.PERCENTAGE },
+            borders: tanpaSemua,
+            children: [logoParagraf(kop.kanan, AlignmentType.RIGHT)],
+          }),
+        ],
+      }),
+    ],
+  })
+
+  // Garis ganda di bawah kop
+  const garisKop = new Paragraph({
+    spacing: { before: 40, after: 200 },
+    border: { bottom: { style: BorderStyle.DOUBLE, size: 6, color: '000000', space: 1 } },
+    children: [],
+  })
+
+  return [tabelKop, garisKop]
 }
 
 export function buatDokumenRpp(d) {
@@ -129,6 +198,7 @@ export function buatDokumenRpp(d) {
   })
 
   const anak = [
+    ...kopDocx(d.kop),
     tp('RENCANA PELAKSANAAN PEMBELAJARAN (RPP)', { bold: true, size: 26, align: AlignmentType.CENTER, after: 40 }),
     tp(d.mapel ? d.mapel.toUpperCase() : '', { bold: true, align: AlignmentType.CENTER, after: 200 }),
     judulBagian('A', 'Identitas'),
@@ -178,6 +248,27 @@ const esc = (s) =>
 
 const htmlBaris = (t) => (baris(t).length ? baris(t).map((s) => `<p>${esc(s)}</p>`).join('') : '<p>-</p>')
 
+function kopHtml(kop) {
+  if (!kop || !kop.nama) return ''
+  const img = (logo, alt) => (logo?.dataUrl ? `<img src="${logo.dataUrl}" alt="${alt}">` : '')
+  const kontak = kop.kontak ? [kop.alamat, kop.kontak].filter(Boolean).join('  —  ') : kop.alamat || ''
+  return `
+    <div class="kop">
+      <table><tr>
+        <td class="l">${img(kop.kiri, 'Logo')}</td>
+        <td class="c">
+          ${kop.dinas ? `<p class="b1">${esc(kop.dinas.toUpperCase())}</p>` : ''}
+          ${kop.kabupaten ? `<p class="b1">${esc(kop.kabupaten.toUpperCase())}</p>` : ''}
+          <p class="b2">${esc(kop.nama.toUpperCase())}</p>
+          ${kop.kecamatan ? `<p class="b3">${esc(kop.kecamatan.toUpperCase())}</p>` : ''}
+          ${kontak ? `<p class="b4">${esc(kontak)}</p>` : ''}
+        </td>
+        <td class="r">${img(kop.kanan, 'Logo')}</td>
+      </tr></table>
+      <div class="garis"></div>
+    </div>`
+}
+
 export function buatRppHtml(d) {
   const idRows = [
     ['Satuan Pendidikan', d.satuan],
@@ -211,6 +302,7 @@ export function buatRppHtml(d) {
 
   return `
   <div class="rpp">
+    ${kopHtml(d.kop)}
     <h1>RENCANA PELAKSANAAN PEMBELAJARAN (RPP)</h1>
     <h2>${esc((d.mapel || '').toUpperCase())}</h2>
     <h3>A. Identitas</h3>
@@ -244,4 +336,19 @@ export const CSS_CETAK_RPP = `
   .rpp table.ttd { width: 100%; margin-top: 18pt; break-inside: avoid; }
   .rpp table.ttd td { width: 50%; text-align: center; vertical-align: top; }
   .rpp .sp { height: 52pt; }
+
+  .rpp .kop { margin-bottom: 12pt; }
+  .rpp .kop table { width: 100%; border-collapse: collapse; }
+  .rpp .kop td { border: 0; padding: 0; vertical-align: middle; }
+  .rpp .kop td.l, .rpp .kop td.r { width: 80px; }
+  .rpp .kop td.l { text-align: left; }
+  .rpp .kop td.r { text-align: right; }
+  .rpp .kop img { width: 70px; height: 70px; object-fit: contain; }
+  .rpp .kop td.c { text-align: center; }
+  .rpp .kop p { margin: 0; line-height: 1.2; }
+  .rpp .kop .b1 { font-size: 12pt; font-weight: bold; }
+  .rpp .kop .b2 { font-size: 14pt; font-weight: bold; }
+  .rpp .kop .b3 { font-size: 10pt; }
+  .rpp .kop .b4 { font-size: 9pt; margin-top: 2pt; }
+  .rpp .kop .garis { border-top: 1px solid #000; border-bottom: 3px solid #000; height: 2px; margin-top: 4pt; }
 `
