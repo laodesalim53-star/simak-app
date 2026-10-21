@@ -33,10 +33,10 @@ export default function RPP() {
   const [uploading, setUploading] = useState(false)
   const [processingId, setProcessingId] = useState(null)
 
-  // Tab aktif: 'daftar' | 'upload'
-  // Bisa dibuka langsung ke tab tertentu: /rpp?tab=arsip | modul | upload | daftar
+  // Tab aktif: 'daftar' | 'susun' | 'upload' | 'arsip' | 'modul'
+  // Bisa dibuka langsung ke tab tertentu: /rpp?tab=susun | arsip | modul | upload | daftar
   const [searchParams] = useSearchParams()
-  const initialTab = ['daftar', 'upload', 'arsip', 'modul'].includes(searchParams.get('tab'))
+  const initialTab = ['daftar', 'upload', 'arsip', 'modul', 'susun'].includes(searchParams.get('tab'))
     ? searchParams.get('tab')
     : 'daftar'
   const [tab, setTab] = useState(initialTab)
@@ -144,6 +144,8 @@ export default function RPP() {
       setKelasIsNew(d.kelasBaru)
       setMateriPilihan(NEW_VALUE)
     }
+    // Dari Silabus -> langsung buka tab Susun RPP
+    setTab('susun')
     setSilabusDipakai(true)
   }, [dariSilabus, loading, silabusDipakai, mapelOptions, kelasOptions, isAdmin])
 
@@ -447,6 +449,7 @@ export default function RPP() {
 
   const TABS = [
     { key: 'daftar', label: 'Daftar RPP', icon: List, badge: isAdmin && menungguCount > 0 ? menungguCount : null },
+    { key: 'susun', label: 'Susun RPP', icon: Wand2 },
     { key: 'upload', label: isAdmin ? 'Upload Massal' : 'Upload RPP', icon: Upload },
     { key: 'arsip', label: 'Arsip RPP', icon: Archive },
     { key: 'modul', label: 'Modul Ajar', icon: BookOpen },
@@ -1005,6 +1008,10 @@ export default function RPP() {
           </div>
         </>
       )}
+
+      {/* =================== TAB: SUSUN RPP =================== */}
+      {tab === 'susun' && <SusunRppTab awal={dariSilabus} profil={profil} />}
+
       {/* =================== TAB: ARSIP RPP =================== */}
       {tab === 'arsip' && (
         <ArsipRppTab disetujuiItems={disetujuiItems} loadingDisetujui={loading} onReloadRpp={load} />
