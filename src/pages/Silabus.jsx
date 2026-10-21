@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
 import { CP_DEFAULT, cariCpDefault } from '../lib/cpDefault'
 import PilihanCepat from '../components/PilihanCepat'
+import SilabusCetak from '../components/SilabusCetak'
 import { ALOKASI_WAKTU, PENILAIAN, SUMBER_BELAJAR, cariMateriDefault } from '../lib/pilihanSilabus'
 import {
   Save, Loader2, BookOpenText, Trash2, Pencil, ChevronDown, ChevronUp, Printer, X,
@@ -44,6 +46,7 @@ export default function Silabus() {
   const [editId, setEditId] = useState(null)
   const [menyimpan, setMenyimpan] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
+  const [cetak, setCetak] = useState(null) // { win, el } jendela cetak
 
   // Kelas: guru -> kelas yang diampu (wali_kelas_id), admin -> semua kelas
   useEffect(() => {
@@ -119,6 +122,41 @@ export default function Silabus() {
       return { ...f, capaian_pembelajaran: isi.capaian, tujuan_pembelajaran: isi.tujuan }
     })
     return true
+  }
+
+  // Cetak di jendela terpisah supaya tidak terpengaruh aturan cetak Layout.
+  function handleCetak() {
+    if (!kelasTerpilih || items.length === 0) return
+    if (cetak?.win && !cetak.win.closed) cetak.win.close()
+
+    const w = window.open('', '_blank', 'width=1100,height=800')
+    if (!w) {
+      alert('Pop-up diblokir browser. Izinkan pop-up untuk situs ini lalu coba lagi.')
+      return
+    }
+    w.document.title = `Silabus ${kelasTerpilih.nama_kelas}`
+
+    // Salin stylesheet aplikasi (Tailwind dll) ke jendela cetak
+    document.querySelectorAll('link[rel="stylesheet"], style').forEach((n) => {
+      if (n.tagName === 'LINK') {
+        const l = w.document.createElement('link')
+        l.rel = 'stylesheet'
+        l.href = n.href
+        w.document.head.appendChild(l)
+      } else {
+        w.document.head.appendChild(n.cloneNode(true))
+      }
+    })
+
+    const el = w.document.createElement('div')
+    w.document.body.appendChild(el)
+    w.addEventListener('pagehide', () => setCetak(null))
+    setCetak({ win: w, el })
+  }
+
+  function tutupCetak() {
+    if (cetak?.win && !cetak.win.closed) cetak.win.close()
+    setCetak(null)
   }
 
   async function handleSimpan(e) {
@@ -394,7 +432,7 @@ export default function Silabus() {
               {items.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => window.print()}
+                  onClick={handleCetak}
                   className="flex items-center gap-1.5 text-xs font-medium text-ink-700/60 hover:text-ink-900 print:hidden"
                 >
                   <Printer size={14} /> Cetak
@@ -482,6 +520,17 @@ export default function Silabus() {
           </div>
         </>
       )}
+
+      {cetak &&
+        createPortal(
+          <SilabusCetak
+            items={items}
+            kelas={kelasTerpilih}
+            onCetak={() => cetak.win.print()}
+            onTutup={tutupCetak}
+          />,
+          cetak.el
+        )}
     </Layout>
   )
 }
