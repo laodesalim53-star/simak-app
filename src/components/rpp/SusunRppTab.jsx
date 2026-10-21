@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Download, Printer, Loader2, RotateCcw } from 'lucide-react'
+import { Download, Printer, Loader2, RotateCcw, Sparkles } from 'lucide-react'
 import { buatRppDocxFile, buatRppHtml, CSS_CETAK_RPP } from '../../lib/rppDokumen'
-
-const DIMENSI = [
-  'Beriman, bertakwa kepada Tuhan Yang Maha Esa, dan berakhlak mulia',
-  'Berkebinekaan global',
-  'Bergotong royong',
-  'Mandiri',
-  'Bernalar kritis',
-  'Kreatif',
-]
+import {
+  DIMENSI,
+  MODEL,
+  ALOKASI,
+  MEDIA,
+  SUMBER,
+  ASESMEN,
+  faseDariKelas,
+  capaianDari,
+  kegiatanDariModel,
+} from '../../data/rppRekomendasi'
 
 const KUNCI_DRAFT = 'simak_draft_susun_rpp'
 
@@ -46,18 +48,44 @@ const KOSONG = {
 function bacaDraft() {
   try {
     const raw = localStorage.getItem(KUNCI_DRAFT)
-    return raw ? { ...KOSONG, ...JSON.parse(raw) } : KOSONG
+    return raw ? { ...KOSONG, ...JSON.parse(raw) } : { ...KOSONG, tanggal: hariIni() }
   } catch {
-    return KOSONG
+    return { ...KOSONG, tanggal: hariIni() }
   }
 }
 
-function Field({ label, children, full }) {
+const kosong = (s) => !String(s || '').trim()
+
+// Dropdown kecil "Rekomendasi": memilih satu opsi akan mengisi kolom terkait
+function Rekom({ opsi, onPilih, teks = 'Rekomendasi' }) {
   return (
-    <label className={`block ${full ? 'sm:col-span-2' : ''}`}>
-      <span className="text-xs font-medium text-ink-700/70 mb-1 block">{label}</span>
+    <select
+      className="text-[11px] rounded-md bg-sage-500/10 text-sage-500 font-medium px-1.5 py-0.5 border-0 max-w-[60%] cursor-pointer"
+      value=""
+      onChange={(e) => {
+        if (e.target.value === '') return
+        onPilih(opsi[Number(e.target.value)])
+      }}
+    >
+      <option value="">✨ {teks}</option>
+      {opsi.map((o, i) => (
+        <option key={i} value={i}>
+          {typeof o === 'string' ? o : o.label}
+        </option>
+      ))}
+    </select>
+  )
+}
+
+function Field({ label, children, full, rekom }) {
+  return (
+    <div className={full ? 'sm:col-span-2' : ''}>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <span className="text-xs font-medium text-ink-700/70">{label}</span>
+        {rekom}
+      </div>
       {children}
-    </label>
+    </div>
   )
 }
 
@@ -92,6 +120,15 @@ export default function SusunRppTab({ awal, profil }) {
     if (nama) setD((p) => (p.penyusun ? p : { ...p, penyusun: nama }))
   }, [profil])
 
+  // Fase otomatis dari kelas (kalau fase masih kosong)
+  useEffect(() => {
+    setD((p) => {
+      if (p.fase || !p.kelas) return p
+      const f = faseDariKelas(p.kelas)
+      return f ? { ...p, fase: f } : p
+    })
+  }, [d.kelas])
+
   // Simpan draft otomatis di perangkat supaya tidak hilang kalau halaman tertutup
   useEffect(() => {
     try {
@@ -105,6 +142,53 @@ export default function SusunRppTab({ awal, profil }) {
   const namaFile = `RPP_${(d.mapel || 'Mapel').replace(/\s+/g, '_')}_${(d.materi || 'Materi')
     .slice(0, 30)
     .replace(/[^\w]+/g, '_')}.docx`
+
+  // ---------- Pengisi rekomendasi ----------
+  // Tambahkan teks ke kolom (tidak menimpa; tidak menambah kalau sudah ada)
+  function tambah(k, teks, pemisah = '\n') {
+    setD((p) => {
+      if (kosong(p[k])) return { ...p, [k]: teks }
+      if (p[k].includes(teks)) return p
+      return { ...p, [k]: p[k].trimEnd() + pemisah + teks }
+    })
+  }
+
+  // Pilih model: isi model, profil (kalau kosong), dan kegiatan (kalau kosong atau timpa=true)
+  function pilihModel(label, timpa = false) {
+    const keg = kegiatanDariModel(label, d.materi)
+    if (!keg) return
+    setD((p) => {
+      const kegKosong = kosong(p.pendahuluan) && kosong(p.inti) && kosong(p.penutup)
+      return {
+        ...p,
+        model: label,
+        profil: p.profil.length ? p.profil : keg.profil,
+        ...(kegKosong || timpa
+          ? { pendahuluan: keg.pendahuluan, inti: keg.inti, penutup: keg.penutup }
+          : {}),
+      }
+    })
+  }
+
+  // Isi semua kolom yang masih kosong sekaligus
+  function isiOtomatis() {
+    const label = d.model || MODEL[0].label
+    const keg = kegiatanDariModel(label, d.materi)
+    setD((p) => ({
+      ...p,
+      fase: p.fase || faseDariKelas(p.kelas),
+      alokasi: p.alokasi || ALOKASI[0],
+      capaian: p.capaian || capaianDari(p.materi, p.fase || faseDariKelas(p.kelas)),
+      model: p.model || label,
+      profil: p.profil.length ? p.profil : keg.profil,
+      media: p.media || 'Papan tulis, Slide presentasi (PowerPoint), Lembar Kerja Peserta Didik (LKPD)',
+      sumber: p.sumber || 'Buku Siswa Kurikulum Merdeka (Kemendikbudristek), Buku Guru Kurikulum Merdeka, Lingkungan sekitar sekolah',
+      pendahuluan: kosong(p.pendahuluan) ? keg.pendahuluan : p.pendahuluan,
+      inti: kosong(p.inti) ? keg.inti : p.inti,
+      penutup: kosong(p.penutup) ? keg.penutup : p.penutup,
+      asesmen: kosong(p.asesmen) ? ASESMEN[0].isi : p.asesmen,
+    }))
+  }
 
   function toggleDimensi(nama) {
     setD((p) => ({
@@ -149,11 +233,13 @@ export default function SusunRppTab({ awal, profil }) {
     setD({ ...KOSONG, tanggal: hariIni(), penyusun: profil?.nama_lengkap || profil?.nama || '' })
   }
 
-  const area = (k, label, rows = 4, full = true) => (
-    <Field label={label} full={full}>
+  const area = (k, label, rows = 4, rekom = null) => (
+    <Field label={label} full rekom={rekom}>
       <textarea className="input-field" rows={rows} value={d[k]} onChange={set(k)} />
     </Field>
   )
+
+  const modelDipilih = MODEL.some((x) => x.label === d.model)
 
   return (
     <div className="space-y-6">
@@ -162,6 +248,23 @@ export default function SusunRppTab({ awal, profil }) {
           Data diisi dari Silabus {awal.mata_pelajaran}. Lengkapi bagian yang masih kosong.
         </div>
       )}
+
+      {/* Isi otomatis semua kolom kosong */}
+      <div className="card p-4 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-ink-700/70 max-w-xl">
+          Klik <strong>Isi Otomatis</strong> untuk melengkapi semua kolom yang masih kosong (fase, alokasi, capaian,
+          model, kegiatan, media, sumber, asesmen). Isian yang sudah Anda tulis tidak ditimpa. Atau pilih
+          <strong> ✨ Rekomendasi</strong> di setiap kolom satu per satu.
+        </p>
+        <button
+          type="button"
+          onClick={isiOtomatis}
+          disabled={!siap}
+          className="btn-primary shrink-0 disabled:opacity-50"
+        >
+          <Sparkles size={16} /> Isi Otomatis
+        </button>
+      </div>
 
       <div className="card p-6">
         <h3 className="font-display text-lg font-semibold mb-3">A. Identitas</h3>
@@ -175,7 +278,20 @@ export default function SusunRppTab({ awal, profil }) {
           <Field label="Kelas">
             <input className="input-field" value={d.kelas} onChange={set('kelas')} />
           </Field>
-          <Field label="Fase (mis. A, B, C)">
+          <Field
+            label="Fase (mis. A, B, C)"
+            rekom={
+              d.kelas && faseDariKelas(d.kelas) ? (
+                <button
+                  type="button"
+                  className="text-[11px] rounded-md bg-sage-500/10 text-sage-500 font-medium px-1.5 py-0.5"
+                  onClick={() => setD((p) => ({ ...p, fase: faseDariKelas(p.kelas) }))}
+                >
+                  ✨ Dari kelas ({faseDariKelas(d.kelas)})
+                </button>
+              ) : null
+            }
+          >
             <input className="input-field" value={d.fase} onChange={set('fase')} />
           </Field>
           <Field label="Semester">
@@ -187,7 +303,10 @@ export default function SusunRppTab({ awal, profil }) {
           <Field label="Tahun Ajaran">
             <input className="input-field" placeholder="2026/2027" value={d.tahunAjaran} onChange={set('tahunAjaran')} />
           </Field>
-          <Field label="Alokasi Waktu">
+          <Field
+            label="Alokasi Waktu"
+            rekom={<Rekom opsi={ALOKASI} onPilih={(o) => setD((p) => ({ ...p, alokasi: o }))} />}
+          >
             <input className="input-field" placeholder="2 x 35 menit" value={d.alokasi} onChange={set('alokasi')} />
           </Field>
           <Field label="Materi Pokok">
@@ -199,9 +318,39 @@ export default function SusunRppTab({ awal, profil }) {
       <div className="card p-6">
         <h3 className="font-display text-lg font-semibold mb-3">B–F. Rancangan Pembelajaran</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {area('capaian', 'B. Capaian Pembelajaran')}
+          {area(
+            'capaian',
+            'B. Capaian Pembelajaran',
+            4,
+            <button
+              type="button"
+              disabled={!d.materi.trim()}
+              className="text-[11px] rounded-md bg-sage-500/10 text-sage-500 font-medium px-1.5 py-0.5 disabled:opacity-40"
+              onClick={() => setD((p) => ({ ...p, capaian: capaianDari(p.materi, p.fase || faseDariKelas(p.kelas)) }))}
+            >
+              ✨ Rumuskan dari materi
+            </button>
+          )}
           {area('tujuan', 'C. Tujuan Pembelajaran')}
-          <Field label="D. Dimensi Profil Pelajar" full>
+
+          <Field
+            label="D. Dimensi Profil Pelajar"
+            full
+            rekom={
+              <button
+                type="button"
+                className="text-[11px] rounded-md bg-sage-500/10 text-sage-500 font-medium px-1.5 py-0.5"
+                onClick={() =>
+                  setD((p) => ({
+                    ...p,
+                    profil: (kegiatanDariModel(p.model || MODEL[0].label, p.materi) || MODEL[0]).profil,
+                  }))
+                }
+              >
+                ✨ Sesuai model
+              </button>
+            }
+          >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
               {DIMENSI.map((p) => (
                 <label key={p} className="flex items-start gap-2 text-xs text-ink-700">
@@ -211,19 +360,46 @@ export default function SusunRppTab({ awal, profil }) {
               ))}
             </div>
           </Field>
-          {area('model', 'E. Model / Metode Pembelajaran', 2)}
-          <Field label="F. Media">
+
+          <Field
+            label="E. Model / Metode Pembelajaran"
+            full
+            rekom={<Rekom opsi={MODEL.map((x) => x.label)} onPilih={(label) => pilihModel(label)} teks="Pilih model" />}
+          >
+            <textarea className="input-field" rows={2} value={d.model} onChange={set('model')} />
+          </Field>
+
+          <Field
+            label="F. Media"
+            rekom={<Rekom opsi={MEDIA} onPilih={(o) => tambah('media', o, ', ')} teks="Tambah media" />}
+          >
             <input className="input-field" value={d.media} onChange={set('media')} />
           </Field>
-          <Field label="F. Sumber Belajar">
+          <Field
+            label="F. Sumber Belajar"
+            rekom={<Rekom opsi={SUMBER} onPilih={(o) => tambah('sumber', o, ', ')} teks="Tambah sumber" />}
+          >
             <input className="input-field" value={d.sumber} onChange={set('sumber')} />
           </Field>
         </div>
       </div>
 
       <div className="card p-6">
-        <h3 className="font-display text-lg font-semibold mb-1">G. Kegiatan Pembelajaran</h3>
-        <p className="text-[11px] text-ink-700/40 mb-3">Satu baris = satu langkah kegiatan.</p>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+          <h3 className="font-display text-lg font-semibold">G. Kegiatan Pembelajaran</h3>
+          {modelDipilih && (
+            <button
+              type="button"
+              className="text-[11px] rounded-md bg-sage-500/10 text-sage-500 font-medium px-2 py-1"
+              onClick={() => pilihModel(d.model, true)}
+            >
+              ✨ Isi ulang kegiatan sesuai model
+            </button>
+          )}
+        </div>
+        <p className="text-[11px] text-ink-700/40 mb-3">
+          Satu baris = satu langkah kegiatan. Pilih model di bagian E agar kegiatan terisi otomatis.
+        </p>
         <div className="grid grid-cols-1 gap-3">
           {area('pendahuluan', 'Pendahuluan', 4)}
           {area('inti', 'Kegiatan Inti', 6)}
@@ -234,7 +410,12 @@ export default function SusunRppTab({ awal, profil }) {
       <div className="card p-6">
         <h3 className="font-display text-lg font-semibold mb-3">H. Asesmen & Pengesahan</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {area('asesmen', 'Asesmen / Penilaian', 4)}
+          {area(
+            'asesmen',
+            'Asesmen / Penilaian',
+            4,
+            <Rekom opsi={ASESMEN} onPilih={(o) => tambah('asesmen', o.isi)} teks="Tambah asesmen" />
+          )}
           <Field label="Nama Penyusun (Guru)">
             <input className="input-field" value={d.penyusun} onChange={set('penyusun')} />
           </Field>
