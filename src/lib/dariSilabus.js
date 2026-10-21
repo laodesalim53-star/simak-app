@@ -36,5 +36,8 @@ export function siapkanDariSilabus(d, mapelOptions = [], kelasOptions = []) {
     judul: `RPP ${mata_pelajaran} Kelas ${kelas} Semester ${d.semester || ''} ${d.tahun_ajaran || ''}`
       .replace(/\s+/g, ' ')
       .trim(),
+    judulModul: `Modul Ajar ${mata_pelajaran} Kelas ${kelas} Semester ${d.semester || ''} ${d.tahun_ajaran || ''}`
+      .replace(/\s+/g, ' ')
+      .trim(),
   }
 }
