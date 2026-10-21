@@ -78,7 +78,7 @@ function logoParagraf(logo, align) {
   })
 }
 
-function kopDocx(kop) {
+export function kopDocx(kop) {
   if (!kop || !kop.nama) return []
 
   const kontak = kop.kontak ? [kop.alamat, kop.kontak].filter(Boolean).join('  —  ') : kop.alamat || ''
@@ -248,7 +248,7 @@ const esc = (s) =>
 
 const htmlBaris = (t) => (baris(t).length ? baris(t).map((s) => `<p>${esc(s)}</p>`).join('') : '<p>-</p>')
 
-function kopHtml(kop) {
+export function kopHtml(kop) {
   if (!kop || !kop.nama) return ''
   const img = (logo, alt) => (logo?.dataUrl ? `<img src="${logo.dataUrl}" alt="${alt}">` : '')
   const kontak = kop.kontak ? [kop.alamat, kop.kontak].filter(Boolean).join('  —  ') : kop.alamat || ''
