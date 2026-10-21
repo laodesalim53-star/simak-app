@@ -52,7 +52,7 @@ export default function Silabus() {
   useEffect(() => {
     async function loadKelas() {
       setLoadingKelas(true)
-      let q = supabase.from('kelas').select('id, nama_kelas').order('nama_kelas')
+      let q = supabase.from('kelas').select('id, nama_kelas, wali_kelas_id').order('nama_kelas')
       if (!isAdmin) {
         if (!profil?.guru_id) {
           setKelasList([])
@@ -136,17 +136,28 @@ export default function Silabus() {
     }
     w.document.title = `Silabus ${kelasTerpilih.nama_kelas}`
 
-    // Salin stylesheet aplikasi (Tailwind dll) ke jendela cetak
-    document.querySelectorAll('link[rel="stylesheet"], style').forEach((n) => {
-      if (n.tagName === 'LINK') {
-        const l = w.document.createElement('link')
-        l.rel = 'stylesheet'
-        l.href = n.href
-        w.document.head.appendChild(l)
-      } else {
-        w.document.head.appendChild(n.cloneNode(true))
+    // Salin stylesheet aplikasi (Tailwind dll) ke jendela cetak, TANPA aturan
+    // @media print milik aplikasi (aturan itu menyembunyikan isi halaman -> cetakan kosong).
+    const css = []
+    for (const sheet of Array.from(document.styleSheets)) {
+      try {
+        for (const rule of Array.from(sheet.cssRules)) {
+          if (rule.type === CSSRule.MEDIA_RULE && /print/i.test(rule.media.mediaText)) continue
+          css.push(rule.cssText)
+        }
+      } catch {
+        // stylesheet lintas-origin (mis. Google Fonts): muat lewat <link>
+        if (sheet.href) {
+          const l = w.document.createElement('link')
+          l.rel = 'stylesheet'
+          l.href = sheet.href
+          w.document.head.appendChild(l)
+        }
       }
-    })
+    }
+    const st = w.document.createElement('style')
+    st.textContent = css.join('\n')
+    w.document.head.appendChild(st)
 
     const el = w.document.createElement('div')
     w.document.body.appendChild(el)
@@ -526,6 +537,7 @@ export default function Silabus() {
           <SilabusCetak
             items={items}
             kelas={kelasTerpilih}
+            waliId={kelasTerpilih?.wali_kelas_id || (!isAdmin ? profil?.guru_id : null)}
             onCetak={() => cetak.win.print()}
             onTutup={tutupCetak}
           />,
