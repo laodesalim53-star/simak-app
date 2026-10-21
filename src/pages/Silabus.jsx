@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
 import { CP_DEFAULT, cariCpDefault } from '../lib/cpDefault'
+import PilihanCepat from '../components/PilihanCepat'
+import { ALOKASI_WAKTU, PENILAIAN, SUMBER_BELAJAR, cariMateriDefault } from '../lib/pilihanSilabus'
 import {
   Save, Loader2, BookOpenText, Trash2, Pencil, ChevronDown, ChevronUp, Printer, X,
 } from 'lucide-react'
@@ -320,6 +322,13 @@ export default function Silabus() {
                     value={form.materi_pokok}
                     onChange={(e) => setForm({ ...form, materi_pokok: e.target.value })}
                   />
+                  <PilihanCepat
+                    pilihan={cariMateriDefault(form.mata_pelajaran, kelasTerpilih?.nama_kelas)}
+                    nilai={form.materi_pokok}
+                    onChange={(v) => setForm({ ...form, materi_pokok: v })}
+                    pemisah={'\n'}
+                    kosongPesan="Pilih mata pelajaran dari daftar agar saran materi pokok muncul."
+                  />
                 </div>
                 <div>
                   <label className="label-field">Alokasi Waktu (opsional)</label>
@@ -329,6 +338,12 @@ export default function Silabus() {
                     placeholder="mis. 5 x 35 menit / minggu"
                     value={form.alokasi_waktu}
                     onChange={(e) => setForm({ ...form, alokasi_waktu: e.target.value })}
+                  />
+                  <PilihanCepat
+                    mode="single"
+                    pilihan={ALOKASI_WAKTU}
+                    nilai={form.alokasi_waktu}
+                    onChange={(v) => setForm({ ...form, alokasi_waktu: v })}
                   />
                 </div>
                 <div>
@@ -340,6 +355,11 @@ export default function Silabus() {
                     value={form.penilaian}
                     onChange={(e) => setForm({ ...form, penilaian: e.target.value })}
                   />
+                  <PilihanCepat
+                    pilihan={PENILAIAN}
+                    nilai={form.penilaian}
+                    onChange={(v) => setForm({ ...form, penilaian: v })}
+                  />
                 </div>
                 <div className="sm:col-span-2">
                   <label className="label-field">Sumber Belajar (opsional)</label>
@@ -349,6 +369,11 @@ export default function Silabus() {
                     placeholder="mis. Buku siswa, buku guru, lingkungan sekitar"
                     value={form.sumber_belajar}
                     onChange={(e) => setForm({ ...form, sumber_belajar: e.target.value })}
+                  />
+                  <PilihanCepat
+                    pilihan={SUMBER_BELAJAR}
+                    nilai={form.sumber_belajar}
+                    onChange={(v) => setForm({ ...form, sumber_belajar: v })}
                   />
                 </div>
               </div>
