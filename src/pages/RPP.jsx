@@ -4,13 +4,33 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
-import { Upload, FileText, Download, CheckCircle2, XCircle, Clock, Loader2, NotebookPen, Wand2, Users, List, Archive, BookOpen } from 'lucide-react'
+import {
+  Upload,
+  FileText,
+  Download,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Loader2,
+  NotebookPen,
+  Wand2,
+  Users,
+  List,
+  Archive,
+  BookOpen,
+  ClipboardList,
+  ListChecks,
+  ClipboardCheck,
+} from 'lucide-react'
 import { findRppTemplate } from '../data/rppTemplates'
 import { buildRppDocxFile } from '../lib/generateRppDocx'
 import { siapkanDariSilabus } from '../lib/dariSilabus'
 import ArsipRppTab from '../components/rpp/ArsipRppTab'
 import ModulAjarTab from '../components/rpp/ModulAjarTab'
 import SusunRppTab from '../components/rpp/SusunRppTab'
+import LkpdTab from '../components/rpp/LkpdTab'
+import KisiTab from '../components/rpp/KisiTab'
+import EvaluasiTab from '../components/rpp/EvaluasiTab'
 
 const STATUS_STYLE = {
   menunggu: 'bg-brass-400/15 text-brass-600',
@@ -26,6 +46,8 @@ const STATUS_LABEL = {
 
 const NEW_VALUE = '__baru__'
 
+const TAB_VALID = ['daftar', 'upload', 'arsip', 'modul', 'susun', 'lkpd', 'kisi', 'evaluasi']
+
 export default function RPP() {
   const { profil, isAdmin, session } = useAuth()
   const [items, setItems] = useState([])
@@ -33,12 +55,10 @@ export default function RPP() {
   const [uploading, setUploading] = useState(false)
   const [processingId, setProcessingId] = useState(null)
 
-  // Tab aktif: 'daftar' | 'susun' | 'upload' | 'arsip' | 'modul'
-  // Bisa dibuka langsung ke tab tertentu: /rpp?tab=susun | arsip | modul | upload | daftar
+  // Tab aktif: 'daftar' | 'susun' | 'lkpd' | 'kisi' | 'evaluasi' | 'upload' | 'arsip' | 'modul'
+  // Bisa dibuka langsung ke tab tertentu: /rpp?tab=susun | lkpd | kisi | evaluasi | arsip | modul | upload | daftar
   const [searchParams] = useSearchParams()
-  const initialTab = ['daftar', 'upload', 'arsip', 'modul', 'susun'].includes(searchParams.get('tab'))
-    ? searchParams.get('tab')
-    : 'daftar'
+  const initialTab = TAB_VALID.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'daftar'
   const [tab, setTab] = useState(initialTab)
 
   // Form upload (guru)
@@ -450,6 +470,9 @@ export default function RPP() {
   const TABS = [
     { key: 'daftar', label: 'Daftar RPP', icon: List, badge: isAdmin && menungguCount > 0 ? menungguCount : null },
     { key: 'susun', label: 'Susun RPP', icon: Wand2 },
+    { key: 'lkpd', label: 'LKPD', icon: ClipboardList },
+    { key: 'kisi', label: 'Kisi-Kisi', icon: ListChecks },
+    { key: 'evaluasi', label: 'Evaluasi', icon: ClipboardCheck },
     { key: 'upload', label: isAdmin ? 'Upload Massal' : 'Upload RPP', icon: Upload },
     { key: 'arsip', label: 'Arsip RPP', icon: Archive },
     { key: 'modul', label: 'Modul Ajar', icon: BookOpen },
@@ -1011,6 +1034,15 @@ export default function RPP() {
 
       {/* =================== TAB: SUSUN RPP =================== */}
       {tab === 'susun' && <SusunRppTab awal={dariSilabus} profil={profil} />}
+
+      {/* =================== TAB: LKPD =================== */}
+      {tab === 'lkpd' && <LkpdTab />}
+
+      {/* =================== TAB: KISI-KISI =================== */}
+      {tab === 'kisi' && <KisiTab />}
+
+      {/* =================== TAB: EVALUASI =================== */}
+      {tab === 'evaluasi' && <EvaluasiTab />}
 
       {/* =================== TAB: ARSIP RPP =================== */}
       {tab === 'arsip' && (
