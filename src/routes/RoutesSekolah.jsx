@@ -115,6 +115,7 @@ const AdministrasiKantor = lazy(() => import('../pages/AdministrasiKantor'))
 const PengajuanSuratAktif = lazy(() => import('../pages/PengajuanSuratAktif'))
 const PengajuanEditSiswa = lazy(() => import('../pages/PengajuanEditSiswa'))
 const PengajuanKebutuhanKelas = lazy(() => import('../pages/PengajuanKebutuhanKelas'))
+const Silabus = lazy(() => import('../pages/Silabus'))
 const SertifikatPenghargaan = lazy(() => import('../pages/SertifikatPenghargaan'))
 
 // --- Fitur Toko ---
@@ -281,6 +282,7 @@ export default function RoutesSekolah() {
       <Route path="/pengajuan-surat-aktif" element={<ProtectedRoute><PengajuanSuratAktif /></ProtectedRoute>} />
       <Route path="/perbaikan-data-siswa" element={<ProtectedRoute><PengajuanEditSiswa /></ProtectedRoute>} />
       <Route path="/pengajuan-kebutuhan-kelas" element={<ProtectedRoute><PengajuanKebutuhanKelas /></ProtectedRoute>} />
+      <Route path="/silabus" element={<ProtectedRoute><Silabus /></ProtectedRoute>} />
       <Route path="/sertifikat" element={<ProtectedRoute><SertifikatPenghargaan /></ProtectedRoute>} />
 
       {/* 9. Toko — keranjang & pengiriman terbuka untuk pengunjung, login saat checkout */}
