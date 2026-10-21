@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Download, Printer, Loader2, RotateCcw, Sparkles } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
+import { useAuth } from '../../lib/AuthContext'
 import { buatRppDocxFile, buatRppHtml, CSS_CETAK_RPP } from '../../lib/rppDokumen'
 import {
   DIMENSI,
@@ -15,6 +16,44 @@ import {
 } from '../../data/rppRekomendasi'
 
 const KUNCI_DRAFT = 'simak_draft_susun_rpp'
+const LOGO_BUCKET_SEKOLAH = 'profil-sekolah'
+
+// Path/URL di database -> URL publik (sama seperti KopSurat.jsx)
+function urlLogo(path) {
+  if (!path) return null
+  if (path.startsWith('http')) return path
+  return supabase.storage.from(LOGO_BUCKET_SEKOLAH).getPublicUrl(path).data.publicUrl
+}
+
+// Unduh logo -> { data, type, w, h, dataUrl } (dipakai untuk Word dan cetak PDF)
+async function ambilLogo(url) {
+  if (!url) return null
+  try {
+    const res = await fetch(url)
+    if (!res.ok) return null
+    const buf = new Uint8Array(await res.arrayBuffer())
+    const type =
+      buf[0] === 0x89 && buf[1] === 0x50 ? 'png' : buf[0] === 0xff && buf[1] === 0xd8 ? 'jpg' : buf[0] === 0x47 && buf[1] === 0x49 ? 'gif' : null
+    if (!type) return null // format lain (mis. SVG/WebP) dilewati
+    const mime = type === 'jpg' ? 'image/jpeg' : `image/${type}`
+    let w = 70
+    let h = 70
+    try {
+      const bmp = await createImageBitmap(new Blob([buf], { type: mime }))
+      const skala = Math.min(70 / bmp.width, 70 / bmp.height)
+      w = Math.round(bmp.width * skala)
+      h = Math.round(bmp.height * skala)
+      bmp.close?.()
+    } catch {
+      /* pakai ukuran bawaan */
+    }
+    let bin = ''
+    for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000))
+    return { data: buf, type, w, h, dataUrl: `data:${mime};base64,${btoa(bin)}` }
+  } catch {
+    return null
+  }
+}
 
 const hariIni = () =>
   new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -44,6 +83,7 @@ const KOSONG = {
   inti: '',
   penutup: '',
   asesmen: '',
+  pakaiKop: true,
 }
 
 function bacaDraft() {
@@ -93,8 +133,13 @@ function Field({ label, children, full, rekom }) {
 // awal   : data kiriman dari halaman Silabus (location.state.dariSilabus), boleh kosong
 // profil : profil pengguna dari useAuth (dipakai untuk mengisi nama penyusun)
 export default function SusunRppTab({ awal, profil }) {
+  const { sekolahId } = useAuth()
   const [d, setD] = useState(bacaDraft)
   const [busy, setBusy] = useState(false)
+  const [kop, setKop] = useState(null)
+
+  // Data untuk dokumen: kop hanya disertakan kalau dicentang dan datanya ada
+  const dataDokumen = () => ({ ...d, kop: d.pakaiKop ? kop : null })
 
   const set = (k) => (e) => setD((p) => ({ ...p, [k]: e.target.value }))
 
@@ -126,26 +171,53 @@ export default function SusunRppTab({ awal, profil }) {
   useEffect(() => {
     let batal = false
     async function ambil() {
-      const { data: sk } = await supabase.from('profil_sekolah').select('*').limit(1).maybeSingle()
+      let q = supabase.from('profil_sekolah').select('*')
+      if (sekolahId) q = q.eq('sekolah_id', sekolahId)
+      const { data: sk } = await q.limit(1).maybeSingle()
+
       let nipGuru = ''
       if (profil?.guru_id) {
         const { data: g } = await supabase.from('guru').select('*').eq('id', profil.guru_id).maybeSingle()
         nipGuru = g?.nip || ''
       }
       if (batal) return
+
+      // Kota untuk tanda tangan: nama kabupaten tanpa awalan "Kabupaten"/"Kab."
+      const kota = (sk?.kabupaten || '').replace(/^\s*(kabupaten|kab\.?|kota)\s+/i, '').trim()
+
       setD((p) => ({
         ...p,
         kepsek: p.kepsek || sk?.kepala_sekolah || '',
         nipKepsek: p.nipKepsek || sk?.nip_kepala_sekolah || '',
-        satuan: p.satuan || sk?.nama_sekolah || sk?.nama || '',
+        satuan: p.satuan || sk?.nama_sekolah || '',
+        kota: p.kota || kota,
         nipPenyusun: p.nipPenyusun || nipGuru,
       }))
+
+      // Kop surat: logo kabupaten di kiri + logo sekolah di kanan (sama seperti KopSurat.jsx)
+      if (sk?.nama_sekolah) {
+        const [logoSekolah, logoKab] = await Promise.all([
+          ambilLogo(urlLogo(sk.logo_path)),
+          ambilLogo(urlLogo(sk.logo_kabupaten_path)),
+        ])
+        if (batal) return
+        setKop({
+          dinas: sk.dinas_pendidikan || '',
+          kabupaten: sk.kabupaten || '',
+          nama: sk.nama_sekolah,
+          kecamatan: sk.kecamatan || '',
+          alamat: sk.alamat || '',
+          kontak: [sk.email && `Email: ${sk.email}`, sk.telepon && `Telp/HP: ${sk.telepon}`].filter(Boolean).join('  |  '),
+          kiri: logoKab || logoSekolah,
+          kanan: logoKab ? logoSekolah : null,
+        })
+      }
     }
     ambil().catch(() => {})
     return () => {
       batal = true
     }
-  }, [profil?.guru_id])
+  }, [profil?.guru_id, sekolahId])
 
   // Fase otomatis dari kelas (kalau fase masih kosong)
   useEffect(() => {
@@ -227,7 +299,7 @@ export default function SusunRppTab({ awal, profil }) {
   async function unduhWord() {
     setBusy(true)
     try {
-      const file = await buatRppDocxFile(d, namaFile)
+      const file = await buatRppDocxFile(dataDokumen(), namaFile)
       const url = URL.createObjectURL(file)
       const a = document.createElement('a')
       a.href = url
@@ -248,11 +320,17 @@ export default function SusunRppTab({ awal, profil }) {
     }
     w.document.write(
       `<!doctype html><html><head><meta charset="utf-8"><title>RPP ${d.mapel}</title>` +
-        `<style>${CSS_CETAK_RPP}</style></head><body>${buatRppHtml(d)}</body></html>`
+        `<style>${CSS_CETAK_RPP}</style></head><body>${buatRppHtml(dataDokumen())}</body></html>`
     )
     w.document.close()
     w.focus()
-    setTimeout(() => w.print(), 300)
+    // Tunggu logo selesai dimuat sebelum membuka dialog cetak
+    const tunggu = Promise.all(
+      [...w.document.images].map((im) =>
+        im.complete ? null : new Promise((r) => { im.onload = im.onerror = r })
+      )
+    )
+    Promise.race([tunggu, new Promise((r) => setTimeout(r, 2500))]).then(() => setTimeout(() => w.print(), 200))
   }
 
   function ulang() {
@@ -436,6 +514,23 @@ export default function SusunRppTab({ awal, profil }) {
 
       <div className="card p-6">
         <h3 className="font-display text-lg font-semibold mb-3">H. Asesmen & Pengesahan</h3>
+        <label className="flex items-start gap-2 text-xs text-ink-700 mb-3 rounded-xl bg-ink-900/[0.04] px-3 py-2">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={d.pakaiKop}
+            disabled={!kop}
+            onChange={(e) => setD((p) => ({ ...p, pakaiKop: e.target.checked }))}
+          />
+          <span>
+            Sertakan kop surat
+            {kop ? (
+              <span className="text-ink-700/50"> — {kop.nama}{kop.kiri ? '' : ' (logo belum diatur di Profil Sekolah)'}</span>
+            ) : (
+              <span className="text-ink-700/50"> — data Profil Sekolah belum termuat atau belum diisi</span>
+            )}
+          </span>
+        </label>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {area(
             'asesmen',
