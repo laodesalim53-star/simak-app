@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
+import { CP_DEFAULT, cariCpDefault } from '../lib/cpDefault'
 import {
   Save, Loader2, BookOpenText, Trash2, Pencil, ChevronDown, ChevronUp, Printer, X,
 } from 'lucide-react'
@@ -105,6 +106,17 @@ export default function Silabus() {
       sumber_belajar: item.sumber_belajar || '',
     })
     window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  // Isi CP & TP otomatis dari draf per fase. force=false: hanya jika kedua kolom masih kosong.
+  function isiOtomatis(mapel, force = false) {
+    const isi = cariCpDefault(mapel, kelasTerpilih?.nama_kelas)
+    if (!isi) return false
+    setForm((f) => {
+      if (!force && (f.capaian_pembelajaran.trim() || f.tujuan_pembelajaran.trim())) return f
+      return { ...f, capaian_pembelajaran: isi.capaian, tujuan_pembelajaran: isi.tujuan }
+    })
+    return true
   }
 
   async function handleSimpan(e) {
@@ -231,10 +243,20 @@ export default function Silabus() {
                     className="input-field w-full"
                     type="text"
                     placeholder="mis. Matematika"
+                    list="daftar-mapel"
                     value={form.mata_pelajaran}
-                    onChange={(e) => setForm({ ...form, mata_pelajaran: e.target.value })}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setForm({ ...form, mata_pelajaran: v })
+                      if (!editId) isiOtomatis(v)
+                    }}
                     required
                   />
+                  <datalist id="daftar-mapel">
+                    {Object.keys(CP_DEFAULT).map((m) => (
+                      <option key={m} value={m} />
+                    ))}
+                  </datalist>
                 </div>
                 <div>
                   <label className="label-field">Semester</label>
@@ -260,7 +282,20 @@ export default function Silabus() {
                   />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="label-field">Capaian Pembelajaran (opsional)</label>
+                  <div className="flex items-center justify-between">
+                    <label className="label-field">Capaian Pembelajaran (opsional)</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isiOtomatis(form.mata_pelajaran, true)) {
+                          alert('Draf otomatis tidak tersedia. Pilih mata pelajaran dari daftar dan pastikan nama kelas memuat angka 1-6 atau I-VI.')
+                        }
+                      }}
+                      className="text-xs font-medium text-brass-600 hover:underline"
+                    >
+                      Isi CP &amp; Tujuan otomatis
+                    </button>
+                  </div>
                   <textarea
                     className="input-field w-full"
                     rows={3}
