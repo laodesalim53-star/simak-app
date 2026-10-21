@@ -10,7 +10,7 @@ import { buildRppDocxFile } from '../lib/generateRppDocx'
 import { siapkanDariSilabus } from '../lib/dariSilabus'
 import ArsipRppTab from '../components/rpp/ArsipRppTab'
 import ModulAjarTab from '../components/rpp/ModulAjarTab'
-import { buatRppDocxFile } from '../lib/buatRppDocxFile'
+import SusunRppTab from '../components/rpp/SusunRppTab'
 
 const STATUS_STYLE = {
   menunggu: 'bg-brass-400/15 text-brass-600',
