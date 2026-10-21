@@ -1,15 +1,21 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
 import { CP_DEFAULT, cariCpDefault } from '../lib/cpDefault'
 import PilihanCepat from '../components/PilihanCepat'
 import SilabusCetak from '../components/SilabusCetak'
+import SilabusOtomatis from '../components/SilabusOtomatis'
+import SilabusSalin from '../components/SilabusSalin'
 import { ALOKASI_WAKTU, PENILAIAN, SUMBER_BELAJAR, cariMateriDefault } from '../lib/pilihanSilabus'
 import {
-  Save, Loader2, BookOpenText, Trash2, Pencil, ChevronDown, ChevronUp, Printer, X,
+  Save, Loader2, BookOpenText, Trash2, Pencil, ChevronDown, ChevronUp, Printer, X, NotebookPen,
 } from 'lucide-react'
+
+// Tab di halaman /rpp tempat RPP dibuat. Sesuaikan: daftar | upload | arsip | modul
+const TAB_RPP = 'upload'
 
 const SEMESTER_OPTIONS = ['Ganjil', 'Genap']
 
@@ -33,6 +39,7 @@ const FORM_KOSONG = {
 
 export default function Silabus() {
   const { profil, isAdmin } = useAuth()
+  const navigate = useNavigate()
 
   const [kelasList, setKelasList] = useState([])
   const [loadingKelas, setLoadingKelas] = useState(true)
@@ -122,6 +129,26 @@ export default function Silabus() {
       return { ...f, capaian_pembelajaran: isi.capaian, tujuan_pembelajaran: isi.tujuan }
     })
     return true
+  }
+
+  // Buka halaman RPP dengan data silabus terbawa lewat router state.
+  function buatRpp(item) {
+    navigate(`/rpp?tab=${TAB_RPP}`, {
+      state: {
+        dariSilabus: {
+          silabus_id: item.id,
+          kelas_id: item.kelas_id,
+          nama_kelas: kelasTerpilih?.nama_kelas || '',
+          mata_pelajaran: item.mata_pelajaran,
+          semester: item.semester,
+          tahun_ajaran: item.tahun_ajaran,
+          capaian_pembelajaran: item.capaian_pembelajaran || '',
+          tujuan_pembelajaran: item.tujuan_pembelajaran || '',
+          materi_pokok: item.materi_pokok || '',
+          alokasi_waktu: item.alokasi_waktu || '',
+        },
+      },
+    })
   }
 
   // Cetak di jendela terpisah supaya tidak terpengaruh aturan cetak Layout.
@@ -272,6 +299,9 @@ export default function Silabus() {
               <span className="text-sm font-medium text-ink-900">{kelasList[0].nama_kelas}</span>
             )}
           </div>
+
+          <SilabusOtomatis onSelesai={() => load(kelasTerpilih?.id)} />
+          <SilabusSalin kelas={kelasTerpilih} items={items} onSelesai={() => load(kelasTerpilih?.id)} />
 
           {/* Form */}
           {bolehKelola && (
@@ -484,6 +514,15 @@ export default function Silabus() {
                             </span>
                             {expanded ? <ChevronUp size={13} className="text-ink-700/40 print:hidden" /> : <ChevronDown size={13} className="text-ink-700/40 print:hidden" />}
                           </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => buatRpp(item)}
+                          className="shrink-0 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-brass-600 bg-brass-400/15 hover:bg-brass-400/25 print:hidden"
+                          title="Buat RPP dari silabus ini"
+                        >
+                          <NotebookPen size={14} /> Buat RPP
                         </button>
 
                         {bolehEditItem && (
