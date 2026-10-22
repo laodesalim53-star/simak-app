@@ -38,6 +38,7 @@ function urlLogo(path) {
   if (path.startsWith('http')) return path
   return supabase.storage.from(LOGO_BUCKET_SEKOLAH).getPublicUrl(path).data.publicUrl
 }
+
 const ROMAWI = { I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6 }
 
 // "4A" -> 4, "VI" -> 6, "Kelas IV B" -> 4
@@ -250,15 +251,8 @@ export default function PerangkatAjarTab({ jenis }) {
     }
     setBusy('')
   }
-     {jenis === 'atp' && (
-      <button type="button" onClick={ambilDariSilabus} disabled={busy !== ''} className={tombol}>
-      {busy === 'silabus' ? <Loader2 size={14} className="animate-spin" /> : <BookOpenText size={14} />}
-      Ambil dari Silabus
-      </button>
-      'Klik "Ambil dari Silabus", "Buat dengan AI", atau tambah baris manual.'}
-      )}
-  
-    // ---- Ambil dari Silabus (khusus ATP) ----
+
+  // ---- Ambil dari Silabus (khusus ATP) ----
   async function ambilDariSilabus() {
     if (!butuhIdentitas()) return
     if (rows.length > 0 && !window.confirm('Isi tabel saat ini akan diganti data dari Silabus. Lanjutkan?')) return
@@ -583,6 +577,12 @@ export default function PerangkatAjarTab({ jenis }) {
               Buat dengan AI
             </button>
           )}
+          {jenis === 'atp' && (
+            <button type="button" onClick={ambilDariSilabus} disabled={busy !== ''} className={tombol}>
+              {busy === 'silabus' ? <Loader2 size={14} className="animate-spin" /> : <BookOpenText size={14} />}
+              Ambil dari Silabus
+            </button>
+          )}
           {jenis !== 'atp' && (
             <button type="button" onClick={ambilDariSumber} disabled={busy !== ''} className={tombol}>
               {busy === 'ambil' ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />}
@@ -643,7 +643,9 @@ export default function PerangkatAjarTab({ jenis }) {
             Belum ada isi.{' '}
             {jenis === 'promes'
               ? 'Klik "Ambil dari Prota" atau tambah baris manual.'
-              : 'Klik "Buat dengan AI", ambil dari dokumen sebelumnya, atau tambah baris manual.'}
+              : jenis === 'prota'
+                ? 'Klik "Ambil dari ATP", "Buat dengan AI", atau tambah baris manual.'
+                : 'Klik "Ambil dari Silabus", "Buat dengan AI", atau tambah baris manual.'}
           </p>
         ) : jenis === 'promes' ? (
           <TabelPromes
