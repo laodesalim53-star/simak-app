@@ -238,7 +238,7 @@ export default function RoutesSekolah() {
 
       {/* 4. Akademik */}
       <Route path="/jadwal" element={<ProtectedRoute><Jadwal /></ProtectedRoute>} />
-      const JurnalMengajar = lazy(() => import('../pages/JurnalMengajar'))
+      <Route path="/jurnal-mengajar" element={<JurnalMengajar />} />
       <Route path="/presensi" element={<ProtectedRoute><Presensi /></ProtectedRoute>} />
       <Route path="/nilai" element={<ProtectedRoute><Nilai /></ProtectedRoute>} />
       <Route path="/nilai-asesmen" element={<ProtectedRoute><NilaiAsesmen /></ProtectedRoute>} />
