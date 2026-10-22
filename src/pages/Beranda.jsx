@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowRight, LogIn, Video, Download, Monitor, Apple, Smartphone, Share, SquarePlus, X, BookOpen, IdCard, Wallet, MessageCircle, Settings, Users, ShoppingBag, Phone, Send, Fish, Shell, Shirt, Pencil, Building2, Landmark, ClipboardList, UploadCloud } from 'lucide-react'
+import { ArrowRight, LogIn, Video, Download, Monitor, Apple, Smartphone, Share, SquarePlus, X, BookOpen, IdCard, Wallet, MessageCircle, Settings, Users, ShoppingBag, Mail, Send, Fish, Shell, Shirt, Pencil, Building2, Landmark, ClipboardList, UploadCloud } from 'lucide-react'
 // PENTING: sesuaikan path import ini dengan lokasi client Supabase Anda
 // yang sudah ada di project (biasanya di src/lib/ atau src/services/).
 import { supabase } from '../lib/supabaseClient'
@@ -11,7 +11,7 @@ import { LOGO_DINAS_PENDIDIKAN } from '../assets/logoMitra'
 
 // Widget "Tanya AI" — dimuat malas (lazy) supaya tidak memperberat
 // pemuatan awal beranda, terutama di sinyal lambat. Ditempatkan di pojok
-// KIRI bawah supaya tidak bertabrakan dengan tombol WhatsApp/Live Chat di
+// KIRI bawah supaya tidak bertabrakan dengan tombol Email/Live Chat di
 // kanan bawah. Sesuaikan path import ini dengan lokasi file TanyaAI.jsx.
 const TanyaAI = lazy(() => import('../components/TanyaAI'))
 
@@ -37,7 +37,8 @@ const TanyaAI = lazy(() => import('../components/TanyaAI'))
 // akun? Masuk, Lihat Toko Sekolah, Coba Demo) -> pemilih jenjang
 // (Semua / SD / SMP) -> baris "Instal aplikasi".
 
-const NOMOR_WA_ADMIN = '6282197574897'
+// Alamat email admin untuk form kontak (pengganti nomor WhatsApp).
+const EMAIL_ADMIN = 'laodesalim53@gmail.com'
 
 // Alamat situs yang ditampilkan di panduan instal iPhone/iPad. Dipisah jadi
 // konstanta supaya kalau domain berubah cukup diganti di satu tempat.
@@ -519,9 +520,26 @@ export default function Beranda() {
     return () => window.removeEventListener('keydown', saatTombol)
   }, [panduanMulaiTerbuka])
 
-  // Menu pilihan kontak (WhatsApp / Live Chat) dari tombol mengambang.
+  // Menu pilihan kontak (Email / Live Chat) dari tombol mengambang.
   const [showFabMenu, setShowFabMenu] = useState(false)
   const [showLiveChat, setShowLiveChat] = useState(false)
+
+  // Form kontak email: membuka aplikasi email pengunjung dengan pesan yang
+  // sudah terisi, ditujukan ke EMAIL_ADMIN.
+  const [showEmailForm, setShowEmailForm] = useState(false)
+  const [formEmail, setFormEmail] = useState({ nama: '', email: '', pesan: '' })
+  function ubahFormEmail(e) {
+    setFormEmail((f) => ({ ...f, [e.target.name]: e.target.value }))
+  }
+  function kirimEmail(e) {
+    e.preventDefault()
+    const nama = formEmail.nama.trim()
+    const pesan = formEmail.pesan.trim()
+    if (!nama || !pesan) return
+    const isi = `Nama: ${nama}\nEmail: ${formEmail.email.trim()}\n\n${pesan}`
+    window.location.href =
+      `mailto:${EMAIL_ADMIN}?subject=${encodeURIComponent('Pertanyaan tentang SIMAK')}&body=${encodeURIComponent(isi)}`
+  }
 
   // Live chat — pesan pengunjung disimpan ke tabel Supabase
   // "live_chat_pesan" sehingga langsung muncul di aplikasi/dashboard admin.
@@ -1149,29 +1167,32 @@ export default function Beranda() {
         </div>
       )}
 
-      {/* Tombol kontak mengambang — tap untuk memilih WhatsApp atau
-          Live Chat. Nomor WA memakai konstanta NOMOR_WA_ADMIN di atas.
+      {/* Tombol kontak mengambang — tap untuk memilih Email atau
+          Live Chat. Alamat email memakai konstanta EMAIL_ADMIN di atas.
           Ring di sekeliling tombol adalah satu-satunya animasi berulang
           yang dipertahankan di halaman ini — dipakai khusus untuk menarik
           perhatian ke titik kontak, bukan disebar ke banyak elemen. */}
       <div className="contact-fab-wrap">
         {showFabMenu && (
           <div className="fab-menu">
-            <a
-              href={`https://wa.me/${NOMOR_WA_ADMIN}?text=Halo%20SIMAK%2C%20saya%20ingin%20bertanya`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="fab-menu-item"
-              onClick={() => setShowFabMenu(false)}
-            >
-              <span className="fab-menu-icon fab-menu-icon-wa"><Phone size={17} strokeWidth={2.4} fill="currentColor" /></span>
-              WhatsApp
-            </a>
             <button
               type="button"
               className="fab-menu-item"
               onClick={() => {
                 setShowFabMenu(false)
+                setShowLiveChat(false)
+                setShowEmailForm(true)
+              }}
+            >
+              <span className="fab-menu-icon fab-menu-icon-email"><Mail size={17} strokeWidth={2.4} /></span>
+              Kirim Email
+            </button>
+            <button
+              type="button"
+              className="fab-menu-item"
+              onClick={() => {
+                setShowFabMenu(false)
+                setShowEmailForm(false)
                 setShowLiveChat(true)
               }}
             >
@@ -1280,8 +1301,72 @@ export default function Beranda() {
         </div>
       )}
 
+      {/* Panel form kontak email — pengganti WhatsApp. Memakai gaya
+          panel live chat; tombol Kirim membuka aplikasi email pengunjung. */}
+      {showEmailForm && (
+        <div className="chat-panel" role="dialog" aria-label="Kirim email ke admin SIMAK">
+          <div className="chat-panel-header">
+            <div className="chat-panel-title">
+              <Mail size={18} strokeWidth={2.4} />
+              Kirim Email
+            </div>
+            <button
+              type="button"
+              className="chat-panel-close"
+              onClick={() => setShowEmailForm(false)}
+              aria-label="Tutup form email"
+            >
+              <X size={16} />
+            </button>
+          </div>
+          <form className="chat-nama-form email-form" onSubmit={kirimEmail}>
+            <p className="chat-nama-label">
+              Tulis pertanyaan Anda. Pesan akan dibuka di aplikasi email Anda untuk dikirim ke admin.
+            </p>
+            <input
+              type="text"
+              name="nama"
+              value={formEmail.nama}
+              onChange={ubahFormEmail}
+              placeholder="Nama Anda"
+              aria-label="Nama Anda"
+              className="chat-nama-input"
+              required
+              autoFocus
+            />
+            <input
+              type="email"
+              name="email"
+              value={formEmail.email}
+              onChange={ubahFormEmail}
+              placeholder="Email Anda"
+              aria-label="Email Anda"
+              className="chat-nama-input"
+              required
+            />
+            <textarea
+              name="pesan"
+              value={formEmail.pesan}
+              onChange={ubahFormEmail}
+              placeholder="Tulis pesan..."
+              aria-label="Pesan"
+              rows={4}
+              className="chat-nama-input email-textarea"
+              required
+            />
+            <button
+              type="submit"
+              className="chat-nama-btn"
+              disabled={!formEmail.nama.trim() || !formEmail.pesan.trim()}
+            >
+              Kirim Email
+            </button>
+          </form>
+        </div>
+      )}
+
       {/* Widget Tanya AI — ditempatkan terpisah di pojok KIRI bawah agar
-          tidak bertumpuk dengan tombol WhatsApp/Live Chat di kanan bawah.
+          tidak bertumpuk dengan tombol Email/Live Chat di kanan bawah.
           Komponen ini sudah mengatur floating button + panel chat-nya
           sendiri (lihat TanyaAI.jsx). Dimuat malas lewat Suspense. */}
       <Suspense fallback={null}>
@@ -1571,7 +1656,7 @@ export default function Beranda() {
           flex-shrink: 0;
           overflow: hidden;
         }
-        .fab-menu-icon-wa { background: #25D366; }
+        .fab-menu-icon-email { background: #F2762B; }
         .fab-menu-icon-chat { background: #4E5FE0; }
         .fab-menu-icon-img {
           width: 100%;
@@ -1698,6 +1783,7 @@ export default function Beranda() {
           cursor: pointer;
         }
         .chat-nama-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .email-textarea { font-family: inherit; resize: vertical; min-height: 90px; }
         .chat-panel-body {
           flex: 1;
           overflow-y: auto;
