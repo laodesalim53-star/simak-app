@@ -166,6 +166,7 @@ function getGroupsAdmin(
         // (menu di atas), jadi baris ini dulu bikin dobel untuk admin.
         { to: '/portofolio-siswa', label: 'Portofolio Siswa', icon: FolderHeart },
         { to: '/catatan-siswa', label: 'Catatan Siswa', icon: NotebookPen },
+        { to: '/jurnal-mengajar', label: 'Jurnal Mengajar', icon: BookOpen },
         { to: '/sertifikat', label: 'Sertifikat & Penghargaan', icon: Award },
         { to: '/buat-ujian', label: 'Buat Ujian', icon: FilePlus },
         { to: '/bank-soal', label: 'Bank Soal', icon: Database },
@@ -515,6 +516,7 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   { to: '/buat-kuis-seru', label: 'Kuis Seru (Kls 1-3)', icon: Gamepad2 },
   { to: '/rapor-kumer', label: 'Raport Kumer', icon: FileBadge },
   { to: '/catatan-siswa', label: 'Catatan Siswa', icon: NotebookPen },
+  { to: '/jurnal-mengajar', label: 'Jurnal Mengajar', icon: BookOpen },
   { to: '/perpustakaan', label: 'Perpustakaan', icon: Library },
   { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
   // BARU: Daftar Hadir Guru & Tendik (guru hanya bisa melihat & mencetak)
