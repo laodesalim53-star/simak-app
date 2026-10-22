@@ -46,14 +46,9 @@ const PRINT_CSS = `
 }
 `
 
-// Peran yang boleh melihat & mengelola SEMUA jadwal.
-// Sesuaikan dengan nilai role di AuthContext-mu kalau berbeda.
-const ROLE_ADMIN = ['admin', 'superadmin', 'owner', 'operator']
-
 export default function Jadwal() {
-  const auth = useAuth()
-  const user = auth.user
-  const isAdmin = auth.isAdmin ?? ROLE_ADMIN.includes(auth.role)
+  const { profil, isAdmin, loading: authLoading } = useAuth()
+  const guruIdSaya = profil?.guru_id || null
 
   const [data, setData] = useState([])
   const [kelasList, setKelasList] = useState([])
@@ -96,12 +91,19 @@ export default function Jadwal() {
     }
 
     // ===== Guru: hanya jadwal yang diampu sendiri =====
-    if (!user?.id) { setLoading(false); return }
+    if (!guruIdSaya) {
+      setGuruSaya(null)
+      setData([])
+      setKelasList([])
+      setGuruList([])
+      setLoading(false)
+      return
+    }
 
     const { data: saya } = await supabase
       .from('guru')
       .select('id, nama_lengkap')
-      .eq('user_id', user.id)
+      .eq('id', guruIdSaya)
       .maybeSingle()
 
     setGuruSaya(saya || null)
@@ -135,7 +137,10 @@ export default function Jadwal() {
     setLoading(false)
   }
 
-  useEffect(() => { loadData() }, [isAdmin, user?.id])
+  useEffect(() => {
+    if (authLoading) return // tunggu profil selesai dimuat
+    loadData()
+  }, [authLoading, isAdmin, guruIdSaya])
 
   async function handleSubmit(e) {
     e.preventDefault()
