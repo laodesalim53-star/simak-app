@@ -16,8 +16,6 @@ import {
   FileCheck2,
   FileSignature,
   ScrollText,
-  FileBarChart,
-  FileStack,
 } from 'lucide-react'
 import Layout from '../components/Layout'
 
@@ -251,30 +249,7 @@ const daftarLaporan = [
     warna: 'violet',
     siap: true,
   },
-  // Laporan Bulanan — rekap presensi siswa/guru, surat masuk-keluar, dan
-  // agenda kegiatan per bulan. Satu pintu, Sidebar tidak makin panjang.
-  {
-    id: 'laporan-bulanan',
-    judul: 'Laporan Bulanan',
-    deskripsi: 'Rekap bulanan: presensi siswa, presensi guru (termasuk format Daftar Hadir), surat masuk/keluar, dan agenda kegiatan.',
-    icon: FileBarChart,
-    path: '/laporan',
-    warna: 'fuchsia',
-    siap: true,
-  },
-  // Cetak Sampul Laporan — satu halaman dengan sidebar menu berisi semua
-  // jenis sampul (Bulanan, Semester, 8355, LPJ BOS, BKU, Inventaris, dst).
-  {
-    id: 'cetak-sampul',
-    judul: 'Cetak Sampul Laporan',
-    deskripsi: 'Cetak halaman sampul untuk berbagai jenis laporan sekolah — kop otomatis dari Profil Sekolah, tinggal pilih jenisnya.',
-    icon: FileStack,
-    path: '/cetak-sampul',
-    warna: 'indigo',
-    siap: true,
-  },
 ]
-
 // Sama seperti BatikOverlay di Dashboard.jsx — dipakai di banner atas
 // supaya identitas visual (motif batik + gradasi biru tua) konsisten
 // di seluruh halaman.
