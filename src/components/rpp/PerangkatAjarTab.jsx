@@ -12,6 +12,7 @@ import {
   FolderOpen,
   Link2,
   CalendarRange,
+  BookOpenText,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 import { useAuth } from '../../lib/AuthContext'
@@ -36,6 +37,24 @@ function urlLogo(path) {
   if (!path) return null
   if (path.startsWith('http')) return path
   return supabase.storage.from(LOGO_BUCKET_SEKOLAH).getPublicUrl(path).data.publicUrl
+}
+const ROMAWI = { I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6 }
+
+// "4A" -> 4, "VI" -> 6, "Kelas IV B" -> 4
+function angkaKelas(teks) {
+  const s = String(teks || '').toUpperCase().replace(/KELAS/g, '').trim()
+  const m = s.match(/\d+/)
+  if (m) return Number(m[0])
+  const r = s.match(/^(VI|IV|V|III|II|I)/)
+  return r ? ROMAWI[r[1]] : null
+}
+
+// Pecah teks multi-baris silabus jadi daftar, buang penomoran/bullet di depan
+function pecahBaris(teks) {
+  return String(teks || '')
+    .split('\n')
+    .map((x) => x.replace(/^\s*(?:\d+[.)]|[-•*])\s*/, '').trim())
+    .filter(Boolean)
 }
 
 const FORM_AWAL = {
@@ -230,6 +249,77 @@ export default function PerangkatAjarTab({ jenis }) {
       tampil('err', err.message)
     }
     setBusy('')
+  }
+     {jenis === 'atp' && (
+      <button type="button" onClick={ambilDariSilabus} disabled={busy !== ''} className={tombol}>
+      {busy === 'silabus' ? <Loader2 size={14} className="animate-spin" /> : <BookOpenText size={14} />}
+      Ambil dari Silabus
+      </button>
+      'Klik "Ambil dari Silabus", "Buat dengan AI", atau tambah baris manual.'}
+      )}
+  
+    // ---- Ambil dari Silabus (khusus ATP) ----
+  async function ambilDariSilabus() {
+    if (!butuhIdentitas()) return
+    if (rows.length > 0 && !window.confirm('Isi tabel saat ini akan diganti data dari Silabus. Lanjutkan?')) return
+    setBusy('silabus')
+    setPesan(null)
+
+    const { data, error } = await supabase
+      .from('silabus')
+      .select('*, kelas(nama_kelas)')
+      .eq('tahun_ajaran', form.tahun_ajaran.trim())
+      .ilike('mata_pelajaran', form.mata_pelajaran.trim())
+    setBusy('')
+
+    if (error) return tampil('err', 'Gagal mengambil Silabus: ' + error.message)
+
+    const target = angkaKelas(form.kelas)
+    const cocok = (data || []).filter((s) => angkaKelas(s.kelas?.nama_kelas) === target)
+    if (cocok.length === 0) {
+      return tampil(
+        'err',
+        'Silabus tidak ditemukan. Pastikan Mata Pelajaran dan Tahun Ajaran sama persis dengan di halaman Silabus, dan nama kelas silabus memuat angka kelas yang sama.'
+      )
+    }
+
+    const hasil = []
+    for (const sem of ['Ganjil', 'Genap']) {
+      const dok = cocok.filter((s) => s.semester === sem)
+      if (dok.length === 0) continue
+
+      const tujuan = dok.flatMap((d) => pecahBaris(d.tujuan_pembelajaran))
+      const materi = dok.flatMap((d) => pecahBaris(d.materi_pokok))
+      const n = Math.max(tujuan.length, materi.length)
+      if (n === 0) continue
+
+      // Bagi JP semester secara merata (pakai ±90% kapasitas kalender)
+      const total = Math.floor(kapasitas[sem] * 0.9)
+      const dasar = Math.max(1, Math.floor(total / n))
+      let sisa = Math.max(0, total - dasar * n)
+
+      for (let i = 0; i < n; i++) {
+        const tambahan = sisa > 0 ? 1 : 0
+        sisa -= tambahan
+        hasil.push({
+          elemen: '',
+          tujuan: tujuan[i] || '',
+          materi: materi[i] || '',
+          kktp: '',
+          jp: dasar + tambahan,
+          semester: sem,
+        })
+      }
+    }
+
+    if (hasil.length === 0) {
+      return tampil('err', 'Silabus ditemukan, tetapi Tujuan Pembelajaran dan Materi Pokok-nya masih kosong.')
+    }
+
+    const cpGabung = [...new Set(cocok.map((s) => (s.capaian_pembelajaran || '').trim()).filter(Boolean))].join('\n\n')
+    if (cpGabung) setCp(cpGabung)
+    setRows(normalisasiBaris('atp', hasil))
+    tampil('ok', 'Data diambil dari Silabus. Lengkapi Elemen dan KKTP, lalu sesuaikan JP sebelum disimpan.')
   }
 
   // ---- Ambil dari dokumen sebelumnya (ATP -> Prota -> Promes) ----
