@@ -8,7 +8,6 @@ import {
   BookOpen,
   School,
   ClipboardList,
-  CalendarCheck,
   ClipboardEdit,
   Printer,
   Lock,
@@ -196,15 +195,6 @@ const daftarLaporan = [
     icon: ClipboardList,
     path: '/laporan-semester',
     warna: 'indigo',
-    siap: true,
-  },
-  {
-    id: 'daftar-hadir-guru',
-    judul: 'Daftar Hadir Guru/Pegawai',
-    deskripsi: 'Format kertas absensi bulanan (grid tanggal 1–31) lengkap dengan rekap Sakit/Izin/Tanpa Keterangan dan tanda tangan kepala sekolah.',
-    icon: CalendarCheck,
-    path: '/laporan-daftar-hadir-guru',
-    warna: 'teal',
     siap: true,
   },
   // Formulir 8355 (Daftar Calon Peserta Ujian, Kelas 6) — dipindahkan ke sini
