@@ -79,6 +79,7 @@ const DataUjian8355 = lazy(() => import('../pages/DataUjian8355'))
 const Cetak8355 = lazy(() => import('../pages/Cetak8355'))
 
 const Jadwal = lazy(() => import('../pages/Jadwal'))
+const JurnalMengajar = lazy(() => import('../pages/JurnalMengajar'))
 const Presensi = lazy(() => import('../pages/Presensi'))
 const Nilai = lazy(() => import('../pages/Nilai'))
 const NilaiAsesmen = lazy(() => import('../pages/NilaiAsesmen'))
@@ -237,6 +238,7 @@ export default function RoutesSekolah() {
 
       {/* 4. Akademik */}
       <Route path="/jadwal" element={<ProtectedRoute><Jadwal /></ProtectedRoute>} />
+      const JurnalMengajar = lazy(() => import('../pages/JurnalMengajar'))
       <Route path="/presensi" element={<ProtectedRoute><Presensi /></ProtectedRoute>} />
       <Route path="/nilai" element={<ProtectedRoute><Nilai /></ProtectedRoute>} />
       <Route path="/nilai-asesmen" element={<ProtectedRoute><NilaiAsesmen /></ProtectedRoute>} />
