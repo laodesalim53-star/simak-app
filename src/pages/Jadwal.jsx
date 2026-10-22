@@ -28,12 +28,29 @@ const PRINT_CSS = `
   #area-cetak { position: absolute; left: 0; top: 0; width: 100%; background: #fff !important; color: #000 !important; }
   #area-cetak .no-print { display: none !important; }
   #area-cetak .print-only { display: block !important; }
+
+  /* --- Kop surat: wadah sendiri agar tinggi kop selalu terhitung --- */
+  #area-cetak .print-kop {
+    position: relative;
+    display: flow-root;          /* wadah menghitung tinggi isinya */
+    min-height: 32mm;            /* cadangan jika isi KopSurat memakai absolute */
+    margin-bottom: 8mm;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  /* elemen fixed di dalam kop dijadikan absolute agar tetap di dalam wadah kop */
+  #area-cetak .print-kop .fixed,
+  #area-cetak .print-kop [style*="position: fixed"],
+  #area-cetak .print-kop [style*="position:fixed"] { position: absolute !important; }
   #area-cetak .kop-surat-resmi { margin-bottom: 10px !important; }
   #area-cetak .kop-surat-resmi, #area-cetak .kop-surat-resmi * { color: #000 !important; }
-  #area-cetak .judul-cetak { text-align: center; margin: 8px 0 14px; }
+
+  /* --- Judul: selalu di bawah kop --- */
+  #area-cetak .judul-cetak { position: relative; clear: both; text-align: center; margin: 0 0 14px; padding-top: 4mm; }
   #area-cetak .judul-cetak h1 { font-size: 14pt; font-weight: 700; text-transform: uppercase; text-decoration: underline; margin: 0; }
   #area-cetak .judul-cetak p { font-size: 10pt; margin: 3px 0 0; }
-  #area-cetak .kartu-jadwal { box-shadow: none !important; border: none !important; padding: 0 !important; margin-bottom: 18px; break-inside: avoid; page-break-inside: avoid; }
+
+  #area-cetak .kartu-jadwal { position: relative; clear: both; box-shadow: none !important; border: none !important; padding: 0 !important; margin-bottom: 18px; break-inside: avoid; page-break-inside: avoid; }
   #area-cetak .kartu-jadwal h3 { font-size: 12pt; margin-bottom: 6px !important; }
   #area-cetak table { width: 100%; border-collapse: collapse; font-size: 11pt; }
   #area-cetak thead { display: table-header-group; }
@@ -42,7 +59,7 @@ const PRINT_CSS = `
   #area-cetak th { font-weight: 700; background: #e5e5e5 !important; }
   #area-cetak tr.baris-hari td { background: #f0f0f0 !important; font-weight: 700; }
   #area-cetak h1, #area-cetak h2, #area-cetak h3 { color: #000 !important; }
-  #area-cetak .footer-cetak { margin-top: 16px; font-size: 9pt; text-align: right; }
+  #area-cetak .footer-cetak { position: relative; clear: both; margin-top: 16px; font-size: 9pt; text-align: right; }
 }
 `
 
@@ -463,7 +480,9 @@ export default function Jadwal() {
         <div id="area-cetak">
           {/* Kop surat + judul: hanya muncul saat dicetak */}
           <div className="print-only">
-            <KopSurat />
+            <div className="print-kop">
+              <KopSurat />
+            </div>
             <div className="judul-cetak">
               <h1>{judulCetak}</h1>
               {subJudulCetak && <p>{subJudulCetak}</p>}
