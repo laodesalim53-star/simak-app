@@ -21,6 +21,9 @@ import {
   ClipboardList,
   ListChecks,
   ClipboardCheck,
+  Target,
+  CalendarDays,
+  CalendarRange,
 } from 'lucide-react'
 import { findRppTemplate } from '../data/rppTemplates'
 import { buildRppDocxFile } from '../lib/generateRppDocx'
@@ -31,6 +34,7 @@ import SusunRppTab from '../components/rpp/SusunRppTab'
 import LkpdTab from '../components/rpp/LkpdTab'
 import KisiTab from '../components/rpp/KisiTab'
 import EvaluasiTab from '../components/rpp/EvaluasiTab'
+import PerangkatAjarTab from '../components/rpp/PerangkatAjarTab'
 
 const STATUS_STYLE = {
   menunggu: 'bg-brass-400/15 text-brass-600',
@@ -46,7 +50,7 @@ const STATUS_LABEL = {
 
 const NEW_VALUE = '__baru__'
 
-const TAB_VALID = ['daftar', 'upload', 'arsip', 'modul', 'susun', 'lkpd', 'kisi', 'evaluasi']
+const TAB_VALID = ['daftar', 'upload', 'arsip', 'modul', 'susun', 'lkpd', 'kisi', 'evaluasi', 'atp', 'prota', 'promes']
 
 export default function RPP() {
   const { profil, isAdmin, session } = useAuth()
@@ -55,8 +59,8 @@ export default function RPP() {
   const [uploading, setUploading] = useState(false)
   const [processingId, setProcessingId] = useState(null)
 
-  // Tab aktif: 'daftar' | 'susun' | 'lkpd' | 'kisi' | 'evaluasi' | 'upload' | 'arsip' | 'modul'
-  // Bisa dibuka langsung ke tab tertentu: /rpp?tab=susun | lkpd | kisi | evaluasi | arsip | modul | upload | daftar
+  // Tab aktif: 'daftar' | 'susun' | 'lkpd' | 'kisi' | 'evaluasi' | 'upload' | 'arsip' | 'modul' | 'atp' | 'prota' | 'promes'
+  // Bisa dibuka langsung ke tab tertentu: /rpp?tab=susun | lkpd | kisi | evaluasi | arsip | modul | upload | daftar | atp | prota | promes
   const [searchParams] = useSearchParams()
   const initialTab = TAB_VALID.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'daftar'
   const [tab, setTab] = useState(initialTab)
@@ -476,6 +480,9 @@ export default function RPP() {
     { key: 'upload', label: isAdmin ? 'Upload Massal' : 'Upload RPP', icon: Upload },
     { key: 'arsip', label: 'Arsip RPP', icon: Archive },
     { key: 'modul', label: 'Modul Ajar', icon: BookOpen },
+    { key: 'atp', label: 'ATP/KKTP', icon: Target },
+    { key: 'prota', label: 'Prota', icon: CalendarDays },
+    { key: 'promes', label: 'Promes', icon: CalendarRange },
   ]
 
   return (
@@ -1051,6 +1058,11 @@ export default function RPP() {
 
       {/* =================== TAB: MODUL AJAR =================== */}
       {tab === 'modul' && <ModulAjarTab />}
+
+      {/* =================== TAB: PERANGKAT AJAR (ATP/KKTP, PROTA, PROMES) =================== */}
+      {tab === 'atp' && <PerangkatAjarTab jenis="atp" />}
+      {tab === 'prota' && <PerangkatAjarTab jenis="prota" />}
+      {tab === 'promes' && <PerangkatAjarTab jenis="promes" />}
     </Layout>
   )
 }
