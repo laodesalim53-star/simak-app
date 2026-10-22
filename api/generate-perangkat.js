@@ -7,7 +7,7 @@
 //   SUPABASE_URL / SUPABASE_ANON_KEY  (alternatif: VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)
 //                    dipakai untuk memastikan pemanggil sudah login.
 
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
+const MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash'
 
 const potong = (v, n) => String(v ?? '').slice(0, n)
 const angka = (v, min, max, def) => {
