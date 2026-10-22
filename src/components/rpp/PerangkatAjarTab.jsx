@@ -30,6 +30,14 @@ import {
 } from '../../lib/perangkatAjar'
 import { panggilAiPerangkat } from '../../lib/aiPerangkat'
 
+// Sama dengan KopSurat.jsx: path di database diubah jadi URL publik, path berawalan http dipakai apa adanya.
+const LOGO_BUCKET_SEKOLAH = 'profil-sekolah'
+function urlLogo(path) {
+  if (!path) return null
+  if (path.startsWith('http')) return path
+  return supabase.storage.from(LOGO_BUCKET_SEKOLAH).getPublicUrl(path).data.publicUrl
+}
+
 const FORM_AWAL = {
   mata_pelajaran: '',
   kelas: '',
@@ -42,7 +50,8 @@ const FORM_AWAL = {
 
 // Satu komponen untuk tiga tab: <PerangkatAjarTab jenis="atp" | "prota" | "promes" />
 export default function PerangkatAjarTab({ jenis }) {
-  const { profil } = useAuth()
+  const { profil, sekolahId: sekolahIdAuth } = useAuth()
+  const idSekolah = sekolahIdAuth ?? profil?.sekolah_id ?? null
   const info = JENIS[jenis]
 
   const [form, setForm] = useState(FORM_AWAL)
@@ -82,16 +91,30 @@ export default function PerangkatAjarTab({ jenis }) {
         })
         setOverrides(map)
       })
-    supabase
-      .from('profil_sekolah')
-      .select('nama_sekolah, alamat, kabupaten, kepala_sekolah, tempat_ttd')
-      .limit(1)
-      .single()
-      .then(({ data, error }) => {
-        if (!error) setProfilSekolah(data)
-      })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Data kop (kolom yang sama dengan KopSurat.jsx) + penandatangan, per sekolah.
+  useEffect(() => {
+    let q = supabase
+      .from('profil_sekolah')
+      .select(
+        'dinas_pendidikan, nama_sekolah, alamat, kabupaten, kecamatan, telepon, email, logo_path, logo_kabupaten_path, kepala_sekolah, tempat_ttd'
+      )
+    q = idSekolah ? q.eq('sekolah_id', idSekolah) : q.limit(1)
+    q.maybeSingle().then(({ data, error }) => {
+      if (error) {
+        console.error('PerangkatAjarTab: gagal memuat profil_sekolah:', error)
+        return
+      }
+      if (!data) return
+      setProfilSekolah({
+        ...data,
+        logoUrl: urlLogo(data.logo_path),
+        logoKabupatenUrl: urlLogo(data.logo_kabupaten_path),
+      })
+    })
+  }, [idSekolah])
 
   useEffect(() => {
     if (!profil?.guru_id) return
@@ -263,7 +286,7 @@ export default function PerangkatAjarTab({ jenis }) {
     const payload = {
       jenis,
       guru_id: profil?.guru_id != null ? String(profil.guru_id) : null,
-      sekolah_id: profil?.sekolah_id != null ? String(profil.sekolah_id) : null,
+      sekolah_id: idSekolah != null ? String(idSekolah) : null,
       mata_pelajaran: form.mata_pelajaran.trim(),
       kelas: form.kelas.trim(),
       fase: form.fase || null,
