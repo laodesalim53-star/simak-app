@@ -1,8 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
-import { Loader2, Save, BookOpen, Trash2, Printer, Pencil, X } from 'lucide-react'
+import PilihanCepat from '../components/PilihanCepat'
+import { CP_DEFAULT } from '../lib/cpDefault'
+import { cariMateriDefault } from '../lib/pilihanSilabus'
+import { JAM_KE, KEGIATAN, HAMBATAN, TINDAK_LANJUT } from '../lib/pilihanJurnal'
+import { Loader2, Save, BookOpen, Trash2, Printer, Pencil, X, RefreshCw } from 'lucide-react'
 
 const hariIni = () => new Date().toISOString().slice(0, 10)
 
@@ -21,6 +25,8 @@ const KOSONG = () => ({
   alpa: 0,
 })
 
+const NOL = { hadir: 0, izin: 0, sakit: 0, alpa: 0 }
+
 function tglLabel(iso) {
   return new Date(iso).toLocaleDateString('id-ID', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
@@ -32,6 +38,20 @@ function bulanLabel(ym) {
   return new Date(y, m - 1, 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
 }
 
+// Hitung kehadiran dari presensi siswa pada kelas & tanggal tertentu.
+// Mengembalikan null kalau presensi hari itu belum diisi.
+async function ambilKehadiran(kelasId, tanggal) {
+  const { data: siswa } = await supabase
+    .from('siswa').select('id').eq('kelas_id', kelasId).eq('status', 'aktif')
+  const ids = (siswa || []).map((s) => s.id)
+  if (ids.length === 0) return null
+  const { data: pr } = await supabase
+    .from('presensi_siswa').select('status').eq('tanggal', tanggal).in('siswa_id', ids)
+  if (!pr || pr.length === 0) return null
+  const n = (s) => pr.filter((p) => p.status === s).length
+  return { hadir: n('hadir'), izin: n('izin'), sakit: n('sakit'), alpa: n('alpa') }
+}
+
 const LABEL = 'block text-xs font-semibold text-ink-700/60 mb-1'
 
 export default function JurnalMengajar() {
@@ -40,25 +60,64 @@ export default function JurnalMengajar() {
 
   const [bulan, setBulan] = useState(() => hariIni().slice(0, 7))
   const [filterGuru, setFilterGuru] = useState('')
-  const [kelasList, setKelasList] = useState([])
+  const [kelasSaya, setKelasSaya] = useState([])
+  const [loadingKelas, setLoadingKelas] = useState(true)
+  const [silabusKelas, setSilabusKelas] = useState([])
   const [guruList, setGuruList] = useState([])
   const [daftar, setDaftar] = useState([])
   const [form, setForm] = useState(KOSONG)
   const [editId, setEditId] = useState(null)
+  const [kehadiranKey, setKehadiranKey] = useState(0)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [pesan, setPesan] = useState('')
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
+  // Admin: daftar guru untuk filter riwayat
   useEffect(() => {
-    supabase.from('kelas').select('id, nama_kelas').order('nama_kelas')
-      .then(({ data }) => setKelasList(data || []))
-    if (isAdmin) {
-      supabase.from('guru').select('id, nama_lengkap').eq('status', 'aktif').order('nama_lengkap')
-        .then(({ data }) => setGuruList(data || []))
-    }
+    if (!isAdmin) return
+    supabase.from('guru').select('id, nama_lengkap').eq('status', 'aktif').order('nama_lengkap')
+      .then(({ data }) => setGuruList(data || []))
   }, [isAdmin])
+
+  // Kelas yang boleh diisi = kelas yang diampu guru ini (wali_kelas_id), sama seperti halaman Silabus
+  useEffect(() => {
+    if (!guruId) {
+      setKelasSaya([])
+      setLoadingKelas(false)
+      return
+    }
+    setLoadingKelas(true)
+    supabase.from('kelas').select('id, nama_kelas').eq('wali_kelas_id', guruId).order('nama_kelas')
+      .then(({ data }) => {
+        const list = data || []
+        setKelasSaya(list)
+        // Otomatis pilih kelas pertama kalau belum ada yang terpilih
+        setForm((f) => (f.kelas_id || list.length === 0 ? f : { ...f, kelas_id: list[0].id }))
+        setLoadingKelas(false)
+      })
+  }, [guruId])
+
+  // Silabus kelas terpilih: sumber saran mata pelajaran & materi
+  useEffect(() => {
+    if (!form.kelas_id) {
+      setSilabusKelas([])
+      return
+    }
+    supabase.from('silabus').select('mata_pelajaran, materi_pokok').eq('kelas_id', form.kelas_id)
+      .then(({ data }) => setSilabusKelas(data || []))
+  }, [form.kelas_id])
+
+  // Kehadiran terisi otomatis dari presensi siswa saat kelas / tanggal berubah
+  useEffect(() => {
+    if (!form.kelas_id || editId) return
+    let aktif = true
+    ambilKehadiran(form.kelas_id, form.tanggal).then((h) => {
+      if (aktif) setForm((f) => ({ ...f, ...(h || NOL) }))
+    })
+    return () => { aktif = false }
+  }, [form.kelas_id, form.tanggal, editId, kehadiranKey])
 
   useEffect(() => {
     muatJurnal()
@@ -87,33 +146,49 @@ export default function JurnalMengajar() {
     setLoading(false)
   }
 
-  // Hitung hadir/izin/sakit/alpa dari presensi siswa pada kelas & tanggal yang dipilih
-  async function isiDariPresensi() {
+  const namaKelasForm = kelasSaya.find((k) => k.id === form.kelas_id)?.nama_kelas
+
+  // Saran mata pelajaran: dari silabus kelas ini + daftar mapel bawaan
+  const mapelOpsi = useMemo(
+    () => [...new Set([...silabusKelas.map((s) => s.mata_pelajaran).filter(Boolean), ...Object.keys(CP_DEFAULT)])],
+    [silabusKelas]
+  )
+
+  // Saran materi: utamakan materi pokok dari silabus kelas & mapel yang dipilih,
+  // kalau belum ada pakai draf bawaan per kelas
+  const saranMateri = useMemo(() => {
+    const mapel = form.mata_pelajaran.trim().toLowerCase()
+    if (!mapel) return []
+    const dariSilabus = silabusKelas
+      .filter((s) => s.mata_pelajaran?.trim().toLowerCase() === mapel)
+      .flatMap((s) => (s.materi_pokok || '').split('\n'))
+      .map((t) => t.trim())
+      .filter(Boolean)
+    if (dariSilabus.length > 0) return [...new Set(dariSilabus)]
+    return cariMateriDefault(form.mata_pelajaran, namaKelasForm) || []
+  }, [silabusKelas, form.mata_pelajaran, namaKelasForm])
+
+  async function hitungUlangKehadiran() {
     if (!form.kelas_id) {
       setPesan('Pilih kelas dulu.')
       return
     }
-    setPesan('')
-    const { data: siswa } = await supabase
-      .from('siswa').select('id').eq('kelas_id', form.kelas_id).eq('status', 'aktif')
-    const ids = (siswa || []).map((s) => s.id)
-    if (ids.length === 0) {
-      setPesan('Belum ada siswa aktif di kelas ini.')
-      return
-    }
-    const { data: pr } = await supabase
-      .from('presensi_siswa').select('status').eq('tanggal', form.tanggal).in('siswa_id', ids)
-    if (!pr || pr.length === 0) {
+    const h = await ambilKehadiran(form.kelas_id, form.tanggal)
+    if (!h) {
       setPesan('Presensi siswa pada tanggal ini belum diisi.')
       return
     }
-    const hitung = (s) => pr.filter((p) => p.status === s).length
-    setForm((f) => ({ ...f, hadir: hitung('hadir'), izin: hitung('izin'), sakit: hitung('sakit'), alpa: hitung('alpa') }))
+    setPesan('')
+    setForm((f) => ({ ...f, ...h }))
   }
 
   async function simpan() {
-    if (!form.kelas_id || !form.materi.trim()) {
-      setPesan('Pilih kelas dan isi materi dulu.')
+    if (!kelasSaya.some((k) => k.id === form.kelas_id)) {
+      setPesan('Anda hanya bisa mengisi jurnal untuk kelas yang Anda ampu.')
+      return
+    }
+    if (!form.materi.trim()) {
+      setPesan('Isi materi dulu.')
       return
     }
     setSaving(true)
@@ -144,6 +219,7 @@ export default function JurnalMengajar() {
     setPesan(editId ? 'Perubahan tersimpan.' : 'Jurnal tersimpan.')
     setEditId(null)
     setForm((f) => ({ ...KOSONG(), tanggal: f.tanggal, kelas_id: f.kelas_id, mata_pelajaran: f.mata_pelajaran }))
+    setKehadiranKey((k) => k + 1)
     muatJurnal()
   }
 
@@ -166,7 +242,7 @@ export default function JurnalMengajar() {
 
   function batalUbah() {
     setEditId(null)
-    setForm(KOSONG())
+    setForm((f) => ({ ...KOSONG(), kelas_id: f.kelas_id }))
     setPesan('')
   }
 
@@ -184,6 +260,8 @@ export default function JurnalMengajar() {
   const namaPencetak = isAdmin
     ? (guruList.find((g) => g.id === filterGuru)?.nama_lengkap || 'Semua guru')
     : profil?.nama_lengkap
+
+  const adaKelas = kelasSaya.length > 0
 
   return (
     <Layout title="Jurnal Mengajar" subtitle="Catat kegiatan belajar mengajar harian">
@@ -204,13 +282,29 @@ export default function JurnalMengajar() {
           </div>
           <div>
             <p className="font-display font-semibold text-lg text-white">Jurnal Mengajar</p>
-            <p className="text-sm text-blue-200/70 mt-0.5">{bulanLabel(bulan)}</p>
+            <p className="text-sm text-blue-200/70 mt-0.5">
+              {namaKelasForm && guruId ? `Kelas ${namaKelasForm} · ` : ''}{bulanLabel(bulan)}
+            </p>
           </div>
         </div>
       </div>
 
-      {/* FORM — hanya untuk akun yang tertaut ke data guru */}
-      {guruId ? (
+      {/* FORM */}
+      {!guruId ? (
+        !isAdmin && (
+          <div className="card p-6 text-center text-ink-700/60 mb-6">
+            Akun Anda belum terhubung ke data guru. Hubungi admin untuk menautkan akun.
+          </div>
+        )
+      ) : loadingKelas ? (
+        <p className="text-sm text-ink-700/50 mb-6">Memuat data kelas...</p>
+      ) : !adaKelas ? (
+        <div className="card p-6 mb-6">
+          <p className="text-sm text-ink-700/60">
+            Anda belum tercatat sebagai wali kelas di kelas manapun, jadi belum ada kelas yang bisa diisi jurnalnya.
+          </p>
+        </div>
+      ) : (
         <div className="card relative overflow-hidden p-5 mb-6">
           <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-900 to-brass-400" />
           <div className="flex items-center justify-between mb-4">
@@ -231,45 +325,68 @@ export default function JurnalMengajar() {
             </div>
             <div>
               <label className={LABEL}>Kelas</label>
-              <select className="input-field w-full" value={form.kelas_id} onChange={(e) => set('kelas_id', e.target.value)}>
-                <option value="">Pilih kelas</option>
-                {kelasList.map((k) => <option key={k.id} value={k.id}>{k.nama_kelas}</option>)}
-              </select>
+              {kelasSaya.length > 1 ? (
+                <select className="input-field w-full" value={form.kelas_id} onChange={(e) => set('kelas_id', e.target.value)}>
+                  {kelasSaya.map((k) => <option key={k.id} value={k.id}>{k.nama_kelas}</option>)}
+                </select>
+              ) : (
+                <p className="input-field w-full flex items-center bg-ink-900/[0.03]">{kelasSaya[0].nama_kelas}</p>
+              )}
             </div>
             <div>
               <label className={LABEL}>Mata pelajaran</label>
-              <input className="input-field w-full" value={form.mata_pelajaran} onChange={(e) => set('mata_pelajaran', e.target.value)} placeholder="Contoh: Matematika" />
+              <input
+                className="input-field w-full"
+                list="daftar-mapel-jurnal"
+                value={form.mata_pelajaran}
+                onChange={(e) => set('mata_pelajaran', e.target.value)}
+                placeholder="Pilih atau ketik mata pelajaran"
+              />
+              <datalist id="daftar-mapel-jurnal">
+                {mapelOpsi.map((m) => <option key={m} value={m} />)}
+              </datalist>
             </div>
             <div>
               <label className={LABEL}>Jam ke</label>
               <input className="input-field w-full" value={form.jam_ke} onChange={(e) => set('jam_ke', e.target.value)} placeholder="Contoh: 1-2" />
+              <PilihanCepat mode="single" pilihan={JAM_KE} nilai={form.jam_ke} onChange={(v) => set('jam_ke', v)} />
             </div>
           </div>
 
           <div className="mt-4">
             <label className={LABEL}>Materi / tujuan pembelajaran</label>
             <textarea className="input-field w-full" rows={2} value={form.materi} onChange={(e) => set('materi', e.target.value)} />
+            <PilihanCepat
+              mode="single"
+              pilihan={saranMateri}
+              nilai={form.materi}
+              onChange={(v) => set('materi', v)}
+              kosongPesan="Pilih mata pelajaran agar saran materi dari silabus muncul."
+            />
           </div>
           <div className="mt-4">
             <label className={LABEL}>Kegiatan pembelajaran</label>
             <textarea className="input-field w-full" rows={2} value={form.kegiatan} onChange={(e) => set('kegiatan', e.target.value)} />
+            <PilihanCepat pilihan={KEGIATAN} nilai={form.kegiatan} onChange={(v) => set('kegiatan', v)} pemisah="; " />
           </div>
           <div className="grid gap-4 sm:grid-cols-2 mt-4">
             <div>
               <label className={LABEL}>Hambatan</label>
               <textarea className="input-field w-full" rows={2} value={form.hambatan} onChange={(e) => set('hambatan', e.target.value)} />
+              <PilihanCepat pilihan={HAMBATAN} nilai={form.hambatan} onChange={(v) => set('hambatan', v)} pemisah="; " />
             </div>
             <div>
               <label className={LABEL}>Tindak lanjut</label>
               <textarea className="input-field w-full" rows={2} value={form.tindak_lanjut} onChange={(e) => set('tindak_lanjut', e.target.value)} />
+              <PilihanCepat pilihan={TINDAK_LANJUT} nilai={form.tindak_lanjut} onChange={(v) => set('tindak_lanjut', v)} pemisah="; " />
             </div>
           </div>
 
           <div className="mt-4">
             <div className="flex items-center justify-between mb-1">
-              <label className={LABEL + ' mb-0'}>Kehadiran siswa</label>
-              <button type="button" onClick={isiDariPresensi} className="text-xs text-blue-900 font-medium hover:underline">
-                Isi dari presensi
+              <label className={LABEL + ' mb-0'}>Kehadiran siswa (otomatis dari presensi)</label>
+              <button type="button" onClick={hitungUlangKehadiran} className="flex items-center gap-1 text-xs text-blue-900 font-medium hover:underline">
+                <RefreshCw size={12} /> Hitung ulang
               </button>
             </div>
             <div className="grid grid-cols-4 gap-2">
@@ -290,12 +407,6 @@ export default function JurnalMengajar() {
             {pesan && <span className="text-sm text-ink-700/70">{pesan}</span>}
           </div>
         </div>
-      ) : (
-        !isAdmin && (
-          <div className="card p-6 text-center text-ink-700/60 mb-6">
-            Akun Anda belum terhubung ke data guru. Hubungi admin untuk menautkan akun.
-          </div>
-        )
       )}
 
       {/* FILTER + RIWAYAT */}
