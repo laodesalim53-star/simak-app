@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
 import KopSurat from '../components/KopSurat'
-import { Plus, Trash2, X, Loader2, Upload, Download, CheckCircle2, AlertCircle, Pencil, Printer, ChevronLeft, ChevronRight } from 'lucide-react'
-import { TAHUN_AJARAN, BULAN, SEMESTER, KETERANGAN, toISODate, getStatusTanggal } from '../lib/kalenderPendidikan'
+import { Plus, Trash2, X, Loader2, Upload, Download, CheckCircle2, AlertCircle, Pencil, Printer } from 'lucide-react'
 
 const HARI = ['Senin', 'Selasa', 'Rabu', 'Kamis', "Jum'at", 'Sabtu']
 const emptyForm = { kelas_id: '', mata_pelajaran: '', guru_id: '', hari: 'Senin', jam_mulai: '', jam_selesai: '' }
@@ -28,19 +28,37 @@ const PRINT_CSS = `
   #area-cetak { position: absolute; left: 0; top: 0; width: 100%; background: #fff !important; color: #000 !important; }
   #area-cetak .no-print { display: none !important; }
   #area-cetak .print-only { display: block !important; }
+  #area-cetak .kop-surat-resmi { margin-bottom: 10px !important; }
+  #area-cetak .kop-surat-resmi, #area-cetak .kop-surat-resmi * { color: #000 !important; }
+  #area-cetak .judul-cetak { text-align: center; margin: 8px 0 14px; }
+  #area-cetak .judul-cetak h1 { font-size: 14pt; font-weight: 700; text-transform: uppercase; text-decoration: underline; margin: 0; }
+  #area-cetak .judul-cetak p { font-size: 10pt; margin: 3px 0 0; }
   #area-cetak .kartu-jadwal { box-shadow: none !important; border: none !important; padding: 0 !important; margin-bottom: 18px; break-inside: avoid; page-break-inside: avoid; }
-  #area-cetak table { width: 100%; border-collapse: collapse; font-size: 12pt; }
+  #area-cetak .kartu-jadwal h3 { font-size: 12pt; margin-bottom: 6px !important; }
+  #area-cetak table { width: 100%; border-collapse: collapse; font-size: 11pt; }
+  #area-cetak thead { display: table-header-group; }
+  #area-cetak tr { break-inside: avoid; page-break-inside: avoid; }
   #area-cetak th, #area-cetak td { border: 1px solid #000 !important; padding: 5px 8px !important; color: #000 !important; background: #fff !important; }
   #area-cetak th { font-weight: 700; background: #e5e5e5 !important; }
   #area-cetak tr.baris-hari td { background: #f0f0f0 !important; font-weight: 700; }
   #area-cetak h1, #area-cetak h2, #area-cetak h3 { color: #000 !important; }
+  #area-cetak .footer-cetak { margin-top: 16px; font-size: 9pt; text-align: right; }
 }
 `
 
+// Peran yang boleh melihat & mengelola SEMUA jadwal.
+// Sesuaikan dengan nilai role di AuthContext-mu kalau berbeda.
+const ROLE_ADMIN = ['admin', 'superadmin', 'owner', 'operator']
+
 export default function Jadwal() {
+  const auth = useAuth()
+  const user = auth.user
+  const isAdmin = auth.isAdmin ?? ROLE_ADMIN.includes(auth.role)
+
   const [data, setData] = useState([])
   const [kelasList, setKelasList] = useState([])
   const [guruList, setGuruList] = useState([])
+  const [guruSaya, setGuruSaya] = useState(null) // data guru milik akun yang login (non-admin)
   const [filterKelas, setFilterKelas] = useState('')
   const [filterGuru, setFilterGuru] = useState('')
   const [tampilan, setTampilan] = useState('kelas') // 'kelas' | 'hari'
@@ -50,10 +68,6 @@ export default function Jadwal() {
   const [saving, setSaving] = useState(false)
   const [editingId, setEditingId] = useState(null) // null = mode tambah, isi id = mode edit
 
-  // --- State Kalender Pendidikan ---
-  const [overrides, setOverrides] = useState({}) // { 'YYYY-MM-DD': { kode, keterangan } }
-  const [pekanOffset, setPekanOffset] = useState(0) // 0 = pekan ini, -1 = pekan lalu, dst.
-
   // --- State untuk Import Massal ---
   const [showImport, setShowImport] = useState(false)
   const [importText, setImportText] = useState('')
@@ -61,36 +75,71 @@ export default function Jadwal() {
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState(null) // { success, failed }
 
+  const SELECT_JADWAL = '*, kelas(nama_kelas), guru(nama_lengkap)'
+
   async function loadData() {
     setLoading(true)
-    const [{ data: jadwal }, { data: kelas }, { data: guru }] = await Promise.all([
-      supabase.from('jadwal').select('*, kelas(nama_kelas), guru(nama_lengkap)').order('hari').order('jam_mulai'),
-      supabase.from('kelas').select('id, nama_kelas').order('nama_kelas'),
-      supabase.from('guru').select('id, nama_lengkap').order('nama_lengkap'),
-    ])
-    setData(jadwal || [])
-    setKelasList(kelas || [])
-    setGuruList(guru || [])
+
+    // ===== Admin: semua jadwal =====
+    if (isAdmin) {
+      const [{ data: jadwal }, { data: kelas }, { data: guru }] = await Promise.all([
+        supabase.from('jadwal').select(SELECT_JADWAL).order('hari').order('jam_mulai'),
+        supabase.from('kelas').select('id, nama_kelas').order('nama_kelas'),
+        supabase.from('guru').select('id, nama_lengkap').order('nama_lengkap'),
+      ])
+      setGuruSaya(null)
+      setData(jadwal || [])
+      setKelasList(kelas || [])
+      setGuruList(guru || [])
+      setLoading(false)
+      return
+    }
+
+    // ===== Guru: hanya jadwal yang diampu sendiri =====
+    if (!user?.id) { setLoading(false); return }
+
+    const { data: saya } = await supabase
+      .from('guru')
+      .select('id, nama_lengkap')
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    setGuruSaya(saya || null)
+    if (!saya) {
+      setData([])
+      setKelasList([])
+      setGuruList([])
+      setLoading(false)
+      return
+    }
+
+    const { data: jadwal } = await supabase
+      .from('jadwal')
+      .select(SELECT_JADWAL)
+      .eq('guru_id', saya.id)
+      .order('hari')
+      .order('jam_mulai')
+
+    const rows = jadwal || []
+    // Daftar kelas untuk filter = hanya kelas yang diampu guru ini
+    const kelasUnik = new Map()
+    rows.forEach((j) => {
+      if (j.kelas_id && !kelasUnik.has(j.kelas_id)) {
+        kelasUnik.set(j.kelas_id, { id: j.kelas_id, nama_kelas: j.kelas?.nama_kelas || '—' })
+      }
+    })
+
+    setData(rows)
+    setGuruList([saya])
+    setKelasList([...kelasUnik.values()].sort((a, b) => a.nama_kelas.localeCompare(b.nama_kelas, 'id', { numeric: true })))
     setLoading(false)
   }
 
-  useEffect(() => { loadData() }, [])
-
-  // Muat penanda tanggal khusus (libur, ujian, dll) dari Kalender Pendidikan.
-  // Jika tabel belum ada, jadwal tetap tampil normal.
-  useEffect(() => {
-    let aktif = true
-    supabase.from('kalender_overrides').select('*').then(({ data, error }) => {
-      if (error || !aktif) return
-      const map = {}
-      ;(data || []).forEach((r) => { map[r.tanggal] = { kode: r.kode, keterangan: r.keterangan } })
-      setOverrides(map)
-    })
-    return () => { aktif = false }
-  }, [])
+  useEffect(() => { loadData() }, [isAdmin, user?.id])
 
   async function handleSubmit(e) {
     e.preventDefault()
+    if (!isAdmin) return
     setSaving(true)
     const payload = { ...form, kelas_id: form.kelas_id || null, guru_id: form.guru_id || null }
 
@@ -108,6 +157,7 @@ export default function Jadwal() {
   }
 
   function handleEdit(j) {
+    if (!isAdmin) return
     setForm({
       kelas_id: j.kelas_id || '',
       mata_pelajaran: j.mata_pelajaran || '',
@@ -127,6 +177,7 @@ export default function Jadwal() {
   }
 
   async function handleDelete(id) {
+    if (!isAdmin) return
     if (!confirm('Hapus jadwal ini?')) return
     const { error } = await supabase.from('jadwal').delete().eq('id', id)
     if (!error) loadData()
@@ -134,9 +185,12 @@ export default function Jadwal() {
 
   // ================= FILTER & PENGELOMPOKAN =================
 
+  // Guru yang dipaksa terpilih jika bukan admin
+  const filterGuruAktif = isAdmin ? filterGuru : (guruSaya?.id || '')
+
   const filtered = data.filter((j) =>
     (!filterKelas || j.kelas_id === filterKelas) &&
-    (!filterGuru || j.guru_id === filterGuru)
+    (!filterGuruAktif || j.guru_id === filterGuruAktif)
   )
 
   // Kelompokkan per kelas (jadwal tiap kelas, diurutkan hari lalu jam)
@@ -152,21 +206,38 @@ export default function Jadwal() {
       .sort((a, b) => a.nama.localeCompare(b.nama, 'id', { numeric: true }))
   })()
 
-  const guruTerpilih = guruList.find((g) => g.id === filterGuru)
+  const guruTerpilih = guruList.find((g) => g.id === filterGuruAktif)
   const kelasTerpilih = kelasList.find((k) => k.id === filterKelas)
-  const tampilkanKolomGuru = !filterGuru // jika sudah difilter per guru, kolom guru tidak perlu
+  const tampilkanKolomGuru = !filterGuruAktif // jika sudah difilter per guru, kolom guru tidak perlu
+
+  // Jumlah kolom tabel (untuk colSpan baris hari)
+  const jumlahKolomKelas = 2 + (tampilkanKolomGuru ? 1 : 0) + (isAdmin ? 1 : 0)
 
   const judulCetak = guruTerpilih
-    ? `Jadwal Mengajar – ${guruTerpilih.nama_lengkap}`
+    ? `Jadwal Mengajar`
     : kelasTerpilih
-      ? `Jadwal Pelajaran – ${kelasTerpilih.nama_kelas}`
+      ? `Jadwal Pelajaran`
       : 'Jadwal Pelajaran'
+
+  const subJudulCetak = guruTerpilih
+    ? `Guru: ${guruTerpilih.nama_lengkap}${kelasTerpilih ? ` — ${kelasTerpilih.nama_kelas}` : ''}`
+    : kelasTerpilih
+      ? kelasTerpilih.nama_kelas
+      : ''
 
   const tanggalCetak = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
 
   function handleCetak() {
     window.print()
   }
+
+  // Tombol aksi baris (hanya admin)
+  const sel = (j) => (
+    <td className="no-print px-4 py-3 text-right whitespace-nowrap">
+      <button onClick={() => handleEdit(j)} className="p-1.5 hover:bg-[#6b0f1a]/10 rounded-lg text-[#6b0f1a] mr-1"><Pencil size={14} /></button>
+      <button onClick={() => handleDelete(j.id)} className="p-1.5 hover:bg-[#6b0f1a]/10 rounded-lg text-[#8f1f22]"><Trash2 size={14} /></button>
+    </td>
+  )
 
   // ================= IMPORT MASSAL =================
 
@@ -269,6 +340,7 @@ export default function Jadwal() {
   }
 
   async function handleImportSubmit() {
+    if (!isAdmin) return
     const validPayloads = importRows.filter((r) => r.errors.length === 0).map((r) => r.payload)
     if (validPayloads.length === 0) return
 
@@ -301,20 +373,30 @@ export default function Jadwal() {
   const tabCls = (aktif) =>
     `px-3 py-2 text-sm font-medium transition-colors ${aktif ? 'bg-[#6b0f1a] text-white' : 'bg-white text-[#6b0f1a] hover:bg-[#6b0f1a]/5'}`
 
+  const adaFilter = isAdmin ? (filterGuru || filterKelas) : filterKelas
+
   return (
-    <Layout title="Jadwal Pelajaran" subtitle="Susunan jam mengajar per kelas dan per guru" actions={
-      <div className="flex items-center gap-2">
-        <button className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-white text-[#6b0f1a] border border-[#6b0f1a]/20 hover:bg-[#6b0f1a]/5 transition-colors" onClick={handleCetak}>
-          <Printer size={16} /> Cetak
-        </button>
-        <button className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-white text-[#6b0f1a] border border-[#6b0f1a]/20 hover:bg-[#6b0f1a]/5 transition-colors" onClick={() => setShowImport(true)}>
-          <Upload size={16} /> Import Massal
-        </button>
-        <button className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-[#6b0f1a] text-white hover:bg-[#7d1420] transition-colors shadow-sm shadow-[#6b0f1a]/30" onClick={() => setShowForm(true)}>
-          <Plus size={16} /> Tambah Jadwal
-        </button>
-      </div>
-    }>
+    <Layout
+      title="Jadwal Pelajaran"
+      subtitle={isAdmin ? 'Susunan jam mengajar per kelas dan per guru' : 'Jadwal mengajar Anda'}
+      actions={
+        <div className="flex items-center gap-2">
+          <button className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-white text-[#6b0f1a] border border-[#6b0f1a]/20 hover:bg-[#6b0f1a]/5 transition-colors" onClick={handleCetak}>
+            <Printer size={16} /> Cetak
+          </button>
+          {isAdmin && (
+            <>
+              <button className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-white text-[#6b0f1a] border border-[#6b0f1a]/20 hover:bg-[#6b0f1a]/5 transition-colors" onClick={() => setShowImport(true)}>
+                <Upload size={16} /> Import Massal
+              </button>
+              <button className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-[#6b0f1a] text-white hover:bg-[#7d1420] transition-colors shadow-sm shadow-[#6b0f1a]/30" onClick={() => setShowForm(true)}>
+                <Plus size={16} /> Tambah Jadwal
+              </button>
+            </>
+          )}
+        </div>
+      }
+    >
       <style>{PRINT_CSS}</style>
 
       <div className="min-h-screen bg-gradient-to-b from-[#fdf3f1] to-[#f7e6e3] -m-4 p-4 rounded-xl">
@@ -322,17 +404,19 @@ export default function Jadwal() {
         {/* Filter & pilihan tampilan */}
         <div className="bg-white rounded-xl border border-[#6b0f1a]/10 shadow-sm p-4 mb-4 space-y-3">
           <div className="flex flex-wrap items-end gap-3">
+            {isAdmin && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-[#6b0f1a]/70">Guru</label>
+                <select className={`${selectCls} min-w-[12rem]`} value={filterGuru} onChange={(e) => setFilterGuru(e.target.value)}>
+                  <option value="">Semua Guru</option>
+                  {guruList.map((g) => <option key={g.id} value={g.id}>{g.nama_lengkap}</option>)}
+                </select>
+              </div>
+            )}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-[#6b0f1a]/70">Guru</label>
-              <select className={`${selectCls} min-w-[12rem]`} value={filterGuru} onChange={(e) => setFilterGuru(e.target.value)}>
-                <option value="">Semua Guru</option>
-                {guruList.map((g) => <option key={g.id} value={g.id}>{g.nama_lengkap}</option>)}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-[#6b0f1a]/70">Kelas</label>
+              <label className="text-xs font-medium text-[#6b0f1a]/70">{isAdmin ? 'Kelas' : 'Kelas yang Diampu'}</label>
               <select className={`${selectCls} min-w-[10rem]`} value={filterKelas} onChange={(e) => setFilterKelas(e.target.value)}>
-                <option value="">Semua Kelas</option>
+                <option value="">{isAdmin ? 'Semua Kelas' : 'Semua Kelas Saya'}</option>
                 {kelasList.map((k) => <option key={k.id} value={k.id}>{k.nama_kelas}</option>)}
               </select>
             </div>
@@ -343,7 +427,7 @@ export default function Jadwal() {
                 <button type="button" className={`${tabCls(tampilan === 'hari')} border-l border-[#6b0f1a]/20`} onClick={() => setTampilan('hari')}>Per Hari</button>
               </div>
             </div>
-            {(filterGuru || filterKelas) && (
+            {adaFilter && (
               <button type="button" className="px-3 py-2 text-sm text-[#6b0f1a] underline underline-offset-2" onClick={() => { setFilterGuru(''); setFilterKelas('') }}>
                 Hapus filter
               </button>
@@ -363,11 +447,22 @@ export default function Jadwal() {
           )}
         </div>
 
+        {/* Akun guru belum terhubung ke data guru */}
+        {!isAdmin && !loading && !guruSaya && (
+          <div className="bg-white rounded-xl border border-[#6b0f1a]/10 shadow-sm p-5 mb-4 text-sm text-[#3b0a0a]">
+            Akun Anda belum terhubung ke data guru, sehingga jadwal belum bisa ditampilkan. Hubungi admin untuk menautkan akun Anda.
+          </div>
+        )}
+
         {/* ===== AREA CETAK ===== */}
         <div id="area-cetak">
-          <div className="print-only" style={{ marginBottom: 14 }}>
-            <h1 style={{ fontSize: '16pt', fontWeight: 700, margin: 0 }}>{judulCetak}</h1>
-            <p style={{ fontSize: '10pt', margin: '2px 0 0' }}>Dicetak pada {tanggalCetak}</p>
+          {/* Kop surat + judul: hanya muncul saat dicetak */}
+          <div className="print-only">
+            <KopSurat />
+            <div className="judul-cetak">
+              <h1>{judulCetak}</h1>
+              {subJudulCetak && <p>{subJudulCetak}</p>}
+            </div>
           </div>
 
           {tampilan === 'kelas' ? (
@@ -386,7 +481,7 @@ export default function Jadwal() {
                           <th className="text-left px-4 py-2.5 rounded-l-lg font-medium">Jam</th>
                           <th className="text-left px-4 py-2.5 font-medium">Mata Pelajaran</th>
                           {tampilkanKolomGuru && <th className="text-left px-4 py-2.5 font-medium">Guru</th>}
-                          <th className="no-print px-4 py-2.5 rounded-r-lg"></th>
+                          {isAdmin && <th className="no-print px-4 py-2.5 rounded-r-lg"></th>}
                         </tr>
                       </thead>
                       {HARI.map((hari) => {
@@ -395,17 +490,14 @@ export default function Jadwal() {
                         return (
                           <tbody key={hari} className="divide-y divide-[#6b0f1a]/8">
                             <tr className="baris-hari bg-[#f7e6e3]">
-                              <td colSpan={tampilkanKolomGuru ? 4 : 3} className="px-4 py-2 text-sm font-semibold text-[#6b0f1a]">{hari}</td>
+                              <td colSpan={jumlahKolomKelas} className="px-4 py-2 text-sm font-semibold text-[#6b0f1a]">{hari}</td>
                             </tr>
                             {rows.map((j) => (
                               <tr key={j.id} className="hover:bg-[#6b0f1a]/5 transition-colors">
                                 <td className="px-4 py-3 font-mono text-xs text-[#6b0f1a] whitespace-nowrap">{j.jam_mulai?.slice(0, 5)} – {j.jam_selesai?.slice(0, 5)}</td>
                                 <td className="px-4 py-3 font-medium text-[#3b0a0a]">{j.mata_pelajaran}</td>
                                 {tampilkanKolomGuru && <td className="px-4 py-3">{j.guru?.nama_lengkap || '—'}</td>}
-                                <td className="no-print px-4 py-3 text-right whitespace-nowrap">
-                                  <button onClick={() => handleEdit(j)} className="p-1.5 hover:bg-[#6b0f1a]/10 rounded-lg text-[#6b0f1a] mr-1"><Pencil size={14} /></button>
-                                  <button onClick={() => handleDelete(j.id)} className="p-1.5 hover:bg-[#6b0f1a]/10 rounded-lg text-[#8f1f22]"><Trash2 size={14} /></button>
-                                </td>
+                                {isAdmin && sel(j)}
                               </tr>
                             ))}
                           </tbody>
@@ -435,7 +527,7 @@ export default function Jadwal() {
                             <th className="text-left px-4 py-2.5 font-medium">Kelas</th>
                             <th className="text-left px-4 py-2.5 font-medium">Mata Pelajaran</th>
                             {tampilkanKolomGuru && <th className="text-left px-4 py-2.5 font-medium">Guru</th>}
-                            <th className="no-print px-4 py-2.5 rounded-r-lg"></th>
+                            {isAdmin && <th className="no-print px-4 py-2.5 rounded-r-lg"></th>}
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-[#6b0f1a]/8">
@@ -445,10 +537,7 @@ export default function Jadwal() {
                               <td className="px-4 py-3">{j.kelas?.nama_kelas || '—'}</td>
                               <td className="px-4 py-3 font-medium text-[#3b0a0a]">{j.mata_pelajaran}</td>
                               {tampilkanKolomGuru && <td className="px-4 py-3">{j.guru?.nama_lengkap || '—'}</td>}
-                              <td className="no-print px-4 py-3 text-right whitespace-nowrap">
-                                <button onClick={() => handleEdit(j)} className="p-1.5 hover:bg-[#6b0f1a]/10 rounded-lg text-[#6b0f1a] mr-1"><Pencil size={14} /></button>
-                                <button onClick={() => handleDelete(j.id)} className="p-1.5 hover:bg-[#6b0f1a]/10 rounded-lg text-[#8f1f22]"><Trash2 size={14} /></button>
-                              </td>
+                              {isAdmin && sel(j)}
                             </tr>
                           ))}
                         </tbody>
@@ -460,15 +549,17 @@ export default function Jadwal() {
             </div>
           )}
 
-          {!loading && filtered.length === 0 && (
+          {!loading && filtered.length === 0 && (isAdmin || guruSaya) && (
             <p className="text-sm text-[#6b0f1a]/50">
-              {filterGuru || filterKelas ? 'Tidak ada jadwal yang cocok dengan filter ini.' : 'Belum ada jadwal untuk ditampilkan.'}
+              {adaFilter ? 'Tidak ada jadwal yang cocok dengan filter ini.' : 'Belum ada jadwal untuk ditampilkan.'}
             </p>
           )}
+
+          <div className="print-only footer-cetak">Dicetak pada {tanggalCetak}</div>
         </div>
         {/* ===== END AREA CETAK ===== */}
 
-        {showForm && (
+        {isAdmin && showForm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#3b0a0a]/50 backdrop-blur-sm p-4">
             <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative border-t-4 border-[#6b0f1a]">
               <button type="button" onClick={closeFormModal} className="absolute top-4 right-4 text-[#6b0f1a]/40 hover:text-[#6b0f1a]"><X size={20} /></button>
@@ -517,7 +608,7 @@ export default function Jadwal() {
           </div>
         )}
 
-        {showImport && (
+        {isAdmin && showImport && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#3b0a0a]/50 backdrop-blur-sm p-4">
             <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl p-6 relative border-t-4 border-[#6b0f1a] max-h-[90vh] overflow-y-auto">
               <button type="button" onClick={closeImportModal} className="absolute top-4 right-4 text-[#6b0f1a]/40 hover:text-[#6b0f1a]"><X size={20} /></button>
