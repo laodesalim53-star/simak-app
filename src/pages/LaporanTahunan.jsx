@@ -77,6 +77,8 @@ export default function LaporanTahunan() {
   const sid = profil?.sekolah_id
   const [tahun, setTahun] = useState(new Date().getFullYear())
   const [sekolah, setSekolah] = useState(null)
+  const [vm, setVm] = useState(null)
+  const [logoUrl, setLogoUrl] = useState('')
   const [angka, setAngka] = useState({})
   const [sebaran, setSebaran] = useState([])
   const [uang, setUang] = useState({ anggaran: null, penerimaan: null })
@@ -91,6 +93,14 @@ export default function LaporanTahunan() {
     // Identitas, visi, misi, tujuan, moto (dibaca bila kolomnya ada di profil_sekolah)
     const { data: ps } = await supabase.from('profil_sekolah').select('*').eq('sekolah_id', sid).maybeSingle()
     setSekolah(ps || null)
+    if (ps?.logo_path) {
+      const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(ps.logo_path)
+      setLogoUrl(pub.publicUrl)
+    } else setLogoUrl('')
+
+    // Visi, misi, tujuan dari laman Visi, Misi, dan Tujuan (tabel visi_misi_sekolah)
+    const { data: vmData } = await supabase.from('visi_misi_sekolah').select('*').eq('sekolah_id', sid).maybeSingle()
+    setVm(vmData || null)
 
     // Jumlah tiap modul secara paralel
     const hasil = await Promise.all(SUMBER.map((s) => hitung(s, sid, tahun)))
@@ -187,27 +197,46 @@ export default function LaporanTahunan() {
 
       <article className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-8 text-slate-800">
         <header className="text-center border-b-2 border-slate-800 pb-3 mb-4">
-          <FileBarChart className="no-print mx-auto mb-1 text-blue-900" size={24} />
+          {logoUrl ? (
+            <img src={logoUrl} alt="Logo sekolah" className="mx-auto mb-1 h-16 w-auto object-contain" />
+          ) : (
+            <FileBarChart className="no-print mx-auto mb-1 text-blue-900" size={24} />
+          )}
           <h1 className="font-display text-lg font-bold uppercase">Laporan Tahunan Kepala Sekolah</h1>
           <p className="font-semibold uppercase">{nama}</p>
-          <p className="text-sm">Tahun {tahun}</p>
+          {sekolah?.alamat && <p className="text-xs text-slate-600">{sekolah.alamat}</p>}
+          <p className="text-sm">Tahun {tahun}{vm?.tahun_ajaran ? ` (Tahun Ajaran ${vm.tahun_ajaran})` : ''}</p>
         </header>
 
         <Judul huruf="A">Pendahuluan</Judul>
         <Isian k="pendahuluan" label="Latar belakang dan tujuan laporan" />
 
         <Judul huruf="B">Visi, Misi, dan Tujuan Sekolah</Judul>
-        {sekolah?.visi || sekolah?.misi || sekolah?.tujuan ? (
+        {vm?.visi || vm?.misi?.length || vm?.tujuan?.length ? (
           <div className="text-sm space-y-2">
-            {sekolah.moto && <p><b>Moto:</b> {sekolah.moto}</p>}
-            {sekolah.visi && <p><b>Visi:</b> {sekolah.visi}</p>}
-            {sekolah.misi && <div><b>Misi:</b><p className="whitespace-pre-line">{sekolah.misi}</p></div>}
-            {sekolah.tujuan && <div><b>Tujuan:</b><p className="whitespace-pre-line">{sekolah.tujuan}</p></div>}
+            {vm.motto && <p><b>Motto:</b> {vm.motto}</p>}
+            {vm.visi && <p className="text-justify"><b>Visi:</b> {vm.visi}</p>}
+            {vm.misi?.length > 0 && (
+              <div>
+                <b>Misi:</b>
+                <ol className="list-decimal pl-6 space-y-1 text-justify">
+                  {vm.misi.map((m, i) => <li key={i}>{m}</li>)}
+                </ol>
+              </div>
+            )}
+            {vm.tujuan?.length > 0 && (
+              <div>
+                <b>Tujuan:</b>
+                <ol className="list-decimal pl-6 space-y-1 text-justify">
+                  {vm.tujuan.map((m, i) => <li key={i}>{m}</li>)}
+                </ol>
+              </div>
+            )}
           </div>
         ) : (
           <p className="text-sm text-slate-500">
-            Isi visi, misi, dan tujuan belum terbaca dari profil_sekolah. Sesuaikan nama kolomnya (visi, misi, tujuan, moto) atau
-            tabel tempat laman Visi, Misi, dan Tujuan menyimpan datanya.
+            Visi, misi, dan tujuan belum diisi. Isi dulu di{' '}
+            <Link to="/administrasi-kepsek/visi-misi" className="text-blue-700 underline">Visi, Misi, dan Tujuan</Link>.
           </p>
         )}
 
@@ -272,7 +301,12 @@ export default function LaporanTahunan() {
 
         <footer className="mt-8 grid grid-cols-2 text-sm text-center break-inside-avoid">
           <div>Mengetahui,<br />Komite Sekolah<br /><br /><br /><br />(......................................)</div>
-          <div>Kepala {nama}<br /><br /><br /><br /><br />(......................................)<br />NIP. ..........................</div>
+          <div>
+            {sekolah?.kabupaten ? `${sekolah.kabupaten}, ` : ''}……………………<br />
+            Kepala {nama}<br /><br /><br /><br />
+            <b className="underline">{vm?.kepala_sekolah || '......................................'}</b><br />
+            NIP. {vm?.nip_kepala || '..........................'}
+          </div>
         </footer>
       </article>
     </Layout>
