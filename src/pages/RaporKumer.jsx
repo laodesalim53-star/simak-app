@@ -1,17 +1,20 @@
 // src/pages/RaporKumer.jsx
 //
 // Raport Kumer — halaman input nilai SEDERHANA untuk guru, satu layar saja:
-//   pilih Kelas + Mapel + Semester + Tahun Ajaran -> isi Tugas / UTS / UAS
-//   -> Nilai Akhir, Predikat & Deskripsi terisi otomatis -> Simpan.
+//   pilih Kompetensi (Pengetahuan / Keterampilan) + Kelas + Mapel + Semester +
+//   Tahun Ajaran -> isi Tugas / UTS / UAS -> Nilai Akhir, Predikat & Deskripsi
+//   terisi otomatis -> Simpan.
 //
-// Deskripsi Capaian: ada dropdown pilihan siap pakai per jenjang (Kelas 1–6 SD
-// dan Kelas 7–9 SMP) + predikat, dan tetap bisa diketik/diedit manual.
+// Deskripsi Capaian (Pengetahuan): ada dropdown pilihan siap pakai per jenjang
+// (Kelas 1–6 SD dan Kelas 7–9 SMP) + predikat, dan tetap bisa diketik/diedit manual.
+// Deskripsi Capaian (Keterampilan): diketik sendiri atau dikosongkan agar terisi
+// otomatis menurut predikat.
 //
 // SINKRON DENGAN HALAMAN LAMA (tanpa tabel baru):
-//   - Tugas/UTS/UAS disimpan ke tabel `nilai` (kompetensi 'Pengetahuan'),
-//     jadi langsung muncul di halaman Nilai lama (tab Input / Lihat & Hapus).
+//   - Tugas/UTS/UAS disimpan ke tabel `nilai` (kompetensi 'Pengetahuan' atau
+//     'Keterampilan'), jadi langsung muncul di halaman Nilai lama (tab Input / Lihat & Hapus).
 //   - Nilai Akhir, Predikat & Deskripsi disimpan ke tabel `capaian_mapel`
-//     (jenis 'Pengetahuan'), jadi langsung muncul di Rapor lama
+//     (jenis 'Pengetahuan' atau 'Keterampilan'), jadi langsung muncul di Rapor lama
 //     (tab Rekap Nilai, Deskripsi Capaian) dan halaman cetaknya.
 //   - Sebaliknya, nilai yang sudah pernah diinput lewat halaman lama
 //     otomatis tampil di sini saat halaman dibuka.
@@ -25,7 +28,8 @@ import { MAPEL_IJAZAH } from '../components/IjazahPrintTemplate'
 import { kanonikkanOpsiMapel, TOKEN_IPAS_GABUNGAN } from '../utils/mapelIjazahAlias'
 import { JENJANG_OPTS, tebakJenjang, opsiDeskripsi } from '../utils/deskripsiCapaian'
 
-const KOMPETENSI = 'Pengetahuan'
+// Dua jenis kompetensi yang bisa diinput di halaman ini.
+const KOMPETENSI_OPTS = ['Pengetahuan', 'Keterampilan']
 
 const KOLOM_NILAI = [
   { key: 'Tugas', label: 'Tugas' },
@@ -82,6 +86,18 @@ const DESKRIPSI_OTOMATIS = {
     `Ananda masih memerlukan bimbingan lebih lanjut pada mata pelajaran ${m} untuk dapat memahami materi secara optimal. Diperlukan perhatian dan pendampingan yang lebih intensif.`,
 }
 
+// Deskripsi otomatis untuk kompetensi Keterampilan (praktik / unjuk kerja).
+const DESKRIPSI_OTOMATIS_KETERAMPILAN = {
+  A: (m) =>
+    `Ananda sangat terampil dalam mempraktikkan dan mendemonstrasikan kompetensi pada mata pelajaran ${m}, mampu mengerjakan tugas praktik dengan tepat, mandiri, dan kreatif.`,
+  B: (m) =>
+    `Ananda terampil dalam mempraktikkan kompetensi pada mata pelajaran ${m} dan mampu menyelesaikan sebagian besar tugas praktik dengan baik.`,
+  C: (m) =>
+    `Ananda cukup terampil dalam mempraktikkan kompetensi pada mata pelajaran ${m}. Diperlukan latihan dan bimbingan lebih lanjut agar keterampilannya semakin meningkat.`,
+  D: (m) =>
+    `Ananda masih memerlukan bimbingan dan latihan yang lebih intensif dalam mempraktikkan kompetensi pada mata pelajaran ${m}.`,
+}
+
 function pecahMapel(raw) {
   if (!raw) return []
   return [...new Set(raw.split(/[,/]+/).map((m) => m.trim()).filter(Boolean))]
@@ -124,6 +140,7 @@ export default function RaporKumer() {
   const { profil, isAdmin } = useAuth()
   const navigate = useNavigate()
 
+  const [kompetensi, setKompetensi] = useState('Pengetahuan') // 'Pengetahuan' | 'Keterampilan'
   const [kelasList, setKelasList] = useState([])
   const [kelasId, setKelasId] = useState('')
   const [siswaList, setSiswaList] = useState([])
@@ -142,6 +159,8 @@ export default function RaporKumer() {
 
   // `${siswaId}|${labelMapel}` -> id baris capaian_mapel yang sudah ada
   const capaianIdRef = useRef({})
+
+  const adalahKeterampilan = kompetensi === 'Keterampilan'
 
   // ---- Kelas (guru: kelas yang dia wali-i; admin: semua kelas) ----
   useEffect(() => {
@@ -213,7 +232,7 @@ export default function RaporKumer() {
   useEffect(() => {
     muatData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [siswaList, mataPelajaran, semester, tahunAjaran])
+  }, [siswaList, mataPelajaran, semester, tahunAjaran, kompetensi])
 
   async function muatData() {
     const labelList = labelResmiUntukPilihan(mataPelajaran)
@@ -231,7 +250,7 @@ export default function RaporKumer() {
         .from('nilai')
         .select('siswa_id, jenis, nilai')
         .eq('mata_pelajaran', labelUtama)
-        .eq('kompetensi', KOMPETENSI)
+        .eq('kompetensi', kompetensi)
         .eq('semester', semester)
         .eq('tahun_ajaran', tahunAjaran)
         .in('siswa_id', ids),
@@ -239,7 +258,7 @@ export default function RaporKumer() {
         .from('capaian_mapel')
         .select('id, siswa_id, mata_pelajaran, deskripsi_capaian')
         .in('mata_pelajaran', labelList)
-        .eq('jenis', KOMPETENSI)
+        .eq('jenis', kompetensi)
         .eq('semester', semester)
         .eq('tahun_ajaran', tahunAjaran)
         .in('siswa_id', ids),
@@ -311,6 +330,7 @@ export default function RaporKumer() {
     }
 
     const namaMapel = mapelOpts.find((o) => o.value === mataPelajaran)?.label || labelList[0]
+    const templateOtomatis = adalahKeterampilan ? DESKRIPSI_OTOMATIS_KETERAMPILAN : DESKRIPSI_OTOMATIS
     const nilaiRows = []
     const capRows = []
 
@@ -323,7 +343,7 @@ export default function RaporKumer() {
             siswa_id: r.siswaId,
             mata_pelajaran: label,
             jenis: k.key,
-            kompetensi: KOMPETENSI,
+            kompetensi,
             semester,
             tahun_ajaran: tahunAjaran,
             nilai: Number(r[k.key]),
@@ -340,7 +360,7 @@ export default function RaporKumer() {
           siswaId: r.siswaId,
           akhir,
           predikat,
-          deskripsi: r.deskripsi.trim() || DESKRIPSI_OTOMATIS[predikat](namaMapel),
+          deskripsi: r.deskripsi.trim() || templateOtomatis[predikat](namaMapel),
         })
       }
     })
@@ -382,7 +402,7 @@ export default function RaporKumer() {
             inserts.push({
               siswa_id: c.siswaId,
               mata_pelajaran: label,
-              jenis: KOMPETENSI,
+              jenis: kompetensi,
               semester,
               tahun_ajaran: tahunAjaran,
               nilai_akhir: c.akhir,
@@ -428,7 +448,7 @@ export default function RaporKumer() {
     } else {
       setPesan({
         tipe: 'ok',
-        teks: `Tersimpan untuk ${capRows.length} siswa — sudah masuk ke Nilai dan Rapor (${namaMapel}, Semester ${semester} ${tahunAjaran}).`,
+        teks: `Nilai ${kompetensi} tersimpan untuk ${capRows.length} siswa — sudah masuk ke Nilai dan Rapor (${namaMapel}, Semester ${semester} ${tahunAjaran}).`,
       })
     }
     await muatData()
@@ -449,6 +469,25 @@ export default function RaporKumer() {
           <b>{mapelTidakDikenal.join(', ')}</b>. Mohon perbaiki penulisannya di halaman Data Guru.
         </div>
       )}
+
+      {/* Pilihan kompetensi: Pengetahuan / Keterampilan */}
+      <div className="flex gap-1 mb-4 border-b border-ink-950/10">
+        {KOMPETENSI_OPTS.map((k) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setKompetensi(k)}
+            disabled={saving}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              kompetensi === k
+                ? 'border-brass-500 text-brass-600'
+                : 'border-transparent text-ink-700/60 hover:text-ink-950'
+            }`}
+          >
+            Nilai {k}
+          </button>
+        ))}
+      </div>
 
       <div className="card p-5 mb-5 grid grid-cols-2 md:grid-cols-5 gap-3">
         <div>
@@ -495,23 +534,28 @@ export default function RaporKumer() {
             ))}
           </select>
         </div>
-        <div>
-          <label className="label-field">Jenjang (Deskripsi)</label>
-          <select className="input-field" value={jenjang} onChange={(e) => setJenjang(e.target.value)}>
-            <option value="">Pilih jenjang</option>
-            {JENJANG_OPTS.map((j) => (
-              <option key={j.value} value={j.value}>
-                {j.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        {!adalahKeterampilan && (
+          <div>
+            <label className="label-field">Jenjang (Deskripsi)</label>
+            <select className="input-field" value={jenjang} onChange={(e) => setJenjang(e.target.value)}>
+              <option value="">Pilih jenjang</option>
+              {JENJANG_OPTS.map((j) => (
+                <option key={j.value} value={j.value}>
+                  {j.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       <p className="text-xs text-ink-700/50 mb-3">
-        Isi Tugas, UTS, dan UAS (0–100). Nilai Akhir = Tugas 20% + UTS 30% + UAS 50%; komponen yang dikosongkan
-        dilewati. Predikat terisi otomatis. Deskripsi bisa dipilih dari dropdown (sesuai jenjang &amp; predikat),
-        diketik sendiri, atau dikosongkan agar terisi otomatis. Tekan Enter untuk pindah ke siswa berikutnya.
+        Isi Tugas, UTS, dan UAS (0–100) untuk nilai <b>{kompetensi}</b>. Nilai Akhir = Tugas 20% + UTS 30% + UAS 50%;
+        komponen yang dikosongkan dilewati. Predikat terisi otomatis.{' '}
+        {adalahKeterampilan
+          ? 'Deskripsi bisa diketik sendiri atau dikosongkan agar terisi otomatis menurut predikat.'
+          : 'Deskripsi bisa dipilih dari dropdown (sesuai jenjang & predikat), diketik sendiri, atau dikosongkan agar terisi otomatis.'}{' '}
+        Tekan Enter untuk pindah ke siswa berikutnya.
       </p>
 
       {pesan && (
@@ -538,7 +582,7 @@ export default function RaporKumer() {
               ))}
               <th className="w-20 text-center">Akhir</th>
               <th className="w-20 text-center">Predikat</th>
-              <th className="min-w-[300px]">Deskripsi Capaian</th>
+              <th className="min-w-[300px]">Deskripsi Capaian ({kompetensi})</th>
               <th className="w-12 text-center"></th>
             </tr>
           </thead>
@@ -569,7 +613,9 @@ export default function RaporKumer() {
                 const akhir = hitungAkhir(r)
                 const predikat = predikatDariNilai(akhir)
                 const pilihanDeskripsi =
-                  jenjang && predikat ? opsiDeskripsi(jenjang, predikat, namaMapelTerpilih) : []
+                  !adalahKeterampilan && jenjang && predikat
+                    ? opsiDeskripsi(jenjang, predikat, namaMapelTerpilih)
+                    : []
                 return (
                   <tr key={r.siswaId}>
                     <td className="font-medium whitespace-nowrap">{r.nama}</td>
@@ -598,31 +644,40 @@ export default function RaporKumer() {
                       )}
                     </td>
                     <td>
-                      <select
-                        className="input-field !py-1 text-xs mb-1"
-                        disabled={!jenjang || !predikat}
-                        value=""
-                        onChange={(e) => {
-                          if (e.target.value !== '') ubahBaris(idx, 'deskripsi', e.target.value)
-                        }}
-                      >
-                        <option value="">
-                          {!jenjang
-                            ? 'Pilih jenjang dulu'
-                            : !predikat
-                            ? 'Isi nilai dulu'
-                            : 'Pilih deskripsi…'}
-                        </option>
-                        {pilihanDeskripsi.map((o, i) => (
-                          <option key={i} value={o.teks}>
-                            {o.label}
+                      {/* Dropdown deskripsi siap pakai hanya untuk Pengetahuan */}
+                      {!adalahKeterampilan && (
+                        <select
+                          className="input-field !py-1 text-xs mb-1"
+                          disabled={!jenjang || !predikat}
+                          value=""
+                          onChange={(e) => {
+                            if (e.target.value !== '') ubahBaris(idx, 'deskripsi', e.target.value)
+                          }}
+                        >
+                          <option value="">
+                            {!jenjang
+                              ? 'Pilih jenjang dulu'
+                              : !predikat
+                              ? 'Isi nilai dulu'
+                              : 'Pilih deskripsi…'}
                           </option>
-                        ))}
-                      </select>
+                          {pilihanDeskripsi.map((o, i) => (
+                            <option key={i} value={o.teks}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                       <textarea
                         rows={2}
                         className="input-field !py-1 text-xs"
-                        placeholder={akhir !== null ? 'Pilih dari dropdown, ketik sendiri, atau kosongkan (otomatis)' : ''}
+                        placeholder={
+                          akhir !== null
+                            ? adalahKeterampilan
+                              ? 'Ketik sendiri atau kosongkan (otomatis)'
+                              : 'Pilih dari dropdown, ketik sendiri, atau kosongkan (otomatis)'
+                            : ''
+                        }
                         value={r.deskripsi}
                         onChange={(e) => ubahBaris(idx, 'deskripsi', e.target.value)}
                       />
@@ -648,7 +703,7 @@ export default function RaporKumer() {
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <button className="btn-primary" onClick={simpan} disabled={saving || loading}>
             {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-            Simpan Nilai &amp; Rapor
+            Simpan Nilai {kompetensi} &amp; Rapor
           </button>
         </div>
       )}
