@@ -42,6 +42,8 @@ const KinerjaTendik = lazy(() => import('../pages/KinerjaTendik'))
 const AkreditasiSekolah = lazy(() => import('../pages/AkreditasiSekolah'))
 const Strukturorganisasi = lazy(() => import('../pages/Strukturorganisasi'))
 const Tatatertib = lazy(() => import('../pages/Tatatertib'))
+const VisiMisiSekolah = lazy(() => import('../pages/VisiMisiSekolah'))
+const LaporanPertanggungjawabanKepsek = lazy(() => import('../pages/LaporanPertanggungjawabanKepsek'))
 
 
 const GudangSK = lazy(() => import('../pages/GudangSK'))
@@ -178,6 +180,8 @@ export default function RoutesSekolah() {
 
       {/* Administrasi Kepala Sekolah */}
       <Route path="/administrasi-kepsek" element={<ProtectedRoute adminOnly><AdministrasiKepalaSekolah /></ProtectedRoute>} />
+      <Route path="/administrasi-kepsek/visi-misi" element={<ProtectedRoute adminOnly><VisiMisiSekolah /></ProtectedRoute>} />
+      <Route path="/administrasi-kepsek/lpj-kepsek" element={<ProtectedRoute adminOnly><LaporanPertanggungjawabanKepsek /></ProtectedRoute>} />
       <Route path="/administrasi-kepsek/buku-induk-siswa" element={<ProtectedRoute adminOnly><BukuIndukSiswa /></ProtectedRoute>} />
       <Route path="/administrasi-kepsek/buku-kerja" element={<ProtectedRoute adminOnly><BukuKerjaKepsek /></ProtectedRoute>} />
       <Route path="/administrasi-kepsek/supervisi-akademik" element={<ProtectedRoute adminOnly><SupervisiAkademik /></ProtectedRoute>} />
