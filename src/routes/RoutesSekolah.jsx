@@ -180,8 +180,8 @@ export default function RoutesSekolah() {
       <Route path="/daftar-hadir-pegawai" element={<ProtectedRoute><DaftarHadirPegawai /></ProtectedRoute>} />
 
       {/* Administrasi Kepala Sekolah */}
-      <Route path="/administrasi-kepsek" element={<ProtectedRoute adminOnly><AdministrasiKepalaSekolah /></ProtectedRoute>} />
       <Route path="/administrasi-kepsek/laporan-tahunan" element={<ProtectedRoute adminOnly><LaporanTahunan /></ProtectedRoute>} />
+      <Route path="/administrasi-kepsek" element={<ProtectedRoute adminOnly><AdministrasiKepalaSekolah /></ProtectedRoute>} />
       <Route path="/administrasi-kepsek/visi-misi" element={<ProtectedRoute adminOnly><VisiMisiSekolah /></ProtectedRoute>} />
       <Route path="/administrasi-kepsek/lpj-kepsek" element={<ProtectedRoute adminOnly><LaporanPertanggungjawabanKepsek /></ProtectedRoute>} />
       <Route path="/administrasi-kepsek/buku-induk-siswa" element={<ProtectedRoute adminOnly><BukuIndukSiswa /></ProtectedRoute>} />
