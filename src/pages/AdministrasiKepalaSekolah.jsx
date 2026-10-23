@@ -36,6 +36,7 @@ const KELOMPOK = [
       { id: 'rkt', judul: 'RKT', deskripsi: 'Rencana Kerja Tahunan: program, kegiatan, dan target sekolah.', icon: Target, warna: 'indigo', siap: true },
       { id: 'rkas', judul: 'RKAS', deskripsi: 'Rencana Kegiatan dan Anggaran Sekolah per tahun.', icon: Wallet, warna: 'emerald', siap: true },
       { id: 'kalender-pendidikan', judul: 'Kalender Pendidikan', deskripsi: 'Hari efektif belajar dan agenda kegiatan tahunan.', icon: CalendarCheck, warna: 'teal', siap: true },
+      { id: 'laporan-tahunan', judul: 'Laporan Tahunan', deskripsi: 'Rekap capaian, data siswa, kegiatan, dan keuangan sekolah selama setahun.', icon: FileBarChart, warna: 'indigo', siap: true },
     ],
   },
   {
