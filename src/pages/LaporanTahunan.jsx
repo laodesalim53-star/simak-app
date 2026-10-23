@@ -1,6 +1,14 @@
 // src/pages/LaporanTahunan.jsx  ->  rute /administrasi-kepsek/laporan-tahunan
 // Dibuat dengan pola yang sama seperti BukuKerjaKepsek.jsx: komponen cetak, KopSurat, TandaTanganKepsek,
 // dan penyimpanan lewat useDokumenTersimpan (dokumen: 'laporan-tahunan'), jadi TIDAK perlu tabel baru.
+//
+// Sumber data otomatis:
+//  - Murid & guru     : useKeadaanSekolah (components/LaporanTahunanOtomatis.jsx)
+//                       siswa.kelas_id -> kelas.tingkat, status 'aktif' (sinkron dengan Keadaan Murid)
+//  - Anggaran (ARKAS) : arkas_anggaran  (sekolah_id, tahun_anggaran, is_item, jumlah)
+//                       HANYA baris is_item = true yang dijumlahkan (baris lain judul/subtotal).
+//  - Realisasi (BKU)  : bku_kas         (tahun, bulan, penerimaan, pengeluaran)
+//  - Buku Kerja Kepsek: dokumen 'buku-kerja' yang sudah tersimpan
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Printer, RefreshCw } from 'lucide-react'
@@ -10,6 +18,13 @@ import { supabase } from '../lib/supabaseClient'
 import { KopSurat, TandaTanganKepsek, KotakSimpan, Th, Td, Baris, cssCetak, tombolKecil } from '../components/AdministrasiKepsekKomponen'
 import { IsianTtd } from '../components/AdministrasiKepsekIsian'
 import { useDataSekolah, useDokumenTersimpan } from '../lib/administrasiKepsek'
+import {
+  useKeadaanSekolah,
+  TabelKeadaanMurid,
+  RekapGuru,
+  RekapDemografi,
+  PanelOtomatis,
+} from '../components/LaporanTahunanOtomatis'
 
 // Rekap jumlah dari tabel modul lain. SESUAIKAN nama tabel / kolom tanggal; tabel yang tidak ada tampil "–".
 const SUMBER = [
@@ -21,14 +36,13 @@ const SUMBER = [
   { id: 'notulen', label: 'Rapat (notulen)', tabel: 'notulen_rapat', tgl: 'tanggal' },
 ]
 
-// Keuangan dari impor ARKAS. Sesuaikan kolom jumlah / tahun bila berbeda.
-const KEUANGAN = {
-  anggaran: { tabel: 'arkas_anggaran', kolomJumlah: 'jumlah', kolomTahun: 'tahun' },
-  penerimaan: { tabel: 'arkas_penerimaan', kolomJumlah: 'jumlah', kolomTahun: 'tahun' },
-}
+const NAMA_BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
+const BULAN_SINGKAT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
 
 const rupiah = (n) =>
   n == null ? '–' : new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
+
+const persen = (n) => (n == null ? '–' : `${n.toFixed(1).replace('.', ',')}%`)
 
 async function hitung(s, sekolahId, tahun) {
   let q = supabase.from(s.tabel).select('*', { count: 'exact', head: true }).eq('sekolah_id', sekolahId)
@@ -37,11 +51,61 @@ async function hitung(s, sekolahId, tahun) {
   return error ? null : count
 }
 
-async function jumlahkan(cfg, tahun) {
-  // Tabel ARKAS memakai npsn, bukan sekolah_id; isolasi antar sekolah ditangani RLS.
-  const { data, error } = await supabase.from(cfg.tabel).select('*').eq(cfg.kolomTahun, tahun)
-  if (error || !data) return null
-  return data.reduce((t, r) => t + (Number(r[cfg.kolomJumlah]) || 0), 0)
+// Supabase membatasi 1000 baris per permintaan; ARKAS/BKU setahun bisa lebih, jadi diambil bertahap.
+async function ambilSemua(buatQuery) {
+  const hasil = []
+  for (let dari = 0; ; dari += 1000) {
+    const { data, error } = await buatQuery().range(dari, dari + 999)
+    if (error) return { data: null, error }
+    hasil.push(...(data || []))
+    if (!data || data.length < 1000) break
+  }
+  return { data: hasil, error: null }
+}
+
+const KEUANGAN_KOSONG = {
+  anggaran: null,
+  penerimaan: null,
+  pengeluaran: null,
+  perBulan: Array.from({ length: 12 }, (_, i) => ({ bulan: i + 1, penerimaan: 0, pengeluaran: 0 })),
+  error: '',
+}
+
+// Anggaran dari ARKAS (arkas_anggaran) + realisasi dari BKU (bku_kas), sama seperti halaman Keuangan.
+async function muatKeuangan(sekolahId, tahun) {
+  const [ark, bku] = await Promise.all([
+    ambilSemua(() =>
+      supabase
+        .from('arkas_anggaran')
+        .select('id, jumlah, is_item')
+        .eq('sekolah_id', sekolahId)
+        .eq('tahun_anggaran', String(tahun))
+        .order('id')
+    ),
+    ambilSemua(() =>
+      supabase.from('bku_kas').select('id, bulan, tanggal, penerimaan, pengeluaran').eq('tahun', tahun).order('id')
+    ),
+  ])
+
+  const pesan = []
+  if (ark.error) pesan.push(`ARKAS: ${ark.error.message}`)
+  if (bku.error) pesan.push(`BKU: ${bku.error.message}`)
+
+  const baris = ark.data || []
+  const anggaran = baris.length ? baris.filter((r) => r.is_item).reduce((t, r) => t + (Number(r.jumlah) || 0), 0) : null
+
+  const perBulan = KEUANGAN_KOSONG.perBulan.map((b) => ({ ...b }))
+  const bkuRows = bku.data || []
+  bkuRows.forEach((r) => {
+    const b = Number(r.bulan) || (r.tanggal ? new Date(r.tanggal).getMonth() + 1 : 0)
+    if (b < 1 || b > 12) return
+    perBulan[b - 1].penerimaan += Number(r.penerimaan) || 0
+    perBulan[b - 1].pengeluaran += Number(r.pengeluaran) || 0
+  })
+  const penerimaan = bkuRows.length ? perBulan.reduce((t, b) => t + b.penerimaan, 0) : null
+  const pengeluaran = bkuRows.length ? perBulan.reduce((t, b) => t + b.pengeluaran, 0) : null
+
+  return { anggaran, penerimaan, pengeluaran, perBulan, error: pesan.join(' | ') }
 }
 
 const NARASI_KOSONG = { pendahuluan: '', capaian: '', kendala: '', tindak_lanjut: '' }
@@ -72,16 +136,54 @@ function Narasi({ nilai, onUbah, label, baris = 4 }) {
   )
 }
 
+// Grafik penerimaan vs pengeluaran per bulan (SVG, ikut tercetak; angka lengkap ada di tabel di bawahnya).
+function GrafikKeuangan({ data }) {
+  const W = 560
+  const H = 190
+  const kiri = 6
+  const bawah = 22
+  const atas = 26
+  const maks = Math.max(1, ...data.flatMap((d) => [d.penerimaan, d.pengeluaran]))
+  const grup = (W - kiri) / 12
+  const tinggi = (v) => (v / maks) * (H - atas - bawah)
+  return (
+    <figure className="mt-3" style={{ breakInside: 'avoid' }}>
+      <figcaption className="mb-1 text-xs font-semibold">Grafik Penerimaan dan Pengeluaran per Bulan</figcaption>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-2xl" role="img" aria-label="Grafik penerimaan dan pengeluaran per bulan">
+        <rect x={kiri} y={4} width={10} height={10} fill="#1e3a8a" />
+        <text x={kiri + 14} y={13} fontSize="10" fill="#0f172a">Penerimaan</text>
+        <rect x={kiri + 80} y={4} width={10} height={10} fill="#db2777" />
+        <text x={kiri + 94} y={13} fontSize="10" fill="#0f172a">Pengeluaran</text>
+        <text x={W - 4} y={13} fontSize="10" textAnchor="end" fill="#475569">Skala maks {rupiah(maks)}</text>
+        <line x1={kiri} x2={W} y1={H - bawah} y2={H - bawah} stroke="#94a3b8" strokeWidth="1" />
+        {data.map((d, i) => {
+          const x = kiri + i * grup
+          const w = grup * 0.36
+          return (
+            <g key={d.bulan}>
+              <rect x={x + grup * 0.1} y={H - bawah - tinggi(d.penerimaan)} width={w} height={tinggi(d.penerimaan)} fill="#1e3a8a" />
+              <rect x={x + grup * 0.1 + w + 1} y={H - bawah - tinggi(d.pengeluaran)} width={w} height={tinggi(d.pengeluaran)} fill="#db2777" />
+              <text x={x + grup / 2} y={H - 8} fontSize="9" textAnchor="middle" fill="#0f172a">{BULAN_SINGKAT[i]}</text>
+            </g>
+          )
+        })}
+      </svg>
+    </figure>
+  )
+}
+
 export default function LaporanTahunan() {
   const { sekolahId } = useAuth()
   const [tahun, setTahun] = useState(new Date().getFullYear())
   const [vm, setVm] = useState(null)
-  const [sebaran, setSebaran] = useState([])
   const [angka, setAngka] = useState({})
-  const [uang, setUang] = useState({ anggaran: null, penerimaan: null })
+  const [uang, setUang] = useState(KEUANGAN_KOSONG)
   const [memuatAngka, setMemuatAngka] = useState(false)
 
-  const { info, guruList } = useDataSekolah(sekolahId)
+  // Murid, guru, dan rekap demografi (usia, agama, kewarganegaraan)
+  const ks = useKeadaanSekolah(sekolahId)
+
+  const { info } = useDataSekolah(sekolahId)
   const dok = useDokumenTersimpan({ sekolahId, dokumen: 'laporan-tahunan', buatBawaan: bawaan })
   const { data, setData } = dok
   // Hanya dibaca: rekap dari dokumen Buku Kerja Kepala Sekolah yang sudah tersimpan.
@@ -100,30 +202,32 @@ export default function LaporanTahunan() {
     const { data: v } = await supabase.from('visi_misi_sekolah').select('*').eq('sekolah_id', sekolahId).maybeSingle()
     setVm(v || null)
 
-    const { data: sw } = await supabase.from('siswa').select('kelas, jenis_kelamin').eq('sekolah_id', sekolahId)
-    const peta = {}
-    ;(sw || []).forEach((r) => {
-      const k = r.kelas || 'Tanpa kelas'
-      peta[k] = peta[k] || { kelas: k, L: 0, P: 0 }
-      const jk = String(r.jenis_kelamin || '').trim().toUpperCase()[0]
-      if (jk === 'L') peta[k].L++
-      else if (jk === 'P') peta[k].P++
-    })
-    setSebaran(Object.values(peta).sort((a, b) => String(a.kelas).localeCompare(String(b.kelas), 'id', { numeric: true })))
-
-    const hasil = await Promise.all(SUMBER.map((s) => hitung(s, sekolahId, tahun)))
+    const [hasil, keu] = await Promise.all([
+      Promise.all(SUMBER.map((s) => hitung(s, sekolahId, tahun))),
+      muatKeuangan(sekolahId, tahun),
+    ])
     setAngka(Object.fromEntries(SUMBER.map((s, i) => [s.id, hasil[i]])))
-
-    const [a, p] = await Promise.all([jumlahkan(KEUANGAN.anggaran, tahun), jumlahkan(KEUANGAN.penerimaan, tahun)])
-    setUang({ anggaran: a, penerimaan: p })
+    setUang(keu)
     setMemuatAngka(false)
   }, [sekolahId, tahun])
 
   useEffect(() => { muat() }, [muat])
 
-  const totalL = sebaran.reduce((t, r) => t + r.L, 0)
-  const totalP = sebaran.reduce((t, r) => t + r.P, 0)
+  // Turunan keuangan
   const selisih = uang.anggaran != null && uang.penerimaan != null ? uang.penerimaan - uang.anggaran : null
+  const sisaKas = uang.penerimaan != null && uang.pengeluaran != null ? uang.penerimaan - uang.pengeluaran : null
+  const serapan = uang.anggaran > 0 && uang.pengeluaran != null ? (uang.pengeluaran / uang.anggaran) * 100 : null
+
+  // Baris per bulan (hanya bulan yang ada transaksinya) + saldo kumulatif
+  const barisBulan = useMemo(() => {
+    let saldo = 0
+    return uang.perBulan
+      .map((b) => {
+        saldo += b.penerimaan - b.pengeluaran
+        return { ...b, saldo }
+      })
+      .filter((b) => b.penerimaan || b.pengeluaran)
+  }, [uang.perBulan])
 
   // Rekap Buku Kerja Kepala Sekolah (hanya baris yang benar-benar terisi)
   const bk = useMemo(() => {
@@ -167,8 +271,8 @@ export default function LaporanTahunan() {
           </select>
         </label>
         <div className="ml-auto flex items-center gap-2">
-          <button type="button" className={tombolKecil} onClick={muat}>
-            <RefreshCw size={13} className={`mr-1 inline ${memuatAngka ? 'animate-spin' : ''}`} /> Muat ulang angka
+          <button type="button" className={tombolKecil} onClick={() => { muat(); ks.muat() }}>
+            <RefreshCw size={13} className={`mr-1 inline ${memuatAngka || ks.memuat ? 'animate-spin' : ''}`} /> Muat ulang angka
           </button>
           <button
             type="button"
@@ -179,6 +283,19 @@ export default function LaporanTahunan() {
           </button>
         </div>
       </div>
+
+      <PanelOtomatis
+        ks={ks}
+        tahun={tahun}
+        namaSekolah={namaSekolah}
+        vm={vm}
+        angka={angka}
+        uang={uang}
+        bk={bk}
+        narasi={narasi}
+        selisih={selisih}
+        onTerapkan={(n) => setData((d) => ({ ...d, narasi: { ...(d.narasi || {}), [tahun]: n } }))}
+      />
 
       <IsianTtd tempat={data.tempat} tanggal={data.tanggal} onTempat={set('tempat')} onTanggal={set('tanggal')} tempatBawaan={info.tempat} />
 
@@ -224,26 +341,10 @@ export default function LaporanTahunan() {
         </Bagian>
 
         <Bagian huruf="C" judul="Data Peserta Didik dan Pendidik">
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr><Th className="w-8">No</Th><Th>Kelas</Th><Th className="w-24">Laki-laki</Th><Th className="w-24">Perempuan</Th><Th className="w-24">Jumlah</Th></tr>
-              </thead>
-              <tbody>
-                {sebaran.map((r, i) => (
-                  <tr key={r.kelas}>
-                    <Td className="text-center">{i + 1}</Td><Td>{r.kelas}</Td>
-                    <Td className="text-center">{r.L}</Td><Td className="text-center">{r.P}</Td><Td className="text-center">{r.L + r.P}</Td>
-                  </tr>
-                ))}
-                <tr className="font-bold">
-                  <Td className="text-center" colSpan={2}>Total</Td>
-                  <Td className="text-center">{totalL}</Td><Td className="text-center">{totalP}</Td><Td className="text-center">{totalL + totalP}</Td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <p className="mt-2">Jumlah guru dan tenaga kependidikan terdata: <b>{guruList?.length ?? '–'}</b> orang.</p>
+          {ks.error && <p className="no-print mb-2 rounded bg-red-50 p-2 text-xs text-red-700">{ks.error}</p>}
+          <TabelKeadaanMurid ks={ks} />
+          <RekapGuru ks={ks} />
+          <RekapDemografi ks={ks} />
         </Bagian>
 
         <Bagian huruf="D" judul="Pelaksanaan Tugas Kepala Sekolah">
@@ -276,14 +377,59 @@ export default function LaporanTahunan() {
           </table>
         </Bagian>
 
-        <Bagian huruf="F" judul="Keuangan">
+        <Bagian huruf="F" judul="Keuangan (ARKAS dan BKU)">
+          {uang.error && <p className="no-print mb-2 rounded bg-red-50 p-2 text-xs text-red-700">Gagal memuat sebagian data keuangan. {uang.error}</p>}
+
           <table className="w-full border-collapse">
             <tbody>
-              <tr><Td>Total anggaran (RKAS/ARKAS)</Td><Td className="text-right">{rupiah(uang.anggaran)}</Td></tr>
-              <tr><Td>Total penerimaan</Td><Td className="text-right">{rupiah(uang.penerimaan)}</Td></tr>
+              <tr><Td>Total anggaran RKAS/ARKAS tahun {tahun}</Td><Td className="text-right">{rupiah(uang.anggaran)}</Td></tr>
+              <tr><Td>Realisasi penerimaan (BKU)</Td><Td className="text-right">{rupiah(uang.penerimaan)}</Td></tr>
+              <tr><Td>Realisasi pengeluaran / belanja (BKU)</Td><Td className="text-right">{rupiah(uang.pengeluaran)}</Td></tr>
+              <tr><Td>Sisa kas (penerimaan dikurangi pengeluaran)</Td><Td className="text-right">{rupiah(sisaKas)}</Td></tr>
+              <tr><Td>Serapan anggaran (pengeluaran terhadap anggaran)</Td><Td className="text-right">{persen(serapan)}</Td></tr>
               <tr className="font-bold"><Td>Selisih penerimaan terhadap anggaran</Td><Td className="text-right">{rupiah(selisih)}</Td></tr>
             </tbody>
           </table>
+
+          {uang.anggaran == null && (
+            <p className="no-print mt-2 text-xs text-amber-700">
+              Belum ada data ARKAS tahun {tahun}. Impor di menu Keuangan, tab ARKAS.
+            </p>
+          )}
+
+          {barisBulan.length > 0 ? (
+            <>
+              <GrafikKeuangan data={uang.perBulan} />
+              <div className="mt-3 overflow-x-auto" style={{ breakInside: 'avoid' }}>
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr><Th className="w-8">No</Th><Th>Bulan</Th><Th>Penerimaan</Th><Th>Pengeluaran</Th><Th>Saldo Kumulatif</Th></tr>
+                  </thead>
+                  <tbody>
+                    {barisBulan.map((b, i) => (
+                      <tr key={b.bulan}>
+                        <Td className="text-center">{i + 1}</Td>
+                        <Td>{NAMA_BULAN[b.bulan - 1]}</Td>
+                        <Td className="text-right">{rupiah(b.penerimaan)}</Td>
+                        <Td className="text-right">{rupiah(b.pengeluaran)}</Td>
+                        <Td className="text-right">{rupiah(b.saldo)}</Td>
+                      </tr>
+                    ))}
+                    <tr className="font-bold">
+                      <Td className="text-center" colSpan={2}>Total</Td>
+                      <Td className="text-right">{rupiah(uang.penerimaan)}</Td>
+                      <Td className="text-right">{rupiah(uang.pengeluaran)}</Td>
+                      <Td className="text-right">{rupiah(sisaKas)}</Td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            <p className="no-print mt-2 text-xs text-amber-700">
+              Belum ada data BKU tahun {tahun}. Impor di menu Keuangan, tab BKU.
+            </p>
+          )}
         </Bagian>
 
         <Bagian huruf="G" judul="Capaian Program dan Prestasi">
