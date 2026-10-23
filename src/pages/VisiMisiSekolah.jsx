@@ -15,6 +15,167 @@ const KOSONG = {
   tahun_ajaran: '',
 }
 
+// Tema kertas untuk hasil cetak. Warna dipakai lewat inline style agar ikut tercetak.
+const TEMA = {
+  klasik: {
+    nama: 'Klasik Emas',
+    kertas: '#fbf6e9',
+    kertasDalam: '#fffdf6',
+    aksen: '#8a6508',
+    garis: '#b8860b',
+    tinta: '#2b2417',
+    redup: '#6b5a33',
+    kotak: '#f6ecce',
+    batik: '#b8860b',
+    batikOpacity: 0.16,
+  },
+  batik: {
+    nama: 'Biru Batik',
+    kertas: '#eef3fb',
+    kertasDalam: '#fbfdff',
+    aksen: '#1e3a8a',
+    garis: '#c9a227',
+    tinta: '#0f1d3d',
+    redup: '#475a85',
+    kotak: '#e1eaf8',
+    batik: '#c9a227',
+    batikOpacity: 0.28,
+  },
+  hijau: {
+    nama: 'Hijau Daun',
+    kertas: '#eef7ee',
+    kertasDalam: '#fbfffb',
+    aksen: '#166534',
+    garis: '#4d9a63',
+    tinta: '#10261a',
+    redup: '#44624d',
+    kotak: '#dcefdf',
+    batik: '#4d9a63',
+    batikOpacity: 0.2,
+  },
+}
+
+function BatikOverlay({ patternId, warna, opacity = 1, size = 72 }) {
+  return (
+    <svg
+      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
+      preserveAspectRatio="xMidYMid slice"
+      aria-hidden="true"
+    >
+      <defs>
+        <pattern id={patternId} x="0" y="0" width={size} height={size} patternUnits="userSpaceOnUse" patternTransform="rotate(8)">
+          <g fill="none" stroke={warna} strokeWidth="1.1" opacity={opacity}>
+            <ellipse cx={size / 2} cy={size * 0.333} rx={size * 0.125} ry={size * 0.194} opacity="0.55" />
+            <ellipse cx={size / 2} cy={size * 0.667} rx={size * 0.125} ry={size * 0.194} opacity="0.55" />
+            <ellipse cx={size * 0.333} cy={size / 2} rx={size * 0.194} ry={size * 0.125} opacity="0.55" />
+            <ellipse cx={size * 0.667} cy={size / 2} rx={size * 0.194} ry={size * 0.125} opacity="0.55" />
+            <circle cx={size / 2} cy={size / 2} r={size * 0.042} opacity="0.7" />
+          </g>
+          <circle cx={size * 0.11} cy={size * 0.11} r="1.3" fill={warna} opacity={opacity * 0.4} />
+          <circle cx={size * 0.89} cy={size * 0.22} r="1.3" fill={warna} opacity={opacity * 0.4} />
+        </pattern>
+      </defs>
+      <rect x="0" y="0" width="100%" height="100%" fill={`url(#${patternId})`} />
+    </svg>
+  )
+}
+
+function Sudut({ warna, posisi }) {
+  const putar = { 'kiri-atas': 0, 'kanan-atas': 90, 'kanan-bawah': 180, 'kiri-bawah': 270 }[posisi]
+  const letak = {
+    'kiri-atas': { top: 10, left: 10 },
+    'kanan-atas': { top: 10, right: 10 },
+    'kanan-bawah': { bottom: 10, right: 10 },
+    'kiri-bawah': { bottom: 10, left: 10 },
+  }[posisi]
+  return (
+    <svg
+      width="56"
+      height="56"
+      viewBox="0 0 56 56"
+      fill="none"
+      stroke={warna}
+      strokeWidth="1.6"
+      style={{ position: 'absolute', transform: `rotate(${putar}deg)`, ...letak }}
+      aria-hidden="true"
+    >
+      <path d="M2 54 V14 Q2 2 14 2 H54" />
+      <path d="M10 54 V20 Q10 10 20 10 H54" opacity="0.5" />
+      <circle cx="14" cy="14" r="3.2" fill={warna} stroke="none" />
+    </svg>
+  )
+}
+
+function Pemisah({ warna }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '14px auto', width: '70%' }}>
+      <div style={{ flex: 1, height: 1, background: warna, opacity: 0.6 }} />
+      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+        <rect x="3" y="3" width="8" height="8" transform="rotate(45 7 7)" fill={warna} />
+      </svg>
+      <div style={{ flex: 1, height: 1, background: warna, opacity: 0.6 }} />
+    </div>
+  )
+}
+
+function JudulBagian({ huruf, teks, t }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '18px 0 10px' }}>
+      <span
+        style={{
+          width: 26,
+          height: 26,
+          borderRadius: 6,
+          background: t.aksen,
+          color: '#fff',
+          fontWeight: 700,
+          fontSize: 13,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
+        {huruf}
+      </span>
+      <h3 style={{ margin: 0, fontWeight: 700, fontSize: 15, letterSpacing: '0.12em', color: t.aksen, textTransform: 'uppercase' }}>
+        {teks}
+      </h3>
+      <div style={{ flex: 1, height: 1, background: t.garis, opacity: 0.5 }} />
+    </div>
+  )
+}
+
+function DaftarBernomor({ items, t }) {
+  return (
+    <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+      {items.map((m, i) => (
+        <li key={i} style={{ display: 'flex', gap: 10, marginBottom: 7, breakInside: 'avoid' }}>
+          <span
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: '50%',
+              border: `1.5px solid ${t.aksen}`,
+              color: t.aksen,
+              fontSize: 11,
+              fontWeight: 700,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              marginTop: 1,
+            }}
+          >
+            {i + 1}
+          </span>
+          <span style={{ textAlign: 'justify', color: t.tinta }}>{m}</span>
+        </li>
+      ))}
+    </ol>
+  )
+}
+
 function ListEditor({ label, hint, items, onChange }) {
   const ubah = (i, v) => onChange(items.map((x, idx) => (idx === i ? v : x)))
   const hapus = (i) => onChange(items.filter((_, idx) => idx !== i))
@@ -63,6 +224,8 @@ export default function VisiMisiSekolah() {
 
   const [form, setForm] = useState(KOSONG)
   const [sekolah, setSekolah] = useState(null)
+  const [logoUrl, setLogoUrl] = useState('')
+  const [tema, setTema] = useState('klasik')
   const [tab, setTab] = useState('isi')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -80,6 +243,10 @@ export default function VisiMisiSekolah() {
       if (batal) return
       if (ps.data) {
         setSekolah({ nama: ps.data.nama_sekolah, alamat: ps.data.alamat, kota: ps.data.kabupaten })
+        if (ps.data.logo_path) {
+          const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(ps.data.logo_path)
+          setLogoUrl(pub.publicUrl)
+        }
       }
       if (vm.data) {
         setForm({
@@ -126,6 +293,7 @@ export default function VisiMisiSekolah() {
 
   const misi = form.misi.filter((s) => s.trim())
   const tujuan = form.tujuan.filter((s) => s.trim())
+  const t = TEMA[tema]
 
   return (
     <Layout
@@ -134,9 +302,14 @@ export default function VisiMisiSekolah() {
     >
       <style>{`
         @media print {
+          @page { size: A4; margin: 8mm; }
           body * { visibility: hidden; }
           #area-cetak, #area-cetak * { visibility: visible; }
-          #area-cetak { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none !important; }
+          #area-cetak {
+            position: absolute; left: 0; top: 0; width: 100%;
+            box-shadow: none !important; border-radius: 0 !important;
+            -webkit-print-color-adjust: exact; print-color-adjust: exact;
+          }
         }
       `}</style>
 
@@ -145,12 +318,11 @@ export default function VisiMisiSekolah() {
           <ArrowLeft size={16} /> Administrasi Kepala Sekolah
         </Link>
 
-
         <div className="flex gap-2 mb-4">
           {[
             ['isi', 'Isi Dokumen'],
             ['cetak', 'Pratinjau & Cetak'],
-          ].map(([k, t]) => (
+          ].map(([k, tt]) => (
             <button
               key={k}
               onClick={() => setTab(k)}
@@ -158,7 +330,7 @@ export default function VisiMisiSekolah() {
                 tab === k ? 'bg-blue-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
             >
-              {t}
+              {tt}
             </button>
           ))}
         </div>
@@ -193,7 +365,7 @@ export default function VisiMisiSekolah() {
 
             <div>
               <label className="text-sm font-semibold text-slate-800">Visi</label>
-              <p className="text-xs text-slate-500 mb-1">Satu kalimat tentang sekolah yang dicita-citakan.</p>
+              <p className="text-xs text-slate-500 mb-1">Satu kalimat tentang sekolah yang dicita-citakan. Tidak perlu memakai tanda kutip.</p>
               <textarea
                 rows={3}
                 value={form.visi}
@@ -250,60 +422,146 @@ export default function VisiMisiSekolah() {
         )}
 
         {!loading && tab === 'cetak' && (
-          <button
-            onClick={() => window.print()}
-            className="inline-flex items-center gap-2 bg-blue-900 hover:bg-blue-950 text-white px-4 py-2 rounded-lg text-sm font-medium mb-4"
-          >
-            <Printer size={16} /> Cetak
-          </button>
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            <button
+              onClick={() => window.print()}
+              className="inline-flex items-center gap-2 bg-blue-900 hover:bg-blue-950 text-white px-4 py-2 rounded-lg text-sm font-medium"
+            >
+              <Printer size={16} /> Cetak
+            </button>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-slate-700">Tema kertas:</span>
+              {Object.entries(TEMA).map(([k, v]) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setTema(k)}
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border ${
+                    tema === k ? 'border-blue-900 bg-blue-50 text-blue-900' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <span style={{ width: 12, height: 12, borderRadius: 3, background: v.aksen, display: 'inline-block' }} />
+                  {v.nama}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
       </div>
 
       {!loading && tab === 'cetak' && (
         <div className="max-w-3xl mx-auto px-4 pb-10">
-          <div id="area-cetak" className="bg-white border border-slate-200 rounded-2xl p-8 sm:p-12 text-slate-900 leading-relaxed">
-            <div className="text-center border-b-2 border-slate-800 pb-3 mb-6">
-              <p className="text-sm">VISI, MISI, DAN TUJUAN</p>
-              <h2 className="text-lg font-bold">{sekolah?.nama || 'NAMA SEKOLAH'}</h2>
-              {sekolah?.alamat && <p className="text-xs text-slate-600">{sekolah.alamat}</p>}
-              {form.tahun_ajaran && <p className="text-xs text-slate-600">Tahun Ajaran {form.tahun_ajaran}</p>}
-            </div>
+          <div
+            id="area-cetak"
+            style={{
+              position: 'relative',
+              background: t.kertas,
+              color: t.tinta,
+              borderRadius: 16,
+              padding: 14,
+              lineHeight: 1.6,
+              fontSize: 14,
+              boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
+              WebkitPrintColorAdjust: 'exact',
+              printColorAdjust: 'exact',
+            }}
+          >
+            {/* Bingkai ganda */}
+            <div
+              style={{
+                position: 'relative',
+                overflow: 'hidden',
+                border: `4px double ${t.garis}`,
+                background: t.kertasDalam,
+                padding: '44px 48px 40px',
+              }}
+            >
+              <BatikOverlay patternId={`batikVisiMisi-${tema}`} warna={t.batik} opacity={t.batikOpacity} />
+              <Sudut warna={t.garis} posisi="kiri-atas" />
+              <Sudut warna={t.garis} posisi="kanan-atas" />
+              <Sudut warna={t.garis} posisi="kanan-bawah" />
+              <Sudut warna={t.garis} posisi="kiri-bawah" />
 
-            <h3 className="font-bold mb-1">A. Visi</h3>
-            <p className="mb-5 text-justify">{form.visi || '—'}</p>
-            {form.motto && (
-              <p className="mb-5 italic">Motto: {form.motto}</p>
-            )}
+              <div style={{ position: 'relative' }}>
+                {/* Kepala dokumen */}
+                <div style={{ textAlign: 'center' }}>
+                  {logoUrl && (
+                    <img
+                      src={logoUrl}
+                      alt="Logo sekolah"
+                      style={{ height: 72, width: 'auto', objectFit: 'contain', margin: '0 auto 8px', display: 'block' }}
+                    />
+                  )}
+                  <p style={{ margin: 0, fontSize: 12, letterSpacing: '0.35em', color: t.redup, fontWeight: 600 }}>
+                    VISI, MISI, DAN TUJUAN
+                  </p>
+                  <h2 style={{ margin: '4px 0 2px', fontSize: 24, fontWeight: 800, color: t.aksen, letterSpacing: '0.04em' }}>
+                    {sekolah?.nama || 'NAMA SEKOLAH'}
+                  </h2>
+                  {sekolah?.alamat && <p style={{ margin: 0, fontSize: 11, color: t.redup }}>{sekolah.alamat}</p>}
+                  {form.tahun_ajaran && (
+                    <p style={{ margin: '2px 0 0', fontSize: 11, color: t.redup }}>Tahun Ajaran {form.tahun_ajaran}</p>
+                  )}
+                  <Pemisah warna={t.garis} />
+                </div>
 
-            <h3 className="font-bold mb-1">B. Misi</h3>
-            {misi.length ? (
-              <ol className="list-decimal pl-6 mb-5 space-y-1 text-justify">
-                {misi.map((m, i) => (
-                  <li key={i}>{m}</li>
-                ))}
-              </ol>
-            ) : (
-              <p className="mb-5">—</p>
-            )}
+                {/* Visi */}
+                <JudulBagian huruf="A" teks="Visi" t={t} />
+                <div
+                  style={{
+                    background: t.kotak,
+                    borderLeft: `5px solid ${t.aksen}`,
+                    borderRadius: 6,
+                    padding: '14px 18px',
+                    position: 'relative',
+                  }}
+                >
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: -6,
+                      left: 10,
+                      fontSize: 40,
+                      lineHeight: 1,
+                      color: t.garis,
+                      opacity: 0.5,
+                      fontFamily: 'Georgia, serif',
+                    }}
+                  >
+                    “
+                  </span>
+                  <p style={{ margin: 0, fontStyle: 'italic', fontSize: 15, textAlign: 'center', color: t.tinta }}>
+                    {form.visi || '—'}
+                  </p>
+                </div>
+                {form.motto && (
+                  <p style={{ textAlign: 'center', margin: '12px 0 0', fontWeight: 700, color: t.aksen, letterSpacing: '0.06em' }}>
+                    ✦ {form.motto} ✦
+                  </p>
+                )}
 
-            <h3 className="font-bold mb-1">C. Tujuan Sekolah</h3>
-            {tujuan.length ? (
-              <ol className="list-decimal pl-6 mb-8 space-y-1 text-justify">
-                {tujuan.map((t, i) => (
-                  <li key={i}>{t}</li>
-                ))}
-              </ol>
-            ) : (
-              <p className="mb-8">—</p>
-            )}
+                {/* Misi */}
+                <JudulBagian huruf="B" teks="Misi" t={t} />
+                {misi.length ? <DaftarBernomor items={misi} t={t} /> : <p style={{ margin: 0 }}>—</p>}
 
-            <div className="flex justify-end">
-              <div className="text-center text-sm min-w-[220px]">
-                <p>{sekolah?.kota ? `${sekolah.kota}, ` : ''}……………………</p>
-                <p>Kepala Sekolah,</p>
-                <div className="h-20" />
-                <p className="font-bold underline">{form.kepala_sekolah || '……………………'}</p>
-                <p>NIP. {form.nip_kepala || '……………………'}</p>
+                {/* Tujuan */}
+                <JudulBagian huruf="C" teks="Tujuan Sekolah" t={t} />
+                {tujuan.length ? <DaftarBernomor items={tujuan} t={t} /> : <p style={{ margin: 0 }}>—</p>}
+
+                {/* Tanda tangan */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 28, breakInside: 'avoid' }}>
+                  <div style={{ textAlign: 'center', minWidth: 230, fontSize: 13 }}>
+                    <p style={{ margin: 0 }}>{sekolah?.kota ? `${sekolah.kota}, ` : ''}……………………</p>
+                    <p style={{ margin: 0 }}>Kepala Sekolah,</p>
+                    <div style={{ height: 72 }} />
+                    <p style={{ margin: 0, fontWeight: 700, textDecoration: 'underline' }}>
+                      {form.kepala_sekolah || '……………………'}
+                    </p>
+                    <p style={{ margin: 0 }}>NIP. {form.nip_kepala || '……………………'}</p>
+                  </div>
+                </div>
+
+                <Pemisah warna={t.garis} />
               </div>
             </div>
           </div>
