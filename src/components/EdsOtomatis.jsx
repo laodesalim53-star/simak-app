@@ -7,6 +7,7 @@
 //  - Keuangan       : muatKeuanganTahun (lib/dataKeuanganLaporan.js), ARKAS + BKU
 //  - Program kerja  : dokumen 'buku-kerja' (Buku Kerja Kepala Sekolah)
 //  - Visi & misi    : tabel visi_misi_sekolah
+//  - Catatan admin  : tabel administrasi_kepsek (inventaris, KOSP, RKT, notulen rapat)
 //
 // Isian yang sudah ditulis pengguna TIDAK ditimpa, kecuali kotak "Timpa isian" dicentang.
 // Bagian yang tidak bisa diketahui dari database ditandai [lengkapi: ...] agar diisi sendiri.
@@ -53,7 +54,8 @@ export function kenaliStandar(teks) {
 }
 
 // Menyusun draf { capaian, bukti, rencana } untuk satu standar dari data terkini.
-export function susunDrafEds(kunci, { ks, keu, bk, visiMisi, tahunAnggaran }) {
+export function susunDrafEds(kunci, { ks, keu, bk, visiMisi, tahunAnggaran, adm }) {
+  const inv = adm?.inventaris || { jenis: 0, unit: 0, rusak: 0 }
   const siswa = ks?.totalSiswaAktif || 0
   const guru = ks?.guru?.total || 0
   const rombel = ks?.totalRombel || 0
@@ -87,7 +89,8 @@ export function susunDrafEds(kunci, { ks, keu, bk, visiMisi, tahunAnggaran }) {
             ? `Program kerja yang tercantum dalam Buku Kerja Kepala Sekolah berjumlah ${namaProgram.length}, antara lain ${namaProgram.slice(0, 3).join('; ')}.`
             : '[lengkapi: program kerja kurikulum yang sudah berjalan]',
           visiMisi?.visi ? 'Visi, misi, dan tujuan sekolah sudah tersusun dan menjadi acuan penyusunan KOSP.' : '[lengkapi: status penyusunan KOSP dan visi misi]',
-        ].join('\n'),
+          adm?.kosp ? `Dokumen KOSP tahun ajaran ${tahunAnggaran}/${tahunAnggaran + 1} sudah memuat ${adm.kosp} bagian.` : '',
+        ].filter(Boolean).join('\n'),
         bukti: 'Dokumen KOSP, Kalender Pendidikan, Buku Kerja Kepala Sekolah, dan dokumen Visi, Misi, dan Tujuan sekolah.',
         rencana: daftarBernomor([
           'Meninjau KOSP setiap awal tahun ajaran agar sesuai dengan kebutuhan murid dan kondisi sekolah.',
@@ -144,10 +147,13 @@ export function susunDrafEds(kunci, { ks, keu, bk, visiMisi, tahunAnggaran }) {
       return {
         capaian: [
           `Sarana dan prasarana digunakan untuk melayani ${siswa} siswa dalam ${rombel} rombongan belajar.`,
-          '[lengkapi: kondisi ruang kelas, perpustakaan, sanitasi, dan alat peraga]',
+          inv.jenis
+            ? `Buku Inventaris mencatat ${inv.jenis} jenis barang (${inv.unit} unit); ${inv.rusak} jenis di antaranya dalam kondisi tidak baik.`
+            : '[lengkapi: kondisi ruang kelas, perpustakaan, sanitasi, dan alat peraga]',
         ].join('\n'),
         bukti: 'Buku Inventaris, daftar kondisi ruang dan barang, serta foto sarana dan prasarana.',
         rencana: daftarBernomor([
+          ...(inv.rusak ? [`Memperbaiki atau mengganti ${inv.rusak} jenis barang yang kondisinya tidak baik sesuai prioritas.`] : []),
           'Memutakhirkan Buku Inventaris dan memeriksa kondisi barang secara berkala.',
           'Mengusulkan perbaikan atau pengadaan sarana prioritas melalui RKAS.',
           'Melibatkan warga sekolah dalam perawatan lingkungan dan fasilitas.',
@@ -160,6 +166,8 @@ export function susunDrafEds(kunci, { ks, keu, bk, visiMisi, tahunAnggaran }) {
           visiMisi?.visi ? 'Visi, misi, dan tujuan sekolah telah dirumuskan.' : '[lengkapi: perencanaan sekolah (visi, misi, RKT)]',
           namaProgram.length ? `Buku Kerja Kepala Sekolah memuat ${namaProgram.length} program kerja.` : '[lengkapi: program kerja kepala sekolah]',
           bk?.jurnal ? `Jurnal kegiatan kepala sekolah tercatat ${bk.jurnal} entri.` : '',
+          adm?.rkt ? `Rencana Kerja Tahunan ${tahunAnggaran} memuat ${adm.rkt} baris program dan kegiatan.` : '',
+          adm?.notulen ? `Rapat sekolah yang tercatat dalam notulen tahun ${tahunAnggaran} berjumlah ${adm.notulen} kali.` : '',
         ]
           .filter(Boolean)
           .join('\n'),
@@ -209,6 +217,7 @@ export default function EdsOtomatis({ sekolahId, tanggal, standar, nilai, onTera
   const bukuKerja = useDokumenTersimpan({ sekolahId, dokumen: 'buku-kerja', buatBawaan: bawaanBukuKerja })
   const [visiMisi, setVisiMisi] = useState(null)
   const [keu, setKeu] = useState(KEUANGAN_LPJ_KOSONG)
+  const [adm, setAdm] = useState({ dimuat: false, inventaris: { jenis: 0, unit: 0, rusak: 0 }, kosp: 0, rkt: 0, notulen: 0 })
   const [timpa, setTimpa] = useState(false)
   const [pesan, setPesan] = useState('')
 
@@ -236,6 +245,37 @@ export default function EdsOtomatis({ sekolahId, tanggal, standar, nilai, onTera
     }
   }, [sekolahId, tahunAnggaran])
 
+  // Catatan di administrasi_kepsek: inventaris, KOSP, RKT, notulen rapat
+  useEffect(() => {
+    if (!sekolahId) return
+    let batal = false
+    supabase
+      .from('administrasi_kepsek')
+      .select('jenis, tanggal, data')
+      .eq('sekolah_id', sekolahId)
+      .in('jenis', ['inventaris', 'kosp', 'rkt', 'notulen-rapat'])
+      .then(({ data, error }) => {
+        if (batal) return
+        const per = (j) => (error ? [] : (data || []).filter((r) => r.jenis === j))
+        const thn = String(tahunAnggaran)
+        const inv = per('inventaris')
+        setAdm({
+          dimuat: true,
+          inventaris: {
+            jenis: inv.length,
+            unit: inv.reduce((n, r) => n + (Number(r.data?.jumlah) || 1), 0),
+            rusak: inv.filter((r) => r.data?.kondisi && r.data.kondisi !== 'Baik').length,
+          },
+          kosp: per('kosp').filter((r) => String(r.data?.tahun_ajaran || '').trim().startsWith(thn)).length,
+          rkt: per('rkt').filter((r) => String(r.data?.tahun) === thn).length,
+          notulen: per('notulen-rapat').filter((r) => r.tanggal && String(new Date(r.tanggal).getFullYear()) === thn).length,
+        })
+      })
+    return () => {
+      batal = true
+    }
+  }, [sekolahId, tahunAnggaran])
+
   const bk = useMemo(() => {
     const x = bukuKerja.data || {}
     return {
@@ -246,10 +286,10 @@ export default function EdsOtomatis({ sekolahId, tanggal, standar, nilai, onTera
   }, [bukuKerja.data])
 
   const kunci = kenaliStandar(standar)
-  const siap = !ks.memuat && !bukuKerja.memuat && keu.dimuat
+  const siap = !ks.memuat && !bukuKerja.memuat && keu.dimuat && adm.dimuat
   const drafSekarang = useMemo(
-    () => (kunci && siap ? susunDrafEds(kunci, { ks, keu, bk, visiMisi, tahunAnggaran }) : null),
-    [kunci, siap, ks, keu, bk, visiMisi, tahunAnggaran]
+    () => (kunci && siap ? susunDrafEds(kunci, { ks, keu, bk, visiMisi, tahunAnggaran, adm }) : null),
+    [kunci, siap, ks, keu, bk, visiMisi, tahunAnggaran, adm]
   )
 
   // Draf terakhir yang kita isikan sendiri; dipakai agar ganti Standar boleh mengganti draf lama
