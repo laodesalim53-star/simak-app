@@ -73,6 +73,12 @@ const capaianDari = (program) =>
   }))
 const hariIni = () => new Date().toLocaleDateString('sv-SE')
 
+// Buang awalan "Kecamatan" bila sudah tertulis di data, supaya kop tidak menampilkan "Kecamatan Kecamatan ..."
+const tanpaAwalan = (teks, kata) => {
+  const s = String(teks || '').trim()
+  return s.replace(new RegExp(`^${kata}\\s+`, 'i'), '')
+}
+
 function Bagian({ judul, petunjuk, children, aksi }) {
   return (
     <section className="bg-white border border-slate-200 rounded-2xl p-4">
@@ -166,6 +172,18 @@ export default function LaporanPertanggungjawabanKepsek() {
   const bukuKerja = useDokumenTersimpan({ sekolahId, dokumen: 'buku-kerja', buatBawaan: bawaanBukuKerja })
 
   const namaSekolah = info.sekolah?.nama_sekolah || info.sekolah?.nama || ''
+
+  // Data untuk kop surat: kecamatan dibersihkan dari awalan "Kecamatan" agar tidak dobel
+  const infoKop = useMemo(() => {
+    if (!info?.sekolah) return info
+    return {
+      ...info,
+      sekolah: {
+        ...info.sekolah,
+        kecamatan: tanpaAwalan(info.sekolah.kecamatan, 'kecamatan'),
+      },
+    }
+  }, [info])
 
   // Tahun anggaran: bawaan = tahun awal tahun ajaran (mis. 2026/2027 -> 2026), bisa diubah
   const cocok = String(tahun).match(/^(\d{4})/)
@@ -614,7 +632,7 @@ export default function LaporanPertanggungjawabanKepsek() {
         <div className="max-w-4xl mx-auto px-4 pb-10">
           <PemeriksaDokumen hasil={hasilPeriksa} terbuka={false} />
           <div id="area-cetak-adm" className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6 text-slate-900 text-[13px] leading-relaxed">
-            <KopSurat info={info} namaSekolah={namaSekolah} />
+            <KopSurat info={infoKop} namaSekolah={namaSekolah} />
 
             <div className="mb-4 text-center">
               <p className="text-base font-bold uppercase underline underline-offset-4">Laporan Pertanggungjawaban Kepala Sekolah</p>
