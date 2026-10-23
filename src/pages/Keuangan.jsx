@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
+import LpjReminder from '../components/LpjReminder'
 import { eksporExcel, eksporPDF } from '../lib/exportUtils'
 import ArkasImportModal from '../components/ArkasImportModal'
 import BkuImportModal from '../components/BkuImportModal'
@@ -389,6 +390,10 @@ export default function Keuangan() {
         )
       }
     >
+      {/* Kelola jadwal LPJ — banner pengingatnya sudah tampil global dari Layout,
+          jadi di sini cukup tautan "Kelola jadwal LPJ" (tampilBanner={false}). */}
+      <LpjReminder tampilBanner={false} />
+
       {/* Menu tab */}
       <div className="flex gap-1 mb-4 border-b border-ink-950/10">
         {MENU_TABS.map(({ key, label, icon: Icon }) => (
