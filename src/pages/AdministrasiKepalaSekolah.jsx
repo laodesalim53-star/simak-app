@@ -5,7 +5,7 @@ import {
   ClipboardList, ArrowLeftRight, UserCheck, Mail, FileSignature, Award, Eye,
   Users, Package, ClipboardEdit, FileBarChart, School, FileText, ShieldCheck,
   Compass, FileCheck,
-} from 'lucide-react''
+} from 'lucide-react'
 import Layout from '../components/Layout'
 
 // Palet warna per kartu — sama polanya dengan PusatLaporanGuru.jsx.
