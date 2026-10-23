@@ -114,8 +114,8 @@ const bawaanBukuKerja = () => ({ jurnal: [], program: [], pembinaan: [] })
 
 function Bagian({ huruf, judul, children }) {
   return (
-    <section className="mt-5" style={{ breakInside: 'avoid-page' }}>
-      <h3 className="mb-2 text-sm font-bold uppercase">{huruf}. {judul}</h3>
+    <section className="mt-5">
+      <h3 className="mb-2 text-sm font-bold uppercase" style={{ breakAfter: 'avoid' }}>{huruf}. {judul}</h3>
       {children}
     </section>
   )
@@ -134,6 +134,74 @@ function Narasi({ nilai, onUbah, label, baris = 4 }) {
       <p className="hidden whitespace-pre-line text-justify print:block">{nilai || '-'}</p>
     </>
   )
+}
+
+// Prestasi: diisi manual per tahun laporan, disimpan bersama dokumen (data.prestasi[tahun]), tanpa tabel baru.
+const TINGKAT_PRESTASI = ['Sekolah', 'Kecamatan', 'Kabupaten', 'Provinsi', 'Nasional', 'Internasional']
+const prestasiBaru = () => ({ nama: '', peraih: '', tingkat: 'Kecamatan', juara: '' })
+
+function DaftarPrestasi({ rows, onUbah }) {
+  const ubah = (i, k, v) => onUbah(rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)))
+  const hapus = (i) => onUbah(rows.filter((_, j) => j !== i))
+  const terisi = rows.filter((r) => r.nama?.trim())
+  const inp = 'w-full rounded border border-slate-300 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-300'
+  return (
+    <>
+      <div className="no-print space-y-2">
+        {rows.map((r, i) => (
+          <div key={i} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_130px_120px_auto]">
+            <input className={inp} placeholder="Nama prestasi / lomba" value={r.nama} onChange={(e) => ubah(i, 'nama', e.target.value)} />
+            <input className={inp} placeholder="Peraih (siswa / guru / sekolah)" value={r.peraih} onChange={(e) => ubah(i, 'peraih', e.target.value)} />
+            <select className={inp} value={r.tingkat} onChange={(e) => ubah(i, 'tingkat', e.target.value)}>
+              {TINGKAT_PRESTASI.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <input className={inp} placeholder="Juara / peringkat" value={r.juara} onChange={(e) => ubah(i, 'juara', e.target.value)} />
+            <button type="button" className={tombolKecil} onClick={() => hapus(i)}>Hapus</button>
+          </div>
+        ))}
+        <button type="button" className={tombolKecil} onClick={() => onUbah([...rows, prestasiBaru()])}>+ Tambah prestasi</button>
+      </div>
+      {terisi.length > 0 ? (
+        <div className="hidden print:block">
+          <table className="w-full border-collapse">
+            <thead><tr><Th className="w-8">No</Th><Th>Prestasi / Lomba</Th><Th>Peraih</Th><Th className="w-24">Tingkat</Th><Th className="w-28">Juara</Th></tr></thead>
+            <tbody>
+              {terisi.map((r, i) => (
+                <tr key={i}><Td className="text-center">{i + 1}</Td><Td>{r.nama}</Td><Td>{r.peraih}</Td><Td>{r.tingkat}</Td><Td>{r.juara}</Td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="hidden print:block">-</p>
+      )}
+    </>
+  )
+}
+
+// Draf Capaian Program: hanya merangkum angka yang tercatat di sistem (tidak mengarang hasil/prestasi).
+function buatCapaian({ tahun, ks, bk, angka, uang, serapan, jumlahPrestasi }) {
+  const p = []
+  if (ks.totalSiswa > 0) {
+    p.push(`Pada tahun ${tahun}, sekolah melayani ${ks.totalSiswa} peserta didik dalam ${ks.totalRombel} rombongan belajar dengan dukungan ${ks.guru.total} guru dan tenaga kependidikan.`)
+  }
+  if (bk.program.length) {
+    const daftar = bk.program.slice(0, 5).map((r) => r.program.trim()).join('; ')
+    p.push(`Program kerja kepala sekolah yang tercatat dalam Buku Kerja berjumlah ${bk.program.length} program, antara lain: ${daftar}${bk.program.length > 5 ? ', dan lainnya' : ''}.`)
+  }
+  if (bk.jurnal || bk.pembinaan) {
+    p.push(`Pelaksanaan tugas kepala sekolah terdokumentasi melalui ${bk.jurnal} kegiatan pada jurnal harian dan ${bk.pembinaan} kali pembinaan guru dan tenaga kependidikan.`)
+  }
+  const adm = [['surat masuk', angka.surat_masuk], ['surat keluar', angka.surat_keluar], ['rapat', angka.notulen], ['kunjungan tamu', angka.tamu]]
+    .filter(([, n]) => n > 0)
+    .map(([l, n]) => `${n} ${l}`)
+  if (adm.length) p.push(`Administrasi sekolah tercatat sebanyak ${adm.join(', ')}.`)
+  if (serapan != null) {
+    p.push(`Realisasi belanja mencapai ${rupiah(uang.pengeluaran)} atau ${persen(serapan)} dari total anggaran ${rupiah(uang.anggaran)}.`)
+  }
+  if (jumlahPrestasi > 0) p.push(`Prestasi yang diraih sepanjang tahun ${tahun} berjumlah ${jumlahPrestasi} (rincian pada tabel prestasi).`)
+  p.push('[Tambahkan capaian lain, mis. hasil asesmen, kegiatan penguatan karakter, perbaikan sarana prasarana, atau akreditasi.]')
+  return p.join('\n\n')
 }
 
 // Grafik penerimaan vs pengeluaran per bulan (SVG, ikut tercetak; angka lengkap ada di tabel di bawahnya).
@@ -194,6 +262,8 @@ export default function LaporanTahunan() {
   const setNarasi = (k) => (v) =>
     setData((d) => ({ ...d, narasi: { ...(d.narasi || {}), [tahun]: { ...NARASI_KOSONG, ...(d.narasi?.[tahun] || {}), [k]: v } } }))
   const set = (k) => (v) => setData((d) => ({ ...d, [k]: v }))
+  const prestasi = data.prestasi?.[tahun] || []
+  const setPrestasi = (rows) => setData((d) => ({ ...d, prestasi: { ...(d.prestasi || {}), [tahun]: rows } }))
 
   const muat = useCallback(async () => {
     if (!sekolahId) return
@@ -240,9 +310,26 @@ export default function LaporanTahunan() {
     }
   }, [bukuKerja.data])
 
+  const isiCapaian = () => {
+    if (narasi.capaian.trim() && !window.confirm('Isian capaian yang sudah ada akan ditimpa. Lanjutkan?')) return
+    setNarasi('capaian')(
+      buatCapaian({ tahun, ks, bk, angka, uang, serapan, jumlahPrestasi: prestasi.filter((r) => r.nama?.trim()).length })
+    )
+  }
+
   return (
     <Layout title="Laporan Tahunan" subtitle="Disusun otomatis dari data administrasi yang sudah ada.">
       <style>{cssCetak('portrait')}</style>
+      <style>{`
+        @media print {
+          /* Bagian panjang (mis. Visi-Misi) boleh terpotong antar halaman, supaya tidak meninggalkan celah kosong. */
+          #area-cetak-adm [style*="break-inside"] { break-inside: auto !important; }
+          #area-cetak-adm figure[style*="break-inside"] { break-inside: avoid !important; }
+          #area-cetak-adm tr { break-inside: avoid; }
+          #area-cetak-adm thead { display: table-header-group; }
+          #area-cetak-adm h3 { break-after: avoid; }
+        }
+      `}</style>
 
       <KotakSimpan
         judul="Laporan Tahunan"
@@ -433,7 +520,13 @@ export default function LaporanTahunan() {
         </Bagian>
 
         <Bagian huruf="G" judul="Capaian Program dan Prestasi">
-          <Narasi nilai={narasi.capaian} onUbah={setNarasi('capaian')} label="Capaian program dan prestasi sekolah" baris={6} />
+          <div className="no-print mb-2">
+            <button type="button" className={tombolKecil} onClick={isiCapaian}>Isi draf capaian dari data</button>
+          </div>
+          <p className="mb-1 font-semibold">1. Capaian Program</p>
+          <Narasi nilai={narasi.capaian} onUbah={setNarasi('capaian')} label="Capaian program sekolah" baris={6} />
+          <p className="mb-1 mt-3 font-semibold">2. Prestasi</p>
+          <DaftarPrestasi rows={prestasi} onUbah={setPrestasi} />
         </Bagian>
         <Bagian huruf="H" judul="Kendala dan Hambatan">
           <Narasi nilai={narasi.kendala} onUbah={setNarasi('kendala')} label="Kendala yang dihadapi" />
