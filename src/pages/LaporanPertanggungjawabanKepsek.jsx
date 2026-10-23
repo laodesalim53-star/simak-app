@@ -1,9 +1,28 @@
+// src/pages/LaporanPertanggungjawabanKepsek.jsx
+// LPJ Kepala Sekolah per tahun ajaran, disimpan di tabel lpj_kepsek (sekolah_id, tahun_ajaran, data).
+//
+// Terisi otomatis dari:
+//  - Murid & guru     : useKeadaanSekolah (components/LaporanTahunanOtomatis.jsx), siswa aktif + kelas + guru aktif
+//  - Anggaran / BKU   : muatKeuanganTahun (lib/dataKeuanganLaporan.js), arkas_anggaran + bku_kas per kode rekening
+//  - Capaian program  : dokumen 'buku-kerja' (Buku Kerja Kepala Sekolah)
+//  - Kop, kepala sekolah, NIP, tempat : useDataSekolah (sama dengan Laporan Tahunan)
+// Bagian yang masih kosong terisi otomatis saat halaman dibuka; yang sudah Anda isi TIDAK ditimpa.
 import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Plus, Trash2, Save, Printer, Loader2, RefreshCw } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Save, Printer, Loader2, RefreshCw, Sparkles, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import Layout from '../components/Layout'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
+import { KopSurat, cssCetak } from '../components/AdministrasiKepsekKomponen'
+import { useDataSekolah, useDokumenTersimpan } from '../lib/administrasiKepsek'
+import {
+  useKeadaanSekolah,
+  TabelKeadaanMurid,
+  RekapGuru,
+  RekapDemografi,
+  buatNarasi,
+} from '../components/LaporanTahunanOtomatis'
+import { muatKeuanganTahun, KEUANGAN_LPJ_KOSONG } from '../lib/dataKeuanganLaporan'
 
 const tahunAjaranSekarang = () => {
   const n = new Date()
@@ -14,9 +33,13 @@ const tahunAjaranSekarang = () => {
 const DATA_AWAL = {
   pendahuluan: '',
   jumlah_siswa: '',
+  jumlah_l: '',
+  jumlah_p: '',
   jumlah_guru: '',
   jumlah_rombel: '',
   capaian: [{ bidang: '', program: '', target: '', capaian: '', ket: '' }],
+  tahun_anggaran: '',
+  penerimaan: '',
   keuangan: [{ uraian: '', anggaran: '', realisasi: '' }],
   kendala: [{ masalah: '', solusi: '' }],
   rtl: [''],
@@ -27,10 +50,29 @@ const DATA_AWAL = {
   nip_kepala: '',
 }
 
+const bawaanBukuKerja = () => ({ jurnal: [], program: [], pembinaan: [] })
+
 const rupiah = (n) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(n) || 0)
 
 const input = 'w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300'
+
+// ---- pembantu pengisian otomatis ----
+const kosongKeuangan = (rows) => rows.every((r) => !r.uraian.trim() && !r.anggaran && !r.realisasi)
+const kosongCapaian = (rows) => rows.every((r) => !r.program.trim())
+const barisKeuanganDari = (keu) =>
+  keu.perKelompok.map((g) => ({ uraian: g.label, anggaran: String(Math.round(g.anggaran)), realisasi: String(Math.round(g.realisasi)) }))
+const capaianDari = (program) =>
+  program.map((r) => ({
+    bidang: r.bidang || '',
+    program: r.program || '',
+    target: r.target || '',
+    capaian: '',
+    ket: r.waktu ? `Waktu: ${r.waktu}` : '',
+  }))
+// "1. teks" -> "teks"; baris placeholder "[...]" dibuang supaya tidak ikut tercetak
+const daftarDariTeks = (teks) =>
+  String(teks || '').split('\n').map((l) => l.replace(/^\d+\.\s*/, '').trim()).filter((l) => l && !l.startsWith('['))
 
 function Bagian({ judul, petunjuk, children, aksi }) {
   return (
@@ -55,31 +97,97 @@ function TombolTambah({ onClick }) {
   )
 }
 
+function TombolAksi({ onClick, disabled, spin, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="inline-flex items-center gap-1 text-xs font-medium text-blue-800 hover:text-blue-950 disabled:opacity-50"
+    >
+      <RefreshCw size={14} className={spin ? 'animate-spin' : ''} /> {children}
+    </button>
+  )
+}
+
+function PanelOtomatis({ cek, timpa, setTimpa, onIsi, disabled }) {
+  return (
+    <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-slate-700">
+      <div className="mb-2 flex flex-wrap items-center gap-3">
+        <p className="text-sm font-semibold text-blue-900">Pengisian otomatis</p>
+        <label className="ml-auto flex items-center gap-1">
+          <input type="checkbox" checked={timpa} onChange={(e) => setTimpa(e.target.checked)} />
+          Timpa isian yang sudah ada
+        </label>
+        <button
+          type="button"
+          onClick={onIsi}
+          disabled={disabled}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-950 disabled:opacity-50"
+        >
+          <Sparkles size={14} /> Isi draf Pendahuluan, Kendala, dan Tindak Lanjut
+        </button>
+      </div>
+      <ul className="grid gap-1 sm:grid-cols-2">
+        {cek.map((c) => (
+          <li key={c.teks} className={`flex items-start gap-1.5 ${c.ok ? 'text-emerald-700' : 'text-amber-700'}`}>
+            {c.ok ? <CheckCircle2 size={14} className="mt-0.5 shrink-0" /> : <AlertTriangle size={14} className="mt-0.5 shrink-0" />}
+            {c.teks}
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-[11px] text-slate-500">
+        Draf hanya memakai angka dari database. Kolom Capaian pada tabel program dan kolom Solusi pada kendala sengaja dikosongkan; isi sendiri agar akurat.
+      </p>
+    </div>
+  )
+}
+
 export default function LaporanPertanggungjawabanKepsek() {
-  const { profil } = useAuth()
-  const sekolahId = profil?.sekolah_id
+  const { profil, sekolahId: sid } = useAuth()
+  const sekolahId = sid || profil?.sekolah_id
 
   const [tahun, setTahun] = useState(tahunAjaranSekarang())
   const [d, setD] = useState(DATA_AWAL)
-  const [sekolah, setSekolah] = useState(null)
   const [visiMisi, setVisiMisi] = useState(null)
   const [tab, setTab] = useState('isi')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [tarik, setTarik] = useState(false)
-  const [pesan, setPesan] = useState(null)
+  const [tarik, setTarik] = useState('') // '' | 'murid' | 'keuangan'
+  const [pesan, setPesan] = useState(null) // hasil simpan
+  const [info2, setInfo2] = useState(null) // hasil tarik data / draf
+  const [timpaDraf, setTimpaDraf] = useState(false)
+  const [sertakanRincian, setSertakanRincian] = useState(true)
+  const [sertakanDemografi, setSertakanDemografi] = useState(false)
+  const [keu, setKeu] = useState(KEUANGAN_LPJ_KOSONG)
+  const [mintaMurid, setMintaMurid] = useState(false)
 
-  // Profil sekolah + visi/misi (sekali saja)
+  const ks = useKeadaanSekolah(sekolahId)
+  const { info } = useDataSekolah(sekolahId)
+  const bukuKerja = useDokumenTersimpan({ sekolahId, dokumen: 'buku-kerja', buatBawaan: bawaanBukuKerja })
+
+  const namaSekolah = info.sekolah?.nama_sekolah || info.sekolah?.nama || ''
+
+  // Tahun anggaran: bawaan = tahun awal tahun ajaran (mis. 2026/2027 -> 2026), bisa diubah
+  const cocok = String(tahun).match(/^(\d{4})/)
+  const tahunAwal = cocok ? Number(cocok[1]) : null
+  const thnAnggaran = Number(d.tahun_anggaran) || tahunAwal || new Date().getFullYear()
+
+  const bk = useMemo(() => {
+    const x = bukuKerja.data || {}
+    return {
+      jurnal: (x.jurnal || []).filter((r) => r.kegiatan?.trim()).length,
+      program: (x.program || []).filter((r) => r.program?.trim()),
+      pembinaan: (x.pembinaan || []).filter((r) => r.topik?.trim()).length,
+      tahunAjaran: x.tahunAjaran || '',
+    }
+  }, [bukuKerja.data])
+
+  // Visi & misi (sekali saja)
   useEffect(() => {
     if (!sekolahId) return
-    supabase.from('profil_sekolah').select('*').eq('sekolah_id', sekolahId).maybeSingle().then(({ data }) => {
-      if (data) setSekolah({ nama: data.nama_sekolah, alamat: data.alamat, kota: data.kabupaten })
-    })
     supabase.from('visi_misi_sekolah').select('*').eq('sekolah_id', sekolahId).maybeSingle().then(({ data }) => {
-      if (data) {
-        setVisiMisi(data)
-        setD((x) => ({ ...x, kepala_sekolah: x.kepala_sekolah || data.kepala_sekolah || '', nip_kepala: x.nip_kepala || data.nip_kepala || '' }))
-      }
+      if (data) setVisiMisi(data)
     })
   }, [sekolahId])
 
@@ -104,31 +212,132 @@ export default function LaporanPertanggungjawabanKepsek() {
     }
   }, [sekolahId, tahun])
 
+  // Anggaran + BKU untuk tahun anggaran terpilih
+  useEffect(() => {
+    if (!sekolahId || thnAnggaran < 2000) return
+    let batal = false
+    muatKeuanganTahun(sekolahId, thnAnggaran).then((h) => {
+      if (!batal) setKeu(h)
+    })
+    return () => {
+      batal = true
+    }
+  }, [sekolahId, thnAnggaran])
+
+  // ---- Isi otomatis awal: hanya untuk bagian yang MASIH KOSONG ----
+  useEffect(() => {
+    if (loading || ks.memuat || ks.totalSiswaAktif + ks.guru.total === 0) return
+    setD((x) =>
+      x.jumlah_siswa === '' && x.jumlah_guru === '' && x.jumlah_rombel === ''
+        ? { ...x, jumlah_siswa: ks.totalSiswaAktif, jumlah_l: ks.totalL, jumlah_p: ks.totalP, jumlah_guru: ks.guru.total, jumlah_rombel: ks.totalRombel }
+        : x
+    )
+  }, [loading, ks.memuat, ks.totalSiswaAktif, ks.guru.total, ks.totalRombel, ks.totalL, ks.totalP])
+
+  useEffect(() => {
+    if (loading || !keu.dimuat) return
+    setD((x) => {
+      let n = x
+      if (kosongKeuangan(x.keuangan) && keu.perKelompok.length) n = { ...n, keuangan: barisKeuanganDari(keu) }
+      if (n.penerimaan === '' && keu.penerimaan != null) n = { ...n, penerimaan: String(Math.round(keu.penerimaan)) }
+      return n
+    })
+  }, [loading, keu])
+
+  useEffect(() => {
+    if (loading || bukuKerja.memuat || !bk.program.length) return
+    if (bk.tahunAjaran && bk.tahunAjaran !== tahun) return // Buku Kerja untuk tahun ajaran lain
+    setD((x) => (kosongCapaian(x.capaian) ? { ...x, capaian: capaianDari(bk.program) } : x))
+  }, [loading, bukuKerja.memuat, bk.program, bk.tahunAjaran, tahun])
+
+  // Tombol "Tarik Data Otomatis" (murid & guru): muat ulang dulu, lalu terapkan
+  useEffect(() => {
+    if (!mintaMurid || ks.memuat) return
+    setD((x) => ({ ...x, jumlah_siswa: ks.totalSiswaAktif, jumlah_l: ks.totalL, jumlah_p: ks.totalP, jumlah_guru: ks.guru.total, jumlah_rombel: ks.totalRombel }))
+    setMintaMurid(false)
+    setTarik('')
+    setInfo2({ ok: true, teks: 'Jumlah siswa aktif, guru aktif, dan rombel sudah ditarik. Periksa lalu simpan.' })
+  }, [mintaMurid, ks.memuat, ks.totalSiswaAktif, ks.totalL, ks.totalP, ks.guru.total, ks.totalRombel])
+
   const set = (k, v) => setD((x) => ({ ...x, [k]: v }))
   const ubahBaris = (k, i, f, v) =>
     setD((x) => ({ ...x, [k]: x[k].map((r, idx) => (idx === i ? { ...r, [f]: v } : r)) }))
   const tambahBaris = (k, tpl) => setD((x) => ({ ...x, [k]: [...x[k], tpl] }))
   const hapusBaris = (k, i) => setD((x) => ({ ...x, [k]: x[k].length > 1 ? x[k].filter((_, idx) => idx !== i) : x[k] }))
 
-  async function tarikData() {
-    setTarik(true)
-    setPesan(null)
-    const hitung = async (tabel) => {
-      const { count, error } = await supabase
-        .from(tabel)
-        .select('id', { count: 'exact', head: true })
-        .eq('sekolah_id', sekolahId)
-      return error ? null : count
+  function tarikMurid() {
+    setTarik('murid')
+    setInfo2(null)
+    setMintaMurid(true)
+    ks.muat()
+  }
+
+  async function tarikKeuangan() {
+    if (!kosongKeuangan(d.keuangan) && !window.confirm('Baris keuangan yang sudah ada akan diganti dengan data ARKAS dan BKU. Lanjutkan?')) return
+    setTarik('keuangan')
+    setInfo2(null)
+    const h = await muatKeuanganTahun(sekolahId, thnAnggaran)
+    setKeu(h)
+    setTarik('')
+    if (h.error) {
+      setInfo2({ ok: false, teks: `Gagal menarik data keuangan. ${h.error}` })
+      return
     }
-    const [s, g, k] = await Promise.all([hitung('siswa'), hitung('guru'), hitung('kelas')])
+    if (!h.perKelompok.length && h.penerimaan == null) {
+      setInfo2({ ok: false, teks: `Belum ada data ARKAS atau BKU untuk tahun ${thnAnggaran}. Impor dulu di menu Keuangan.` })
+      return
+    }
     setD((x) => ({
       ...x,
-      jumlah_siswa: s ?? x.jumlah_siswa,
-      jumlah_guru: g ?? x.jumlah_guru,
-      jumlah_rombel: k ?? x.jumlah_rombel,
+      keuangan: h.perKelompok.length ? barisKeuanganDari(h) : x.keuangan,
+      penerimaan: h.penerimaan != null ? String(Math.round(h.penerimaan)) : x.penerimaan,
     }))
-    setTarik(false)
-    setPesan({ ok: true, teks: 'Jumlah siswa, guru, dan rombel sudah ditarik. Periksa lalu simpan.' })
+    setInfo2({ ok: true, teks: `Data ARKAS dan BKU tahun ${thnAnggaran} sudah ditarik. Periksa lalu simpan.` })
+  }
+
+  function tarikCapaian() {
+    if (!bk.program.length) {
+      setInfo2({ ok: false, teks: 'Belum ada program di Buku Kerja Kepala Sekolah.' })
+      return
+    }
+    const ada = new Set(d.capaian.map((r) => r.program.trim().toLowerCase()))
+    const baru = capaianDari(bk.program).filter((r) => !ada.has(r.program.trim().toLowerCase()))
+    const dasar = d.capaian.filter((r) => r.program.trim() || r.bidang.trim() || r.target.trim() || r.capaian.trim())
+    const hasil = [...dasar, ...baru]
+    set('capaian', hasil.length ? hasil : DATA_AWAL.capaian)
+    setInfo2({ ok: true, teks: `${baru.length} program dari Buku Kerja ditambahkan. Isi kolom Capaian lalu simpan.` })
+  }
+
+  const total = useMemo(
+    () => ({
+      anggaran: d.keuangan.reduce((a, r) => a + (Number(r.anggaran) || 0), 0),
+      realisasi: d.keuangan.reduce((a, r) => a + (Number(r.realisasi) || 0), 0),
+    }),
+    [d.keuangan]
+  )
+  const persen = total.anggaran ? ((total.realisasi / total.anggaran) * 100).toFixed(1) : '0'
+  const selisih = keu.anggaran != null && keu.penerimaan != null ? keu.penerimaan - keu.anggaran : null
+
+  function isiDraf() {
+    const draf = buatNarasi({
+      ks,
+      tahun: `ajaran ${tahun}`,
+      namaSekolah,
+      tahunAjaran: '',
+      angka: {},
+      uang: keu,
+      bk,
+      selisih,
+    })
+    const kendala = daftarDariTeks(draf.kendala).map((masalah) => ({ masalah, solusi: '' }))
+    const rtl = daftarDariTeks(draf.tindak_lanjut)
+    setD((x) => ({
+      ...x,
+      pendahuluan: timpaDraf || !x.pendahuluan.trim() ? draf.pendahuluan : x.pendahuluan,
+      kendala: (timpaDraf || x.kendala.every((r) => !r.masalah.trim())) && kendala.length ? kendala : x.kendala,
+      rtl: (timpaDraf || x.rtl.every((s) => !s.trim())) && rtl.length ? rtl : x.rtl,
+    }))
+    setInfo2({ ok: true, teks: 'Draf Pendahuluan, Kendala, dan Tindak Lanjut sudah diisi. Periksa dan sunting sebelum dicetak.' })
   }
 
   async function simpan() {
@@ -142,40 +351,47 @@ export default function LaporanPertanggungjawabanKepsek() {
     setPesan(error ? { ok: false, teks: `Gagal menyimpan: ${error.message}` } : { ok: true, teks: 'Tersimpan.' })
   }
 
-  const total = useMemo(
-    () => ({
-      anggaran: d.keuangan.reduce((a, r) => a + (Number(r.anggaran) || 0), 0),
-      realisasi: d.keuangan.reduce((a, r) => a + (Number(r.realisasi) || 0), 0),
-    }),
-    [d.keuangan]
-  )
-  const persen = total.anggaran ? ((total.realisasi / total.anggaran) * 100).toFixed(1) : '0'
-
   const capaianIsi = d.capaian.filter((r) => r.program.trim())
   const keuanganIsi = d.keuangan.filter((r) => r.uraian.trim())
   const kendalaIsi = d.kendala.filter((r) => r.masalah.trim())
   const rtlIsi = d.rtl.filter((s) => s.trim())
+
+  const kepala = d.kepala_sekolah || info.kepalaNama || ''
+  const nipKepala = d.nip_kepala || info.kepalaNip || ''
+  const tempatTtd = d.tempat || info.tempat || ''
+
+  const cek = [
+    { ok: ks.totalSiswaAktif > 0, teks: `Data murid terbaca (${ks.totalSiswaAktif} siswa aktif)` },
+    { ok: ks.siswaTanpaTingkat === 0, teks: ks.siswaTanpaTingkat ? `${ks.siswaTanpaTingkat} siswa aktif belum punya kelas/tingkat` : 'Semua siswa aktif terhubung ke kelas' },
+    { ok: ks.guru.total > 0, teks: `Data guru terbaca (${ks.guru.total} orang)` },
+    { ok: keu.anggaran != null, teks: keu.anggaran != null ? `Data ARKAS tahun ${thnAnggaran} tersedia` : `Belum ada data ARKAS tahun ${thnAnggaran}` },
+    { ok: keu.penerimaan != null, teks: keu.penerimaan != null ? `Data BKU tahun ${thnAnggaran} tersedia` : `Belum ada data BKU tahun ${thnAnggaran}` },
+    { ok: bk.program.length > 0, teks: bk.program.length ? `${bk.program.length} program di Buku Kerja` : 'Belum ada program di Buku Kerja' },
+    { ok: !!(visiMisi?.visi || visiMisi?.misi?.length), teks: 'Visi dan misi sudah diisi' },
+  ]
+  const bkBeda = bk.tahunAjaran && bk.tahunAjaran !== tahun
 
   return (
     <Layout
       title="Laporan Pertanggungjawaban Kepala Sekolah"
       subtitle="Laporan tahunan: capaian program, penggunaan anggaran, kendala, dan tindak lanjut."
     >
+      <style>{cssCetak('portrait')}</style>
       <style>{`
         @media print {
-          body * { visibility: hidden; }
-          #area-cetak, #area-cetak * { visibility: visible; }
-          #area-cetak { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none !important; }
-          #area-cetak h3 { break-after: avoid; }
-          #area-cetak table, #area-cetak tr { break-inside: avoid; }
+          /* Bagian panjang boleh terpotong antar halaman supaya tidak meninggalkan celah kosong. */
+          #area-cetak-adm [style*="break-inside"] { break-inside: auto !important; }
+          #area-cetak-adm figure[style*="break-inside"] { break-inside: avoid !important; }
+          #area-cetak-adm tr { break-inside: avoid; }
+          #area-cetak-adm thead { display: table-header-group; }
+          #area-cetak-adm h3 { break-after: avoid; }
         }
       `}</style>
 
-      <div className="max-w-5xl mx-auto p-4 print:hidden">
+      <div className="no-print max-w-5xl mx-auto p-4 print:hidden">
         <Link to="/administrasi-kepsek" className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900 mb-3">
           <ArrowLeft size={16} /> Administrasi Kepala Sekolah
         </Link>
-
 
         <div className="flex flex-wrap items-end gap-3 mb-4">
           <div>
@@ -197,9 +413,19 @@ export default function LaporanPertanggungjawabanKepsek() {
             ))}
           </div>
           {tab === 'cetak' && (
-            <button onClick={() => window.print()} className="inline-flex items-center gap-2 bg-blue-900 hover:bg-blue-950 text-white px-4 py-2 rounded-lg text-sm font-medium">
-              <Printer size={16} /> Cetak
-            </button>
+            <>
+              <label className="flex items-center gap-1 text-xs text-slate-700">
+                <input type="checkbox" checked={sertakanRincian} onChange={(e) => setSertakanRincian(e.target.checked)} />
+                Tabel murid per tingkat & rekap guru
+              </label>
+              <label className="flex items-center gap-1 text-xs text-slate-700">
+                <input type="checkbox" checked={sertakanDemografi} onChange={(e) => setSertakanDemografi(e.target.checked)} />
+                Rekap usia, agama, kewarganegaraan
+              </label>
+              <button onClick={() => window.print()} className="inline-flex items-center gap-2 bg-blue-900 hover:bg-blue-950 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                <Printer size={16} /> Cetak
+              </button>
+            </>
           )}
         </div>
 
@@ -211,27 +437,29 @@ export default function LaporanPertanggungjawabanKepsek() {
 
         {!loading && tab === 'isi' && (
           <div className="space-y-4">
+            <PanelOtomatis cek={cek} timpa={timpaDraf} setTimpa={setTimpaDraf} onIsi={isiDraf} disabled={ks.memuat} />
+
+            {ks.error && <p className="rounded-lg bg-red-50 p-2 text-xs text-red-700">{ks.error}</p>}
+            {info2 && (
+              <p role="status" className={`rounded-lg p-2 text-xs ${info2.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700'}`}>
+                {info2.teks}
+              </p>
+            )}
+
             <Bagian judul="A. Pendahuluan" petunjuk="Latar belakang, dasar, dan tujuan laporan.">
               <textarea rows={4} value={d.pendahuluan} onChange={(e) => set('pendahuluan', e.target.value)} className={input} />
             </Bagian>
 
             <Bagian
               judul="B. Gambaran Umum Sekolah"
-              petunjuk="Nama dan alamat diambil dari Profil Sekolah. Visi dan misi diambil dari dokumen Visi, Misi, dan Tujuan."
-              aksi={
-                <button
-                  type="button"
-                  onClick={tarikData}
-                  disabled={tarik}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-blue-800 hover:text-blue-950 disabled:opacity-50"
-                >
-                  <RefreshCw size={14} className={tarik ? 'animate-spin' : ''} /> Tarik Data Otomatis
-                </button>
-              }
+              petunjuk="Terisi otomatis dari siswa aktif, guru aktif, dan kelas. Visi dan misi diambil dari dokumen Visi, Misi, dan Tujuan."
+              aksi={<TombolAksi onClick={tarikMurid} disabled={tarik === 'murid'} spin={tarik === 'murid'}>Tarik Data Otomatis</TombolAksi>}
             >
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                 {[
                   ['jumlah_siswa', 'Jumlah siswa'],
+                  ['jumlah_l', 'Laki-laki'],
+                  ['jumlah_p', 'Perempuan'],
                   ['jumlah_guru', 'Jumlah guru'],
                   ['jumlah_rombel', 'Jumlah rombel'],
                 ].map(([k, l]) => (
@@ -243,7 +471,20 @@ export default function LaporanPertanggungjawabanKepsek() {
               </div>
             </Bagian>
 
-            <Bagian judul="C. Capaian Program" petunjuk="Satu baris per program kerja." aksi={<TombolTambah onClick={() => tambahBaris('capaian', { bidang: '', program: '', target: '', capaian: '', ket: '' })} />}>
+            <Bagian
+              judul="C. Capaian Program"
+              petunjuk={
+                bkBeda
+                  ? `Satu baris per program kerja. Catatan: Buku Kerja tersimpan untuk tahun ajaran ${bk.tahunAjaran}, bukan ${tahun}.`
+                  : 'Satu baris per program kerja. Program, target, dan waktu bisa ditarik dari Buku Kerja; kolom Capaian isi sendiri.'
+              }
+              aksi={
+                <div className="flex items-center gap-3">
+                  <TombolAksi onClick={tarikCapaian}>Tarik dari Buku Kerja</TombolAksi>
+                  <TombolTambah onClick={() => tambahBaris('capaian', { bidang: '', program: '', target: '', capaian: '', ket: '' })} />
+                </div>
+              }
+            >
               <div className="space-y-3">
                 {d.capaian.map((r, i) => (
                   <div key={i} className="grid sm:grid-cols-12 gap-2 items-start border rounded-lg p-2">
@@ -260,7 +501,21 @@ export default function LaporanPertanggungjawabanKepsek() {
               </div>
             </Bagian>
 
-            <Bagian judul="D. Pengelolaan Keuangan" petunjuk="Isi per sumber atau jenis belanja (mis. Dana BOS, belanja ATK). Total dihitung otomatis." aksi={<TombolTambah onClick={() => tambahBaris('keuangan', { uraian: '', anggaran: '', realisasi: '' })} />}>
+            <Bagian
+              judul="D. Pengelolaan Keuangan"
+              petunjuk="Anggaran dari ARKAS dan realisasi dari BKU, dikelompokkan per kode rekening. Bisa disunting; total dihitung otomatis."
+              aksi={<TambahKeuangan onClick={() => tambahBaris('keuangan', { uraian: '', anggaran: '', realisasi: '' })} />}
+            >
+              <div className="mb-3 flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-700">Tahun anggaran</label>
+                  <input type="number" value={d.tahun_anggaran || thnAnggaran} onChange={(e) => set('tahun_anggaran', e.target.value)} className={`${input} w-28`} />
+                </div>
+                <TombolAksi onClick={tarikKeuangan} disabled={tarik === 'keuangan'} spin={tarik === 'keuangan'}>
+                  Tarik dari ARKAS & BKU
+                </TombolAksi>
+              </div>
+              {keu.error && <p className="mb-2 rounded bg-red-50 p-2 text-xs text-red-700">Gagal memuat sebagian data keuangan. {keu.error}</p>}
               <div className="space-y-2">
                 {d.keuangan.map((r, i) => (
                   <div key={i} className="grid grid-cols-12 gap-2 items-center">
@@ -272,6 +527,12 @@ export default function LaporanPertanggungjawabanKepsek() {
                     </button>
                   </div>
                 ))}
+              </div>
+              <div className="mt-3 flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-700">Total penerimaan dana (Rp)</label>
+                  <input type="number" min="0" value={d.penerimaan} onChange={(e) => set('penerimaan', e.target.value)} className={`${input} w-52`} />
+                </div>
               </div>
               <p className="text-sm text-slate-700 mt-3">
                 Total anggaran {rupiah(total.anggaran)} · realisasi {rupiah(total.realisasi)} ({persen}%)
@@ -306,13 +567,13 @@ export default function LaporanPertanggungjawabanKepsek() {
               </div>
             </Bagian>
 
-            <Bagian judul="G. Penutup dan Pengesahan">
+            <Bagian judul="G. Penutup dan Pengesahan" petunjuk="Nama, NIP, dan tempat otomatis diambil dari data sekolah bila dikosongkan.">
               <textarea rows={3} value={d.penutup} onChange={(e) => set('penutup', e.target.value)} placeholder="Kalimat penutup" className={`${input} mb-3`} />
               <div className="grid sm:grid-cols-2 gap-3">
-                <input placeholder="Tempat (mis. Sorong)" value={d.tempat} onChange={(e) => set('tempat', e.target.value)} className={input} />
+                <input placeholder={info.tempat || 'Tempat (mis. Sorong)'} value={d.tempat} onChange={(e) => set('tempat', e.target.value)} className={input} />
                 <input type="date" value={d.tanggal} onChange={(e) => set('tanggal', e.target.value)} className={input} />
-                <input placeholder="Nama kepala sekolah" value={d.kepala_sekolah} onChange={(e) => set('kepala_sekolah', e.target.value)} className={input} />
-                <input placeholder="NIP kepala sekolah" value={d.nip_kepala} onChange={(e) => set('nip_kepala', e.target.value)} className={input} />
+                <input placeholder={info.kepalaNama || 'Nama kepala sekolah'} value={d.kepala_sekolah} onChange={(e) => set('kepala_sekolah', e.target.value)} className={input} />
+                <input placeholder={info.kepalaNip || 'NIP kepala sekolah'} value={d.nip_kepala} onChange={(e) => set('nip_kepala', e.target.value)} className={input} />
               </div>
             </Bagian>
 
@@ -328,23 +589,31 @@ export default function LaporanPertanggungjawabanKepsek() {
 
       {!loading && tab === 'cetak' && (
         <div className="max-w-4xl mx-auto px-4 pb-10">
-          <div id="area-cetak" className="bg-white border border-slate-200 rounded-2xl p-8 sm:p-12 text-slate-900 text-sm leading-relaxed">
-            <div className="text-center border-b-2 border-slate-800 pb-3 mb-6">
-              <p className="text-xs">LAPORAN PERTANGGUNGJAWABAN KEPALA SEKOLAH</p>
-              <h2 className="text-lg font-bold">{sekolah?.nama || 'NAMA SEKOLAH'}</h2>
-              {sekolah?.alamat && <p className="text-xs text-slate-600">{sekolah.alamat}</p>}
-              <p className="text-xs text-slate-600">Tahun Ajaran {tahun}</p>
+          <div id="area-cetak-adm" className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6 text-slate-900 text-[13px] leading-relaxed">
+            <KopSurat info={info} namaSekolah={namaSekolah} />
+
+            <div className="mb-4 text-center">
+              <p className="text-base font-bold uppercase underline underline-offset-4">Laporan Pertanggungjawaban Kepala Sekolah</p>
+              <p>Tahun Ajaran {tahun}</p>
             </div>
 
             <h3 className="font-bold mb-1">A. Pendahuluan</h3>
             <p className="mb-4 text-justify whitespace-pre-line">{d.pendahuluan || '—'}</p>
 
             <h3 className="font-bold mb-1">B. Gambaran Umum Sekolah</h3>
-            <p className="mb-1">
-              {sekolah?.nama || 'Sekolah'} memiliki {d.jumlah_siswa || '…'} siswa, {d.jumlah_guru || '…'} guru, dan {d.jumlah_rombel || '…'} rombongan belajar pada tahun ajaran {tahun}.
+            <p className="mb-2">
+              {namaSekolah || 'Sekolah'} memiliki {d.jumlah_siswa || '…'} siswa
+              {d.jumlah_l !== '' && d.jumlah_p !== '' ? ` (${d.jumlah_l} laki-laki dan ${d.jumlah_p} perempuan)` : ''}, {d.jumlah_guru || '…'} guru dan tenaga kependidikan, dan {d.jumlah_rombel || '…'} rombongan belajar pada tahun ajaran {tahun}.
             </p>
+            {sertakanRincian && (
+              <div className="mb-3">
+                <TabelKeadaanMurid ks={ks} />
+                <RekapGuru ks={ks} />
+              </div>
+            )}
+            {sertakanDemografi && <RekapDemografi ks={ks} />}
             {visiMisi?.visi && (
-              <p className="mb-1">
+              <p className="mb-1 mt-2">
                 <span className="font-semibold">Visi:</span> {visiMisi.visi}
               </p>
             )}
@@ -387,8 +656,9 @@ export default function LaporanPertanggungjawabanKepsek() {
             )}
 
             <h3 className="font-bold mb-1">D. Pengelolaan Keuangan</h3>
+            <p className="mb-1 text-xs">Tahun anggaran {thnAnggaran}.</p>
             {keuanganIsi.length ? (
-              <table className="w-full border-collapse border border-slate-700 mb-4 text-xs">
+              <table className="w-full border-collapse border border-slate-700 mb-2 text-xs">
                 <thead>
                   <tr className="bg-slate-100">
                     {['No', 'Uraian', 'Anggaran', 'Realisasi', '%'].map((h) => (
@@ -417,7 +687,12 @@ export default function LaporanPertanggungjawabanKepsek() {
                 </tbody>
               </table>
             ) : (
-              <p className="mb-4">—</p>
+              <p className="mb-2">—</p>
+            )}
+            {Number(d.penerimaan) > 0 && (
+              <p className="mb-4 text-xs">
+                Total penerimaan dana: <b>{rupiah(d.penerimaan)}</b>. Sisa kas (penerimaan dikurangi realisasi): <b>{rupiah(Number(d.penerimaan) - total.realisasi)}</b>.
+              </p>
             )}
 
             <h3 className="font-bold mb-1">E. Kendala dan Solusi</h3>
@@ -458,18 +733,18 @@ export default function LaporanPertanggungjawabanKepsek() {
             <h3 className="font-bold mb-1">G. Penutup</h3>
             <p className="mb-8 text-justify whitespace-pre-line">{d.penutup || '—'}</p>
 
-            <div className="flex justify-end">
+            <div className="flex justify-end" style={{ breakInside: 'avoid' }}>
               <div className="text-center min-w-[220px]">
                 <p>
-                  {d.tempat || sekolah?.kota || '……………'},{' '}
+                  {tempatTtd || '……………'},{' '}
                   {d.tanggal
                     ? new Date(d.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
                     : '……………'}
                 </p>
                 <p>Kepala Sekolah,</p>
                 <div className="h-20" />
-                <p className="font-bold underline">{d.kepala_sekolah || '……………'}</p>
-                <p>NIP. {d.nip_kepala || '……………'}</p>
+                <p className="font-bold underline">{kepala || '……………'}</p>
+                <p>NIP. {nipKepala || '……………'}</p>
               </div>
             </div>
           </div>
@@ -477,4 +752,8 @@ export default function LaporanPertanggungjawabanKepsek() {
       )}
     </Layout>
   )
+}
+
+function TambahKeuangan({ onClick }) {
+  return <TombolTambah onClick={onClick} />
 }
