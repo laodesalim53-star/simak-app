@@ -23,8 +23,8 @@ const emptyForm = {
   ttd_kepala_sekolah_path: '',
   tahun_berdiri: '',
   akreditasi: '',
-  visi: '',
-  misi: '',
+  // visi & misi dihapus dari sini (sudah pindah ke halaman Visi, Misi, dan Tujuan:
+  // /administrasi-kepsek/visi-misi, tabel visi_misi_sekolah)
   sejarah: '',
   kabupaten: '',
   dinas_pendidikan: '',
@@ -173,7 +173,9 @@ export default function ProfilSekolah() {
     if (!rowId) return
     setSaving(true)
     setTersimpan(false)
-    const { id, diperbarui_pada, sekolah_id, ...payload } = form
+    // visi & misi dikeluarkan dari payload: datanya sekarang dikelola di halaman
+    // Visi, Misi, dan Tujuan, jadi halaman ini tidak boleh menimpanya.
+    const { id, diperbarui_pada, sekolah_id, visi, misi, ...payload } = form
     const { error } = await supabase
       .from('profil_sekolah')
       .update({ ...payload, diperbarui_pada: new Date().toISOString() })
@@ -649,30 +651,6 @@ export default function ProfilSekolah() {
             <div className="sm:col-span-2">
               <label className="label-field">Alamat</label>
               <textarea className="input-field" rows={2} value={form.alamat} onChange={(e) => ubah('alamat', e.target.value)} />
-            </div>
-          </div>
-        </div>
-
-        <div className="card p-6">
-          <h3 className="font-display font-semibold text-ink-950 mb-4">Visi & Misi</h3>
-          <div className="space-y-4">
-            <div>
-              <label className="label-field">Visi</label>
-              <textarea className="input-field" rows={2} value={form.visi} onChange={(e) => ubah('visi', e.target.value)} />
-            </div>
-            <div>
-              <label className="label-field">Misi (satu poin per baris)</label>
-              <textarea
-                className="input-field"
-                rows={5}
-                placeholder={
-                  isKantor
-                    ? 'Contoh:\nMemberikan pelayanan publik yang cepat dan transparan\nMeningkatkan kapasitas dan integritas pegawai'
-                    : 'Contoh:\nMenyelenggarakan pendidikan yang berkualitas\nMembentuk karakter siswa yang berakhlak mulia'
-                }
-                value={form.misi}
-                onChange={(e) => ubah('misi', e.target.value)}
-              />
             </div>
           </div>
         </div>
