@@ -23,6 +23,7 @@ import {
   buatNarasi,
 } from '../components/LaporanTahunanOtomatis'
 import { muatKeuanganTahun, KEUANGAN_LPJ_KOSONG } from '../lib/dataKeuanganLaporan'
+import { buatKendalaSolusi, buatRtl, buatPenutup, periksaDokumen, PemeriksaDokumen } from '../components/LaporanLpjOtomatis'
 
 const tahunAjaranSekarang = () => {
   const n = new Date()
@@ -70,9 +71,7 @@ const capaianDari = (program) =>
     capaian: '',
     ket: r.waktu ? `Waktu: ${r.waktu}` : '',
   }))
-// "1. teks" -> "teks"; baris placeholder "[...]" dibuang supaya tidak ikut tercetak
-const daftarDariTeks = (teks) =>
-  String(teks || '').split('\n').map((l) => l.replace(/^\d+\.\s*/, '').trim()).filter((l) => l && !l.startsWith('['))
+const hariIni = () => new Date().toLocaleDateString('sv-SE')
 
 function Bagian({ judul, petunjuk, children, aksi }) {
   return (
@@ -125,7 +124,7 @@ function PanelOtomatis({ cek, timpa, setTimpa, onIsi, disabled }) {
           disabled={disabled}
           className="inline-flex items-center gap-1.5 rounded-lg bg-blue-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-950 disabled:opacity-50"
         >
-          <Sparkles size={14} /> Isi draf Pendahuluan, Kendala, dan Tindak Lanjut
+          <Sparkles size={14} /> Isi draf Pendahuluan, Kendala, Tindak Lanjut, dan Penutup
         </button>
       </div>
       <ul className="grid gap-1 sm:grid-cols-2">
@@ -137,7 +136,7 @@ function PanelOtomatis({ cek, timpa, setTimpa, onIsi, disabled }) {
         ))}
       </ul>
       <p className="mt-2 text-[11px] text-slate-500">
-        Draf hanya memakai angka dari database. Kolom Capaian pada tabel program dan kolom Solusi pada kendala sengaja dikosongkan; isi sendiri agar akurat.
+        Draf memakai angka dari database dan terisi otomatis untuk bagian yang masih kosong. Solusi dan tindak lanjut adalah usulan standar, sesuaikan dengan kondisi sekolah. Kolom Capaian pada tabel program sengaja dikosongkan; isi sendiri agar akurat.
       </p>
     </div>
   )
@@ -250,6 +249,24 @@ export default function LaporanPertanggungjawabanKepsek() {
     setD((x) => (kosongCapaian(x.capaian) ? { ...x, capaian: capaianDari(bk.program) } : x))
   }, [loading, bukuKerja.memuat, bk.program, bk.tahunAjaran, tahun])
 
+  // Draf Pendahuluan, Kendala, Tindak Lanjut, Penutup, dan tanggal: otomatis untuk bagian yang MASIH KOSONG,
+  // setelah murid, guru, keuangan, dan Buku Kerja selesai dimuat.
+  const siap = !loading && !ks.memuat && keu.dimuat && !bukuKerja.memuat
+  useEffect(() => {
+    if (!siap) return
+    setD((x) => {
+      const draf = susunDraf(x)
+      const n = { ...x }
+      if (!x.pendahuluan.trim()) n.pendahuluan = draf.pendahuluan
+      if (x.kendala.every((r) => !r.masalah.trim()) && draf.kendala.length) n.kendala = draf.kendala
+      if (x.rtl.every((s) => !s.trim())) n.rtl = draf.rtl
+      if (!x.penutup.trim()) n.penutup = draf.penutup
+      if (!x.tanggal) n.tanggal = hariIni()
+      return n
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [siap])
+
   // Tombol "Tarik Data Otomatis" (murid & guru): muat ulang dulu, lalu terapkan
   useEffect(() => {
     if (!mintaMurid || ks.memuat) return
@@ -318,26 +335,29 @@ export default function LaporanPertanggungjawabanKepsek() {
   const persen = total.anggaran ? ((total.realisasi / total.anggaran) * 100).toFixed(1) : '0'
   const selisih = keu.anggaran != null && keu.penerimaan != null ? keu.penerimaan - keu.anggaran : null
 
+  // Menyusun draf dari data terkini (keuangan dibaca dari isian saat ini, jadi ikut suntingan Anda)
+  const susunDraf = (x) => {
+    const baris = x.keuangan.filter((r) => r.uraian.trim())
+    const n = buatNarasi({ ks, tahun: `ajaran ${tahun}`, namaSekolah, tahunAjaran: '', angka: {}, uang: keu, bk, selisih })
+    return {
+      pendahuluan: n.pendahuluan,
+      kendala: buatKendalaSolusi({ ks, keuangan: baris, bk }),
+      rtl: buatRtl({ ks, keuangan: baris, bk }),
+      penutup: buatPenutup({ namaSekolah, tahun }),
+    }
+  }
+
   function isiDraf() {
-    const draf = buatNarasi({
-      ks,
-      tahun: `ajaran ${tahun}`,
-      namaSekolah,
-      tahunAjaran: '',
-      angka: {},
-      uang: keu,
-      bk,
-      selisih,
-    })
-    const kendala = daftarDariTeks(draf.kendala).map((masalah) => ({ masalah, solusi: '' }))
-    const rtl = daftarDariTeks(draf.tindak_lanjut)
+    const draf = susunDraf(d)
     setD((x) => ({
       ...x,
       pendahuluan: timpaDraf || !x.pendahuluan.trim() ? draf.pendahuluan : x.pendahuluan,
-      kendala: (timpaDraf || x.kendala.every((r) => !r.masalah.trim())) && kendala.length ? kendala : x.kendala,
-      rtl: (timpaDraf || x.rtl.every((s) => !s.trim())) && rtl.length ? rtl : x.rtl,
+      kendala: (timpaDraf || x.kendala.every((r) => !r.masalah.trim())) && draf.kendala.length ? draf.kendala : x.kendala,
+      rtl: (timpaDraf || x.rtl.every((s) => !s.trim())) && draf.rtl.length ? draf.rtl : x.rtl,
+      penutup: timpaDraf || !x.penutup.trim() ? draf.penutup : x.penutup,
+      tanggal: x.tanggal || hariIni(),
     }))
-    setInfo2({ ok: true, teks: 'Draf Pendahuluan, Kendala, dan Tindak Lanjut sudah diisi. Periksa dan sunting sebelum dicetak.' })
+    setInfo2({ ok: true, teks: 'Draf Pendahuluan, Kendala, Tindak Lanjut, dan Penutup sudah diisi. Periksa dan sunting sebelum dicetak.' })
   }
 
   async function simpan() {
@@ -359,6 +379,8 @@ export default function LaporanPertanggungjawabanKepsek() {
   const kepala = d.kepala_sekolah || info.kepalaNama || ''
   const nipKepala = d.nip_kepala || info.kepalaNip || ''
   const tempatTtd = d.tempat || info.tempat || ''
+
+  const hasilPeriksa = periksaDokumen(d, { ks, keu, bk, thnAnggaran, visiMisi, kepala, nipKepala, total })
 
   const cek = [
     { ok: ks.totalSiswaAktif > 0, teks: `Data murid terbaca (${ks.totalSiswaAktif} siswa aktif)` },
@@ -438,6 +460,7 @@ export default function LaporanPertanggungjawabanKepsek() {
         {!loading && tab === 'isi' && (
           <div className="space-y-4">
             <PanelOtomatis cek={cek} timpa={timpaDraf} setTimpa={setTimpaDraf} onIsi={isiDraf} disabled={ks.memuat} />
+            <PemeriksaDokumen hasil={hasilPeriksa} />
 
             {ks.error && <p className="rounded-lg bg-red-50 p-2 text-xs text-red-700">{ks.error}</p>}
             {info2 && (
@@ -589,6 +612,7 @@ export default function LaporanPertanggungjawabanKepsek() {
 
       {!loading && tab === 'cetak' && (
         <div className="max-w-4xl mx-auto px-4 pb-10">
+          <PemeriksaDokumen hasil={hasilPeriksa} terbuka={false} />
           <div id="area-cetak-adm" className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6 text-slate-900 text-[13px] leading-relaxed">
             <KopSurat info={info} namaSekolah={namaSekolah} />
 
