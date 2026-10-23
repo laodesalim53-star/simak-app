@@ -27,12 +27,18 @@ const MENU_TABS = [
 
 const NAMA_BULAN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']
 
+// Tanggal hari ini menurut zona waktu perangkat (bukan UTC), format YYYY-MM-DD.
+// toISOString() memakai UTC sehingga sebelum pukul 09.00 WIT hasilnya tanggal kemarin.
+function tanggalHariIni() {
+  return new Date().toLocaleDateString('sv-SE')
+}
+
 const emptyForm = {
   jenis: 'masuk',
   kategori: 'SPP',
   siswa_id: '',
   jumlah: '',
-  tanggal: new Date().toISOString().slice(0, 10),
+  tanggal: tanggalHariIni(),
   catatan: '',
 }
 
@@ -131,7 +137,8 @@ export default function Keuangan() {
   }, [])
 
   function openAdd() {
-    setForm(emptyForm)
+    // Hitung ulang tanggal setiap form dibuka (halaman bisa terbuka berhari-hari)
+    setForm({ ...emptyForm, tanggal: tanggalHariIni() })
     setEditingId(null)
     setShowForm(true)
   }
