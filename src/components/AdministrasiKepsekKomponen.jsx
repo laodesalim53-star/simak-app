@@ -59,8 +59,19 @@ export function cssCetak(orientasi = 'portrait') {
   `
 }
 
+// Buang awalan "Kecamatan" / "Kec." / "Kec" (satu atau berulang, huruf besar/kecil, dengan atau tanpa
+// titik dua/strip) serta karakter tak terlihat (spasi nol-lebar, NBSP) di depan nama kecamatan,
+// supaya kop tidak menampilkan "Kecamatan Kecamatan ...".
+function bersihkanKecamatan(nilai) {
+  return String(nilai || '')
+    .replace(/[\u200B-\u200D\u2060\uFEFF\u00A0]/g, ' ')
+    .trim()
+    .replace(/^(?:(?:kecamatan|kec)\b\.?\s*[:\-]?\s*)+/i, '')
+    .trim()
+}
+
 export function KopSurat({ info, namaSekolah }) {
-  const kecamatan = String(info.kecamatan || '').replace(/^(kecamatan\s+)+/i, '')
+  const kecamatan = bersihkanKecamatan(info.kecamatan)
   return (
     <div className="kop-surat flex items-center gap-3 border-b-2 border-slate-800 pb-3 mb-4">
       <div className="kop-logo w-[76px] h-[76px] shrink-0 flex items-center justify-center">
