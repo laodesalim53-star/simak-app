@@ -2,8 +2,10 @@ import { useState, useRef, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Bell, MessageSquare, X, Menu, Store } from 'lucide-react'
 import Sidebar from './Sidebar'
+import LpjReminder from './LpjReminder'
 import { useAuth } from '../lib/AuthContext'
 import { usePresenceTracker } from '../hooks/usePresenceTracker'
+import useLpjPengingat from '../hooks/useLpjPengingat'
 import { supabase } from '../lib/supabaseClient'
 
 function waktuRelatif(tanggal) {
@@ -25,7 +27,11 @@ function NotificationBell() {
   const [loading, setLoading] = useState(true)
   const ref = useRef(null)
 
-  const belumDibaca = notifikasi.filter((n) => !n.dibaca).length
+  // Pengingat LPJ (dihitung dari tabel lpj_jadwal, hanya untuk admin) —
+  // ikut dihitung di badge lonceng, tampil paling atas di dropdown.
+  const lpj = useLpjPengingat()
+
+  const belumDibaca = notifikasi.filter((n) => !n.dibaca).length + lpj.length
 
   async function ambilNotifikasi() {
     if (!session?.user?.id) return
@@ -106,7 +112,7 @@ function NotificationBell() {
         <div className="absolute right-0 mt-2 w-80 max-w-[90vw] bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden z-20">
           <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
             <p className="font-display font-semibold text-sm text-slate-900">Notifikasi</p>
-            {belumDibaca > 0 && (
+            {notifikasi.some((n) => !n.dibaca) && (
               <button
                 onClick={tandaiSemuaDibaca}
                 className="text-xs font-medium text-blue-600 hover:text-blue-700"
@@ -119,28 +125,48 @@ function NotificationBell() {
           <div className="max-h-80 overflow-y-auto">
             {loading ? (
               <p className="px-4 py-6 text-sm text-slate-400 text-center">Memuat...</p>
-            ) : notifikasi.length === 0 ? (
+            ) : notifikasi.length === 0 && lpj.length === 0 ? (
               <p className="px-4 py-6 text-sm text-slate-400 text-center">Belum ada notifikasi.</p>
             ) : (
-              notifikasi.map((n) => (
-                <div
-                  key={n.id}
-                  className={`px-4 py-3 border-b border-slate-50 last:border-0 flex gap-2.5 ${
-                    n.dibaca ? '' : 'bg-blue-50/50'
-                  }`}
-                >
-                  <span
-                    className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${
-                      n.dibaca ? 'bg-transparent' : 'bg-blue-600'
-                    }`}
-                  />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-800 truncate">{n.judul}</p>
-                    <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{n.deskripsi}</p>
-                    <p className="text-[11px] text-slate-400 mt-1">{waktuRelatif(n.dibuat_pada)}</p>
+              <>
+                {/* Pengingat LPJ — selalu di atas, hilang otomatis saat LPJ ditandai terkirim */}
+                {lpj.map((p) => (
+                  <div
+                    key={`lpj-${p.id}`}
+                    className="px-4 py-3 border-b border-slate-50 flex gap-2.5 bg-amber-50/60"
+                  >
+                    <span
+                      className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${
+                        p.urgent ? 'bg-red-500' : 'bg-amber-500'
+                      }`}
+                    />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-800 truncate">⏰ {p.judul}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{p.deskripsi}</p>
+                    </div>
                   </div>
-                </div>
-              ))
+                ))}
+
+                {notifikasi.map((n) => (
+                  <div
+                    key={n.id}
+                    className={`px-4 py-3 border-b border-slate-50 last:border-0 flex gap-2.5 ${
+                      n.dibaca ? '' : 'bg-blue-50/50'
+                    }`}
+                  >
+                    <span
+                      className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${
+                        n.dibaca ? 'bg-transparent' : 'bg-blue-600'
+                      }`}
+                    />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-800 truncate">{n.judul}</p>
+                      <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{n.deskripsi}</p>
+                      <p className="text-[11px] text-slate-400 mt-1">{waktuRelatif(n.dibuat_pada)}</p>
+                    </div>
+                  </div>
+                ))}
+              </>
             )}
           </div>
         </div>
@@ -189,6 +215,7 @@ function PesanAdminBanner() {
 export default function Layout({ children, title, subtitle, actions }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const location = useLocation()
+  const { isAdmin } = useAuth()
 
   // Broadcast status online user yang sedang login (guru/admin/kepsek) lewat
   // Supabase Realtime Presence — dipasang sekali di sini supaya jalan di
@@ -268,6 +295,14 @@ export default function Layout({ children, title, subtitle, actions }) {
         <div className="no-print">
           <PesanAdminBanner />
         </div>
+
+        {/* Pengingat LPJ (khusus admin): banner berwarna di semua halaman
+            kalau ada LPJ yang belum terkirim dan batasnya <= 14 hari atau
+            sudah lewat. Tidak merender apa pun kalau tidak ada pengingat.
+            Jadwalnya dikelola dari halaman Keuangan ("Kelola jadwal LPJ"). */}
+        {isAdmin && (
+          <LpjReminder tampilKelola={false} className="mx-4 sm:mx-6 md:mx-8 mt-5" />
+        )}
 
         {/* Tambahan "print:p-0": padding px-4/md:px-8 py-5/md:py-7 di sini
             tetap ada di DOM saat halaman cetak (Cetak8355.jsx dkk) dirender
