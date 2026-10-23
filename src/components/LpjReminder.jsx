@@ -33,7 +33,7 @@ function levelInfo(sisa) {
 
 const kosong = { judul: '', periode: '', tanggal_batas: '', status: 'belum', catatan: '' }
 
-export default function LpjReminder() {
+export default function LpjReminder({ tampilBanner = true, tampilKelola = true, className = 'mb-4' }) {
   const { profil } = useAuth()
   const sekolahId = profil?.sekolah_id
 
@@ -45,7 +45,7 @@ export default function LpjReminder() {
   const [saving, setSaving] = useState(false)
 
   // Pengingat non-urgent boleh disembunyikan sampai besok (disimpan per hari di browser)
-  const kunciTutup = `lpj_tutup_${new Date().toISOString().slice(0, 10)}`
+  const kunciTutup = `lpj_tutup_${new Date().toLocaleDateString('sv-SE')}`
   const [ditutup, setDitutup] = useState(() => {
     try { return JSON.parse(localStorage.getItem(kunciTutup) || '[]') } catch { return [] }
   })
@@ -60,6 +60,8 @@ export default function LpjReminder() {
       .order('tanggal_batas', { ascending: true })
     setJadwal(data || [])
     setLoading(false)
+    // beri tahu lonceng notifikasi di Layout agar ikut menyegarkan
+    window.dispatchEvent(new Event('lpj-berubah'))
   }, [sekolahId])
 
   useEffect(() => { muat() }, [muat])
@@ -132,10 +134,12 @@ export default function LpjReminder() {
     .filter((j) => j.level && (j.level.urgent || !ditutup.includes(j.id)))
 
   if (!sekolahId) return null
+  // Mode banner saja (dipakai di Layout): tidak render apa pun kalau tidak ada pengingat
+  if (!tampilKelola && (!tampilBanner || pengingat.length === 0)) return null
 
   return (
-    <div className="mb-4 space-y-2">
-      {pengingat.map((j) => (
+    <div className={`no-print space-y-2 ${className}`}>
+      {tampilBanner && pengingat.map((j) => (
         <div key={j.id} className={`flex items-start gap-3 border rounded-lg px-4 py-3 ${j.level.cls}`}>
           {j.level.urgent ? <AlertTriangle size={18} className="mt-0.5 shrink-0" /> : <AlarmClock size={18} className="mt-0.5 shrink-0" />}
           <div className="flex-1 min-w-0">
@@ -160,11 +164,13 @@ export default function LpjReminder() {
         </div>
       ))}
 
-      <div className="flex justify-end">
-        <button className="text-xs text-ink-700/60 hover:text-ink-950 flex items-center gap-1" onClick={() => setShowKelola(true)}>
-          <Settings2 size={13} /> Kelola jadwal LPJ
-        </button>
-      </div>
+      {tampilKelola && (
+        <div className="flex justify-end">
+          <button className="text-xs text-ink-700/60 hover:text-ink-950 flex items-center gap-1" onClick={() => setShowKelola(true)}>
+            <Settings2 size={13} /> Kelola jadwal LPJ
+          </button>
+        </div>
+      )}
 
       {showKelola && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
