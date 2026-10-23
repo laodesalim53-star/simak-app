@@ -4,6 +4,7 @@ import { ArrowLeft, Plus, Search, Pencil, Trash2, Printer, X, Download, FileText
 import Layout from '../components/Layout'
 import KopSurat from '../components/KopSurat'
 import KalenderTahunan from '../components/KalenderTahunan'
+import EdsOtomatis from '../components/EdsOtomatis'
 // SESUAIKAN dua impor ini dengan lokasi di repo Anda:
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
@@ -1697,6 +1698,17 @@ export default function AdministrasiKepsekItem() {
                 <p className="sm:col-span-2 rounded-xl border border-blue-100 bg-blue-50/60 p-2.5 text-xs text-blue-800">
                   Pilih Jenis Rapat: format pembahasan, keputusan, dan tindak lanjut terisi otomatis. Ubah sesuai isi rapat yang sebenarnya, lalu cetak dengan ikon printer di daftar.
                 </p>
+              )}
+              {slug === 'evaluasi-diri' && (
+                <div className="sm:col-span-2">
+                  <EdsOtomatis
+                    sekolahId={sekolahId}
+                    tanggal={form.tanggal}
+                    standar={form.data.standar}
+                    nilai={{ capaian: form.data.capaian, bukti: form.data.bukti, rencana: form.data.rencana }}
+                    onTerapkan={(p) => setForm((f) => ({ ...f, data: { ...f.data, ...p } }))}
+                  />
+                </div>
               )}
               {cfg.fields.map((fld) => {
                 const v = form.data[fld.k] ?? ''
