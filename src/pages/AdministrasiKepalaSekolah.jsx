@@ -4,7 +4,8 @@ import {
   Landmark, Search, Lock, Target, Wallet, CalendarCheck, BookOpen, ScrollText,
   ClipboardList, ArrowLeftRight, UserCheck, Mail, FileSignature, Award, Eye,
   Users, Package, ClipboardEdit, FileBarChart, School, FileText, ShieldCheck,
-} from 'lucide-react'
+  Compass, FileCheck,
+} from 'lucide-react''
 import Layout from '../components/Layout'
 
 // Palet warna per kartu — sama polanya dengan PusatLaporanGuru.jsx.
@@ -30,6 +31,7 @@ const KELOMPOK = [
     nama: 'Perencanaan',
     deskripsi: 'Dokumen arah dan rencana sekolah',
     item: [
+      { id: 'visi-misi', judul: 'Visi, Misi, dan Tujuan', deskripsi: 'Visi, misi, dan tujuan sekolah sebagai dokumen resmi siap cetak.', icon: Compass, warna: 'indigo', siap: true },
       { id: 'kosp', judul: 'KOSP', deskripsi: 'Kurikulum Operasional Satuan Pendidikan sekolah.', icon: BookOpen, warna: 'blue', siap: true },
       { id: 'rkt', judul: 'RKT', deskripsi: 'Rencana Kerja Tahunan: program, kegiatan, dan target sekolah.', icon: Target, warna: 'indigo', siap: true },
       { id: 'rkas', judul: 'RKAS', deskripsi: 'Rencana Kegiatan dan Anggaran Sekolah per tahun.', icon: Wallet, warna: 'emerald', siap: true },
@@ -64,6 +66,7 @@ const KELOMPOK = [
       { id: 'notulen-rapat', judul: 'Notulen Rapat', deskripsi: 'Catatan dan keputusan rapat dewan guru.', icon: ClipboardEdit, warna: 'indigo', siap: true },
       { id: 'evaluasi-diri', judul: 'Evaluasi Diri Sekolah', deskripsi: 'Rapor mutu dan rencana perbaikan.', icon: ClipboardList, warna: 'purple', siap: true },
       { id: 'laporan-bulanan', judul: 'Laporan Bulanan', deskripsi: 'Rekap kegiatan dan capaian sekolah tiap bulan.', icon: FileBarChart, warna: 'emerald', siap: true, path: '/laporan' },
+      { id: 'lpj-kepsek', judul: 'Laporan Pertanggungjawaban', deskripsi: 'Laporan tahunan kepala sekolah: capaian program, keuangan, kendala, dan tindak lanjut.', icon: FileCheck, warna: 'rose', siap: true },
       { id: 'akreditasi', judul: 'Berkas Akreditasi', deskripsi: 'Checklist dan arsip berkas akreditasi SD dan SMP.', icon: ShieldCheck, warna: 'blue', siap: true },
     ],
   },
