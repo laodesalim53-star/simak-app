@@ -25,15 +25,63 @@ const KONFIG_PEGAWAI = {
   },
 }
 
+const SELECT_PROFIL = `
+  role,
+  jabatan,
+  guru_id,
+  pegawai_id,
+  sekolah_id,
+  status_akun,
+  catatan_admin,
+  nama_lengkap_pendaftar,
+  email_pendaftar,
+  foto_profil_path,
+  nuptk,
+  pangkat_golongan,
+  no_hp,
+  tanggal_lahir,
+  pendidikan_terakhir,
+  alamat,
+  paket,
+  paket_berlaku_sampai,
+  sekolah:sekolah_id ( nama_sekolah, jenis_organisasi )
+`
+
+// Percobaan ulang otomatis saat query profil gagal (mis. sinyal putus sesaat
+// setelah login). Total 3 percobaan dengan jeda 1,5 dtk lalu 3 dtk.
+const MAKS_PERCOBAAN_PROFIL = 3
+const JEDA_PERCOBAAN_MS = 1500
+
+const tunggu = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+// Paket premium dianggap masih berlaku bila tidak ada tanggal akhir, atau
+// tanggal akhirnya belum lewat (sampai akhir hari tanggal tersebut, waktu lokal).
+function paketMasihBerlaku(tanggalAkhir) {
+  if (!tanggalAkhir) return true
+  const batas = /^\d{4}-\d{2}-\d{2}$/.test(tanggalAkhir)
+    ? new Date(`${tanggalAkhir}T23:59:59`)
+    : new Date(tanggalAkhir)
+  if (Number.isNaN(batas.getTime())) return false
+  return batas >= new Date()
+}
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(undefined)
   const [profil, setProfil] = useState(undefined)
   const [profilPuskesmas, setProfilPuskesmas] = useState(undefined)
   // Pesan bila akun yang login bukan milik jenis institusi aplikasi ini.
   const [galatTenant, setGalatTenant] = useState(null)
+  // Pesan bila profil gagal dimuat setelah semua percobaan ulang habis.
+  // Halaman pemuatan bisa menampilkannya beserta tombol "Coba lagi"
+  // (panggil refreshProfil). null = tidak ada galat.
+  const [galatProfil, setGalatProfil] = useState(null)
 
   const profilRequestIdRef = useRef(0)
   const puskesmasRequestIdRef = useRef(0)
+  // ID user yang profilnya SUDAH berhasil dimuat. Dipakai untuk melewati
+  // pemuatan ulang saat supabase-js mengirim SIGNED_IN lagi ketika tab
+  // kembali aktif.
+  const userIdDimuatRef = useRef(null)
 
   // =========================================================
   // PROFIL PUSKESMAS (tenant jenis_organisasi === 'puskesmas')
@@ -70,41 +118,40 @@ export function AuthProvider({ children }) {
 
     if (!userId) {
       if (requestId === profilRequestIdRef.current) setProfil(null)
+      setGalatProfil(null)
       puskesmasRequestIdRef.current++
       setProfilPuskesmas(null)
       return
     }
 
-    const { data, error } = await supabase
-      .from('profil')
-      .select(`
-        role,
-        jabatan,
-        guru_id,
-        pegawai_id,
-        sekolah_id,
-        status_akun,
-        catatan_admin,
-        nama_lengkap_pendaftar,
-        email_pendaftar,
-        foto_profil_path,
-        nuptk,
-        pangkat_golongan,
-        no_hp,
-        tanggal_lahir,
-        pendidikan_terakhir,
-        alamat,
-        paket,
-        paket_berlaku_sampai,
-        sekolah:sekolah_id ( nama_sekolah, jenis_organisasi )
-      `)
-      .eq('id', userId)
-      .maybeSingle()
+    setGalatProfil(null)
 
-    if (requestId !== profilRequestIdRef.current) return
+    let data = null
+    let error = null
+    for (let percobaan = 1; percobaan <= MAKS_PERCOBAAN_PROFIL; percobaan++) {
+      const hasil = await supabase
+        .from('profil')
+        .select(SELECT_PROFIL)
+        .eq('id', userId)
+        .maybeSingle()
+
+      if (requestId !== profilRequestIdRef.current) return
+
+      data = hasil.data
+      error = hasil.error
+      if (!error) break
+
+      console.error(`Gagal memuat profil (percobaan ${percobaan}/${MAKS_PERCOBAAN_PROFIL}):`, error)
+      if (percobaan < MAKS_PERCOBAAN_PROFIL) {
+        await tunggu(JEDA_PERCOBAAN_MS * percobaan)
+        if (requestId !== profilRequestIdRef.current) return
+      }
+    }
 
     if (error) {
-      console.error('Gagal memuat profil (dibiarkan, tidak logout paksa):', error)
+      // Semua percobaan gagal: jangan logout paksa. Simpan pesan supaya UI
+      // dapat menawarkan "Coba lagi" (refreshProfil) alih-alih macet di layar muat.
+      setGalatProfil('Gagal memuat profil. Periksa koneksi internet lalu coba lagi.')
       return
     }
 
@@ -189,6 +236,11 @@ export function AuthProvider({ children }) {
     }
   }
 
+  // Catat user yang profilnya sudah termuat (dipakai listener auth di bawah).
+  useEffect(() => {
+    userIdDimuatRef.current = profil ? session?.user?.id ?? null : null
+  }, [profil, session])
+
   useEffect(() => {
     let mounted = true
 
@@ -205,6 +257,17 @@ export function AuthProvider({ children }) {
       if (!mounted) return
 
       if (event === 'TOKEN_REFRESHED') {
+        setSession(newSession)
+        return
+      }
+
+      // SIGNED_IN juga dikirim ulang saat tab kembali aktif. Kalau profil user
+      // yang sama sudah termuat, cukup perbarui session — tidak perlu fetch ulang.
+      if (
+        event === 'SIGNED_IN' &&
+        newSession?.user?.id &&
+        newSession.user.id === userIdDimuatRef.current
+      ) {
         setSession(newSession)
         return
       }
@@ -498,6 +561,16 @@ export function AuthProvider({ children }) {
   const isPolres =
     (profil?.jenis_organisasi ?? 'sekolah') === 'polres'
 
+  // Premium aktif = paket 'premium' DAN masa berlakunya belum lewat.
+  // CATATAN: ini hanya untuk tampilan di browser. Fitur berbayar yang penting
+  // tetap harus dijaga di sisi server (RLS / edge function).
+  const paketKedaluwarsa =
+    (profil?.paket ?? 'free') === 'premium' &&
+    !paketMasihBerlaku(profil?.paket_berlaku_sampai)
+
+  const isPremium =
+    (profil?.paket ?? 'free') === 'premium' && !paketKedaluwarsa
+
   return (
     <AuthContext.Provider
       value={{
@@ -510,6 +583,7 @@ export function AuthProvider({ children }) {
         signIn,
         signOut,
         galatTenant,
+        galatProfil,
 
         daftar,
         refreshProfil,
@@ -537,11 +611,13 @@ export function AuthProvider({ children }) {
         pesanAdmin:
           profil?.catatan_admin ?? null,
 
+        // Nilai mentah dari database (bisa masih 'premium' walau sudah kedaluwarsa).
+        // Untuk cek akses fitur, pakai isPremium.
         paket:
           profil?.paket ?? 'free',
 
-        isPremium:
-          (profil?.paket ?? 'free') === 'premium',
+        isPremium,
+        paketKedaluwarsa,
 
         paketBerlakuSampai:
           profil?.paket_berlaku_sampai ?? null,
