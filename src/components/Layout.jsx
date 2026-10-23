@@ -45,7 +45,19 @@ function NotificationBell() {
       .order('dibuat_pada', { ascending: false })
       .limit(20)
 
-    if (!error && data) setNotifikasi(data)
+    if (!error && data) {
+      // Status baca disimpan per pengguna di tabel notifikasi_dibaca
+      // (RLS hanya mengembalikan baris milik akun yang login)
+      let sudahDibaca = new Set()
+      if (data.length > 0) {
+        const { data: baca } = await supabase
+          .from('notifikasi_dibaca')
+          .select('notifikasi_id')
+          .in('notifikasi_id', data.map((n) => n.id))
+        sudahDibaca = new Set((baca || []).map((b) => b.notifikasi_id))
+      }
+      setNotifikasi(data.map((n) => ({ ...n, dibaca: sudahDibaca.has(n.id) })))
+    }
     setLoading(false)
   }
 
@@ -90,7 +102,13 @@ function NotificationBell() {
 
     setNotifikasi((prev) => prev.map((n) => ({ ...n, dibaca: true })))
 
-    await supabase.from('notifikasi').update({ dibaca: true }).in('id', idBelumDibaca)
+    const { error } = await supabase
+      .from('notifikasi_dibaca')
+      .upsert(
+        idBelumDibaca.map((id) => ({ notifikasi_id: id, user_id: session.user.id })),
+        { onConflict: 'notifikasi_id,user_id', ignoreDuplicates: true }
+      )
+    if (error) ambilNotifikasi() // gagal simpan: kembalikan tampilan sesuai database
   }
 
   return (
