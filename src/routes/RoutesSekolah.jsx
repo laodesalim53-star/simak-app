@@ -199,26 +199,25 @@ export default function RoutesSekolah() {
       <Route path="/laporan-daftar-hadir-guru" element={<ProtectedRoute adminOnly><LaporanDaftarHadirGuru /></ProtectedRoute>} />
       <Route path="/laporan-guru" element={<ProtectedRoute adminOnly><PusatLaporanGuru /></ProtectedRoute>} />
 
-      {/* Gudang SK */}
+      {/* Gudang SK — semua route di bawah ini khusus admin (induknya /gudang-sk juga adminOnly) */}
       <Route path="/gudang-sk" element={<ProtectedRoute adminOnly><GudangSK /></ProtectedRoute>} />
       <Route path="/gudang-sk/beban-mengajar" element={<ProtectedRoute adminOnly><SKBebanMengajar /></ProtectedRoute>} />
       <Route path="/gudang-sk/keterangan-melaksanakan-tugas" element={<ProtectedRoute adminOnly><KeteranganMelaksanakanTugas /></ProtectedRoute>} />
-      {/* TODO: route SK/honor di bawah ini belum dibungkus ProtectedRoute (sama seperti App.jsx lama) */}
-      <Route path="/gudang-sk/wali-kelas" element={<SKWaliKelas />} />
-      <Route path="/gudang-sk/pembina-ekstrakurikuler" element={<SKPembinaEkstrakurikuler />} />
-      <Route path="/gudang-sk/petugas-perpustakaan" element={<SKPetugasPerpustakaan />} />
-      <Route path="/gudang-sk/panitia-ujian" element={<SKPanitiaUjian />} />
-      <Route path="/gudang-sk/panitia-ppdb" element={<SKPanitiaPPDB />} />
-      <Route path="/gudang-sk/tim-bos" element={<SKTimBOS />} />
-      <Route path="/gudang-sk/honor-guru" element={<SKHonorGuru />} />
-      <Route path="/gudang-sk/tenaga-kebersihan" element={<SKTenagaKebersihan />} />
-      <Route path="/gudang-sk/operator-dapodik" element={<SKOperatorDapodik />} />
-      <Route path="/gudang-sk/bendahara-bos" element={<SKBendaharaBOS />} />
+      <Route path="/gudang-sk/wali-kelas" element={<ProtectedRoute adminOnly><SKWaliKelas /></ProtectedRoute>} />
+      <Route path="/gudang-sk/pembina-ekstrakurikuler" element={<ProtectedRoute adminOnly><SKPembinaEkstrakurikuler /></ProtectedRoute>} />
+      <Route path="/gudang-sk/petugas-perpustakaan" element={<ProtectedRoute adminOnly><SKPetugasPerpustakaan /></ProtectedRoute>} />
+      <Route path="/gudang-sk/panitia-ujian" element={<ProtectedRoute adminOnly><SKPanitiaUjian /></ProtectedRoute>} />
+      <Route path="/gudang-sk/panitia-ppdb" element={<ProtectedRoute adminOnly><SKPanitiaPPDB /></ProtectedRoute>} />
+      <Route path="/gudang-sk/tim-bos" element={<ProtectedRoute adminOnly><SKTimBOS /></ProtectedRoute>} />
+      <Route path="/gudang-sk/honor-guru" element={<ProtectedRoute adminOnly><SKHonorGuru /></ProtectedRoute>} />
+      <Route path="/gudang-sk/tenaga-kebersihan" element={<ProtectedRoute adminOnly><SKTenagaKebersihan /></ProtectedRoute>} />
+      <Route path="/gudang-sk/operator-dapodik" element={<ProtectedRoute adminOnly><SKOperatorDapodik /></ProtectedRoute>} />
+      <Route path="/gudang-sk/bendahara-bos" element={<ProtectedRoute adminOnly><SKBendaharaBOS /></ProtectedRoute>} />
       <Route path="/gudang-sk/pengawas-asesmen" element={<ProtectedRoute adminOnly><SKPengawasAsesmen /></ProtectedRoute>} />
-      <Route path="/gudang-sk/daftar-honor-literasi-numerasi" element={<DaftarHonorLiterasiNumerasi />} />
-      <Route path="/gudang-sk/daftar-honor-pengawas-asesmen" element={<DaftarHonorPengawasAsesmen />} />
-      <Route path="/gudang-sk/daftar-honor-panitia-ujian" element={<DaftarHonorPanitiaUjian />} />
-      <Route path="/gudang-sk/daftar-honor-panitia-ppdb" element={<DaftarHonorPanitiaPPDB />} />
+      <Route path="/gudang-sk/daftar-honor-literasi-numerasi" element={<ProtectedRoute adminOnly><DaftarHonorLiterasiNumerasi /></ProtectedRoute>} />
+      <Route path="/gudang-sk/daftar-honor-pengawas-asesmen" element={<ProtectedRoute adminOnly><DaftarHonorPengawasAsesmen /></ProtectedRoute>} />
+      <Route path="/gudang-sk/daftar-honor-panitia-ujian" element={<ProtectedRoute adminOnly><DaftarHonorPanitiaUjian /></ProtectedRoute>} />
+      <Route path="/gudang-sk/daftar-honor-panitia-ppdb" element={<ProtectedRoute adminOnly><DaftarHonorPanitiaPPDB /></ProtectedRoute>} />
 
       {/* Portal Ujian */}
       <Route path="/gudang-sk/portal-ujian" element={<ProtectedRoute adminOnly><PortalUjian /></ProtectedRoute>} />
