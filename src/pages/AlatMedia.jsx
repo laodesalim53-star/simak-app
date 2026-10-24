@@ -1,4 +1,4 @@
-import { Video, ScanLine, FileType2 } from 'lucide-react'
+import { Video, ScanLine, FileType2, Images, HardDrive } from 'lucide-react'
 import Layout from '../components/Layout'
 import HubMenu from '../components/HubMenu'
 
@@ -21,11 +21,23 @@ const ITEM = [
     desc: 'Gabung, pisah, dan olah file PDF.',
     icon: FileType2,
   },
+  {
+    to: '/galeri',
+    label: 'Galeri Kegiatan',
+    desc: 'Foto dan dokumentasi kegiatan sekolah.',
+    icon: Images,
+  },
+  {
+    to: '/dokumen',
+    label: 'Dokumen Penting',
+    desc: 'Simpan dan buka dokumen penting sekolah.',
+    icon: HardDrive,
+  },
 ]
 
 export default function AlatMedia() {
   return (
-    <Layout title="Alat / Media" subtitle="Rapat video, pemindai dokumen, dan alat PDF dalam satu tempat.">
+    <Layout title="Alat / Media" subtitle="Rapat video, scan, alat PDF, galeri kegiatan, dan dokumen penting dalam satu tempat.">
       <HubMenu items={ITEM} />
     </Layout>
   )
