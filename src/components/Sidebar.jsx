@@ -70,6 +70,7 @@ import {
   FileText,
   BadgeCheck,
   Target,
+  Network,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
