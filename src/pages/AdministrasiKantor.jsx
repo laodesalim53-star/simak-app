@@ -7,7 +7,10 @@ import {
   ClipboardCheck,
   BookOpenCheck,
   BookOpenText,
+  BookOpen,
   NotebookPen,
+  StickyNote,
+  UserCog,
   Archive,
   CalendarDays,
   PiggyBank,
@@ -25,6 +28,10 @@ import {
 // /kelas memang dijaga `adminOnly` di App.jsx — guru tidak akan pernah
 // melihat kartu ini (konsisten dengan Sidebar.jsx sebelumnya yang juga
 // tidak menampilkan menu "Kelas" untuk guru).
+//
+// PERUBAHAN: kartu "Presensi" dipindah keluar ke menu Sidebar (tepat di
+// bawah "Bagan Struktur Organisasi"). Sebaliknya, "Catatan Siswa", "Jurnal
+// Mengajar" dan "Perbaikan Data Siswa" dipindah dari Sidebar ke sini.
 const SEMUA_KARTU = [
   {
     to: '/kelas',
@@ -38,12 +45,6 @@ const SEMUA_KARTU = [
     label: 'Jadwal Pelajaran',
     icon: CalendarClock,
     desc: 'Atur jadwal pelajaran tiap kelas.',
-  },
-  {
-    to: '/presensi',
-    label: 'Presensi',
-    icon: ClipboardCheck,
-    desc: 'Catat dan pantau kehadiran siswa harian.',
   },
   {
     to: '/nilai',
@@ -60,6 +61,27 @@ const SEMUA_KARTU = [
     label: 'Rapor',
     icon: FileBadge,
     desc: 'Kelola nilai akhir, deskripsi capaian, P5 & catatan wali kelas.',
+  },
+  // PINDAHAN dari Sidebar.
+  {
+    to: '/catatan-siswa',
+    label: 'Catatan Siswa',
+    icon: StickyNote,
+    desc: 'Catat perkembangan dan perilaku siswa.',
+  },
+  // PINDAHAN dari Sidebar.
+  {
+    to: '/jurnal-mengajar',
+    label: 'Jurnal Mengajar',
+    icon: BookOpen,
+    desc: 'Catat jurnal kegiatan mengajar harian.',
+  },
+  // PINDAHAN dari Sidebar.
+  {
+    to: '/perbaikan-data-siswa',
+    label: 'Perbaikan Data Siswa',
+    icon: UserCog,
+    desc: 'Ajukan perbaikan data siswa yang keliru.',
   },
   {
     to: '/silabus',
@@ -92,11 +114,11 @@ const SEMUA_KARTU = [
     desc: 'Kelola kas dan iuran kelas.',
   },
   {
-  to: '/portofolio-siswa',
-  label: 'Portofolio Siswa',
-  icon: GraduationCap,
-  desc: 'Lihat ringkasan biodata, kehadiran, nilai & prestasi tiap siswa.',
-},
+    to: '/portofolio-siswa',
+    label: 'Portofolio Siswa',
+    icon: GraduationCap,
+    desc: 'Lihat ringkasan biodata, kehadiran, nilai & prestasi tiap siswa.',
+  },
   {
     to: '/pengajuan-kebutuhan-kelas',
     label: 'Kebutuhan Kelas',
@@ -129,8 +151,7 @@ export default function AdministrasiKelas() {
 
   // TAMBAHAN: untuk tenant kantor, pakai daftar kartu ringkas KARTU_KANTOR
   // apa adanya (tidak melalui filter adminOnly, karena tidak ada kartu
-  // adminOnly di situ). Untuk tenant sekolah, perilaku PERSIS seperti
-  // sebelumnya — tidak ada perubahan.
+  // adminOnly di situ). Untuk tenant sekolah, filter adminOnly seperti biasa.
   const kartu = isKantor
     ? KARTU_KANTOR
     : SEMUA_KARTU.filter((k) => !k.adminOnly || isAdmin)
