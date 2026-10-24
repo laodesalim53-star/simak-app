@@ -39,13 +39,10 @@ import {
   FileCheck2,
   Award,
   Video,
-  Receipt,
-  ShoppingCart,
   Store,
   History,
   PackagePlus,
   FolderHeart,
-  PiggyBank,
   FileSpreadsheet,
   Gamepad2,
   ScanLine,
@@ -183,11 +180,10 @@ function getGroupsAdmin(
     {
       label: 'Keuangan & Aset',
       links: [
-        { to: '/keuangan', label: 'Keuangan', icon: Wallet },
-        { to: '/bku-bank', label: 'BKU Bank (BOS-K5)', icon: PiggyBank },
-        { to: '/kuitansi', label: 'Kuitansi', icon: Receipt },
-        { to: '/kuitansi-jasa', label: 'Kuitansi Jasa', icon: Receipt },
-        { to: '/nota', label: 'Nota Belanja', icon: ShoppingCart },
+        // GABUNGAN: Keuangan, BKU Bank, Kuitansi, Kuitansi Jasa & Nota Belanja
+        // jadi satu halaman hub "Keuangan" (PusatKeuangan.jsx, berisi kartu).
+        // `aktifJuga` membuat menu ini tetap menyala saat halaman anaknya dibuka.
+        { to: '/pusat-keuangan', label: 'Keuangan', icon: Wallet, aktifJuga: ['/keuangan', '/bku-bank', '/kuitansi', '/kuitansi-jasa', '/nota'] },
         { to: '/perpustakaan', label: 'Perpustakaan', icon: Library },
         { to: '/inventaris', label: 'Inventaris', icon: Boxes },
         // BARU: Kondisi Bangunan — satu paket dengan RingkasanAset.jsx yang
