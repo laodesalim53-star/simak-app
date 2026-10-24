@@ -5,6 +5,11 @@ import Layout from '../components/Layout'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 
+/*
+  SQL (jalankan sekali di Supabase):
+  alter table visi_misi_sekolah add column if not exists tempat text;
+*/
+
 const KOSONG = {
   visi: '',
   motto: '',
@@ -13,6 +18,7 @@ const KOSONG = {
   kepala_sekolah: '',
   nip_kepala: '',
   tahun_ajaran: '',
+  tempat: '',
 }
 
 // Tema kertas untuk hasil cetak. Warna dipakai lewat inline style agar ikut tercetak.
@@ -252,6 +258,7 @@ export default function VisiMisiSekolah() {
         setForm({
           ...KOSONG,
           ...vm.data,
+          tempat: vm.data.tempat || '',
           misi: vm.data.misi?.length ? vm.data.misi : [''],
           tujuan: vm.data.tujuan?.length ? vm.data.tujuan : [''],
         })
@@ -282,6 +289,7 @@ export default function VisiMisiSekolah() {
       kepala_sekolah: form.kepala_sekolah,
       nip_kepala: form.nip_kepala,
       tahun_ajaran: form.tahun_ajaran,
+      tempat: form.tempat,
       updated_at: new Date().toISOString(),
     }
     const { error } = await supabase
@@ -404,6 +412,17 @@ export default function VisiMisiSekolah() {
                   className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-semibold text-slate-800">Tempat penandatanganan</label>
+              <p className="text-xs text-slate-500 mb-1">Contoh: Waria. Tampil sebelum tanggal di bagian tanda tangan.</p>
+              <input
+                value={form.tempat}
+                onChange={(e) => set('tempat', e.target.value)}
+                placeholder="Nama desa/kecamatan"
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              />
             </div>
 
             <div className="flex items-center gap-3">
@@ -551,7 +570,7 @@ export default function VisiMisiSekolah() {
                 {/* Tanda tangan */}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 28, breakInside: 'avoid' }}>
                   <div style={{ textAlign: 'center', minWidth: 230, fontSize: 13 }}>
-                    <p style={{ margin: 0 }}>{sekolah?.kota ? `${sekolah.kota}, ` : ''}……………………</p>
+                    <p style={{ margin: 0 }}>{form.tempat ? `${form.tempat}, ` : ''}……………………</p>
                     <p style={{ margin: 0 }}>Kepala Sekolah,</p>
                     <div style={{ height: 72 }} />
                     <p style={{ margin: 0, fontWeight: 700, textDecoration: 'underline' }}>
