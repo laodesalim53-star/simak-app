@@ -69,6 +69,7 @@ import {
   Gavel,
   FileText,
   BadgeCheck,
+  Target,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
@@ -484,6 +485,7 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   // PERBAIKAN: "/" sekarang halaman Beranda publik, Dashboard di "/dashboard".
   { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
   { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
+  { to: '/visi-misi', label: 'Visi Misi Sekolah', icon: Target },
   { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
   { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
   { to: '/toko', label: 'Toko', icon: Store },
