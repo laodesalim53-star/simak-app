@@ -115,6 +115,9 @@ function getGroupsAdmin(
         // Dashboard aplikasi dipindah ke "/dashboard" — menu ini harus ikut.
         { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
         { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
+        // BARU: Bagan Struktur Organisasi untuk admin (tab "Atur Struktur",
+        // Komite Sekolah, dan Tema ada di halaman ini). Sebelumnya hanya ada di menu guru.
+        { to: '/struktur-organisasi', label: 'Bagan Struktur Organisasi', icon: Network },
         // Upgrade Fitur: status paket (free/standar/premium) melekat ke akun
         // masing-masing, jadi menu ini tampil untuk semua role, bukan cuma admin.
         { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
