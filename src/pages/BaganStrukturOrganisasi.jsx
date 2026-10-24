@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Printer, Loader2, Save, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
+import { ArrowLeft, Printer, Loader2, Save, RotateCcw, ZoomIn, ZoomOut, Plus, Trash2, Palette } from 'lucide-react'
 import Layout from '../components/Layout'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
@@ -8,18 +8,58 @@ import { supabase } from '../lib/supabaseClient'
 /*
   Bagan Struktur Organisasi
   - Semua pengguna sekolah: lihat & cetak.
-  - Admin / kepala sekolah (isAdmin): tab "Atur Struktur" untuk menentukan atasan,
-    jabatan struktural, urutan, dan menyembunyikan seseorang dari bagan.
+  - Admin / kepala sekolah: tab "Atur Struktur" untuk menentukan atasan, jabatan
+    (Kaur Kurikulum, Wali Kelas, dst), urutan, menyembunyikan seseorang, dan
+    mengisi kolom KOMITE SEKOLAH. Pilihan TEMA warna juga hanya bisa diubah admin
+    (tersimpan per sekolah, berlaku untuk semua pengguna).
 
-  Butuh: bagan_struktur_v2.sql (tabel bagan_struktur + fungsi bagan_orang_sekolah).
-
-  Data orang: semua guru sekolah (tabel guru, dengan atau tanpa akun) + akun staf lain.
-  Aturan bawaan (bila admin belum mengatur seseorang):
-    - jabatan 'kepala_sekolah'  -> puncak bagan
-    - orang lain                -> langsung di bawah kepala sekolah
+  Butuh: bagan_struktur_v2.sql (sudah ada) + bagan_komite_tema.sql (baru).
 */
 
-const WARNA = { aksen: '#1e3a8a', emas: '#c9a227', garis: '#94a3b8' }
+// ---------- TEMA ----------
+const TEMA = {
+  biru: { nama: 'Biru Klasik', aksen: '#1e3a8a', emas: '#c9a227', garis: '#94a3b8', latar: '#f8fafc', tepi: '#e2e8f0' },
+  hijau: { nama: 'Hijau Zamrud', aksen: '#065f46', emas: '#c9a227', garis: '#6ee7b7', latar: '#f0fdf4', tepi: '#bbf7d0' },
+  marun: { nama: 'Merah Marun', aksen: '#7f1d1d', emas: '#d4a017', garis: '#d9a5a5', latar: '#fef2f2', tepi: '#fecaca' },
+  ungu: { nama: 'Ungu Royal', aksen: '#4c1d95', emas: '#d4a017', garis: '#c4b5fd', latar: '#faf5ff', tepi: '#e9d5ff' },
+  teal: { nama: 'Teal Segar', aksen: '#0f766e', emas: '#f59e0b', garis: '#5eead4', latar: '#f0fdfa', tepi: '#99f6e4' },
+  hitam: { nama: 'Hitam Elegan', aksen: '#1f2937', emas: '#c9a227', garis: '#9ca3af', latar: '#f9fafb', tepi: '#e5e7eb' },
+}
+const TEMA_BAWAAN = 'biru'
+
+function varsTema(t) {
+  return {
+    '--b-aksen': t.aksen,
+    '--b-emas': t.emas,
+    '--b-garis': t.garis,
+    '--b-latar': t.latar,
+    '--b-tepi': t.tepi,
+  }
+}
+
+// Saran isian "Jabatan di bagan" (tetap boleh mengetik bebas)
+const SARAN_JABATAN = [
+  'Wakil Kepala Sekolah',
+  'Kaur Kurikulum',
+  'Kaur Kesiswaan',
+  'Kaur Sarana Prasarana',
+  'Kaur Humas',
+  'Kaur Tata Usaha',
+  'Wali Kelas I',
+  'Wali Kelas II',
+  'Wali Kelas III',
+  'Wali Kelas IV',
+  'Wali Kelas V',
+  'Wali Kelas VI',
+  'Guru PAI',
+  'Guru PJOK',
+  'Bendahara BOS/BOP',
+  'Operator Sekolah',
+  'Pustakawan',
+  'Penjaga Sekolah',
+]
+
+const SARAN_KOMITE = ['Ketua Komite', 'Wakil Ketua Komite', 'Sekretaris Komite', 'Bendahara Komite', 'Anggota Komite']
 
 function getFotoUrl(path) {
   if (!path) return null
@@ -64,7 +104,7 @@ function Foto({ nama, path, ukuran, cincin }) {
     <div
       style={{
         ...gaya,
-        background: WARNA.aksen,
+        background: 'var(--b-aksen)',
         color: '#fff',
         fontWeight: 700,
         fontSize: ukuran * 0.34,
@@ -81,9 +121,9 @@ function Foto({ nama, path, ukuran, cincin }) {
 // jenis: 'puncak' | 'tengah' | 'daun'
 function Kartu({ orang, label, jenis }) {
   const cfg = {
-    puncak: { w: 190, foto: 80, teks: 14, atas: WARNA.emas },
-    tengah: { w: 150, foto: 60, teks: 13, atas: WARNA.aksen },
-    daun: { w: 112, foto: 48, teks: 11, atas: WARNA.aksen },
+    puncak: { w: 190, foto: 80, teks: 14, atas: 'var(--b-emas)' },
+    tengah: { w: 150, foto: 60, teks: 13, atas: 'var(--b-aksen)' },
+    daun: { w: 112, foto: 48, teks: 11, atas: 'var(--b-aksen)' },
   }[jenis]
   return (
     <div
@@ -95,7 +135,12 @@ function Kartu({ orang, label, jenis }) {
         breakInside: 'avoid',
       }}
     >
-      <Foto nama={orang.nama_lengkap} path={orang.foto_profil_path} ukuran={cfg.foto} cincin={jenis === 'puncak' ? WARNA.emas : WARNA.garis} />
+      <Foto
+        nama={orang.nama_lengkap}
+        path={orang.foto_profil_path}
+        ukuran={cfg.foto}
+        cincin={jenis === 'puncak' ? 'var(--b-emas)' : 'var(--b-garis)'}
+      />
       <p className="mt-1.5 font-semibold text-slate-900 leading-tight" style={{ fontSize: cfg.teks }}>
         {orang.nama_lengkap || 'Tanpa nama'}
       </p>
@@ -138,30 +183,46 @@ function Simpul({ id, anak, orangById, labelById, tingkat }) {
   )
 }
 
+function urutKomite(a, b) {
+  const d = (a.urutan ?? 1000) - (b.urutan ?? 1000)
+  if (d) return d
+  return (a.nama || '').localeCompare(b.nama || '', 'id')
+}
+
 export default function BaganStrukturOrganisasi() {
-  const { profil, isAdmin } = useAuth()
-  const sekolahId = profil?.sekolah_id
-  const bolehEdit = !!isAdmin
+  const { profil, isAdmin, isKepalaSekolah, sekolahId: sekolahIdAuth } = useAuth()
+  const sekolahId = sekolahIdAuth ?? profil?.sekolah_id
+  const bolehEdit = !!(isAdmin || isKepalaSekolah)
 
   const [sekolah, setSekolah] = useState(null)
   const [logoUrl, setLogoUrl] = useState('')
   const [orang, setOrang] = useState([])
   const [baris, setBaris] = useState([])
   const [edit, setEdit] = useState({})
+  const [komite, setKomite] = useState([])
+  const [komiteEdit, setKomiteEdit] = useState([])
+  const [komiteGalat, setKomiteGalat] = useState('')
+  const [tema, setTema] = useState(TEMA_BAWAAN)
   const [tab, setTab] = useState('bagan')
   const [zoom, setZoom] = useState(100)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [galat, setGalat] = useState('')
   const [pesan, setPesan] = useState(null)
+  const [bukaTema, setBukaTema] = useState(false)
+
+  const temaAktif = TEMA[tema] || TEMA[TEMA_BAWAAN]
+  const kunciTema = `bagan_tema_${sekolahId}`
 
   async function muat() {
     setLoading(true)
     setGalat('')
-    const [pr, st, ps] = await Promise.all([
+    const [pr, st, ps, km, pg] = await Promise.all([
       supabase.rpc('bagan_orang_sekolah'),
       supabase.from('bagan_struktur').select('*').eq('sekolah_id', sekolahId),
       supabase.from('profil_sekolah').select('*').eq('sekolah_id', sekolahId).maybeSingle(),
+      supabase.from('bagan_komite').select('*').eq('sekolah_id', sekolahId),
+      supabase.from('bagan_pengaturan').select('tema').eq('sekolah_id', sekolahId).maybeSingle(),
     ])
     if (ps.data) {
       setSekolah({ nama: ps.data.nama_sekolah, alamat: ps.data.alamat })
@@ -170,6 +231,38 @@ export default function BaganStrukturOrganisasi() {
         setLogoUrl(pub.publicUrl)
       }
     }
+
+    // Tema: dari database; kalau belum ada, pakai cadangan di perangkat
+    let temaDipakai = pg.data?.tema
+    if (!temaDipakai) {
+      try {
+        temaDipakai = localStorage.getItem(kunciTema)
+      } catch (_) {
+        temaDipakai = null
+      }
+    }
+    setTema(TEMA[temaDipakai] ? temaDipakai : TEMA_BAWAAN)
+
+    // Komite
+    if (km.error) {
+      setKomiteGalat(`Kolom komite belum bisa dipakai: ${km.error.message}. Jalankan bagan_komite_tema.sql.`)
+      setKomite([])
+      setKomiteEdit([])
+    } else {
+      setKomiteGalat('')
+      const urut = [...(km.data || [])].sort(urutKomite)
+      setKomite(urut)
+      setKomiteEdit(
+        urut.map((k) => ({
+          key: k.id,
+          id: k.id,
+          nama: k.nama || '',
+          jabatan: k.jabatan || '',
+          urutan: k.urutan ?? '',
+        }))
+      )
+    }
+
     if (pr.error || st.error) {
       setGalat(
         `Data bagan tidak bisa dimuat: ${(pr.error || st.error).message}. Pastikan bagan_struktur_v2.sql sudah dijalankan.`
@@ -265,6 +358,21 @@ export default function BaganStrukturOrganisasi() {
   // ---- Edit (admin) ----
   const ubah = (id, k, v) => setEdit((e) => ({ ...e, [id]: { ...e[id], [k]: v } }))
 
+  const ubahKomite = (key, k, v) =>
+    setKomiteEdit((l) => l.map((x) => (x.key === key ? { ...x, [k]: v } : x)))
+  const tambahKomite = () =>
+    setKomiteEdit((l) => [
+      ...l,
+      {
+        key: `baru_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        id: null,
+        nama: '',
+        jabatan: l.length === 0 ? 'Ketua Komite' : 'Anggota Komite',
+        urutan: l.length + 1,
+      },
+    ])
+  const hapusKomite = (key) => setKomiteEdit((l) => l.filter((x) => x.key !== key))
+
   // orang yang berada di bawah `id` menurut isian saat ini (supaya tidak jadi lingkaran)
   function turunan(id) {
     const hasil = new Set()
@@ -279,6 +387,58 @@ export default function BaganStrukturOrganisasi() {
       })
     }
     return hasil
+  }
+
+  async function pilihTema(k) {
+    setTema(k)
+    try {
+      localStorage.setItem(kunciTema, k)
+    } catch (_) {
+      /* abaikan */
+    }
+    if (!bolehEdit) return
+    const { error } = await supabase
+      .from('bagan_pengaturan')
+      .upsert({ sekolah_id: sekolahId, tema: k, updated_at: new Date().toISOString() }, { onConflict: 'sekolah_id' })
+    if (error) {
+      setPesan({
+        ok: false,
+        teks: `Tema hanya tersimpan di perangkat ini (${error.message}). Jalankan bagan_komite_tema.sql agar berlaku untuk semua pengguna.`,
+      })
+    } else {
+      setPesan(null)
+    }
+  }
+
+  async function simpanKomite() {
+    if (komiteGalat) return null
+    const valid = komiteEdit.filter((k) => k.nama.trim())
+    const idLama = komite.map((k) => k.id)
+    const idDipakai = new Set(valid.filter((k) => k.id).map((k) => k.id))
+    const hapus = idLama.filter((id) => !idDipakai.has(id))
+
+    const bentuk = (k) => ({
+      sekolah_id: sekolahId,
+      nama: k.nama.trim(),
+      jabatan: k.jabatan.trim() || 'Anggota Komite',
+      urutan: k.urutan === '' ? null : Number(k.urutan),
+    })
+
+    if (hapus.length) {
+      const { error } = await supabase.from('bagan_komite').delete().in('id', hapus)
+      if (error) return error
+    }
+    const ubahan = valid.filter((k) => k.id).map((k) => ({ id: k.id, ...bentuk(k) }))
+    if (ubahan.length) {
+      const { error } = await supabase.from('bagan_komite').upsert(ubahan, { onConflict: 'id' })
+      if (error) return error
+    }
+    const baru = valid.filter((k) => !k.id).map(bentuk)
+    if (baru.length) {
+      const { error } = await supabase.from('bagan_komite').insert(baru)
+      if (error) return error
+    }
+    return null
   }
 
   async function simpan() {
@@ -300,9 +460,16 @@ export default function BaganStrukturOrganisasi() {
     const { error } = await supabase
       .from('bagan_struktur')
       .upsert(muatan, { onConflict: 'sekolah_id,orang_id' })
-    setSaving(false)
     if (error) {
+      setSaving(false)
       setPesan({ ok: false, teks: `Gagal menyimpan: ${error.message}` })
+      return
+    }
+    const errKomite = await simpanKomite()
+    setSaving(false)
+    if (errKomite) {
+      setPesan({ ok: false, teks: `Struktur tersimpan, tetapi komite gagal: ${errKomite.message}` })
+      await muat()
       return
     }
     setPesan({ ok: true, teks: 'Tersimpan.' })
@@ -310,7 +477,7 @@ export default function BaganStrukturOrganisasi() {
   }
 
   async function kembalikan() {
-    if (!window.confirm('Kembalikan bagan ke susunan otomatis? Semua pengaturan atasan dan jabatan akan dihapus.')) return
+    if (!window.confirm('Kembalikan bagan ke susunan otomatis? Semua pengaturan atasan dan jabatan akan dihapus (data komite tidak ikut terhapus).')) return
     setSaving(true)
     const { error } = await supabase.from('bagan_struktur').delete().eq('sekolah_id', sekolahId)
     setSaving(false)
@@ -319,6 +486,7 @@ export default function BaganStrukturOrganisasi() {
   }
 
   const adaData = pohon.akar.length > 0
+  const tombolAktif = { background: 'var(--b-aksen)', color: '#fff' }
 
   return (
     <Layout title="Bagan Struktur Organisasi" subtitle="Susunan jabatan dan personel sekolah.">
@@ -327,17 +495,17 @@ export default function BaganStrukturOrganisasi() {
         .bagan li { list-style:none; text-align:center; position:relative; padding:20px 6px 0; }
         .bagan li::before, .bagan li::after {
           content:''; position:absolute; top:0; right:50%; width:50%; height:20px;
-          border-top:2px solid ${WARNA.garis};
+          border-top:2px solid var(--b-garis);
         }
-        .bagan li::after { right:auto; left:50%; border-left:2px solid ${WARNA.garis}; }
+        .bagan li::after { right:auto; left:50%; border-left:2px solid var(--b-garis); }
         .bagan li:only-child::before, .bagan li:only-child::after { display:none; }
         .bagan li:only-child { padding-top:0; }
         .bagan li:first-child::before, .bagan li:last-child::after { border:0 none; }
-        .bagan li:last-child::before { border-right:2px solid ${WARNA.garis}; border-radius:0 6px 0 0; }
+        .bagan li:last-child::before { border-right:2px solid var(--b-garis); border-radius:0 6px 0 0; }
         .bagan li:first-child::after { border-radius:6px 0 0 0; }
         .bagan ul ul::before {
           content:''; position:absolute; top:0; left:50%; height:20px;
-          border-left:2px solid ${WARNA.garis};
+          border-left:2px solid var(--b-garis);
         }
         .bagan > ul { padding-top:0; }
         .bagan > ul > li { padding-top:0; }
@@ -345,11 +513,11 @@ export default function BaganStrukturOrganisasi() {
         .bagan-grup { position:relative; padding-top:20px; display:flex; justify-content:center; }
         .bagan-grup::before {
           content:''; position:absolute; top:0; left:50%; height:20px;
-          border-left:2px solid ${WARNA.garis};
+          border-left:2px solid var(--b-garis);
         }
         .bagan-grup-isi {
-          display:grid; gap:8px; padding:8px; background:#f8fafc;
-          border:1px solid #e2e8f0; border-radius:12px;
+          display:grid; gap:8px; padding:8px; background:var(--b-latar);
+          border:1px solid var(--b-tepi); border-radius:12px;
         }
         @media print {
           @page { size: A4 landscape; margin: 8mm; }
@@ -364,13 +532,22 @@ export default function BaganStrukturOrganisasi() {
         }
       `}</style>
 
-      <div className="max-w-6xl mx-auto p-4">
+      <div className="max-w-6xl mx-auto p-4" style={varsTema(temaAktif)}>
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4 print:hidden">
           <Link to="/dashboard" className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900">
             <ArrowLeft size={16} /> Dasbor
           </Link>
           {tab === 'bagan' && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {bolehEdit && (
+                <button
+                  type="button"
+                  onClick={() => setBukaTema((v) => !v)}
+                  className="inline-flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium"
+                >
+                  <Palette size={16} /> Tema
+                </button>
+              )}
               <div className="inline-flex items-center gap-1 bg-slate-100 rounded-lg p-1">
                 <button
                   type="button"
@@ -393,13 +570,43 @@ export default function BaganStrukturOrganisasi() {
               <button
                 onClick={() => window.print()}
                 disabled={!adaData}
-                className="inline-flex items-center gap-2 bg-blue-900 hover:bg-blue-950 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                style={tombolAktif}
               >
                 <Printer size={16} /> Cetak
               </button>
             </div>
           )}
         </div>
+
+        {/* Pemilih tema (admin) */}
+        {bolehEdit && tab === 'bagan' && bukaTema && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 mb-4 print:hidden">
+            <p className="text-xs text-slate-500 mb-3">Pilih tema warna bagan. Tema tersimpan untuk sekolah ini dan dipakai juga saat dicetak.</p>
+            <div className="flex flex-wrap gap-3">
+              {Object.entries(TEMA).map(([k, t]) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => pilihTema(k)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl border text-sm"
+                  style={{
+                    borderColor: tema === k ? t.aksen : '#e2e8f0',
+                    borderWidth: tema === k ? 2 : 1,
+                    background: tema === k ? t.latar : '#fff',
+                  }}
+                >
+                  <span className="inline-flex">
+                    <span style={{ width: 16, height: 16, borderRadius: '50%', background: t.aksen }} />
+                    <span style={{ width: 16, height: 16, borderRadius: '50%', background: t.emas, marginLeft: -5 }} />
+                    <span style={{ width: 16, height: 16, borderRadius: '50%', background: t.garis, marginLeft: -5 }} />
+                  </span>
+                  <span className="font-medium text-slate-800">{t.nama}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {bolehEdit && (
           <div className="flex gap-2 mb-4 print:hidden">
@@ -411,13 +618,18 @@ export default function BaganStrukturOrganisasi() {
                 key={k}
                 onClick={() => setTab(k)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium ${
-                  tab === k ? 'bg-blue-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  tab === k ? '' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
+                style={tab === k ? tombolAktif : undefined}
               >
                 {tt}
               </button>
             ))}
           </div>
+        )}
+
+        {pesan && tab === 'bagan' && (
+          <p className={`text-sm mb-3 print:hidden ${pesan.ok ? 'text-green-700' : 'text-red-600'}`}>{pesan.teks}</p>
         )}
 
         {loading && (
@@ -444,17 +656,58 @@ export default function BaganStrukturOrganisasi() {
                 <img src={logoUrl} alt="Logo sekolah" style={{ height: 60, width: 'auto', margin: '0 auto 6px', objectFit: 'contain' }} />
               )}
               <p className="text-xs font-semibold text-slate-500">Bagan Struktur Organisasi</p>
-              <h2 className="text-xl sm:text-2xl font-extrabold text-blue-900">{sekolah?.nama || 'Nama Sekolah'}</h2>
+              <h2 className="text-xl sm:text-2xl font-extrabold" style={{ color: 'var(--b-aksen)' }}>
+                {sekolah?.nama || 'Nama Sekolah'}
+              </h2>
               {sekolah?.alamat && <p className="text-xs text-slate-500">{sekolah.alamat}</p>}
+              <div
+                style={{ height: 3, width: 90, margin: '8px auto 0', borderRadius: 2, background: 'var(--b-emas)' }}
+              />
             </div>
 
             <div className="bagan-gulir overflow-x-auto pb-2">
-              <div className="bagan" style={{ zoom: zoom / 100, width: 'max-content', minWidth: '100%' }}>
-                <ul>
-                  {pohon.akar.map((id) => (
-                    <Simpul key={id} id={id} anak={pohon.anak} orangById={pohon.orangById} labelById={pohon.labelById} tingkat={0} />
-                  ))}
-                </ul>
+              <div
+                className="flex items-start justify-center gap-8"
+                style={{ zoom: zoom / 100, width: 'max-content', minWidth: '100%' }}
+              >
+                <div className="bagan">
+                  <ul>
+                    {pohon.akar.map((id) => (
+                      <Simpul key={id} id={id} anak={pohon.anak} orangById={pohon.orangById} labelById={pohon.labelById} tingkat={0} />
+                    ))}
+                  </ul>
+                </div>
+
+                {komite.length > 0 && (
+                  <div
+                    className="text-center"
+                    style={{
+                      minWidth: 150,
+                      border: '2px dashed var(--b-aksen)',
+                      borderRadius: 14,
+                      padding: '10px 10px 12px',
+                      background: 'var(--b-latar)',
+                      breakInside: 'avoid',
+                    }}
+                  >
+                    <p
+                      className="text-xs font-bold uppercase tracking-wide mb-2"
+                      style={{ color: 'var(--b-aksen)' }}
+                    >
+                      Komite Sekolah
+                    </p>
+                    <div className="flex flex-col items-center gap-2">
+                      {komite.map((k) => (
+                        <Kartu
+                          key={k.id}
+                          orang={{ nama_lengkap: k.nama, foto_profil_path: k.foto_path || null }}
+                          label={k.jabatan || 'Anggota Komite'}
+                          jenis="daun"
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -462,97 +715,200 @@ export default function BaganStrukturOrganisasi() {
 
         {/* ===== ATUR STRUKTUR (admin) ===== */}
         {!loading && !galat && bolehEdit && tab === 'atur' && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-4">
-            <p className="text-xs text-slate-500">
-              Pilih atasan langsung untuk setiap orang. "Otomatis" berarti langsung di bawah Kepala Sekolah. Isi jabatan hanya
-              bila perlu (mis. Wakil Kepala Sekolah, Kaur Kurikulum, Wali Kelas 1, Bendahara BOS). Angka urutan kecil tampil lebih
-              dulu.
-            </p>
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-6">
+            <datalist id="saran-jabatan">
+              {SARAN_JABATAN.map((j) => (
+                <option key={j} value={j} />
+              ))}
+            </datalist>
+            <datalist id="saran-komite">
+              {SARAN_KOMITE.map((j) => (
+                <option key={j} value={j} />
+              ))}
+            </datalist>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-slate-600 border-b border-slate-200">
-                    <th className="py-2 pr-3 font-semibold">Nama</th>
-                    <th className="py-2 pr-3 font-semibold">Atasan</th>
-                    <th className="py-2 pr-3 font-semibold">Jabatan di bagan</th>
-                    <th className="py-2 pr-3 font-semibold w-20">Urutan</th>
-                    <th className="py-2 font-semibold w-20">Tampil</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...orang]
-                    .sort((a, b) => (a.nama_lengkap || '').localeCompare(b.nama_lengkap || '', 'id'))
-                    .map((o) => {
-                      const e = edit[o.id]
-                      if (!e) return null
-                      const dilarang = turunan(o.id)
-                      return (
-                        <tr key={o.id} className="border-b border-slate-100 align-middle">
-                          <td className="py-2 pr-3">
-                            <div className="flex items-center gap-2 min-w-[180px]">
-                              <Foto nama={o.nama_lengkap} path={o.foto_profil_path} ukuran={32} cincin={WARNA.garis} />
-                              <div>
-                                <p className="font-medium text-slate-900 leading-tight">{o.nama_lengkap || 'Tanpa nama'}</p>
-                                <p className="text-xs text-slate-500">{rapikanJabatan(o.jabatan)}</p>
+            <div className="space-y-3">
+              <h3 className="font-semibold text-slate-900">1. Struktur sekolah</h3>
+              <p className="text-xs text-slate-500">
+                Pilih atasan langsung untuk setiap orang. "Otomatis" berarti langsung di bawah Kepala Sekolah. Isi jabatan untuk
+                tugas tambahan (klik kolom untuk melihat saran: Wakil Kepala Sekolah, Kaur Kurikulum, Wali Kelas, Bendahara BOS,
+                dst — boleh juga ketik sendiri). Contoh susunan: Kaur Kurikulum → atasannya Kepala Sekolah; Wali Kelas → atasannya
+                Kaur Kurikulum. Angka urutan kecil tampil lebih dulu.
+              </p>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-slate-600 border-b border-slate-200">
+                      <th className="py-2 pr-3 font-semibold">Nama</th>
+                      <th className="py-2 pr-3 font-semibold">Atasan</th>
+                      <th className="py-2 pr-3 font-semibold">Jabatan di bagan</th>
+                      <th className="py-2 pr-3 font-semibold w-20">Urutan</th>
+                      <th className="py-2 font-semibold w-20">Tampil</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...orang]
+                      .sort((a, b) => (a.nama_lengkap || '').localeCompare(b.nama_lengkap || '', 'id'))
+                      .map((o) => {
+                        const e = edit[o.id]
+                        if (!e) return null
+                        const dilarang = turunan(o.id)
+                        return (
+                          <tr key={o.id} className="border-b border-slate-100 align-middle">
+                            <td className="py-2 pr-3">
+                              <div className="flex items-center gap-2 min-w-[180px]">
+                                <Foto nama={o.nama_lengkap} path={o.foto_profil_path} ukuran={32} cincin="var(--b-garis)" />
+                                <div>
+                                  <p className="font-medium text-slate-900 leading-tight">{o.nama_lengkap || 'Tanpa nama'}</p>
+                                  <p className="text-xs text-slate-500">{rapikanJabatan(o.jabatan)}</p>
+                                </div>
                               </div>
-                            </div>
-                          </td>
+                            </td>
+                            <td className="py-2 pr-3">
+                              <select
+                                value={e.atasan}
+                                onChange={(ev) => ubah(o.id, 'atasan', ev.target.value)}
+                                className="border rounded-lg px-2 py-1.5 text-sm max-w-[220px] w-full"
+                              >
+                                <option value="otomatis">Otomatis</option>
+                                <option value="puncak">Paling atas (puncak)</option>
+                                {orang
+                                  .filter((x) => x.id !== o.id && !dilarang.has(x.id))
+                                  .sort((a, b) => (a.nama_lengkap || '').localeCompare(b.nama_lengkap || '', 'id'))
+                                  .map((x) => (
+                                    <option key={x.id} value={x.id}>
+                                      {x.nama_lengkap || 'Tanpa nama'}
+                                    </option>
+                                  ))}
+                              </select>
+                            </td>
+                            <td className="py-2 pr-3">
+                              <input
+                                list="saran-jabatan"
+                                value={e.jabatan}
+                                onChange={(ev) => ubah(o.id, 'jabatan', ev.target.value)}
+                                placeholder={labelOrang(o, null)}
+                                className="border rounded-lg px-2 py-1.5 text-sm w-full min-w-[170px]"
+                              />
+                            </td>
+                            <td className="py-2 pr-3">
+                              <input
+                                type="number"
+                                value={e.urutan}
+                                onChange={(ev) => ubah(o.id, 'urutan', ev.target.value)}
+                                className="border rounded-lg px-2 py-1.5 text-sm w-16"
+                              />
+                            </td>
+                            <td className="py-2">
+                              <input
+                                type="checkbox"
+                                checked={e.tampil}
+                                onChange={(ev) => ubah(o.id, 'tampil', ev.target.checked)}
+                                className="w-4 h-4"
+                                aria-label={`Tampilkan ${o.nama_lengkap || 'orang ini'} di bagan`}
+                              />
+                            </td>
+                          </tr>
+                        )
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* ---- Komite Sekolah ---- */}
+            <div className="space-y-3 border-t border-slate-200 pt-5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="font-semibold text-slate-900">2. Komite Sekolah</h3>
+                {!komiteGalat && (
+                  <button
+                    type="button"
+                    onClick={tambahKomite}
+                    className="inline-flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-sm font-medium"
+                  >
+                    <Plus size={15} /> Tambah anggota komite
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-slate-500">
+                Komite sekolah bukan akun guru, jadi diisi manual di sini. Tampil sebagai kolom terpisah (bingkai putus-putus) di
+                sebelah kanan bagan.
+              </p>
+
+              {komiteGalat && (
+                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{komiteGalat}</p>
+              )}
+
+              {!komiteGalat && komiteEdit.length === 0 && (
+                <p className="text-sm text-slate-500 bg-slate-50 border border-dashed border-slate-300 rounded-lg px-3 py-4 text-center">
+                  Belum ada anggota komite. Klik "Tambah anggota komite".
+                </p>
+              )}
+
+              {!komiteGalat && komiteEdit.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-slate-600 border-b border-slate-200">
+                        <th className="py-2 pr-3 font-semibold">Nama</th>
+                        <th className="py-2 pr-3 font-semibold">Jabatan di komite</th>
+                        <th className="py-2 pr-3 font-semibold w-20">Urutan</th>
+                        <th className="py-2 font-semibold w-12" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {komiteEdit.map((k) => (
+                        <tr key={k.key} className="border-b border-slate-100 align-middle">
                           <td className="py-2 pr-3">
-                            <select
-                              value={e.atasan}
-                              onChange={(ev) => ubah(o.id, 'atasan', ev.target.value)}
-                              className="border rounded-lg px-2 py-1.5 text-sm max-w-[220px] w-full"
-                            >
-                              <option value="otomatis">Otomatis</option>
-                              <option value="puncak">Paling atas (puncak)</option>
-                              {orang
-                                .filter((x) => x.id !== o.id && !dilarang.has(x.id))
-                                .sort((a, b) => (a.nama_lengkap || '').localeCompare(b.nama_lengkap || '', 'id'))
-                                .map((x) => (
-                                  <option key={x.id} value={x.id}>
-                                    {x.nama_lengkap || 'Tanpa nama'}
-                                  </option>
-                                ))}
-                            </select>
+                            <input
+                              value={k.nama}
+                              onChange={(ev) => ubahKomite(k.key, 'nama', ev.target.value)}
+                              placeholder="Nama lengkap"
+                              className="border rounded-lg px-2 py-1.5 text-sm w-full min-w-[200px]"
+                            />
                           </td>
                           <td className="py-2 pr-3">
                             <input
-                              value={e.jabatan}
-                              onChange={(ev) => ubah(o.id, 'jabatan', ev.target.value)}
-                              placeholder={labelOrang(o, null)}
-                              className="border rounded-lg px-2 py-1.5 text-sm w-full min-w-[160px]"
+                              list="saran-komite"
+                              value={k.jabatan}
+                              onChange={(ev) => ubahKomite(k.key, 'jabatan', ev.target.value)}
+                              placeholder="Ketua Komite"
+                              className="border rounded-lg px-2 py-1.5 text-sm w-full min-w-[170px]"
                             />
                           </td>
                           <td className="py-2 pr-3">
                             <input
                               type="number"
-                              value={e.urutan}
-                              onChange={(ev) => ubah(o.id, 'urutan', ev.target.value)}
+                              value={k.urutan}
+                              onChange={(ev) => ubahKomite(k.key, 'urutan', ev.target.value)}
                               className="border rounded-lg px-2 py-1.5 text-sm w-16"
                             />
                           </td>
                           <td className="py-2">
-                            <input
-                              type="checkbox"
-                              checked={e.tampil}
-                              onChange={(ev) => ubah(o.id, 'tampil', ev.target.checked)}
-                              className="w-4 h-4"
-                              aria-label={`Tampilkan ${o.nama_lengkap || 'orang ini'} di bagan`}
-                            />
+                            <button
+                              type="button"
+                              onClick={() => hapusKomite(k.key)}
+                              className="p-1.5 rounded-md text-red-600 hover:bg-red-50"
+                              aria-label={`Hapus ${k.nama || 'anggota komite'}`}
+                            >
+                              <Trash2 size={16} />
+                            </button>
                           </td>
                         </tr>
-                      )
-                    })}
-                </tbody>
-              </table>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={simpan}
                 disabled={saving}
-                className="inline-flex items-center gap-2 bg-blue-900 hover:bg-blue-950 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-60"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-60"
+                style={tombolAktif}
               >
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Simpan
               </button>
