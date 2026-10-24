@@ -178,6 +178,8 @@ export default function RoutesSekolah() {
       <Route path="/kelas" element={<ProtectedRoute adminOnly><Kelas /></ProtectedRoute>} />
       {/* Daftar Hadir Guru & Tendik: BUKAN adminOnly (kontrol edit di dalam komponen) */}
       <Route path="/daftar-hadir-pegawai" element={<ProtectedRoute><DaftarHadirPegawai /></ProtectedRoute>} />
+      {/* Visi Misi Sekolah untuk guru: BUKAN adminOnly — guru hanya bisa lihat & cetak (kontrol edit di dalam komponen) */}
+      <Route path="/visi-misi" element={<ProtectedRoute><VisiMisiSekolah /></ProtectedRoute>} />
 
       {/* Administrasi Kepala Sekolah */}
       <Route path="/administrasi-kepsek/laporan-tahunan" element={<ProtectedRoute adminOnly><LaporanTahunan /></ProtectedRoute>} />
