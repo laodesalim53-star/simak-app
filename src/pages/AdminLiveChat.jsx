@@ -1,14 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Send, Headset, Search, MessageSquare, ArrowLeft } from 'lucide-react'
-import Layout from '../components/Layout'
 // PENTING: sesuaikan path import ini dengan lokasi client Supabase Anda,
 // sama seperti yang dipakai di Beranda.jsx.
 import { supabase } from '../lib/supabaseClient'
 
-// Halaman dashboard admin untuk membalas pesan live chat dari pengunjung
-// website. Dibungkus dengan <Layout> yang sama dipakai Dashboard.jsx, dsb —
-// jadi otomatis dapat sidebar navigasi + header (notifikasi, tombol toko,
-// dll) yang sama, bukan halaman berdiri sendiri lagi.
+// Panel untuk membalas pesan live chat dari pengunjung website (khusus
+// superadmin). Sekarang berupa KOMPONEN TANPA <Layout> supaya bisa dipasang
+// sebagai tab "Live Chat" di halaman Pesan.jsx (prop `embedded`). Sebelumnya
+// ini halaman sendiri yang dibungkus <Layout>.
 // Menampilkan daftar percakapan (dikelompokkan per sesi_id) di sisi kiri,
 // dan jendela percakapan yang sedang dibuka di sisi kanan. Balasan admin
 // disimpan ke tabel yang sama (live_chat_pesan) dengan pengirim: 'admin',
@@ -30,7 +29,7 @@ function inisialNama(nama) {
   return nama.trim().charAt(0).toUpperCase()
 }
 
-export default function AdminLiveChat() {
+export default function LiveChatPanel({ embedded = false }) {
   const [daftarSesi, setDaftarSesi] = useState([])
   const [sesiAktif, setSesiAktif] = useState(null)
   const [pesanAktif, setPesanAktif] = useState([])
@@ -81,6 +80,11 @@ export default function AdminLiveChat() {
 
   useEffect(() => {
     muatDaftarSesi()
+
+    // Bersihkan channel lama dengan nama sama (kalau masih ada) supaya tidak
+    // muncul error "cannot add postgres_changes callback after subscribe()".
+    const channelLama = supabase.getChannels().find((ch) => ch.topic === 'realtime:admin-live-chat-semua')
+    if (channelLama) supabase.removeChannel(channelLama)
 
     const channel = supabase
       .channel('admin-live-chat-semua')
@@ -146,8 +150,8 @@ export default function AdminLiveChat() {
   const sesiTerpilih = daftarSesi.find((s) => s.sesi_id === sesiAktif)
 
   return (
-    <Layout title="Live Chat" subtitle="Percakapan real-time dengan pengunjung website">
-      <div className={`admchat-card ${sesiAktif ? 'admchat-tampilkan-panel' : ''}`}>
+    <>
+      <div className={`admchat-card ${embedded ? 'admchat-embedded' : ''} ${sesiAktif ? 'admchat-tampilkan-panel' : ''}`}>
 
         <aside className="admchat-list">
           <div className="admchat-list-header">
@@ -509,7 +513,18 @@ export default function AdminLiveChat() {
           .admchat-card.admchat-tampilkan-panel .admchat-list { display: none; }
           .admchat-card:not(.admchat-tampilkan-panel) .admchat-panel { display: none; }
         }
+
+        /* Mode tertanam di halaman Pesan: ikut tinggi kartu induk (di bawah
+           baris tab), tanpa bingkai ganda. */
+        .admchat-card.admchat-embedded {
+          flex: 1 1 auto;
+          height: auto;
+          min-height: 0;
+          border: none;
+          border-radius: 0;
+          box-shadow: none;
+        }
       `}</style>
-    </Layout>
+    </>
   )
 }
