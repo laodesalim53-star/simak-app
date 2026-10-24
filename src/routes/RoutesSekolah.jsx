@@ -138,6 +138,8 @@ const PencairanDana = lazy(() => import('../pages/PencairanDana'))
 // Halaman gabungan (hub): Toko (etalase + riwayat + pesanan masuk) dan Alat / Media (rapat + scan + PDF)
 const PusatToko = lazy(() => import('../pages/PusatToko'))
 const AlatMedia = lazy(() => import('../pages/AlatMedia'))
+// Halaman gabungan (hub) Keuangan: Keuangan, BKU Bank, Kuitansi, Kuitansi Jasa, Nota Belanja
+const PusatKeuangan = lazy(() => import('../pages/PusatKeuangan'))
 
 // Nota.jsx menerima `sekolah` lewat prop — wrapper ini mengambil profil sekolah.
 function NotaDenganSekolah() {
@@ -283,6 +285,8 @@ export default function RoutesSekolah() {
 
       {/* 6. Administrasi sekolah (di luar adminUmumRoutes) */}
       <Route path="/nota" element={<ProtectedRoute adminOnly><NotaDenganSekolah /></ProtectedRoute>} />
+      {/* Hub Keuangan — kartu menuju /keuangan, /bku-bank, /kuitansi, /kuitansi-jasa, /nota */}
+      <Route path="/pusat-keuangan" element={<ProtectedRoute adminOnly><PusatKeuangan /></ProtectedRoute>} />
       <Route path="/keuangan-kelas" element={<ProtectedRoute><KeuanganKelas /></ProtectedRoute>} />
       <Route path="/profil-sekolah" element={<ProtectedRoute adminUtamaOnly><ProfilSekolah /></ProtectedRoute>} />
       <Route path="/manajemen-sekolah" element={<ProtectedRoute superAdminOnly><ManajemenSekolah /></ProtectedRoute>} />
