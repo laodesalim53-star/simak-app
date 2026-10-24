@@ -486,6 +486,7 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
   { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
   { to: '/visi-misi', label: 'Visi Misi Sekolah', icon: Target },
+  { to: '/struktur-organisasi', label: 'Bagan Struktur Organisasi', icon: Network },
   { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
   { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
   { to: '/toko', label: 'Toko', icon: Store },
