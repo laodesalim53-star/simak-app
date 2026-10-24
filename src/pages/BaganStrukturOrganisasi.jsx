@@ -151,15 +151,81 @@ function Kartu({ orang, label, jenis }) {
   )
 }
 
-function Simpul({ id, anak, orangById, labelById, tingkat }) {
+// Lajur Komite: kolom di kanan puncak bagan + garis putus-putus dari kartu puncak.
+// Diposisikan absolut di dalam <li> puncak (yang diberi padding kiri-kanan 176px
+// supaya kartu puncak tetap di tengah dan kolom tidak menimpa kartu di bawahnya).
+const LEBAR_KOMITE = 160
+function LajurKomite({ komite }) {
+  return (
+    <>
+      {/* garis dari kartu puncak (lebar 190 -> tepi kanan = 50% + 95px) ke kolom komite */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          top: 72,
+          left: 'calc(50% + 95px)',
+          right: LEBAR_KOMITE,
+          borderTop: '2px dashed var(--b-aksen)',
+        }}
+      />
+      <div
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          top: 68,
+          left: 'calc(50% + 91px)',
+          width: 8,
+          height: 8,
+          borderRadius: '50%',
+          background: 'var(--b-aksen)',
+        }}
+      />
+      <div
+        className="text-center"
+        style={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          width: LEBAR_KOMITE,
+          border: '2px dashed var(--b-aksen)',
+          borderRadius: 14,
+          padding: '10px 8px 12px',
+          background: 'var(--b-latar)',
+          breakInside: 'avoid',
+        }}
+      >
+        <p className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: 'var(--b-aksen)' }}>
+          Komite Sekolah
+        </p>
+        <div className="flex flex-col items-center">
+          {komite.map((k, i) => (
+            <div key={k.id} className="flex flex-col items-center">
+              {i > 0 && <div style={{ height: 10, borderLeft: '2px dashed var(--b-garis)' }} />}
+              <Kartu
+                orang={{ nama_lengkap: k.nama, foto_profil_path: k.foto_path || null }}
+                label={k.jabatan || 'Anggota Komite'}
+                jenis="daun"
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  )
+}
+
+function Simpul({ id, anak, orangById, labelById, tingkat, komite }) {
   const o = orangById[id]
   const kids = anak[id] || []
   const semuaDaun = kids.length > 0 && kids.every((k) => !(anak[k] && anak[k].length))
   const kelompok = semuaDaun && kids.length > 5
   const jenis = tingkat === 0 ? 'puncak' : kids.length ? 'tengah' : 'daun'
+  const adaKomite = tingkat === 0 && komite && komite.length > 0
   return (
-    <li>
+    <li style={adaKomite ? { padding: `0 ${LEBAR_KOMITE + 16}px`, minWidth: 660 } : undefined}>
       <Kartu orang={o} label={labelById[id]} jenis={jenis} />
+      {adaKomite && <LajurKomite komite={komite} />}
       {kids.length > 0 &&
         (kelompok ? (
           <div className="bagan-grup">
@@ -672,42 +738,19 @@ export default function BaganStrukturOrganisasi() {
               >
                 <div className="bagan">
                   <ul>
-                    {pohon.akar.map((id) => (
-                      <Simpul key={id} id={id} anak={pohon.anak} orangById={pohon.orangById} labelById={pohon.labelById} tingkat={0} />
+                    {pohon.akar.map((id, i) => (
+                      <Simpul
+                        key={id}
+                        id={id}
+                        anak={pohon.anak}
+                        orangById={pohon.orangById}
+                        labelById={pohon.labelById}
+                        tingkat={0}
+                        komite={i === 0 ? komite : null}
+                      />
                     ))}
                   </ul>
                 </div>
-
-                {komite.length > 0 && (
-                  <div
-                    className="text-center"
-                    style={{
-                      minWidth: 150,
-                      border: '2px dashed var(--b-aksen)',
-                      borderRadius: 14,
-                      padding: '10px 10px 12px',
-                      background: 'var(--b-latar)',
-                      breakInside: 'avoid',
-                    }}
-                  >
-                    <p
-                      className="text-xs font-bold uppercase tracking-wide mb-2"
-                      style={{ color: 'var(--b-aksen)' }}
-                    >
-                      Komite Sekolah
-                    </p>
-                    <div className="flex flex-col items-center gap-2">
-                      {komite.map((k) => (
-                        <Kartu
-                          key={k.id}
-                          orang={{ nama_lengkap: k.nama, foto_profil_path: k.foto_path || null }}
-                          label={k.jabatan || 'Anggota Komite'}
-                          jenis="daun"
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           </div>
