@@ -33,7 +33,6 @@ const Galeri = lazy(() => import('../pages/Galeri'))
 const Dokumen = lazy(() => import('../pages/Dokumen'))
 const Agenda = lazy(() => import('../pages/Agenda'))
 const LinkLayanan = lazy(() => import('../pages/LinkLayanan'))
-const AdminLiveChat = lazy(() => import('../pages/AdminLiveChat'))
 const ScanDokumen = lazy(() => import('../pages/ScanDokumen'))
 const AlatPDF = lazy(() => import('../pages/AlatPDF'))
 const Rapat = lazy(() => import('../pages/Rapat'))
@@ -64,7 +63,8 @@ export const commonRoutes = (
     <Route path="/link-layanan" element={<ProtectedRoute><LinkLayanan /></ProtectedRoute>} />
     <Route path="/scan-dokumen" element={<ProtectedRoute><ScanDokumen /></ProtectedRoute>} />
     <Route path="/alat-pdf" element={<ProtectedRoute><AlatPDF /></ProtectedRoute>} />
-    <Route path="/live-chat" element={<ProtectedRoute superAdminOnly><AdminLiveChat /></ProtectedRoute>} />
+    {/* Live Chat sekarang jadi tab di halaman Pesan (khusus superadmin) — link lama diarahkan ke sana */}
+    <Route path="/live-chat" element={<Navigate to="/pesan?tab=livechat" replace />} />
 
     {/* Rapat: sengaja tanpa ProtectedRoute (tamu boleh gabung lewat link) */}
     <Route path="/rapat" element={<ProtectedRoute><Rapat /></ProtectedRoute>} />
