@@ -153,9 +153,7 @@ function getGroupsAdmin(
         // sidebar. Ditambahkan di sini, sejajar posisinya dengan menu Guru.
         { to: '/administrasi-kelas', label: 'Administrasi Kelas', icon: LayoutGrid },
         // Rapat Video, Scan Dokumen & Alat PDF digabung jadi satu halaman "Alat / Media".
-        { to: '/alat-media', label: 'Alat / Media', icon: Wrench, aktifJuga: ['/rapat', '/scan-dokumen', '/alat-pdf'] },
-        { to: '/galeri', label: 'Galeri Kegiatan', icon: Images },
-        { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
+        { to: '/alat-media', label: 'Alat / Media', icon: Wrench, aktifJuga: ['/rapat', '/scan-dokumen', '/alat-pdf', '/galeri', '/dokumen'] },
         { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
       ],
     },
@@ -494,9 +492,7 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
   { to: '/pusat-toko', label: 'Toko', icon: Store, aktifJuga: ['/toko', '/riwayat-pesanan', '/pesanan-masuk'] },
   { to: '/administrasi-kelas', label: 'Administrasi Kelas', icon: LayoutGrid },
-  { to: '/alat-media', label: 'Alat / Media', icon: Wrench, aktifJuga: ['/rapat', '/scan-dokumen', '/alat-pdf'] },
-  { to: '/galeri', label: 'Galeri Kegiatan', icon: Images },
-  { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
+  { to: '/alat-media', label: 'Alat / Media', icon: Wrench, aktifJuga: ['/rapat', '/scan-dokumen', '/alat-pdf', '/galeri', '/dokumen'] },
   // PERBAIKAN: baris "Administrasi Kelas" sebelumnya terduplikasi di sini
   // (sudah ada satu di atas, sebelum "Rapat Video") — duplikat dihapus.
   { to: '/siswa', label: 'Data Siswa', icon: Users },
