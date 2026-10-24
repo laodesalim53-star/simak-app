@@ -11,8 +11,9 @@ import { supabase } from '../lib/supabaseClient'
   - Admin / kepala sekolah (isAdmin): tab "Atur Struktur" untuk menentukan atasan,
     jabatan struktural, urutan, dan menyembunyikan seseorang dari bagan.
 
-  Butuh: struktur_organisasi.sql (tabel struktur_organisasi + fungsi bagan_orang_sekolah).
+  Butuh: bagan_struktur_v2.sql (tabel bagan_struktur + fungsi bagan_orang_sekolah).
 
+  Data orang: semua guru sekolah (tabel guru, dengan atau tanpa akun) + akun staf lain.
   Aturan bawaan (bila admin belum mengatur seseorang):
     - jabatan 'kepala_sekolah'  -> puncak bagan
     - orang lain                -> langsung di bawah kepala sekolah
@@ -45,7 +46,7 @@ function rapikanJabatan(jabatan) {
 function labelOrang(o, baris) {
   if (baris?.jabatan_struktural?.trim()) return baris.jabatan_struktural.trim()
   if (o.jabatan === 'kepala_sekolah') return 'Kepala Sekolah'
-  if (o.jabatan === 'guru' || o.role === 'guru') return 'Guru'
+  if (o.jabatan === 'guru' || o.role === 'guru') return o.tugas_tambahan?.trim() || 'Guru'
   return rapikanJabatan(o.jabatan)
 }
 
@@ -159,7 +160,7 @@ export default function BaganStrukturOrganisasi() {
     setGalat('')
     const [pr, st, ps] = await Promise.all([
       supabase.rpc('bagan_orang_sekolah'),
-      supabase.from('struktur_organisasi').select('*').eq('sekolah_id', sekolahId),
+      supabase.from('bagan_struktur').select('*').eq('sekolah_id', sekolahId),
       supabase.from('profil_sekolah').select('*').eq('sekolah_id', sekolahId).maybeSingle(),
     ])
     if (ps.data) {
@@ -171,7 +172,7 @@ export default function BaganStrukturOrganisasi() {
     }
     if (pr.error || st.error) {
       setGalat(
-        `Data bagan tidak bisa dimuat: ${(pr.error || st.error).message}. Pastikan struktur_organisasi.sql sudah dijalankan.`
+        `Data bagan tidak bisa dimuat: ${(pr.error || st.error).message}. Pastikan bagan_struktur_v2.sql sudah dijalankan.`
       )
       setOrang([])
       setBaris([])
@@ -179,12 +180,12 @@ export default function BaganStrukturOrganisasi() {
       const layak = (pr.data || []).filter((o) => o.role !== 'orang_tua' && o.role !== 'superadmin')
       setOrang(layak)
       setBaris(st.data || [])
-      const peta = new Map((st.data || []).map((b) => [b.profil_id, b]))
+      const peta = new Map((st.data || []).map((b) => [b.orang_id, b]))
       const awal = {}
       layak.forEach((o) => {
         const b = peta.get(o.id)
         awal[o.id] = {
-          atasan: b?.puncak ? 'puncak' : b?.atasan_profil_id || 'otomatis',
+          atasan: b?.puncak ? 'puncak' : b?.atasan_orang_id || 'otomatis',
           jabatan: b?.jabatan_struktural || '',
           urutan: b?.urutan ?? '',
           tampil: b ? b.tampil !== false : true,
@@ -207,7 +208,7 @@ export default function BaganStrukturOrganisasi() {
 
   // ---- Susun pohon dari data tersimpan ----
   const pohon = useMemo(() => {
-    const petaBaris = new Map(baris.map((b) => [b.profil_id, b]))
+    const petaBaris = new Map(baris.map((b) => [b.orang_id, b]))
     const tampil = orang.filter((o) => petaBaris.get(o.id)?.tampil !== false)
     const ids = new Set(tampil.map((o) => o.id))
     const kepala = tampil.find((o) => o.jabatan === 'kepala_sekolah')
@@ -216,8 +217,8 @@ export default function BaganStrukturOrganisasi() {
     tampil.forEach((o) => {
       const b = petaBaris.get(o.id)
       if (b?.puncak) induk[o.id] = null
-      else if (b?.atasan_profil_id && ids.has(b.atasan_profil_id) && b.atasan_profil_id !== o.id)
-        induk[o.id] = b.atasan_profil_id
+      else if (b?.atasan_orang_id && ids.has(b.atasan_orang_id) && b.atasan_orang_id !== o.id)
+        induk[o.id] = b.atasan_orang_id
       else if (o.jabatan === 'kepala_sekolah') induk[o.id] = null
       else induk[o.id] = kepala ? kepala.id : null
     })
@@ -287,8 +288,8 @@ export default function BaganStrukturOrganisasi() {
       const e = edit[o.id]
       return {
         sekolah_id: sekolahId,
-        profil_id: o.id,
-        atasan_profil_id: e.atasan !== 'otomatis' && e.atasan !== 'puncak' ? e.atasan : null,
+        orang_id: o.id,
+        atasan_orang_id: e.atasan !== 'otomatis' && e.atasan !== 'puncak' ? e.atasan : null,
         puncak: e.atasan === 'puncak',
         jabatan_struktural: e.jabatan.trim() || null,
         urutan: e.urutan === '' ? null : Number(e.urutan),
@@ -297,8 +298,8 @@ export default function BaganStrukturOrganisasi() {
       }
     })
     const { error } = await supabase
-      .from('struktur_organisasi')
-      .upsert(muatan, { onConflict: 'sekolah_id,profil_id' })
+      .from('bagan_struktur')
+      .upsert(muatan, { onConflict: 'sekolah_id,orang_id' })
     setSaving(false)
     if (error) {
       setPesan({ ok: false, teks: `Gagal menyimpan: ${error.message}` })
@@ -311,7 +312,7 @@ export default function BaganStrukturOrganisasi() {
   async function kembalikan() {
     if (!window.confirm('Kembalikan bagan ke susunan otomatis? Semua pengaturan atasan dan jabatan akan dihapus.')) return
     setSaving(true)
-    const { error } = await supabase.from('struktur_organisasi').delete().eq('sekolah_id', sekolahId)
+    const { error } = await supabase.from('bagan_struktur').delete().eq('sekolah_id', sekolahId)
     setSaving(false)
     setPesan(error ? { ok: false, teks: `Gagal: ${error.message}` } : { ok: true, teks: 'Dikembalikan ke susunan otomatis.' })
     if (!error) await muat()
