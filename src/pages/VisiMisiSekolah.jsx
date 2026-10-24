@@ -570,7 +570,10 @@ export default function VisiMisiSekolah() {
                 {/* Tanda tangan */}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 28, breakInside: 'avoid' }}>
                   <div style={{ textAlign: 'center', minWidth: 230, fontSize: 13 }}>
-                    <p style={{ margin: 0 }}>{form.tempat ? `${form.tempat}, ` : ''}……………………</p>
+                    <p style={{ margin: 0 }}>
+                    {form.tempat ? `${form.tempat}, ` : ''}
+                    {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    </p>
                     <p style={{ margin: 0 }}>Kepala Sekolah,</p>
                     <div style={{ height: 72 }} />
                     <p style={{ margin: 0, fontWeight: 700, textDecoration: 'underline' }}>
