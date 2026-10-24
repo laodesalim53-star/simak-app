@@ -49,7 +49,6 @@ import {
   CalendarRange,
   ShieldCheck,
   MessageCircle,
-  MessagesSquare,
   Building2,
   FileStack,
   Inbox,
@@ -124,18 +123,19 @@ function getGroupsAdmin(
         { to: '/link-layanan', label: 'Link Layanan', icon: Link2 },
         // Tab "Admin Pusat" sekarang jadi bagian dari halaman /pesan (lihat
         // Pesan.jsx) — badge menggabungkan unread pesan biasa + admin pusat.
-        { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca + jumlahPesanPusatBelumDibaca },
-        // PERBAIKAN: "Live Chat" (percakapan dengan pengunjung publik di
-        // Beranda) sebelumnya tampil untuk SEMUA admin-tier (admin,
-        // admin_utama, superadmin, kepala_sekolah), padahal tabel
-        // live_chat_pesan adalah satu kotak masuk GLOBAL milik superadmin
-        // (tidak ada kolom sekolah_id, RLS di Supabase juga sudah dikunci
-        // hanya untuk role 'superadmin'). Menu ini sekarang disembunyikan
-        // untuk admin sekolah, sama seperti pola item superadmin-only lain
-        // di bawah (Manajemen Sekolah, Persetujuan Toko, Pencairan Dana).
-        ...(isSuperAdmin
-          ? [{ to: '/live-chat', label: 'Live Chat', icon: MessagesSquare, badge: jumlahLiveChatBelumDibaca }]
-          : []),
+        // GABUNGAN: "Live Chat" (percakapan dengan pengunjung publik di Beranda)
+        // sekarang jadi tab di halaman /pesan, bukan menu sendiri. Live Chat
+        // tetap khusus superadmin (tabel live_chat_pesan = kotak masuk GLOBAL,
+        // RLS hanya untuk 'superadmin'), jadi jumlahLiveChatBelumDibaca selalu
+        // 0 untuk admin sekolah dan badge-nya tidak berubah bagi mereka.
+        // `aktifJuga` menjaga menu Pesan tetap menyala di rute /live-chat.
+        {
+          to: '/pesan',
+          label: 'Pesan',
+          icon: MessageCircle,
+          badge: jumlahPesanBelumDibaca + jumlahPesanPusatBelumDibaca + (isSuperAdmin ? jumlahLiveChatBelumDibaca : 0),
+          aktifJuga: ['/live-chat'],
+        },
         // Toko, Riwayat Pesanan & Pesanan Masuk digabung jadi satu halaman "Toko".
         { to: '/pusat-toko', label: 'Toko', icon: Store, aktifJuga: ['/toko', '/riwayat-pesanan', '/pesanan-masuk'] },
         // "Ajukan Toko" hanya untuk admin sekolah (admin/admin_utama) — sesuai
