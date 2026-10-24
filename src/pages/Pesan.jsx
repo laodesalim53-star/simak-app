@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
 import StatusGuruModal from '../components/StatusGuruModal'
+import LiveChatPanel from '../components/LiveChatPanel'
 import {
   Send,
   Paperclip,
@@ -29,6 +31,9 @@ import {
 // sebelumnya adalah dua halaman terpisah (Pesan.jsx & PesanPusat.jsx).
 // Digabung jadi satu halaman dengan tab supaya tidak duplikasi UI chat
 // (bubble, lampiran, format waktu, dll).
+//
+// Tab "Live Chat" (percakapan dengan pengunjung website, kotak masuk global)
+// hanya tampil untuk Superadmin — isinya komponen LiveChatPanel.
 //
 // Tab "Admin Pusat" hanya tampil untuk role admin-tier (admin, kepala
 // sekolah, admin_utama) dan Superadmin — guru tidak pernah melihat tab
@@ -144,8 +149,18 @@ export default function Pesan() {
   // isAdmin dari AuthContext sudah mencakup admin, kepala_sekolah, admin_utama
   // (persis sama seperti yang dipakai Sidebar.jsx untuk menentukan menu admin).
   const canAksesPusat = isSuperAdmin || isAdmin
+  // Live Chat = kotak masuk GLOBAL milik superadmin (RLS live_chat_pesan).
+  const canAksesLiveChat = isSuperAdmin
 
-  const [tab, setTab] = useState('rekan') // 'rekan' | 'pusat'
+  // 'rekan' | 'pusat' | 'livechat' — tab awal bisa dipilih lewat URL,
+  // mis. /pesan?tab=livechat.
+  const [searchParams] = useSearchParams()
+  const [tab, setTab] = useState(() => {
+    const tabAwal = searchParams.get('tab')
+    if (tabAwal === 'livechat' && canAksesLiveChat) return 'livechat'
+    if (tabAwal === 'pusat' && canAksesPusat) return 'pusat'
+    return 'rekan'
+  })
   const tabRef = useRef(tab)
   useEffect(() => {
     tabRef.current = tab
@@ -700,8 +715,24 @@ export default function Pesan() {
             >
               Admin Pusat
             </button>
+            {canAksesLiveChat && (
+              <button
+                onClick={() => pindahTab('livechat')}
+                className={`flex-1 sm:flex-none sm:px-6 py-2.5 text-sm font-medium transition border-b-2 ${
+                  tab === 'livechat' ? 'border-blue-900 text-blue-900' : 'border-transparent text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                Live Chat
+              </button>
+            )}
           </div>
         )}
+
+        {tab === 'livechat' && canAksesLiveChat ? (
+          <div className="flex flex-1 min-h-0">
+            <LiveChatPanel embedded />
+          </div>
+        ) : (
 
         <div className="flex flex-1 min-h-0">
           {/* ============================== SIDEBAR ============================== */}
@@ -1105,6 +1136,7 @@ export default function Pesan() {
             )}
           </div>
         </div>
+        )}
       </div>
 
       {showStatusGuru && sekolahAktif && (
