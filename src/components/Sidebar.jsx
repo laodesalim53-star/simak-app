@@ -71,6 +71,7 @@ import {
   BadgeCheck,
   Target,
   Network,
+  Wrench,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
@@ -136,9 +137,8 @@ function getGroupsAdmin(
         ...(isSuperAdmin
           ? [{ to: '/live-chat', label: 'Live Chat', icon: MessagesSquare, badge: jumlahLiveChatBelumDibaca }]
           : []),
-        { to: '/toko', label: 'Toko', icon: Store },
-        { to: '/riwayat-pesanan', label: 'Riwayat Pesanan', icon: Receipt },
-        { to: '/pesanan-masuk', label: 'Pesanan Masuk (Toko)', icon: Inbox },
+        // Toko, Riwayat Pesanan & Pesanan Masuk digabung jadi satu halaman "Toko".
+        { to: '/pusat-toko', label: 'Toko', icon: Store, aktifJuga: ['/toko', '/riwayat-pesanan', '/pesanan-masuk'] },
         // "Ajukan Toko" hanya untuk admin sekolah (admin/admin_utama) — sesuai
         // RLS insert pengajuan_toko yang membatasi ke kedua role itu.
         // Superadmin tidak mengajukan toko, jadi menu ini disembunyikan
@@ -152,11 +152,10 @@ function getGroupsAdmin(
         // superadmin/kepala_sekolah) tidak bisa mengakses halaman ini dari
         // sidebar. Ditambahkan di sini, sejajar posisinya dengan menu Guru.
         { to: '/administrasi-kelas', label: 'Administrasi Kelas', icon: LayoutGrid },
-        { to: '/rapat', label: 'Rapat Video', icon: Video },
+        // Rapat Video, Scan Dokumen & Alat PDF digabung jadi satu halaman "Alat / Media".
+        { to: '/alat-media', label: 'Alat / Media', icon: Wrench, aktifJuga: ['/rapat', '/scan-dokumen', '/alat-pdf'] },
         { to: '/galeri', label: 'Galeri Kegiatan', icon: Images },
         { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
-        { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
-        { to: '/alat-pdf', label: 'Alat PDF', icon: FileType2 },
         { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
       ],
     },
@@ -493,15 +492,11 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   { to: '/struktur-organisasi', label: 'Bagan Struktur Organisasi', icon: Network },
   { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
   { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
-  { to: '/toko', label: 'Toko', icon: Store },
-  { to: '/riwayat-pesanan', label: 'Riwayat Pesanan', icon: Receipt },
-  { to: '/pesanan-masuk', label: 'Pesanan Masuk (Toko)', icon: Inbox },
+  { to: '/pusat-toko', label: 'Toko', icon: Store, aktifJuga: ['/toko', '/riwayat-pesanan', '/pesanan-masuk'] },
   { to: '/administrasi-kelas', label: 'Administrasi Kelas', icon: LayoutGrid },
-  { to: '/rapat', label: 'Rapat Video', icon: Video },
+  { to: '/alat-media', label: 'Alat / Media', icon: Wrench, aktifJuga: ['/rapat', '/scan-dokumen', '/alat-pdf'] },
   { to: '/galeri', label: 'Galeri Kegiatan', icon: Images },
   { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
-  { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
-  { to: '/alat-pdf', label: 'Alat PDF', icon: FileType2 },
   // PERBAIKAN: baris "Administrasi Kelas" sebelumnya terduplikasi di sini
   // (sudah ada satu di atas, sebelum "Rapat Video") — duplikat dihapus.
   { to: '/siswa', label: 'Data Siswa', icon: Users },
@@ -593,10 +588,15 @@ function getLinksPuskesmasPegawai(jumlahPesanBelumDibaca = 0) {
 // NavLink menganggapnya cocok. Dipakai untuk menu induk (mis. Gudang SK)
 // yang punya menu anak sendiri di sidebar (mis. Portal Ujian) supaya
 // tidak menyala bersamaan.
-function NavItem({ to, label, icon: Icon, end, badge, onNavigate, external, excludePrefix }) {
+//
+// BARU: `aktifJuga` — daftar prefix path lain yang juga menandai menu ini
+// aktif. Dipakai menu gabungan (Toko, Alat / Media) supaya tetap menyala
+// saat halaman anaknya (mis. /riwayat-pesanan) sedang dibuka.
+function NavItem({ to, label, icon: Icon, end, badge, onNavigate, external, excludePrefix, aktifJuga }) {
   const { pathname } = useLocation()
   const cekAktif = (isActive) =>
-    isActive && !(excludePrefix && pathname.startsWith(excludePrefix))
+    (isActive || !!aktifJuga?.some((p) => pathname === p || pathname.startsWith(`${p}/`))) &&
+    !(excludePrefix && pathname.startsWith(excludePrefix))
 
   const content = (isActive) => (
     <>
@@ -710,9 +710,7 @@ function getLinksOrangTua(jumlahPesanBelumDibaca = 0, sekolahId = null) {
     { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
     { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
     { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
-    { to: '/toko', label: 'Toko', icon: Store },
-    { to: '/riwayat-pesanan', label: 'Riwayat Pesanan', icon: Receipt },
-    { to: '/pesanan-masuk', label: 'Pesanan Masuk (Toko)', icon: Inbox },
+    { to: '/pusat-toko', label: 'Toko', icon: Store, aktifJuga: ['/toko', '/riwayat-pesanan', '/pesanan-masuk'] },
     { to: '/rapat', label: 'Rapat Video', icon: Video },
     { to: '/rapor-anak', label: 'Rapor Anak', icon: FileBadge },
     { to: '/presensi-anak', label: 'Presensi Anak', icon: ClipboardCheck },
