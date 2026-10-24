@@ -44,6 +44,7 @@ const AkreditasiSekolah = lazy(() => import('../pages/AkreditasiSekolah'))
 const Strukturorganisasi = lazy(() => import('../pages/Strukturorganisasi'))
 const Tatatertib = lazy(() => import('../pages/Tatatertib'))
 const VisiMisiSekolah = lazy(() => import('../pages/VisiMisiSekolah'))
+const BaganStrukturOrganisasi = lazy(() => import('../pages/BaganStrukturOrganisasi'))
 const LaporanPertanggungjawabanKepsek = lazy(() => import('../pages/LaporanPertanggungjawabanKepsek'))
 
 
@@ -180,6 +181,7 @@ export default function RoutesSekolah() {
       <Route path="/daftar-hadir-pegawai" element={<ProtectedRoute><DaftarHadirPegawai /></ProtectedRoute>} />
       {/* Visi Misi Sekolah untuk guru: BUKAN adminOnly — guru hanya bisa lihat & cetak (kontrol edit di dalam komponen) */}
       <Route path="/visi-misi" element={<ProtectedRoute><VisiMisiSekolah /></ProtectedRoute>} />
+      <Route path="/struktur-organisasi" element={<ProtectedRoute><BaganStrukturOrganisasi /></ProtectedRoute>} />
 
       {/* Administrasi Kepala Sekolah */}
       <Route path="/administrasi-kepsek/laporan-tahunan" element={<ProtectedRoute adminOnly><LaporanTahunan /></ProtectedRoute>} />
