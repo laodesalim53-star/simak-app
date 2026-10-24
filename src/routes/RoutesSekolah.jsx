@@ -135,6 +135,9 @@ const RiwayatPencairanSaya = lazy(() => import('../pages/RiwayatPencairanSaya'))
 const AjukanToko = lazy(() => import('../pages/AjukanToko'))
 const PersetujuanToko = lazy(() => import('../pages/PersetujuanToko'))
 const PencairanDana = lazy(() => import('../pages/PencairanDana'))
+// Halaman gabungan (hub): Toko (etalase + riwayat + pesanan masuk) dan Alat / Media (rapat + scan + PDF)
+const PusatToko = lazy(() => import('../pages/PusatToko'))
+const AlatMedia = lazy(() => import('../pages/AlatMedia'))
 
 // Nota.jsx menerima `sekolah` lewat prop — wrapper ini mengambil profil sekolah.
 function NotaDenganSekolah() {
@@ -308,6 +311,10 @@ export default function RoutesSekolah() {
       <Route path="/ajukan-toko" element={<ProtectedRoute adminOnly><AjukanToko /></ProtectedRoute>} />
       <Route path="/persetujuan-toko" element={<ProtectedRoute superAdminOnly><PersetujuanToko /></ProtectedRoute>} />
       <Route path="/pencairan-dana" element={<ProtectedRoute superAdminOnly><PencairanDana /></ProtectedRoute>} />
+      <Route path="/pusat-toko" element={<ProtectedRoute><PusatToko /></ProtectedRoute>} />
+
+      {/* 9b. Alat / Media — hub Rapat Video, Scan Dokumen, Alat PDF */}
+      <Route path="/alat-media" element={<ProtectedRoute><AlatMedia /></ProtectedRoute>} />
 
       {/* 10. Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
