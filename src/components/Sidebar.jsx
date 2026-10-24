@@ -37,7 +37,6 @@ import {
   FilePlus,
   CalendarOff,
   FileCheck2,
-  UserCog,
   Award,
   Video,
   Receipt,
@@ -119,6 +118,9 @@ function getGroupsAdmin(
         // BARU: Bagan Struktur Organisasi untuk admin (tab "Atur Struktur",
         // Komite Sekolah, dan Tema ada di halaman ini). Sebelumnya hanya ada di menu guru.
         { to: '/struktur-organisasi', label: 'Bagan Struktur Organisasi', icon: Network },
+        // PINDAHAN: Presensi dikeluarkan dari halaman Administrasi Kelas dan
+        // ditempatkan di sini, tepat di bawah Bagan Struktur Organisasi.
+        { to: '/presensi', label: 'Presensi', icon: ClipboardCheck },
         // Upgrade Fitur: status paket (free/standar/premium) melekat ke akun
         // masing-masing, jadi menu ini tampil untuk semua role, bukan cuma admin.
         { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
@@ -167,8 +169,8 @@ function getGroupsAdmin(
         // bisa diakses lewat kartu "Rapor" di halaman Administrasi Kelas
         // (menu di atas), jadi baris ini dulu bikin dobel untuk admin.
         { to: '/portofolio-siswa', label: 'Portofolio Siswa', icon: FolderHeart },
-        { to: '/catatan-siswa', label: 'Catatan Siswa', icon: NotebookPen },
-        { to: '/jurnal-mengajar', label: 'Jurnal Mengajar', icon: BookOpen },
+        // PINDAHAN: "Catatan Siswa" dan "Jurnal Mengajar" sekarang jadi kartu
+        // di halaman Administrasi Kelas (menu di atas).
         { to: '/sertifikat', label: 'Sertifikat & Penghargaan', icon: Award },
         { to: '/buat-ujian', label: 'Buat Ujian', icon: FilePlus },
         { to: '/bank-soal', label: 'Bank Soal', icon: Database },
@@ -217,7 +219,8 @@ function getGroupsAdmin(
       label: 'Administrasi',
       links: [
         { to: '/pengajuan-surat-aktif', label: 'Pengajuan Surat Aktif', icon: FileCheck2 },
-        { to: '/perbaikan-data-siswa', label: 'Perbaikan Data Siswa', icon: UserCog },
+        // PINDAHAN: "Perbaikan Data Siswa" sekarang jadi kartu di halaman
+        // Administrasi Kelas.
         { to: '/surat', label: 'Surat Masuk/Keluar', icon: Mail },
         { to: '/kelengkapan-surat-pengantar', label: 'Kelengkapan Surat Pengantar', icon: FileText },
         // PERBAIKAN: Portal Ujian berada di bawah path /gudang-sk/portal-ujian,
@@ -488,6 +491,9 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
   { to: '/visi-misi', label: 'Visi Misi Sekolah', icon: Target },
   { to: '/struktur-organisasi', label: 'Bagan Struktur Organisasi', icon: Network },
+  // PINDAHAN: Presensi dikeluarkan dari halaman Administrasi Kelas dan
+  // ditempatkan di sini, tepat di bawah Bagan Struktur Organisasi.
+  { to: '/presensi', label: 'Presensi', icon: ClipboardCheck },
   { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
   { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
   { to: '/pusat-toko', label: 'Toko', icon: Store, aktifJuga: ['/toko', '/riwayat-pesanan', '/pesanan-masuk'] },
@@ -501,7 +507,8 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   // atas), jadi baris ini dulu bikin dobel untuk guru.
   { to: '/sertifikat', label: 'Sertifikat & Penghargaan', icon: Award },
   { to: '/pengajuan-surat-aktif', label: 'Pengajuan Surat Aktif', icon: FileCheck2 },
-  { to: '/perbaikan-data-siswa', label: 'Perbaikan Data Siswa', icon: UserCog },
+  // PINDAHAN: "Perbaikan Data Siswa" sekarang jadi kartu di halaman
+  // Administrasi Kelas.
   // Hanya tautan pintasan ke form publik, sama seperti menu orang tua —
   // approval pendaftar PPDB tetap khusus admin lewat /ppdb-admin.
   // PERBAIKAN: /ppdb/:sekolahId, bukan "/ppdb" polos (lihat catatan di
@@ -513,8 +520,8 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   { to: '/materi-kelas', label: 'Materi Pembelajaran', icon: BookMarked },
   { to: '/buat-kuis-seru', label: 'Kuis Seru (Kls 1-3)', icon: Gamepad2 },
   { to: '/rapor-kumer', label: 'Raport Kumer', icon: FileBadge },
-  { to: '/catatan-siswa', label: 'Catatan Siswa', icon: NotebookPen },
-  { to: '/jurnal-mengajar', label: 'Jurnal Mengajar', icon: BookOpen },
+  // PINDAHAN: "Catatan Siswa" dan "Jurnal Mengajar" sekarang jadi kartu di
+  // halaman Administrasi Kelas.
   { to: '/perpustakaan', label: 'Perpustakaan', icon: Library },
   { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
   // BARU: Daftar Hadir Guru & Tendik (guru hanya bisa melihat & mencetak)
