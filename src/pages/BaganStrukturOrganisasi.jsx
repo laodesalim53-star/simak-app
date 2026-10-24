@@ -144,7 +144,10 @@ function Kartu({ orang, label, jenis }) {
       <p className="mt-1.5 font-semibold text-slate-900 leading-tight" style={{ fontSize: cfg.teks }}>
         {orang.nama_lengkap || 'Tanpa nama'}
       </p>
-      <p className="text-slate-500 mt-0.5 leading-tight" style={{ fontSize: Math.max(cfg.teks - 2, 10) }}>
+      <p
+        className="text-slate-500 mt-0.5 leading-tight"
+        style={{ fontSize: Math.max(cfg.teks - 2, 10), whiteSpace: 'pre-line' }}
+      >
         {label}
       </p>
     </div>
@@ -249,6 +252,53 @@ function Simpul({ id, anak, orangById, labelById, tingkat, komite }) {
   )
 }
 
+// ---- Wali kelas: dicocokkan dari tabel kelas ke orang di bagan ----
+const normNama = (s) => (s || '').toString().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+
+// Hasil: { [orang.id]: ['IV', 'V'] } (nama kelas tanpa kata "Kelas")
+function petaWaliKelas(kelas, orang, guruList = []) {
+  const hasil = {}
+  const guruById = new Map(guruList.map((g) => [String(g.id), g.nama_lengkap]))
+  const idKe = new Map()
+  orang.forEach((o) => {
+    idKe.set(String(o.id), o.id)
+    if (o.guru_id) idKe.set(String(o.guru_id), o.id)
+  })
+  const namaKe = orang.map((o) => [normNama(o.nama_lengkap), o.id])
+
+  kelas.forEach((k) => {
+    const wali = k.wali_kelas_id ?? k.wali_kelas ?? k.wali_kelas_guru_id ?? k.guru_id ?? null
+    const namaKelas = (k.nama_kelas ?? k.nama ?? k.kelas ?? k.nama_rombel ?? '').toString().trim()
+    if (!wali || !namaKelas) return
+
+    let target = idKe.get(String(wali))
+    if (!target) {
+      // id di tabel kelas bisa berbeda dengan id di bagan: cocokkan lewat nama guru
+      const n = normNama(guruById.get(String(wali)) ?? wali)
+      if (n) {
+        const cocok =
+          namaKe.find(([nn]) => nn === n) ||
+          (n.length > 5 ? namaKe.find(([nn]) => nn && (nn.includes(n) || n.includes(nn))) : null)
+        target = cocok?.[1]
+      }
+    }
+    if (!target) return
+    const tampilNama = namaKelas.replace(/^kelas\s*/i, '') || namaKelas
+    ;(hasil[target] = hasil[target] || []).push(tampilNama)
+  })
+  Object.values(hasil).forEach((l) => l.sort((a, b) => a.localeCompare(b, 'id', { numeric: true })))
+  return hasil
+}
+
+// Gabungkan jabatan struktural + wali kelas menjadi teks label kartu (maks 2 baris)
+function gabungLabel(utama, waliList) {
+  if (!waliList || waliList.length === 0) return utama
+  const wali = `Wali Kelas ${waliList.join(' & ')}`
+  if (!utama || utama === 'Guru') return wali
+  if (normNama(utama).includes('wali kelas')) return utama
+  return `${utama}\n${wali}`
+}
+
 function urutKomite(a, b) {
   const d = (a.urutan ?? 1000) - (b.urutan ?? 1000)
   if (d) return d
@@ -265,6 +315,8 @@ export default function BaganStrukturOrganisasi() {
   const [orang, setOrang] = useState([])
   const [baris, setBaris] = useState([])
   const [edit, setEdit] = useState({})
+  const [kelas, setKelas] = useState([])
+  const [guruList, setGuruList] = useState([])
   const [komite, setKomite] = useState([])
   const [komiteEdit, setKomiteEdit] = useState([])
   const [komiteGalat, setKomiteGalat] = useState('')
@@ -283,13 +335,18 @@ export default function BaganStrukturOrganisasi() {
   async function muat() {
     setLoading(true)
     setGalat('')
-    const [pr, st, ps, km, pg] = await Promise.all([
+    const [pr, st, ps, km, pg, kl, gr] = await Promise.all([
       supabase.rpc('bagan_orang_sekolah'),
       supabase.from('bagan_struktur').select('*').eq('sekolah_id', sekolahId),
       supabase.from('profil_sekolah').select('*').eq('sekolah_id', sekolahId).maybeSingle(),
       supabase.from('bagan_komite').select('*').eq('sekolah_id', sekolahId),
       supabase.from('bagan_pengaturan').select('tema').eq('sekolah_id', sekolahId).maybeSingle(),
+      supabase.from('kelas').select('id, nama_kelas, tingkat, wali_kelas_id').eq('sekolah_id', sekolahId),
+      supabase.from('guru').select('id, nama_lengkap').eq('sekolah_id', sekolahId),
     ])
+    setGuruList(gr.error ? [] : gr.data || [])
+    // Wali kelas: kalau tabel kelas tidak terbaca, bagan tetap tampil tanpa info wali kelas
+    setKelas(kl.error ? [] : kl.data || [])
     if (ps.data) {
       setSekolah({ nama: ps.data.nama_sekolah, alamat: ps.data.alamat })
       if (ps.data.logo_path) {
@@ -365,6 +422,8 @@ export default function BaganStrukturOrganisasi() {
     if (!bolehEdit) setTab('bagan')
   }, [bolehEdit])
 
+  const waliById = useMemo(() => petaWaliKelas(kelas, orang, guruList), [kelas, orang, guruList])
+
   // ---- Susun pohon dari data tersimpan ----
   const pohon = useMemo(() => {
     const petaBaris = new Map(baris.map((b) => [b.orang_id, b]))
@@ -417,9 +476,11 @@ export default function BaganStrukturOrganisasi() {
       else akar.push(o.id)
     })
     const orangById = Object.fromEntries(tampil.map((o) => [o.id, o]))
-    const labelById = Object.fromEntries(tampil.map((o) => [o.id, labelOrang(o, petaBaris.get(o.id))]))
+    const labelById = Object.fromEntries(
+      tampil.map((o) => [o.id, gabungLabel(labelOrang(o, petaBaris.get(o.id)), waliById[o.id])])
+    )
     return { akar, anak, orangById, labelById }
-  }, [orang, baris])
+  }, [orang, baris, waliById])
 
   // ---- Edit (admin) ----
   const ubah = (id, k, v) => setEdit((e) => ({ ...e, [id]: { ...e[id], [k]: v } }))
@@ -805,6 +866,11 @@ export default function BaganStrukturOrganisasi() {
                                 <div>
                                   <p className="font-medium text-slate-900 leading-tight">{o.nama_lengkap || 'Tanpa nama'}</p>
                                   <p className="text-xs text-slate-500">{rapikanJabatan(o.jabatan)}</p>
+                                  {waliById[o.id] && (
+                                    <p className="text-xs font-medium" style={{ color: 'var(--b-aksen)' }}>
+                                      Wali Kelas {waliById[o.id].join(' & ')}
+                                    </p>
+                                  )}
                                 </div>
                               </div>
                             </td>
