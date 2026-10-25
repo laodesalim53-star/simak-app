@@ -6,15 +6,36 @@ import {
   Plus, Pencil, Trash2, X, Loader2, Search, BookOpen, Undo2, AlertCircle,
 } from 'lucide-react'
 
+/*
+  Perpustakaan Sekolah
+  Kolom mapel, kurikulum, jumlah_rusak_berat, dan jumlah_rusak_ringan di tabel
+  `buku` dipakai oleh Laporan Semester (Tabel "Data Keadaan Buku-buku K13 dan
+  Kumer"). Hanya buku yang diisi mata pelajaran + kurikulumnya yang dihitung.
+  Butuh: buku_laporan_semester.sql
+*/
+
 const emptyBukuForm = {
   judul: '', penulis: '', penerbit: '', tahun_terbit: '', kategori: '', rak: '', jumlah_total: 1,
+  mapel: '', kurikulum: '', jumlah_rusak_berat: 0, jumlah_rusak_ringan: 0,
 }
+
+// Daftar ini HARUS sama dengan DAFTAR_BUKU di LaporanSemester.jsx.
+const MAPEL_BUKU = [
+  'PPKn', 'Pendidikan Agama', 'Bhs. Indonesia', 'IPA', 'IPS',
+  'Bhs. Inggris', 'Matematika', 'SBK', 'Mulok', 'Penjaskes',
+]
+
+const kurikulumLabel = { tematik: 'K13 (Tematik)', kumer: 'Kumer' }
 
 const emptyPinjamForm = {
   buku_id: '', nama_peminjam: '', jenis_peminjam: 'siswa', siswa_id: '',
   tanggal_pinjam: new Date().toISOString().slice(0, 10),
   tanggal_wajib_kembali: '',
 }
+
+const inputCls =
+  'w-full px-3 py-2 rounded-lg border border-[#6b0f1a]/15 focus:border-[#6b0f1a] focus:ring-2 focus:ring-[#6b0f1a]/20 outline-none transition-colors'
+const labelCls = 'block text-xs font-medium text-[#6b0f1a]/70 mb-1'
 
 function tambahHari(tanggalStr, jumlahHari) {
   const d = new Date(tanggalStr)
@@ -74,25 +95,44 @@ export default function Perpustakaan() {
     setShowFormBuku(true)
   }
   function openEditBuku(b) {
-    setFormBuku({ ...emptyBukuForm, ...b })
+    setFormBuku({
+      ...emptyBukuForm,
+      ...b,
+      mapel: b.mapel || '',
+      kurikulum: b.kurikulum || '',
+      jumlah_rusak_berat: b.jumlah_rusak_berat ?? 0,
+      jumlah_rusak_ringan: b.jumlah_rusak_ringan ?? 0,
+    })
     setEditingBukuId(b.id)
     setShowFormBuku(true)
   }
   async function handleSubmitBuku(e) {
     e.preventDefault()
-    setSavingBuku(true)
     const total = Number(formBuku.jumlah_total) || 1
-    const payload = editingBukuId
-      ? { ...formBuku, jumlah_total: total }
-      : { ...formBuku, jumlah_total: total, jumlah_tersedia: total }
-    delete payload.jumlah_tersedia_lama
+    const rb = Number(formBuku.jumlah_rusak_berat) || 0
+    const rr = Number(formBuku.jumlah_rusak_ringan) || 0
+    if (rb + rr > total) {
+      alert('Jumlah buku rusak tidak boleh melebihi jumlah eksemplar.')
+      return
+    }
+    setSavingBuku(true)
+    const dasar = {
+      judul: formBuku.judul,
+      penulis: formBuku.penulis,
+      penerbit: formBuku.penerbit,
+      tahun_terbit: formBuku.tahun_terbit,
+      kategori: formBuku.kategori,
+      rak: formBuku.rak,
+      jumlah_total: total,
+      mapel: formBuku.mapel || null,
+      // kalau mata pelajaran diisi tapi kurikulum belum dipilih, anggap Kumer
+      kurikulum: formBuku.mapel ? formBuku.kurikulum || 'kumer' : null,
+      jumlah_rusak_berat: rb,
+      jumlah_rusak_ringan: rr,
+    }
     const { error } = editingBukuId
-      ? await supabase.from('buku').update({
-          judul: formBuku.judul, penulis: formBuku.penulis, penerbit: formBuku.penerbit,
-          tahun_terbit: formBuku.tahun_terbit, kategori: formBuku.kategori, rak: formBuku.rak,
-          jumlah_total: total,
-        }).eq('id', editingBukuId)
-      : await supabase.from('buku').insert(payload)
+      ? await supabase.from('buku').update(dasar).eq('id', editingBukuId)
+      : await supabase.from('buku').insert({ ...dasar, jumlah_tersedia: total })
     setSavingBuku(false)
     if (!error) { setShowFormBuku(false); muatBuku() }
     else alert('Gagal menyimpan: ' + error.message)
@@ -154,7 +194,7 @@ export default function Perpustakaan() {
   }
 
   const bukuTerfilter = bukuList.filter((b) =>
-    `${b.judul} ${b.penulis} ${b.kategori}`.toLowerCase().includes(searchBuku.toLowerCase())
+    `${b.judul} ${b.penulis} ${b.kategori} ${b.mapel || ''}`.toLowerCase().includes(searchBuku.toLowerCase())
   )
 
   const hariIni = new Date().toISOString().slice(0, 10)
@@ -194,7 +234,7 @@ export default function Perpustakaan() {
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6b0f1a]/40" />
               <input
                 className="w-full pl-9 pr-3 py-2 rounded-lg border border-[#6b0f1a]/15 focus:border-[#6b0f1a] focus:ring-2 focus:ring-[#6b0f1a]/20 outline-none transition-colors"
-                placeholder="Cari judul, penulis, atau kategori..."
+                placeholder="Cari judul, penulis, kategori, atau mata pelajaran..."
                 value={searchBuku}
                 onChange={(e) => setSearchBuku(e.target.value)}
               />
@@ -207,21 +247,36 @@ export default function Perpustakaan() {
                   <th className="text-left px-4 py-3 font-medium">Judul</th>
                   <th className="text-left px-4 py-3 font-medium">Penulis</th>
                   <th className="text-left px-4 py-3 font-medium">Kategori</th>
+                  <th className="text-left px-4 py-3 font-medium">Mapel / Kurikulum</th>
                   <th className="text-left px-4 py-3 font-medium">Rak</th>
                   <th className="text-left px-4 py-3 font-medium">Stok Tersedia</th>
                   {isAdmin && <th className="px-4 py-3"></th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#6b0f1a]/8">
-                {loadingBuku && <tr><td colSpan={6} className="text-center py-8 text-[#6b0f1a]/50">Memuat data...</td></tr>}
+                {loadingBuku && <tr><td colSpan={7} className="text-center py-8 text-[#6b0f1a]/50">Memuat data...</td></tr>}
                 {!loadingBuku && bukuTerfilter.length === 0 && (
-                  <tr><td colSpan={6} className="text-center py-8 text-[#6b0f1a]/50">Belum ada buku.</td></tr>
+                  <tr><td colSpan={7} className="text-center py-8 text-[#6b0f1a]/50">Belum ada buku.</td></tr>
                 )}
                 {bukuTerfilter.map((b) => (
                   <tr key={b.id} className="hover:bg-[#6b0f1a]/5 transition-colors">
                     <td className="px-4 py-3 font-medium text-[#3b0a0a]">{b.judul}</td>
                     <td className="px-4 py-3">{b.penulis || '-'}</td>
                     <td className="px-4 py-3">{b.kategori || '-'}</td>
+                    <td className="px-4 py-3">
+                      {b.mapel ? (
+                        <span>
+                          {b.mapel}
+                          <span className="block text-xs text-[#6b0f1a]/50">
+                            {kurikulumLabel[b.kurikulum] || '-'}
+                            {(b.jumlah_rusak_berat > 0 || b.jumlah_rusak_ringan > 0) &&
+                              ` · rusak ${b.jumlah_rusak_berat || 0} berat, ${b.jumlah_rusak_ringan || 0} ringan`}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-[#6b0f1a]/30">-</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3">{b.rak || '-'}</td>
                     <td className="px-4 py-3">
                       <span className={`text-xs px-2 py-1 rounded-full font-medium ${
@@ -316,47 +371,103 @@ export default function Perpustakaan() {
       {/* Modal Tambah/Edit Buku */}
       {showFormBuku && (
         <div className="fixed inset-0 bg-[#3b0a0a]/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 border-t-4 border-[#6b0f1a]">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 border-t-4 border-[#6b0f1a] max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-display text-lg font-semibold text-[#3b0a0a]">{editingBukuId ? 'Ubah Buku' : 'Tambah Buku'}</h2>
               <button className="p-1.5 rounded-md hover:bg-[#6b0f1a]/10 text-[#6b0f1a]" onClick={() => setShowFormBuku(false)}><X size={18} /></button>
             </div>
             <form onSubmit={handleSubmitBuku} className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-[#6b0f1a]/70 mb-1">Judul Buku *</label>
-                <input required className="w-full px-3 py-2 rounded-lg border border-[#6b0f1a]/15 focus:border-[#6b0f1a] focus:ring-2 focus:ring-[#6b0f1a]/20 outline-none transition-colors" value={formBuku.judul} onChange={(e) => setFormBuku({ ...formBuku, judul: e.target.value })} />
+                <label className={labelCls}>Judul Buku *</label>
+                <input required className={inputCls} value={formBuku.judul} onChange={(e) => setFormBuku({ ...formBuku, judul: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-[#6b0f1a]/70 mb-1">Penulis</label>
-                  <input className="w-full px-3 py-2 rounded-lg border border-[#6b0f1a]/15 focus:border-[#6b0f1a] focus:ring-2 focus:ring-[#6b0f1a]/20 outline-none transition-colors" value={formBuku.penulis} onChange={(e) => setFormBuku({ ...formBuku, penulis: e.target.value })} />
+                  <label className={labelCls}>Penulis</label>
+                  <input className={inputCls} value={formBuku.penulis} onChange={(e) => setFormBuku({ ...formBuku, penulis: e.target.value })} />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#6b0f1a]/70 mb-1">Penerbit</label>
-                  <input className="w-full px-3 py-2 rounded-lg border border-[#6b0f1a]/15 focus:border-[#6b0f1a] focus:ring-2 focus:ring-[#6b0f1a]/20 outline-none transition-colors" value={formBuku.penerbit} onChange={(e) => setFormBuku({ ...formBuku, penerbit: e.target.value })} />
+                  <label className={labelCls}>Penerbit</label>
+                  <input className={inputCls} value={formBuku.penerbit} onChange={(e) => setFormBuku({ ...formBuku, penerbit: e.target.value })} />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-[#6b0f1a]/70 mb-1">Tahun Terbit</label>
-                  <input className="w-full px-3 py-2 rounded-lg border border-[#6b0f1a]/15 focus:border-[#6b0f1a] focus:ring-2 focus:ring-[#6b0f1a]/20 outline-none transition-colors" value={formBuku.tahun_terbit} onChange={(e) => setFormBuku({ ...formBuku, tahun_terbit: e.target.value })} />
+                  <label className={labelCls}>Tahun Terbit</label>
+                  <input className={inputCls} value={formBuku.tahun_terbit} onChange={(e) => setFormBuku({ ...formBuku, tahun_terbit: e.target.value })} />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#6b0f1a]/70 mb-1">Kategori</label>
-                  <input className="w-full px-3 py-2 rounded-lg border border-[#6b0f1a]/15 focus:border-[#6b0f1a] focus:ring-2 focus:ring-[#6b0f1a]/20 outline-none transition-colors" value={formBuku.kategori} onChange={(e) => setFormBuku({ ...formBuku, kategori: e.target.value })} />
+                  <label className={labelCls}>Kategori</label>
+                  <input className={inputCls} value={formBuku.kategori} onChange={(e) => setFormBuku({ ...formBuku, kategori: e.target.value })} />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#6b0f1a]/70 mb-1">Rak</label>
-                  <input className="w-full px-3 py-2 rounded-lg border border-[#6b0f1a]/15 focus:border-[#6b0f1a] focus:ring-2 focus:ring-[#6b0f1a]/20 outline-none transition-colors" value={formBuku.rak} onChange={(e) => setFormBuku({ ...formBuku, rak: e.target.value })} />
+                  <label className={labelCls}>Rak</label>
+                  <input className={inputCls} value={formBuku.rak} onChange={(e) => setFormBuku({ ...formBuku, rak: e.target.value })} />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#6b0f1a]/70 mb-1">Jumlah Eksemplar</label>
-                <input type="number" min="1" className="w-full px-3 py-2 rounded-lg border border-[#6b0f1a]/15 focus:border-[#6b0f1a] focus:ring-2 focus:ring-[#6b0f1a]/20 outline-none transition-colors" value={formBuku.jumlah_total} onChange={(e) => setFormBuku({ ...formBuku, jumlah_total: e.target.value })} />
+                <label className={labelCls}>Jumlah Eksemplar</label>
+                <input type="number" min="1" className={inputCls} value={formBuku.jumlah_total} onChange={(e) => setFormBuku({ ...formBuku, jumlah_total: e.target.value })} />
                 {editingBukuId && (
                   <p className="text-xs text-[#6b0f1a]/40 mt-1">Mengubah jumlah total tidak memengaruhi jumlah yang sedang dipinjam saat ini.</p>
                 )}
               </div>
+
+              {/* Data untuk Laporan Semester */}
+              <div className="rounded-lg border border-[#6b0f1a]/10 bg-[#fdf3f1] p-3 space-y-3">
+                <p className="text-xs text-[#6b0f1a]/60">
+                  Untuk Laporan Semester: isi bagian ini hanya bila buku ini adalah buku mata pelajaran.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelCls}>Buku Mata Pelajaran</label>
+                    <select
+                      className={inputCls}
+                      value={formBuku.mapel}
+                      onChange={(e) => setFormBuku({ ...formBuku, mapel: e.target.value })}
+                    >
+                      <option value="">— Bukan buku pelajaran —</option>
+                      {MAPEL_BUKU.map((m) => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Kurikulum</label>
+                    <select
+                      disabled={!formBuku.mapel}
+                      className={`${inputCls} disabled:opacity-50`}
+                      value={formBuku.kurikulum}
+                      onChange={(e) => setFormBuku({ ...formBuku, kurikulum: e.target.value })}
+                    >
+                      <option value="">— Pilih —</option>
+                      <option value="tematik">K13 (Tematik)</option>
+                      <option value="kumer">Kurikulum Merdeka (Kumer)</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelCls}>Eksemplar Rusak Berat</label>
+                    <input
+                      type="number"
+                      min="0"
+                      className={inputCls}
+                      value={formBuku.jumlah_rusak_berat}
+                      onChange={(e) => setFormBuku({ ...formBuku, jumlah_rusak_berat: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Eksemplar Rusak Ringan</label>
+                    <input
+                      type="number"
+                      min="0"
+                      className={inputCls}
+                      value={formBuku.jumlah_rusak_ringan}
+                      onChange={(e) => setFormBuku({ ...formBuku, jumlah_rusak_ringan: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" className="px-4 py-2 rounded-lg text-sm font-medium bg-[#f7e6e3] text-[#6b0f1a] hover:bg-[#efd3ce] transition-colors" onClick={() => setShowFormBuku(false)}>Batal</button>
                 <button type="submit" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-[#6b0f1a] text-white hover:bg-[#7d1420] transition-colors" disabled={savingBuku}>
@@ -379,8 +490,8 @@ export default function Perpustakaan() {
             </div>
             <form onSubmit={handleSubmitPinjam} className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-[#6b0f1a]/70 mb-1">Buku *</label>
-                <select required className="w-full px-3 py-2 rounded-lg border border-[#6b0f1a]/15 focus:border-[#6b0f1a] focus:ring-2 focus:ring-[#6b0f1a]/20 outline-none transition-colors" value={formPinjam.buku_id} onChange={(e) => setFormPinjam({ ...formPinjam, buku_id: e.target.value })}>
+                <label className={labelCls}>Buku *</label>
+                <select required className={inputCls} value={formPinjam.buku_id} onChange={(e) => setFormPinjam({ ...formPinjam, buku_id: e.target.value })}>
                   <option value="">-- Pilih buku --</option>
                   {bukuList.filter((b) => b.jumlah_tersedia > 0).map((b) => (
                     <option key={b.id} value={b.id}>{b.judul} (tersedia: {b.jumlah_tersedia})</option>
@@ -389,17 +500,17 @@ export default function Perpustakaan() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-[#6b0f1a]/70 mb-1">Jenis Peminjam</label>
-                  <select className="w-full px-3 py-2 rounded-lg border border-[#6b0f1a]/15 focus:border-[#6b0f1a] focus:ring-2 focus:ring-[#6b0f1a]/20 outline-none transition-colors" value={formPinjam.jenis_peminjam} onChange={(e) => setFormPinjam({ ...formPinjam, jenis_peminjam: e.target.value, siswa_id: '' })}>
+                  <label className={labelCls}>Jenis Peminjam</label>
+                  <select className={inputCls} value={formPinjam.jenis_peminjam} onChange={(e) => setFormPinjam({ ...formPinjam, jenis_peminjam: e.target.value, siswa_id: '' })}>
                     <option value="siswa">Siswa</option>
                     <option value="guru">Guru</option>
                   </select>
                 </div>
                 {formPinjam.jenis_peminjam === 'siswa' ? (
                   <div>
-                    <label className="block text-xs font-medium text-[#6b0f1a]/70 mb-1">Nama Siswa</label>
+                    <label className={labelCls}>Nama Siswa</label>
                     <select
-                      className="w-full px-3 py-2 rounded-lg border border-[#6b0f1a]/15 focus:border-[#6b0f1a] focus:ring-2 focus:ring-[#6b0f1a]/20 outline-none transition-colors"
+                      className={inputCls}
                       value={formPinjam.siswa_id}
                       onChange={(e) => {
                         const s = siswaList.find((x) => x.id === e.target.value)
@@ -412,9 +523,9 @@ export default function Perpustakaan() {
                   </div>
                 ) : (
                   <div>
-                    <label className="block text-xs font-medium text-[#6b0f1a]/70 mb-1">Nama Guru</label>
+                    <label className={labelCls}>Nama Guru</label>
                     <input
-                      className="w-full px-3 py-2 rounded-lg border border-[#6b0f1a]/15 focus:border-[#6b0f1a] focus:ring-2 focus:ring-[#6b0f1a]/20 outline-none transition-colors"
+                      className={inputCls}
                       value={formPinjam.nama_peminjam}
                       onChange={(e) => setFormPinjam({ ...formPinjam, nama_peminjam: e.target.value })}
                     />
@@ -423,12 +534,12 @@ export default function Perpustakaan() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-[#6b0f1a]/70 mb-1">Tanggal Pinjam</label>
-                  <input type="date" className="w-full px-3 py-2 rounded-lg border border-[#6b0f1a]/15 focus:border-[#6b0f1a] focus:ring-2 focus:ring-[#6b0f1a]/20 outline-none transition-colors" value={formPinjam.tanggal_pinjam} onChange={(e) => setFormPinjam({ ...formPinjam, tanggal_pinjam: e.target.value })} />
+                  <label className={labelCls}>Tanggal Pinjam</label>
+                  <input type="date" className={inputCls} value={formPinjam.tanggal_pinjam} onChange={(e) => setFormPinjam({ ...formPinjam, tanggal_pinjam: e.target.value })} />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#6b0f1a]/70 mb-1">Wajib Kembali</label>
-                  <input type="date" className="w-full px-3 py-2 rounded-lg border border-[#6b0f1a]/15 focus:border-[#6b0f1a] focus:ring-2 focus:ring-[#6b0f1a]/20 outline-none transition-colors" value={formPinjam.tanggal_wajib_kembali} onChange={(e) => setFormPinjam({ ...formPinjam, tanggal_wajib_kembali: e.target.value })} />
+                  <label className={labelCls}>Wajib Kembali</label>
+                  <input type="date" className={inputCls} value={formPinjam.tanggal_wajib_kembali} onChange={(e) => setFormPinjam({ ...formPinjam, tanggal_wajib_kembali: e.target.value })} />
                 </div>
               </div>
               <div className="flex justify-end gap-3 pt-2">
