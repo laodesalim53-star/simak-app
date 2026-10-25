@@ -160,6 +160,7 @@ const DAFTAR_BUKU = [
   'SBK',
   'Mulok',
   'Penjaskes',
+  'Buku Pengayaan',
 ]
 function dataBukuKosong() {
   const awal = {}
