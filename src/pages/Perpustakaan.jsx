@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabaseClient'
 import Layout from '../components/Layout'
 import { useAuth } from '../lib/AuthContext'
 import {
-  Plus, Pencil, Trash2, X, Loader2, Search, BookOpen, Undo2, AlertCircle,
+  Plus, Pencil, Trash2, X, Loader2, Search, BookOpen, Undo2, AlertCircle, Landmark,
 } from 'lucide-react'
 
 /*
@@ -11,12 +11,18 @@ import {
   Kolom mapel, kurikulum, jumlah_rusak_berat, dan jumlah_rusak_ringan di tabel
   `buku` dipakai oleh Laporan Semester (Tabel "Data Keadaan Buku-buku K13 dan
   Kumer"). Hanya buku yang diisi mata pelajaran + kurikulumnya yang dihitung.
-  Butuh: buku_laporan_semester.sql
+
+  Kolom `sumber` (BARU) menandai asal buku: pembelian sekolah, bantuan
+  pemerintah, atau hibah. Buku bantuan pemerintah diberi label, bisa difilter,
+  dan dihitung di ringkasan.
+
+  Butuh: buku_laporan_semester.sql dan buku_sumber.sql
 */
 
 const emptyBukuForm = {
   judul: '', penulis: '', penerbit: '', tahun_terbit: '', kategori: '', rak: '', jumlah_total: 1,
   mapel: '', kurikulum: '', jumlah_rusak_berat: 0, jumlah_rusak_ringan: 0,
+  sumber: '',
 }
 
 // Daftar ini HARUS sama dengan DAFTAR_BUKU di LaporanSemester.jsx.
@@ -26,6 +32,14 @@ const MAPEL_BUKU = [
 ]
 
 const kurikulumLabel = { tematik: 'K13 (Tematik)', kumer: 'Kumer' }
+
+// Asal / sumber buku. Nilai (kiri) disimpan di kolom buku.sumber.
+const SUMBER_BUKU = [
+  ['pembelian', 'Pembelian Sekolah (BOS)'],
+  ['bantuan_pemerintah', 'Bantuan Pemerintah'],
+  ['hibah', 'Hibah / Sumbangan'],
+]
+const sumberLabel = Object.fromEntries(SUMBER_BUKU)
 
 const emptyPinjamForm = {
   buku_id: '', nama_peminjam: '', jenis_peminjam: 'siswa', siswa_id: '',
@@ -51,6 +65,7 @@ export default function Perpustakaan() {
   const [bukuList, setBukuList] = useState([])
   const [loadingBuku, setLoadingBuku] = useState(true)
   const [searchBuku, setSearchBuku] = useState('')
+  const [filterSumber, setFilterSumber] = useState('') // '' = semua sumber
   const [showFormBuku, setShowFormBuku] = useState(false)
   const [editingBukuId, setEditingBukuId] = useState(null)
   const [formBuku, setFormBuku] = useState(emptyBukuForm)
@@ -90,7 +105,7 @@ export default function Perpustakaan() {
 
   // --- CRUD buku ---
   function openAddBuku() {
-    setFormBuku(emptyBukuForm)
+    setFormBuku({ ...emptyBukuForm, sumber: 'pembelian' })
     setEditingBukuId(null)
     setShowFormBuku(true)
   }
@@ -102,6 +117,7 @@ export default function Perpustakaan() {
       kurikulum: b.kurikulum || '',
       jumlah_rusak_berat: b.jumlah_rusak_berat ?? 0,
       jumlah_rusak_ringan: b.jumlah_rusak_ringan ?? 0,
+      sumber: b.sumber || '',
     })
     setEditingBukuId(b.id)
     setShowFormBuku(true)
@@ -129,13 +145,14 @@ export default function Perpustakaan() {
       kurikulum: formBuku.mapel ? formBuku.kurikulum || 'kumer' : null,
       jumlah_rusak_berat: rb,
       jumlah_rusak_ringan: rr,
+      sumber: formBuku.sumber || null,
     }
     const { error } = editingBukuId
       ? await supabase.from('buku').update(dasar).eq('id', editingBukuId)
       : await supabase.from('buku').insert({ ...dasar, jumlah_tersedia: total })
     setSavingBuku(false)
     if (!error) { setShowFormBuku(false); muatBuku() }
-    else alert('Gagal menyimpan: ' + error.message)
+    else alert('Gagal menyimpan: ' + error.message + ' (pastikan buku_sumber.sql sudah dijalankan).')
   }
   async function hapusBuku(id) {
     if (!confirm('Hapus buku ini? Riwayat peminjamannya juga akan terhapus.')) return
@@ -193,9 +210,19 @@ export default function Perpustakaan() {
     }
   }
 
-  const bukuTerfilter = bukuList.filter((b) =>
-    `${b.judul} ${b.penulis} ${b.kategori} ${b.mapel || ''}`.toLowerCase().includes(searchBuku.toLowerCase())
-  )
+  const bukuTerfilter = bukuList.filter((b) => {
+    const cocokCari = `${b.judul} ${b.penulis} ${b.kategori} ${b.mapel || ''} ${sumberLabel[b.sumber] || ''}`
+      .toLowerCase()
+      .includes(searchBuku.toLowerCase())
+    const cocokSumber = !filterSumber || b.sumber === filterSumber
+    return cocokCari && cocokSumber
+  })
+
+  // Ringkasan koleksi
+  const totalJudul = bukuList.length
+  const totalEksemplar = bukuList.reduce((n, b) => n + (Number(b.jumlah_total) || 0), 0)
+  const bukuBantuan = bukuList.filter((b) => b.sumber === 'bantuan_pemerintah')
+  const eksBantuan = bukuBantuan.reduce((n, b) => n + (Number(b.jumlah_total) || 0), 0)
 
   const hariIni = new Date().toISOString().slice(0, 10)
 
@@ -229,15 +256,54 @@ export default function Perpustakaan() {
 
       {tab === 'buku' && (
         <>
+          {/* Ringkasan koleksi */}
+          {!loadingBuku && totalJudul > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+              <div className="bg-white rounded-xl border border-[#6b0f1a]/10 shadow-sm px-4 py-3">
+                <p className="text-xs text-[#6b0f1a]/60">Total Judul</p>
+                <p className="text-xl font-semibold text-[#3b0a0a]">{totalJudul}</p>
+              </div>
+              <div className="bg-white rounded-xl border border-[#6b0f1a]/10 shadow-sm px-4 py-3">
+                <p className="text-xs text-[#6b0f1a]/60">Total Eksemplar</p>
+                <p className="text-xl font-semibold text-[#3b0a0a]">{totalEksemplar}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFilterSumber(filterSumber === 'bantuan_pemerintah' ? '' : 'bantuan_pemerintah')}
+                className={`text-left rounded-xl border shadow-sm px-4 py-3 transition-colors ${
+                  filterSumber === 'bantuan_pemerintah'
+                    ? 'bg-[#d4a017]/20 border-[#d4a017]'
+                    : 'bg-white border-[#6b0f1a]/10 hover:bg-[#d4a017]/10'
+                }`}
+                title="Klik untuk menampilkan hanya buku bantuan pemerintah"
+              >
+                <p className="text-xs text-[#6b0f1a]/60 flex items-center gap-1"><Landmark size={12} /> Bantuan Pemerintah</p>
+                <p className="text-xl font-semibold text-[#3b0a0a]">
+                  {bukuBantuan.length} <span className="text-sm font-normal text-[#6b0f1a]/60">judul · {eksBantuan} eks</span>
+                </p>
+              </button>
+            </div>
+          )}
+
           <div className="bg-white rounded-xl border border-[#6b0f1a]/10 shadow-sm p-4 mb-4">
-            <div className="relative max-w-sm">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6b0f1a]/40" />
-              <input
-                className="w-full pl-9 pr-3 py-2 rounded-lg border border-[#6b0f1a]/15 focus:border-[#6b0f1a] focus:ring-2 focus:ring-[#6b0f1a]/20 outline-none transition-colors"
-                placeholder="Cari judul, penulis, kategori, atau mata pelajaran..."
-                value={searchBuku}
-                onChange={(e) => setSearchBuku(e.target.value)}
-              />
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1 max-w-sm">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6b0f1a]/40" />
+                <input
+                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-[#6b0f1a]/15 focus:border-[#6b0f1a] focus:ring-2 focus:ring-[#6b0f1a]/20 outline-none transition-colors"
+                  placeholder="Cari judul, penulis, kategori, atau mata pelajaran..."
+                  value={searchBuku}
+                  onChange={(e) => setSearchBuku(e.target.value)}
+                />
+              </div>
+              <select
+                className="px-3 py-2 rounded-lg border border-[#6b0f1a]/15 focus:border-[#6b0f1a] focus:ring-2 focus:ring-[#6b0f1a]/20 outline-none transition-colors text-sm sm:w-56"
+                value={filterSumber}
+                onChange={(e) => setFilterSumber(e.target.value)}
+              >
+                <option value="">Semua sumber</option>
+                {SUMBER_BUKU.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
             </div>
           </div>
           <div className="bg-white rounded-xl border border-[#6b0f1a]/10 shadow-sm overflow-x-auto">
@@ -260,7 +326,19 @@ export default function Perpustakaan() {
                 )}
                 {bukuTerfilter.map((b) => (
                   <tr key={b.id} className="hover:bg-[#6b0f1a]/5 transition-colors">
-                    <td className="px-4 py-3 font-medium text-[#3b0a0a]">{b.judul}</td>
+                    <td className="px-4 py-3 font-medium text-[#3b0a0a]">
+                      {b.judul}
+                      {b.sumber === 'bantuan_pemerintah' && (
+                        <span className="ml-2 inline-flex items-center gap-1 align-middle text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-[#d4a017]/20 text-[#8a6a0d]">
+                          <Landmark size={10} /> Bantuan Pemerintah
+                        </span>
+                      )}
+                      {b.sumber === 'hibah' && (
+                        <span className="ml-2 inline-block align-middle text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-[#6b0f1a]/10 text-[#6b0f1a]">
+                          Hibah
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3">{b.penulis || '-'}</td>
                     <td className="px-4 py-3">{b.kategori || '-'}</td>
                     <td className="px-4 py-3">
@@ -405,13 +483,26 @@ export default function Perpustakaan() {
                   <input className={inputCls} value={formBuku.rak} onChange={(e) => setFormBuku({ ...formBuku, rak: e.target.value })} />
                 </div>
               </div>
-              <div>
-                <label className={labelCls}>Jumlah Eksemplar</label>
-                <input type="number" min="1" className={inputCls} value={formBuku.jumlah_total} onChange={(e) => setFormBuku({ ...formBuku, jumlah_total: e.target.value })} />
-                {editingBukuId && (
-                  <p className="text-xs text-[#6b0f1a]/40 mt-1">Mengubah jumlah total tidak memengaruhi jumlah yang sedang dipinjam saat ini.</p>
-                )}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Jumlah Eksemplar</label>
+                  <input type="number" min="1" className={inputCls} value={formBuku.jumlah_total} onChange={(e) => setFormBuku({ ...formBuku, jumlah_total: e.target.value })} />
+                </div>
+                <div>
+                  <label className={labelCls}>Sumber Buku</label>
+                  <select
+                    className={inputCls}
+                    value={formBuku.sumber}
+                    onChange={(e) => setFormBuku({ ...formBuku, sumber: e.target.value })}
+                  >
+                    <option value="">— Belum diisi —</option>
+                    {SUMBER_BUKU.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                </div>
               </div>
+              {editingBukuId && (
+                <p className="text-xs text-[#6b0f1a]/40 -mt-1">Mengubah jumlah total tidak memengaruhi jumlah yang sedang dipinjam saat ini.</p>
+              )}
 
               {/* Data untuk Laporan Semester */}
               <div className="rounded-lg border border-[#6b0f1a]/10 bg-[#fdf3f1] p-3 space-y-3">
