@@ -12,6 +12,8 @@ import { supabase } from '../lib/supabaseClient'
     (Kaur Kurikulum, Wali Kelas, dst), urutan, menyembunyikan seseorang, dan
     mengisi kolom KOMITE SEKOLAH. Pilihan TEMA warna juga hanya bisa diubah admin
     (tersimpan per sekolah, berlaku untuk semua pengguna).
+  - Tampilan HP (< 640px): bagan otomatis diperkecil, Komite pindah ke bawah bagan,
+    tabel pengaturan menjadi kartu per orang.
 
   Butuh: bagan_struktur_v2.sql (sudah ada) + bagan_komite_tema.sql (baru).
 */
@@ -60,6 +62,18 @@ const SARAN_JABATAN = [
 ]
 
 const SARAN_KOMITE = ['Ketua Komite', 'Wakil Ketua Komite', 'Sekretaris Komite', 'Bendahara Komite', 'Anggota Komite']
+
+// Deteksi layar HP
+const BATAS_HP = 640
+function useMobile(batas = BATAS_HP) {
+  const [m, setM] = useState(() => typeof window !== 'undefined' && window.innerWidth < batas)
+  useEffect(() => {
+    const f = () => setM(window.innerWidth < batas)
+    window.addEventListener('resize', f)
+    return () => window.removeEventListener('resize', f)
+  }, [batas])
+  return m
+}
 
 function getFotoUrl(path) {
   if (!path) return null
@@ -157,6 +171,7 @@ function Kartu({ orang, label, jenis }) {
 // Lajur Komite: kolom di kanan puncak bagan + garis putus-putus dari kartu puncak.
 // Diposisikan absolut di dalam <li> puncak (yang diberi padding kiri-kanan 176px
 // supaya kartu puncak tetap di tengah dan kolom tidak menimpa kartu di bawahnya).
+// Di HP lajur ini tidak dipakai; Komite ditampilkan di bawah bagan (lihat BlokKomiteHp).
 const LEBAR_KOMITE = 160
 function LajurKomite({ komite }) {
   return (
@@ -215,6 +230,35 @@ function LajurKomite({ komite }) {
         </div>
       </div>
     </>
+  )
+}
+
+// Komite versi HP: kotak di bawah bagan, kartu disusun membungkus
+function BlokKomiteHp({ komite }) {
+  return (
+    <div
+      className="mt-4 text-center print:hidden"
+      style={{
+        border: '2px dashed var(--b-aksen)',
+        borderRadius: 14,
+        padding: '10px 8px 12px',
+        background: 'var(--b-latar)',
+      }}
+    >
+      <p className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: 'var(--b-aksen)' }}>
+        Komite Sekolah
+      </p>
+      <div className="flex flex-wrap justify-center gap-2">
+        {komite.map((k) => (
+          <Kartu
+            key={k.id}
+            orang={{ nama_lengkap: k.nama, foto_profil_path: k.foto_path || null }}
+            label={k.jabatan || 'Anggota Komite'}
+            jenis="daun"
+          />
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -309,6 +353,7 @@ export default function BaganStrukturOrganisasi() {
   const { profil, isAdmin, isKepalaSekolah, sekolahId: sekolahIdAuth } = useAuth()
   const sekolahId = sekolahIdAuth ?? profil?.sekolah_id
   const bolehEdit = !!(isAdmin || isKepalaSekolah)
+  const isMobile = useMobile()
 
   const [sekolah, setSekolah] = useState(null)
   const [logoUrl, setLogoUrl] = useState('')
@@ -322,7 +367,9 @@ export default function BaganStrukturOrganisasi() {
   const [komiteGalat, setKomiteGalat] = useState('')
   const [tema, setTema] = useState(TEMA_BAWAAN)
   const [tab, setTab] = useState('bagan')
-  const [zoom, setZoom] = useState(100)
+  const [zoom, setZoom] = useState(() =>
+    typeof window !== 'undefined' && window.innerWidth < BATAS_HP ? 50 : 100
+  )
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [galat, setGalat] = useState('')
@@ -331,6 +378,11 @@ export default function BaganStrukturOrganisasi() {
 
   const temaAktif = TEMA[tema] || TEMA[TEMA_BAWAAN]
   const kunciTema = `bagan_tema_${sekolahId}`
+
+  // Zoom awal menyesuaikan perangkat (HP 50%, lainnya 100%)
+  useEffect(() => {
+    setZoom(isMobile ? 50 : 100)
+  }, [isMobile])
 
   async function muat() {
     setLoading(true)
@@ -614,6 +666,10 @@ export default function BaganStrukturOrganisasi() {
 
   const adaData = pohon.akar.length > 0
   const tombolAktif = { background: 'var(--b-aksen)', color: '#fff' }
+  const urutanOrang = [...orang].sort((a, b) =>
+    (a.nama_lengkap || '').localeCompare(b.nama_lengkap || '', 'id')
+  )
+  const kolomStruktur = 'md:grid-cols-[minmax(180px,1.2fr)_1fr_1fr_80px_60px]'
 
   return (
     <Layout title="Bagan Struktur Organisasi" subtitle="Susunan jabatan dan personel sekolah.">
@@ -646,6 +702,7 @@ export default function BaganStrukturOrganisasi() {
           display:grid; gap:8px; padding:8px; background:var(--b-latar);
           border:1px solid var(--b-tepi); border-radius:12px;
         }
+        .bagan-gulir { -webkit-overflow-scrolling: touch; touch-action: pan-x pan-y; }
         @media print {
           @page { size: A4 landscape; margin: 8mm; }
           body * { visibility: hidden; }
@@ -659,9 +716,9 @@ export default function BaganStrukturOrganisasi() {
         }
       `}</style>
 
-      <div className="max-w-6xl mx-auto p-4" style={varsTema(temaAktif)}>
+      <div className="max-w-6xl mx-auto p-2 sm:p-4" style={varsTema(temaAktif)}>
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4 print:hidden">
-          <Link to="/dashboard" className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900">
+          <Link to="/dashboard" className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900 py-2">
             <ArrowLeft size={16} /> Dasbor
           </Link>
           {tab === 'bagan' && (
@@ -670,16 +727,17 @@ export default function BaganStrukturOrganisasi() {
                 <button
                   type="button"
                   onClick={() => setBukaTema((v) => !v)}
-                  className="inline-flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium"
+                  className="inline-flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2.5 rounded-lg text-sm font-medium"
+                  aria-label="Pilih tema warna"
                 >
-                  <Palette size={16} /> Tema
+                  <Palette size={16} /> <span className="hidden sm:inline">Tema</span>
                 </button>
               )}
               <div className="inline-flex items-center gap-1 bg-slate-100 rounded-lg p-1">
                 <button
                   type="button"
-                  onClick={() => setZoom((z) => Math.max(40, z - 10))}
-                  className="p-1.5 rounded-md hover:bg-white"
+                  onClick={() => setZoom((z) => Math.max(30, z - 10))}
+                  className="p-2.5 sm:p-1.5 rounded-md hover:bg-white"
                   aria-label="Perkecil bagan"
                 >
                   <ZoomOut size={16} />
@@ -688,7 +746,7 @@ export default function BaganStrukturOrganisasi() {
                 <button
                   type="button"
                   onClick={() => setZoom((z) => Math.min(120, z + 10))}
-                  className="p-1.5 rounded-md hover:bg-white"
+                  className="p-2.5 sm:p-1.5 rounded-md hover:bg-white"
                   aria-label="Perbesar bagan"
                 >
                   <ZoomIn size={16} />
@@ -697,10 +755,11 @@ export default function BaganStrukturOrganisasi() {
               <button
                 onClick={() => window.print()}
                 disabled={!adaData}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                className="inline-flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg text-sm font-medium disabled:opacity-50"
                 style={tombolAktif}
+                aria-label="Cetak bagan"
               >
-                <Printer size={16} /> Cetak
+                <Printer size={16} /> <span className="hidden sm:inline">Cetak</span>
               </button>
             </div>
           )}
@@ -708,27 +767,27 @@ export default function BaganStrukturOrganisasi() {
 
         {/* Pemilih tema (admin) */}
         {bolehEdit && tab === 'bagan' && bukaTema && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 mb-4 print:hidden">
+          <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 mb-4 print:hidden">
             <p className="text-xs text-slate-500 mb-3">Pilih tema warna bagan. Tema tersimpan untuk sekolah ini dan dipakai juga saat dicetak.</p>
-            <div className="flex flex-wrap gap-3">
+            <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-3">
               {Object.entries(TEMA).map(([k, t]) => (
                 <button
                   key={k}
                   type="button"
                   onClick={() => pilihTema(k)}
-                  className="flex items-center gap-2 px-3 py-2 rounded-xl border text-sm"
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm text-left"
                   style={{
                     borderColor: tema === k ? t.aksen : '#e2e8f0',
                     borderWidth: tema === k ? 2 : 1,
                     background: tema === k ? t.latar : '#fff',
                   }}
                 >
-                  <span className="inline-flex">
+                  <span className="inline-flex shrink-0">
                     <span style={{ width: 16, height: 16, borderRadius: '50%', background: t.aksen }} />
                     <span style={{ width: 16, height: 16, borderRadius: '50%', background: t.emas, marginLeft: -5 }} />
                     <span style={{ width: 16, height: 16, borderRadius: '50%', background: t.garis, marginLeft: -5 }} />
                   </span>
-                  <span className="font-medium text-slate-800">{t.nama}</span>
+                  <span className="font-medium text-slate-800 leading-tight">{t.nama}</span>
                 </button>
               ))}
             </div>
@@ -744,7 +803,7 @@ export default function BaganStrukturOrganisasi() {
               <button
                 key={k}
                 onClick={() => setTab(k)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                className={`flex-1 sm:flex-none px-4 py-2.5 sm:py-2 rounded-lg text-sm font-medium ${
                   tab === k ? '' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
                 style={tab === k ? tombolAktif : undefined}
@@ -777,13 +836,13 @@ export default function BaganStrukturOrganisasi() {
 
         {/* ===== BAGAN ===== */}
         {!loading && !galat && adaData && tab === 'bagan' && (
-          <div id="area-bagan" className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6">
+          <div id="area-bagan" className="bg-white rounded-2xl border border-slate-200 p-3 sm:p-6">
             <div className="text-center mb-5">
               {logoUrl && (
                 <img src={logoUrl} alt="Logo sekolah" style={{ height: 60, width: 'auto', margin: '0 auto 6px', objectFit: 'contain' }} />
               )}
               <p className="text-xs font-semibold text-slate-500">Bagan Struktur Organisasi</p>
-              <h2 className="text-xl sm:text-2xl font-extrabold" style={{ color: 'var(--b-aksen)' }}>
+              <h2 className="text-lg sm:text-2xl font-extrabold" style={{ color: 'var(--b-aksen)' }}>
                 {sekolah?.nama || 'Nama Sekolah'}
               </h2>
               {sekolah?.alamat && <p className="text-xs text-slate-500">{sekolah.alamat}</p>}
@@ -807,19 +866,22 @@ export default function BaganStrukturOrganisasi() {
                         orangById={pohon.orangById}
                         labelById={pohon.labelById}
                         tingkat={0}
-                        komite={i === 0 ? komite : null}
+                        komite={i === 0 && !isMobile ? komite : null}
                       />
                     ))}
                   </ul>
                 </div>
               </div>
             </div>
+
+            {/* Komite versi HP: di bawah bagan */}
+            {isMobile && komite.length > 0 && <BlokKomiteHp komite={komite} />}
           </div>
         )}
 
         {/* ===== ATUR STRUKTUR (admin) ===== */}
         {!loading && !galat && bolehEdit && tab === 'atur' && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-6">
+          <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 space-y-6">
             <datalist id="saran-jabatan">
               {SARAN_JABATAN.map((j) => (
                 <option key={j} value={j} />
@@ -840,89 +902,93 @@ export default function BaganStrukturOrganisasi() {
                 Kaur Kurikulum. Angka urutan kecil tampil lebih dulu.
               </p>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-xs text-slate-600 border-b border-slate-200">
-                      <th className="py-2 pr-3 font-semibold">Nama</th>
-                      <th className="py-2 pr-3 font-semibold">Atasan</th>
-                      <th className="py-2 pr-3 font-semibold">Jabatan di bagan</th>
-                      <th className="py-2 pr-3 font-semibold w-20">Urutan</th>
-                      <th className="py-2 font-semibold w-20">Tampil</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[...orang]
-                      .sort((a, b) => (a.nama_lengkap || '').localeCompare(b.nama_lengkap || '', 'id'))
-                      .map((o) => {
-                        const e = edit[o.id]
-                        if (!e) return null
-                        const dilarang = turunan(o.id)
-                        return (
-                          <tr key={o.id} className="border-b border-slate-100 align-middle">
-                            <td className="py-2 pr-3">
-                              <div className="flex items-center gap-2 min-w-[180px]">
-                                <Foto nama={o.nama_lengkap} path={o.foto_profil_path} ukuran={32} cincin="var(--b-garis)" />
-                                <div>
-                                  <p className="font-medium text-slate-900 leading-tight">{o.nama_lengkap || 'Tanpa nama'}</p>
-                                  <p className="text-xs text-slate-500">{rapikanJabatan(o.jabatan)}</p>
-                                  {waliById[o.id] && (
-                                    <p className="text-xs font-medium" style={{ color: 'var(--b-aksen)' }}>
-                                      Wali Kelas {waliById[o.id].join(' & ')}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-                            <td className="py-2 pr-3">
-                              <select
-                                value={e.atasan}
-                                onChange={(ev) => ubah(o.id, 'atasan', ev.target.value)}
-                                className="border rounded-lg px-2 py-1.5 text-sm max-w-[220px] w-full"
-                              >
-                                <option value="otomatis">Otomatis</option>
-                                <option value="puncak">Paling atas (puncak)</option>
-                                {orang
-                                  .filter((x) => x.id !== o.id && !dilarang.has(x.id))
-                                  .sort((a, b) => (a.nama_lengkap || '').localeCompare(b.nama_lengkap || '', 'id'))
-                                  .map((x) => (
-                                    <option key={x.id} value={x.id}>
-                                      {x.nama_lengkap || 'Tanpa nama'}
-                                    </option>
-                                  ))}
-                              </select>
-                            </td>
-                            <td className="py-2 pr-3">
-                              <input
-                                list="saran-jabatan"
-                                value={e.jabatan}
-                                onChange={(ev) => ubah(o.id, 'jabatan', ev.target.value)}
-                                placeholder={labelOrang(o, null)}
-                                className="border rounded-lg px-2 py-1.5 text-sm w-full min-w-[170px]"
-                              />
-                            </td>
-                            <td className="py-2 pr-3">
-                              <input
-                                type="number"
-                                value={e.urutan}
-                                onChange={(ev) => ubah(o.id, 'urutan', ev.target.value)}
-                                className="border rounded-lg px-2 py-1.5 text-sm w-16"
-                              />
-                            </td>
-                            <td className="py-2">
-                              <input
-                                type="checkbox"
-                                checked={e.tampil}
-                                onChange={(ev) => ubah(o.id, 'tampil', ev.target.checked)}
-                                className="w-4 h-4"
-                                aria-label={`Tampilkan ${o.nama_lengkap || 'orang ini'} di bagan`}
-                              />
-                            </td>
-                          </tr>
-                        )
-                      })}
-                  </tbody>
-                </table>
+              <div className="space-y-3">
+                <div
+                  className={`hidden md:grid ${kolomStruktur} gap-3 text-xs font-semibold text-slate-600 border-b border-slate-200 pb-2`}
+                >
+                  <span>Nama</span>
+                  <span>Atasan</span>
+                  <span>Jabatan di bagan</span>
+                  <span>Urutan</span>
+                  <span>Tampil</span>
+                </div>
+
+                {urutanOrang.map((o) => {
+                  const e = edit[o.id]
+                  if (!e) return null
+                  const dilarang = turunan(o.id)
+                  return (
+                    <div
+                      key={o.id}
+                      className={`border border-slate-200 md:border-0 md:border-b md:border-slate-100 rounded-xl md:rounded-none p-3 md:p-0 md:py-2 grid grid-cols-2 ${kolomStruktur} gap-3 items-center`}
+                    >
+                      <div className="col-span-2 md:col-span-1 flex items-center gap-2">
+                        <Foto nama={o.nama_lengkap} path={o.foto_profil_path} ukuran={36} cincin="var(--b-garis)" />
+                        <div className="min-w-0">
+                          <p className="font-medium text-slate-900 leading-tight">{o.nama_lengkap || 'Tanpa nama'}</p>
+                          <p className="text-xs text-slate-500">{rapikanJabatan(o.jabatan)}</p>
+                          {waliById[o.id] && (
+                            <p className="text-xs font-medium" style={{ color: 'var(--b-aksen)' }}>
+                              Wali Kelas {waliById[o.id].join(' & ')}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <label className="col-span-2 md:col-span-1 block">
+                        <span className="md:hidden text-xs text-slate-500">Atasan</span>
+                        <select
+                          value={e.atasan}
+                          onChange={(ev) => ubah(o.id, 'atasan', ev.target.value)}
+                          className="border rounded-lg px-2 py-2 text-base sm:text-sm w-full"
+                        >
+                          <option value="otomatis">Otomatis</option>
+                          <option value="puncak">Paling atas (puncak)</option>
+                          {urutanOrang
+                            .filter((x) => x.id !== o.id && !dilarang.has(x.id))
+                            .map((x) => (
+                              <option key={x.id} value={x.id}>
+                                {x.nama_lengkap || 'Tanpa nama'}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+
+                      <label className="col-span-2 md:col-span-1 block">
+                        <span className="md:hidden text-xs text-slate-500">Jabatan di bagan</span>
+                        <input
+                          list="saran-jabatan"
+                          value={e.jabatan}
+                          onChange={(ev) => ubah(o.id, 'jabatan', ev.target.value)}
+                          placeholder={labelOrang(o, null)}
+                          className="border rounded-lg px-2 py-2 text-base sm:text-sm w-full"
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="md:hidden text-xs text-slate-500">Urutan</span>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          value={e.urutan}
+                          onChange={(ev) => ubah(o.id, 'urutan', ev.target.value)}
+                          className="border rounded-lg px-2 py-2 text-base sm:text-sm w-full md:w-16"
+                        />
+                      </label>
+
+                      <label className="flex items-center gap-2 md:justify-start">
+                        <input
+                          type="checkbox"
+                          checked={e.tampil}
+                          onChange={(ev) => ubah(o.id, 'tampil', ev.target.checked)}
+                          className="w-5 h-5"
+                          aria-label={`Tampilkan ${o.nama_lengkap || 'orang ini'} di bagan`}
+                        />
+                        <span className="md:hidden text-sm text-slate-700">Tampil di bagan</span>
+                      </label>
+                    </div>
+                  )
+                })}
               </div>
             </div>
 
@@ -934,7 +1000,7 @@ export default function BaganStrukturOrganisasi() {
                   <button
                     type="button"
                     onClick={tambahKomite}
-                    className="inline-flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-sm font-medium"
+                    className="inline-flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 sm:py-1.5 rounded-lg text-sm font-medium"
                   >
                     <Plus size={15} /> Tambah anggota komite
                   </button>
@@ -942,7 +1008,7 @@ export default function BaganStrukturOrganisasi() {
               </div>
               <p className="text-xs text-slate-500">
                 Komite sekolah bukan akun guru, jadi diisi manual di sini. Tampil sebagai kolom terpisah (bingkai putus-putus) di
-                sebelah kanan bagan.
+                sebelah kanan bagan; di HP tampil di bawah bagan.
               </p>
 
               {komiteGalat && (
@@ -956,67 +1022,60 @@ export default function BaganStrukturOrganisasi() {
               )}
 
               {!komiteGalat && komiteEdit.length > 0 && (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-xs text-slate-600 border-b border-slate-200">
-                        <th className="py-2 pr-3 font-semibold">Nama</th>
-                        <th className="py-2 pr-3 font-semibold">Jabatan di komite</th>
-                        <th className="py-2 pr-3 font-semibold w-20">Urutan</th>
-                        <th className="py-2 font-semibold w-12" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {komiteEdit.map((k) => (
-                        <tr key={k.key} className="border-b border-slate-100 align-middle">
-                          <td className="py-2 pr-3">
-                            <input
-                              value={k.nama}
-                              onChange={(ev) => ubahKomite(k.key, 'nama', ev.target.value)}
-                              placeholder="Nama lengkap"
-                              className="border rounded-lg px-2 py-1.5 text-sm w-full min-w-[200px]"
-                            />
-                          </td>
-                          <td className="py-2 pr-3">
-                            <input
-                              list="saran-komite"
-                              value={k.jabatan}
-                              onChange={(ev) => ubahKomite(k.key, 'jabatan', ev.target.value)}
-                              placeholder="Ketua Komite"
-                              className="border rounded-lg px-2 py-1.5 text-sm w-full min-w-[170px]"
-                            />
-                          </td>
-                          <td className="py-2 pr-3">
-                            <input
-                              type="number"
-                              value={k.urutan}
-                              onChange={(ev) => ubahKomite(k.key, 'urutan', ev.target.value)}
-                              className="border rounded-lg px-2 py-1.5 text-sm w-16"
-                            />
-                          </td>
-                          <td className="py-2">
-                            <button
-                              type="button"
-                              onClick={() => hapusKomite(k.key)}
-                              className="p-1.5 rounded-md text-red-600 hover:bg-red-50"
-                              aria-label={`Hapus ${k.nama || 'anggota komite'}`}
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="space-y-3">
+                  {komiteEdit.map((k) => (
+                    <div
+                      key={k.key}
+                      className="border border-slate-200 rounded-xl p-3 grid grid-cols-[1fr_80px_auto] sm:grid-cols-[1.4fr_1fr_80px_auto] gap-2 items-end"
+                    >
+                      <label className="col-span-3 sm:col-span-1 block">
+                        <span className="text-xs text-slate-500">Nama</span>
+                        <input
+                          value={k.nama}
+                          onChange={(ev) => ubahKomite(k.key, 'nama', ev.target.value)}
+                          placeholder="Nama lengkap"
+                          className="border rounded-lg px-2 py-2 text-base sm:text-sm w-full"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs text-slate-500">Jabatan di komite</span>
+                        <input
+                          list="saran-komite"
+                          value={k.jabatan}
+                          onChange={(ev) => ubahKomite(k.key, 'jabatan', ev.target.value)}
+                          placeholder="Ketua Komite"
+                          className="border rounded-lg px-2 py-2 text-base sm:text-sm w-full"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs text-slate-500">Urutan</span>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          value={k.urutan}
+                          onChange={(ev) => ubahKomite(k.key, 'urutan', ev.target.value)}
+                          className="border rounded-lg px-2 py-2 text-base sm:text-sm w-full"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => hapusKomite(k.key)}
+                        className="p-2.5 rounded-md text-red-600 hover:bg-red-50"
+                        aria-label={`Hapus ${k.nama || 'anggota komite'}`}
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3">
               <button
                 onClick={simpan}
                 disabled={saving}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-60"
+                className="inline-flex justify-center items-center gap-2 px-4 py-3 sm:py-2 rounded-lg text-sm font-medium disabled:opacity-60"
                 style={tombolAktif}
               >
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Simpan
@@ -1024,7 +1083,7 @@ export default function BaganStrukturOrganisasi() {
               <button
                 onClick={kembalikan}
                 disabled={saving}
-                className="inline-flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-60"
+                className="inline-flex justify-center items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-3 sm:py-2 rounded-lg text-sm font-medium disabled:opacity-60"
               >
                 <RotateCcw size={16} /> Kembalikan ke otomatis
               </button>
