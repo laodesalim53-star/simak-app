@@ -148,7 +148,9 @@ const BUKU_KOLOM = ['Tematik', 'Kumer', 'Baik', 'Rusak Berat', 'Rusak Ringan']
 // Daftar ini HARUS sama dengan MAPEL_BUKU di Perpustakaan.jsx.
 const DAFTAR_BUKU = [
   'PPKn',
-  'Pendidikan Agama',
+  'Pendidikan Agama Islam',
+  'Pendidikan Agama Kristen',
+  'Pendidikan Agama Kristen Katolik',
   'Bhs. Indonesia',
   'IPA',
   'IPS',
