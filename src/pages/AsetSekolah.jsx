@@ -850,8 +850,12 @@ function CetakAset({ sekolahId, namaSekolah, judul, rows, total, awal, otomatis,
             position: static !important; inset: auto !important; overflow: visible !important;
             height: auto !important; width: auto !important; background: #fff !important;
           }
+          /* Aturan cetak global aplikasi (mis. body * { visibility: hidden }) tidak boleh ikut menyembunyikan dokumen ini */
+          #portal-cetak-aset, #portal-cetak-aset * { visibility: visible !important; }
+          #portal-cetak-aset { display: block !important; }
           .tanpa-cetak { display: none !important; }
           #area-cetak-aset { padding: 0 !important; }
+          #area-cetak-aset th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           #area-cetak-aset table { page-break-inside: auto; }
           #area-cetak-aset thead { display: table-header-group; }
           #area-cetak-aset tr { break-inside: avoid; page-break-inside: avoid; }
