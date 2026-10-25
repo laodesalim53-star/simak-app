@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
+import KopSurat from '../components/KopSurat'
 import {
   Pencil, X, Loader2, Package, Wallet, TrendingUp, TrendingDown, Printer,
   FileSpreadsheet, Search, EyeOff, Eye, Layers, AlertTriangle, RotateCcw,
@@ -693,8 +694,13 @@ function CetakAset({ sekolahId, namaSekolah, judul, rows, total, awal, onClose }
       </div>
 
       <div id="area-cetak-aset" style={{ padding: '16px 24px', color: '#000', fontFamily: 'Arial, sans-serif' }}>
+        {/* Kop surat resmi (logo kabupaten + logo sekolah, dinas, alamat) dari profil sekolah */}
+        <KopSurat />
+
         <div style={{ textAlign: 'center', marginBottom: 10 }}>
-          <div style={{ fontWeight: 700, fontSize: 15 }}>ASET {namaSekolah.toUpperCase()}</div>
+          <div style={{ fontWeight: 700, fontSize: 14, textDecoration: 'underline' }}>
+            ASET {namaSekolah.toUpperCase()}
+          </div>
           <div style={{ fontSize: 12 }}>{judul}</div>
         </div>
 
