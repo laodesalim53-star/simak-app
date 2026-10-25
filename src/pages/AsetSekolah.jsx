@@ -7,7 +7,7 @@ import Layout from '../components/Layout'
 import KopSurat from '../components/KopSurat'
 import {
   Pencil, X, Loader2, Package, Wallet, TrendingUp, TrendingDown, Printer,
-  FileSpreadsheet, Search, EyeOff, Eye, Layers, AlertTriangle, RotateCcw,
+  FileSpreadsheet, Search, EyeOff, Eye, Layers, AlertTriangle, RotateCcw, Plus,
 } from 'lucide-react'
 
 /**
@@ -20,6 +20,16 @@ import {
  * rekanan, lokasi, satuan, status BM, keterangan) disimpan di tabel aset_sekolah_info
  * (lihat aset_sekolah.sql), dikunci pada isi barisnya — bukan id — sehingga tetap menempel
  * walaupun BKU diunggah ulang (Input Data Massal BKU menghapus lalu menyisipkan ulang).
+ *
+ * BARIS MANUAL: baris yang ditambah lewat tombol "Tambah Baris" juga disimpan di
+ * aset_sekolah_info dengan manual = true (plus kolom jenis, tanggal, nilai). Kuncinya
+ * "manual|<uuid>", jadi tidak terpengaruh unggah ulang BKU. SQL yang diperlukan:
+ *
+ *   alter table aset_sekolah_info
+ *     add column if not exists manual boolean not null default false,
+ *     add column if not exists jenis text,
+ *     add column if not exists tanggal date,
+ *     add column if not exists nilai numeric;
  */
 
 const TAHAP = {
@@ -40,6 +50,37 @@ function tahapDariBulan(b) { return b <= 6 ? 1 : 2 }
 
 function tebakSatuan(uraian) {
   return /buku|kelas|matematika|ipas|bahasa|pendidikan|bs\s/i.test(uraian || '') ? 'Buku' : 'Buah'
+}
+
+// Baris kosong untuk input manual
+function barisBaru() {
+  const id = (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  return {
+    kunci: `manual|${id}`,
+    manual: true,
+    baru: true,
+    bkuId: null,
+    tanggal: new Date().toISOString().slice(0, 10),
+    noBukti: '',
+    kodeRek: '',
+    modal: true,
+    jenis: '',
+    merek: '',
+    noBA: '',
+    rekanan: '',
+    lokasi: '',
+    jumlah: 1,
+    jumlahKosong: false,
+    satuan: 'Buah',
+    harga: 0,
+    nilai: 0,
+    status: 'DI BKU',
+    ket: '',
+    disembunyikan: false,
+    adaOverlay: false,
+  }
 }
 
 // ---- Riwayat pengetikan (saran isian) ----
@@ -240,7 +281,7 @@ export default function AsetSekolah({ tersemat = false }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tahun, tahap, sekolahId])
 
-  // ---- Bentuk baris aset dari BKU ----
+  // ---- Bentuk baris aset dari BKU + baris input manual ----
   const { semuaAset, ringkas } = useMemo(() => {
     const hitung = new Map()
     const aset = []
@@ -269,6 +310,7 @@ export default function AsetSekolah({ tersemat = false }) {
 
       aset.push({
         kunci,
+        manual: false,
         bkuId: r.id,
         tanggal: r.tanggal,
         noBukti: r.no_bukti || '',
@@ -290,8 +332,46 @@ export default function AsetSekolah({ tersemat = false }) {
         adaOverlay: !!info[kunci],
       })
     }
+
+    // Baris input manual (tidak ada di BKU), disaring menurut tahap lewat bulan pada tanggalnya
+    const { dari, sampai } = TAHAP[tahap]
+    const manual = Object.values(info)
+      .filter((o) => o.manual)
+      .filter((o) => {
+        const bulan = o.tanggal ? Number(String(o.tanggal).slice(5, 7)) : null
+        return !bulan || (bulan >= dari && bulan <= sampai)
+      })
+      .sort((x, y) => String(x.tanggal || '').localeCompare(String(y.tanggal || '')) || String(x.updated_at || '').localeCompare(String(y.updated_at || '')))
+    for (const o of manual) {
+      const nilai = Number(o.nilai || 0)
+      const qty = Number(o.jumlah) > 0 ? Number(o.jumlah) : 1
+      aset.push({
+        kunci: o.kunci,
+        manual: true,
+        bkuId: null,
+        tanggal: o.tanggal || '',
+        noBukti: '',
+        kodeRek: '',
+        modal: true,
+        jenis: o.jenis || '',
+        merek: o.merek || '',
+        noBA: o.no_tgl_ba || '',
+        rekanan: o.rekanan || '',
+        lokasi: o.lokasi || '',
+        jumlah: qty,
+        jumlahKosong: false,
+        satuan: o.satuan || 'Buah',
+        harga: nilai / qty,
+        nilai,
+        status: o.status_bm || 'DI BKU',
+        ket: o.keterangan || 'Input manual',
+        disembunyikan: !!o.disembunyikan,
+        adaOverlay: true,
+      })
+    }
+
     return { semuaAset: aset, ringkas: { dana, belanja } }
-  }, [bkuRows, info, tahun])
+  }, [bkuRows, info, tahun, tahap])
 
   const terlihat = useMemo(() => {
     const q = cari.trim().toLowerCase()
@@ -310,7 +390,7 @@ export default function AsetSekolah({ tersemat = false }) {
   const totalNilai = untukCetak.reduce((s, a) => s + a.nilai, 0)
   const totalUnit = untukCetak.reduce((s, a) => s + a.jumlah, 0)
   const jumlahKosong = untukCetak.filter((a) => a.jumlahKosong).length
-  const tanpaRekening = semuaAset.filter((a) => !a.kodeRek).length
+  const tanpaRekening = semuaAset.filter((a) => !a.manual && !a.kodeRek).length
 
   const judulDana = tahap === 'semua' ? `BOSP ${tahun}` : `BOSP Tahap ${tahap} ${tahun}`
   const namaSekolah = ambil(profSekolah, ['nama_sekolah', 'nama']) || ambil(profil, ['nama_sekolah']) || 'SEKOLAH'
@@ -331,6 +411,8 @@ export default function AsetSekolah({ tersemat = false }) {
       keterangan: a.ket || null,
       disembunyikan: a.disembunyikan,
       updated_at: new Date().toISOString(),
+      // Baris manual: simpan juga data yang pada baris BKU diambil dari BKU
+      ...(a.manual ? { manual: true, jenis: a.jenis, tanggal: a.tanggal || null, nilai: a.nilai } : {}),
       ...ubah,
     }
   }
@@ -354,7 +436,10 @@ export default function AsetSekolah({ tersemat = false }) {
   }
 
   async function kembalikanKeBku(a) {
-    if (!confirm('Hapus isian tambahan baris ini dan kembali ke data BKU?')) return
+    const pesan = a.manual
+      ? 'Hapus baris manual ini? Data tidak bisa dikembalikan.'
+      : 'Hapus isian tambahan baris ini dan kembali ke data BKU?'
+    if (!confirm(pesan)) return
     const { error: err } = await supabase
       .from('aset_sekolah_info')
       .delete()
@@ -414,6 +499,9 @@ export default function AsetSekolah({ tersemat = false }) {
 
   const aksi = (
         <>
+          <button className="btn-secondary" onClick={() => setEdit(barisBaru())}>
+            <Plus size={16} /> Tambah Baris
+          </button>
           <button className="btn-secondary" onClick={() => setBulk(true)} disabled={untukCetak.length === 0}>
             <Layers size={16} /> Isi Massal
           </button>
@@ -539,7 +627,7 @@ export default function AsetSekolah({ tersemat = false }) {
             {loading && <tr><td colSpan={13} className="text-center py-8 text-ink-700/50">Memuat data BKU...</td></tr>}
             {!loading && terlihat.length === 0 && (
               <tr><td colSpan={13} className="text-center py-8 text-ink-700/50">
-                Belum ada belanja di BKU untuk {judulDana}. Unggah BKU dulu lewat halaman Keuangan → tab BKU.
+                Belum ada belanja di BKU untuk {judulDana}. Unggah BKU dulu lewat halaman Keuangan → tab BKU, atau klik "Tambah Baris" untuk input manual.
               </td></tr>
             )}
             {terlihat.map((a, i) => (
@@ -547,6 +635,9 @@ export default function AsetSekolah({ tersemat = false }) {
                 <td>{i + 1}</td>
                 <td className="font-medium">
                   {a.jenis}
+                  {a.manual && (
+                    <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-brass-400/20 text-brass-600 align-middle">manual</span>
+                  )}
                   <div className="text-[11px] text-ink-700/50 font-normal whitespace-nowrap">
                     {a.tanggal}{a.noBukti && ` · ${a.noBukti}`}{a.kodeRek && ` · ${a.kodeRek}`}
                   </div>
@@ -563,7 +654,7 @@ export default function AsetSekolah({ tersemat = false }) {
                 <td className="text-xs">{a.ket}</td>
                 <td>
                   <div className="flex items-center gap-1 justify-end">
-                    <button className="icon-btn" title="Lengkapi data" onClick={() => setEdit(a)}><Pencil size={15} /></button>
+                    <button className="icon-btn" title={a.manual ? 'Ubah baris manual' : 'Lengkapi data'} onClick={() => setEdit(a)}><Pencil size={15} /></button>
                     <button className="icon-btn" title={a.disembunyikan ? 'Tampilkan lagi' : 'Sembunyikan dari daftar aset'} onClick={() => alihkanSembunyi(a)}>
                       {a.disembunyikan ? <Eye size={15} /> : <EyeOff size={15} />}
                     </button>
@@ -584,15 +675,20 @@ export default function AsetSekolah({ tersemat = false }) {
         </table>
       </div>
 
+      <button className="btn-secondary mt-3" onClick={() => setEdit(barisBaru())}>
+        <Plus size={16} /> Tambah baris manual
+      </button>
+
       {edit && (
         <ModalEdit
+          key={edit.kunci}
           a={edit}
           saran={saran}
           onClose={() => setEdit(null)}
           onKembali={() => kembalikanKeBku(edit)}
-          onSimpan={async (nilai) => {
+          onSimpan={async (nilai, lagi) => {
             const ok = await simpanBanyak([payloadDari(edit, nilai)])
-            if (ok) setEdit(null)
+            if (ok) setEdit(lagi ? barisBaru() : null)
           }}
         />
       )}
@@ -675,16 +771,29 @@ function InputSaran({ nama, saran, ...props }) {
 
 function ModalEdit({ a, saran, onClose, onSimpan, onKembali }) {
   const [f, setF] = useState({
+    jenis: a.jenis || '',
+    tanggal: a.tanggal || '',
+    nilai: a.manual && a.nilai ? String(a.nilai) : '',
     merek: a.merek, no_tgl_ba: a.noBA, rekanan: a.rekanan, lokasi: a.lokasi,
     jumlah: a.jumlahKosong ? '' : String(a.jumlah), satuan: a.satuan, status_bm: a.status, keterangan: a.ket,
   })
   const [saving, setSaving] = useState(false)
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value })
 
-  async function kirim(e) {
+  async function kirim(e, lagi = false) {
     e.preventDefault()
+    if (a.manual) {
+      if (!f.jenis.trim()) return alert('Jenis Barang wajib diisi')
+      if (!(Number(f.nilai) > 0)) return alert('Nilai Realisasi harus lebih dari 0')
+      if (!(Number(f.jumlah) > 0)) return alert('Jumlah Barang wajib diisi')
+    }
     setSaving(true)
     await onSimpan({
+      ...(a.manual ? {
+        jenis: f.jenis.trim(),
+        tanggal: f.tanggal || null,
+        nilai: Number(f.nilai),
+      } : {}),
       merek: f.merek.trim() || null,
       no_tgl_ba: f.no_tgl_ba.trim() || null,
       rekanan: f.rekanan.trim() || null,
@@ -693,7 +802,7 @@ function ModalEdit({ a, saran, onClose, onSimpan, onKembali }) {
       satuan: f.satuan.trim() || null,
       status_bm: f.status_bm,
       keterangan: f.keterangan.trim() || null,
-    })
+    }, lagi)
     setSaving(false)
   }
 
@@ -701,21 +810,42 @@ function ModalEdit({ a, saran, onClose, onSimpan, onKembali }) {
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-display text-lg font-semibold">Lengkapi Data Aset</h2>
+          <h2 className="font-display text-lg font-semibold">
+            {a.baru ? 'Tambah Baris Aset' : a.manual ? 'Ubah Baris Manual' : 'Lengkapi Data Aset'}
+          </h2>
           <button className="icon-btn" onClick={onClose}><X size={18} /></button>
         </div>
         <form onSubmit={kirim} className="space-y-3">
-          <div>
-            <label className="label-field">Jenis Barang (dari BKU)</label>
-            <p className="text-sm bg-ink-950/5 rounded-lg px-3 py-2">{a.jenis}</p>
-            <p className="text-xs text-ink-700/50 mt-1">
-              Nilai {rupiah(a.nilai)} · {a.tanggal}{a.noBukti && ` · ${a.noBukti}`}. Nilai & uraian hanya bisa diubah di BKU.
-            </p>
-          </div>
+          {a.manual ? (
+            <>
+              <div>
+                <label className="label-field">Jenis Barang *</label>
+                <input className="input-field" value={f.jenis} onChange={set('jenis')} autoFocus />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label-field">Tanggal</label>
+                  <input type="date" className="input-field" value={f.tanggal} onChange={set('tanggal')} />
+                </div>
+                <div>
+                  <label className="label-field">Nilai Realisasi (Rp) *</label>
+                  <input type="number" min="0" step="any" className="input-field" value={f.nilai} onChange={set('nilai')} />
+                </div>
+              </div>
+            </>
+          ) : (
+            <div>
+              <label className="label-field">Jenis Barang (dari BKU)</label>
+              <p className="text-sm bg-ink-950/5 rounded-lg px-3 py-2">{a.jenis}</p>
+              <p className="text-xs text-ink-700/50 mt-1">
+                Nilai {rupiah(a.nilai)} · {a.tanggal}{a.noBukti && ` · ${a.noBukti}`}. Nilai & uraian hanya bisa diubah di BKU.
+              </p>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="label-field">Jumlah Barang</label>
-              <input type="number" min="0" step="any" className="input-field" value={f.jumlah} onChange={set('jumlah')} placeholder="Ikut BKU" />
+              <label className="label-field">Jumlah Barang{a.manual && ' *'}</label>
+              <input type="number" min="0" step="any" className="input-field" value={f.jumlah} onChange={set('jumlah')} placeholder={a.manual ? '' : 'Ikut BKU'} />
             </div>
             <div>
               <label className="label-field">Satuan</label>
@@ -755,11 +885,16 @@ function ModalEdit({ a, saran, onClose, onSimpan, onKembali }) {
           <div className="flex justify-between gap-3 pt-2">
             {a.adaOverlay ? (
               <button type="button" className="btn-secondary text-red-600" onClick={onKembali}>
-                <RotateCcw size={15} /> Kembali ke BKU
+                <RotateCcw size={15} /> {a.manual ? 'Hapus Baris' : 'Kembali ke BKU'}
               </button>
             ) : <span />}
             <div className="flex gap-3">
               <button type="button" className="btn-secondary" onClick={onClose}>Batal</button>
+              {a.baru && (
+                <button type="button" className="btn-secondary" disabled={saving} onClick={(e) => kirim(e, true)}>
+                  Simpan & Tambah Lagi
+                </button>
+              )}
               <button type="submit" className="btn-primary" disabled={saving}>
                 {saving && <Loader2 size={16} className="animate-spin" />} Simpan
               </button>
