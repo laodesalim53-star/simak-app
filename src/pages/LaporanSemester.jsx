@@ -32,7 +32,9 @@ import { supabase } from '../lib/supabaseClient'
 const KELAS_ROMAWI = ['I', 'II', 'III', 'IV', 'V', 'VI']
 const MATA_PELAJARAN = [
   'PPKn',
-  'Pend. Agama',
+  'Pendidikan Agama Islam',
+  'Pendidikan Agama Kristen',
+  'Pendidikan Agama Kristen Katolik',
   'Bhs. Indonesia',
   'IPA',
   'IPS',
