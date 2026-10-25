@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
@@ -88,6 +89,60 @@ function bangunSaran(sekolahId, info) {
   return hasil
 }
 
+// ---- Nama & NIP Kepala Sekolah / Bendahara diambil otomatis dari data aplikasi ----
+const PEJABAT_KOSONG = { kepsekNama: '', kepsekNip: '', bendNama: '', bendNip: '' }
+const LEBAR_KOLOM = [3, 19, 9, 10, 11, 6, 5, 5, 8, 9, 7, 8] // % lebar tabel cetak
+
+// Cari kolom di profil_sekolah yang namanya memuat kata kunci (mis. "bendahara"); nip=true -> kolom NIP-nya
+function cariDiProfil(prof, kataKunci, nip) {
+  if (!prof) return ''
+  for (const [k, v] of Object.entries(prof)) {
+    const kk = k.toLowerCase()
+    if (!kataKunci.some((w) => kk.includes(w))) continue
+    if (kk.includes('nip') !== nip) continue
+    if (/logo|path|url|foto|ttd|tanda|dinas/.test(kk)) continue
+    if (v !== null && v !== undefined && typeof v !== 'object' && String(v).trim()) return String(v).trim()
+  }
+  return ''
+}
+
+// Urutan pencarian: kolom di profil_sekolah dulu, lalu tabel guru (jabatan/tugas memuat "Bendahara" / "Kepala Sekolah")
+async function tentukanPejabat(prof, sekolahId) {
+  const hasil = {
+    kepsekNama: cariDiProfil(prof, ['kepala_sekolah', 'kepsek'], false),
+    kepsekNip: cariDiProfil(prof, ['kepala_sekolah', 'kepsek'], true),
+    bendNama: cariDiProfil(prof, ['bendahara'], false),
+    bendNip: cariDiProfil(prof, ['bendahara'], true),
+  }
+  if (hasil.kepsekNama && hasil.kepsekNip && hasil.bendNama && hasil.bendNip) return hasil
+  if (!sekolahId) return hasil
+  try {
+    // Hanya kolom yang perlu (hindari menarik NIK, rekening, dll. ke browser)
+    const { data, error } = await supabase
+      .from('guru')
+      .select('nama_lengkap, nip, tugas_tambahan, jenis_ptk')
+      .eq('sekolah_id', sekolahId)
+    if (error || !data) return hasil
+    const cocok = (row, uji) => [row.tugas_tambahan, row.jenis_ptk].some((v) => {
+      const teks = Array.isArray(v) ? v.join(' ') : typeof v === 'string' ? v : ''
+      return teks && uji(teks)
+    })
+    const nama = (r) => String(r.nama_lengkap || r.nama || '').trim()
+    const nip = (r) => (r.nip ? String(r.nip).trim() : '')
+    const ks = data.find((r) => cocok(r, (v) => /kepala\s*sekolah|kepsek/i.test(v) && !/wakil/i.test(v)))
+    const bd = data.find((r) => cocok(r, (v) => /bendahara/i.test(v)))
+    if (ks) {
+      hasil.kepsekNama = hasil.kepsekNama || nama(ks)
+      hasil.kepsekNip = hasil.kepsekNip || nip(ks)
+    }
+    if (bd) {
+      hasil.bendNama = hasil.bendNama || nama(bd)
+      hasil.bendNip = hasil.bendNip || nip(bd)
+    }
+  } catch { /* tabel/kolom tidak ada: biarkan, bisa diisi manual */ }
+  return hasil
+}
+
 function ambil(obj, kunci) {
   if (!obj) return ''
   for (const k of kunci) if (obj[k]) return String(obj[k])
@@ -142,6 +197,7 @@ export default function AsetSekolah({ tersemat = false }) {
   const [bkuRows, setBkuRows] = useState([])
   const [info, setInfo] = useState({}) // kunci -> baris aset_sekolah_info
   const [profSekolah, setProfSekolah] = useState(null)
+  const [pejabatAuto, setPejabatAuto] = useState(PEJABAT_KOSONG)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -159,6 +215,7 @@ export default function AsetSekolah({ tersemat = false }) {
     setBkuRows([])
     setInfo({})
     setProfSekolah(null)
+    setPejabatAuto(PEJABAT_KOSONG)
     try {
       const { dari, sampai } = TAHAP[tahap]
       const [hasilBku, infoRes, profRes] = await Promise.all([
@@ -171,6 +228,7 @@ export default function AsetSekolah({ tersemat = false }) {
       setBkuTerfilter(hasilBku.terfilter)
       setInfo(Object.fromEntries((infoRes.data || []).map((r) => [r.kunci, r])))
       setProfSekolah(profRes.data || null)
+      setPejabatAuto(await tentukanPejabat(profRes.data || null, sekolahId))
     } catch (err) {
       setError(err.message || String(err))
     }
@@ -341,18 +399,17 @@ export default function AsetSekolah({ tersemat = false }) {
     XLSX.writeFile(wb, `aset-sekolah-${tahap === 'semua' ? tahun : `${tahun}-tahap-${tahap}`}.xlsx`)
   }
 
+  // Data otomatis dari aplikasi; isian manual (tidak kosong) di pratinjau cetak menimpanya
   function ttdTersimpan() {
-    const dasar = {
-      kepsekNama: ambil(profSekolah, ['nama_kepala_sekolah', 'kepala_sekolah', 'nama_kepsek']),
-      kepsekNip: ambil(profSekolah, ['nip_kepala_sekolah', 'nip_kepsek']),
-      bendNama: ambil(profSekolah, ['nama_bendahara', 'bendahara']),
-      bendNip: ambil(profSekolah, ['nip_bendahara']),
-    }
-    if (!sekolahId) return dasar
+    const hasil = { ...pejabatAuto }
+    if (!sekolahId) return hasil
     try {
-      const s = JSON.parse(localStorage.getItem(`aset_ttd_${sekolahId}`) || 'null')
-      return { ...dasar, ...(s || {}) }
-    } catch { return dasar }
+      const tersimpan = JSON.parse(localStorage.getItem(`aset_ttd_${sekolahId}`) || 'null') || {}
+      for (const k of Object.keys(hasil)) {
+        if (tersimpan[k] && String(tersimpan[k]).trim()) hasil[k] = tersimpan[k]
+      }
+    } catch { /* abaikan */ }
+    return hasil
   }
 
   const aksi = (
@@ -567,6 +624,7 @@ export default function AsetSekolah({ tersemat = false }) {
           rows={untukCetak}
           total={totalNilai}
           awal={ttdTersimpan()}
+          otomatis={pejabatAuto}
           onClose={() => setShowCetak(false)}
         />
       )}
@@ -760,25 +818,43 @@ function ModalMassal({ jumlah, saran, onClose, onTerapkan }) {
 }
 
 // Tampilan cetak A4 landscape — susunan sama dengan model dokumen
-function CetakAset({ sekolahId, namaSekolah, judul, rows, total, awal, onClose }) {
+function CetakAset({ sekolahId, namaSekolah, judul, rows, total, awal, otomatis, onClose }) {
   const [ttd, setTtd] = useState(awal)
   const ubah = (k) => (e) => {
     const baru = { ...ttd, [k]: e.target.value }
     setTtd(baru)
     if (sekolahId) {
-      try { localStorage.setItem(`aset_ttd_${sekolahId}`, JSON.stringify(baru)) } catch { /* abaikan */ }
+      // Simpan hanya isian yang berbeda dari data aplikasi, supaya perubahan data pejabat tetap terbawa
+      const beda = Object.fromEntries(Object.entries(baru).filter(([key, v]) => v && v !== otomatis[key]))
+      try { localStorage.setItem(`aset_ttd_${sekolahId}`, JSON.stringify(beda)) } catch { /* abaikan */ }
     }
   }
-  const sel = { border: '1px solid #000', padding: '3px 5px', fontSize: '10px', verticalAlign: 'top' }
+  const ambilUlang = () => {
+    if (sekolahId) { try { localStorage.removeItem(`aset_ttd_${sekolahId}`) } catch { /* abaikan */ } }
+    setTtd({ ...otomatis })
+  }
+  const sel = {
+    border: '1px solid #000', padding: '3px 5px', fontSize: '10px', verticalAlign: 'top',
+    wordBreak: 'break-word', overflowWrap: 'anywhere',
+  }
 
-  return (
-    <div className="fixed inset-0 bg-white z-[60] overflow-auto">
+  // Dirender lewat portal ke <body>: elemen fixed di dalam halaman membuat hasil cetak terpotong 1 halaman
+  // dan terulang di tiap lembar. Saat cetak, semua anak <body> lain disembunyikan dan area ini mengalir normal.
+  return createPortal(
+    <div id="portal-cetak-aset" className="fixed inset-0 bg-white z-[60] overflow-auto">
       <style>{`
         @media print {
-          body * { visibility: hidden !important; }
-          #area-cetak-aset, #area-cetak-aset * { visibility: visible !important; }
-          #area-cetak-aset { position: absolute; left: 0; top: 0; width: 100%; }
+          html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
+          body > *:not(#portal-cetak-aset) { display: none !important; }
+          #portal-cetak-aset {
+            position: static !important; inset: auto !important; overflow: visible !important;
+            height: auto !important; width: auto !important; background: #fff !important;
+          }
           .tanpa-cetak { display: none !important; }
+          #area-cetak-aset { padding: 0 !important; }
+          #area-cetak-aset table { page-break-inside: auto; }
+          #area-cetak-aset thead { display: table-header-group; }
+          #area-cetak-aset tr { break-inside: avoid; page-break-inside: avoid; }
           @page { size: A4 landscape; margin: 12mm; }
         }
       `}</style>
@@ -788,6 +864,9 @@ function CetakAset({ sekolahId, namaSekolah, judul, rows, total, awal, onClose }
         <input className="input-field w-44" placeholder="NIP Kepala Sekolah" value={ttd.kepsekNip} onChange={ubah('kepsekNip')} />
         <input className="input-field w-48" placeholder="Nama Bendahara" value={ttd.bendNama} onChange={ubah('bendNama')} />
         <input className="input-field w-44" placeholder="NIP Bendahara" value={ttd.bendNip} onChange={ubah('bendNip')} />
+        <button className="btn-secondary" onClick={ambilUlang} title="Isi ulang nama & NIP dari data aplikasi">
+          <RotateCcw size={15} /> Ambil dari data
+        </button>
         <div className="ml-auto flex gap-2">
           <button className="btn-secondary" onClick={onClose}><X size={16} /> Tutup</button>
           <button className="btn-primary" onClick={() => window.print()}><Printer size={16} /> Cetak</button>
@@ -805,7 +884,10 @@ function CetakAset({ sekolahId, namaSekolah, judul, rows, total, awal, onClose }
           <div style={{ fontSize: 12 }}>{judul}</div>
         </div>
 
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+          <colgroup>
+            {LEBAR_KOLOM.map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}
+          </colgroup>
           <thead>
             <tr style={{ background: '#eee', textAlign: 'center' }}>
               <th style={sel} rowSpan={2}>No</th>
@@ -852,7 +934,7 @@ function CetakAset({ sekolahId, namaSekolah, judul, rows, total, awal, onClose }
           </tbody>
         </table>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 28, padding: '0 80px', fontSize: 12, pageBreakInside: 'avoid' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 28, padding: '0 80px', fontSize: 12, pageBreakInside: 'avoid', breakInside: 'avoid' }}>
           <div style={{ textAlign: 'center' }}>
             <div>KEPALA SEKOLAH</div>
             <div style={{ height: 70 }} />
@@ -867,6 +949,7 @@ function CetakAset({ sekolahId, namaSekolah, judul, rows, total, awal, onClose }
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
