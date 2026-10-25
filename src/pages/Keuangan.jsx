@@ -11,9 +11,10 @@ import KirimBukuPerpustakaanModal from '../components/KirimBukuPerpustakaanModal
 import KirimInventarisModal from '../components/KirimInventarisModal'
 import TarikArkasModal from '../components/TarikArkasModal'
 import RkasCetak from '../components/RkasCetak'
+import AsetSekolah from './AsetSekolah'
 import {
   Plus, Pencil, Trash2, X, Loader2, TrendingUp, TrendingDown, Wallet,
-  FileDown, FileSpreadsheet, BookOpen, ClipboardList, Printer,
+  FileDown, FileSpreadsheet, BookOpen, ClipboardList, Printer, Package,
 } from 'lucide-react'
 
 const KATEGORI_MASUK = ['SPP', 'Donasi', 'Dana BOS', 'Sumbangan', 'Lainnya']
@@ -23,6 +24,7 @@ const MENU_TABS = [
   { key: 'transaksi', label: 'Transaksi', icon: Wallet },
   { key: 'arkas', label: 'ARKAS', icon: ClipboardList },
   { key: 'bku', label: 'BKU', icon: BookOpen },
+  { key: 'aset', label: 'Aset', icon: Package },
 ]
 
 const NAMA_BULAN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']
@@ -52,7 +54,7 @@ export default function Keuangan() {
   const { profil } = useAuth()
   const sekolahId = profil?.sekolah_id
 
-  const [menu, setMenu] = useState('transaksi') // 'transaksi' | 'arkas' | 'bku'
+  const [menu, setMenu] = useState('transaksi') // 'transaksi' | 'arkas' | 'bku' | 'aset'
   const [bulan, setBulan] = useState(now.getMonth() + 1)
   const [tahun, setTahun] = useState(now.getFullYear())
 
@@ -125,6 +127,7 @@ export default function Keuangan() {
     setLoadingBku(false)
   }
 
+  // Tab Aset memuat datanya sendiri (lihat AsetSekolah.jsx), jadi tidak ada loader di sini
   useEffect(() => {
     if (menu === 'transaksi') loadData()
     if (menu === 'arkas') loadArkasData()
@@ -378,7 +381,7 @@ export default function Keuangan() {
               }}
             />
           </>
-        ) : (
+        ) : menu === 'bku' ? (
           <>
             <button
               className="btn-secondary text-red-600"
@@ -394,7 +397,7 @@ export default function Keuangan() {
             <KirimBukuPerpustakaanModal bulan={bulan} tahun={tahun} sekolahId={sekolahId} onSelesai={loadBkuData} />
             <KirimInventarisModal bulan={bulan} tahun={tahun} sekolahId={sekolahId} onSelesai={loadBkuData} />
           </>
-        )
+        ) : null /* tab Aset: tombolnya dirender sendiri oleh AsetSekolah */
       }
     >
       {/* Kelola jadwal LPJ — banner pengingatnya sudah tampil global dari Layout,
@@ -402,12 +405,12 @@ export default function Keuangan() {
       <LpjReminder tampilBanner={false} />
 
       {/* Menu tab */}
-      <div className="flex gap-1 mb-4 border-b border-ink-950/10">
+      <div className="flex gap-1 mb-4 border-b border-ink-950/10 overflow-x-auto">
         {MENU_TABS.map(({ key, label, icon: Icon }) => (
           <button
             key={key}
             onClick={() => setMenu(key)}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
               menu === key
                 ? 'border-brass-500 text-brass-600'
                 : 'border-transparent text-ink-700/60 hover:text-ink-950'
@@ -419,18 +422,21 @@ export default function Keuangan() {
         ))}
       </div>
 
-      <div className="card p-4 mb-4 flex flex-wrap gap-3 items-end">
-        <div>
-          <label className="label-field">Bulan</label>
-          <select className="input-field" value={bulan} onChange={(e) => setBulan(Number(e.target.value))}>
-            {NAMA_BULAN.map((n, i) => <option key={n} value={i + 1}>{n}</option>)}
-          </select>
+      {/* Filter Bulan/Tahun — tab Aset punya filter Tahun & Sumber Dana sendiri */}
+      {menu !== 'aset' && (
+        <div className="card p-4 mb-4 flex flex-wrap gap-3 items-end">
+          <div>
+            <label className="label-field">Bulan</label>
+            <select className="input-field" value={bulan} onChange={(e) => setBulan(Number(e.target.value))}>
+              {NAMA_BULAN.map((n, i) => <option key={n} value={i + 1}>{n}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label-field">Tahun</label>
+            <input type="number" className="input-field w-28" value={tahun} onChange={(e) => setTahun(Number(e.target.value))} />
+          </div>
         </div>
-        <div>
-          <label className="label-field">Tahun</label>
-          <input type="number" className="input-field w-28" value={tahun} onChange={(e) => setTahun(Number(e.target.value))} />
-        </div>
-      </div>
+      )}
 
       {/* ===== TAB: TRANSAKSI ===== */}
       {menu === 'transaksi' && (
@@ -653,6 +659,9 @@ export default function Keuangan() {
           </div>
         </>
       )}
+
+      {/* ===== TAB: ASET (ditarik langsung dari BKU) ===== */}
+      {menu === 'aset' && <AsetSekolah tersemat />}
 
       {/* Modal edit Jumlah Barang (tab BKU) */}
       {editBku && (
