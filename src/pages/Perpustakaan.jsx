@@ -22,7 +22,7 @@ const emptyBukuForm = {
 // Daftar ini HARUS sama dengan DAFTAR_BUKU di LaporanSemester.jsx.
 const MAPEL_BUKU = [
   'PPKn', 'Pendidikan Agama', 'Bhs. Indonesia', 'IPA', 'IPS',
-  'Bhs. Inggris', 'Matematika', 'SBK', 'Mulok', 'Penjaskes',
+  'Bhs. Inggris', 'Matematika', 'SBK', 'Mulok', 'Penjaskes','IPAS',
 ]
 
 const kurikulumLabel = { tematik: 'K13 (Tematik)', kumer: 'Kumer' }
