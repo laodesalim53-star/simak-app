@@ -41,6 +41,51 @@ function tebakSatuan(uraian) {
   return /buku|kelas|matematika|ipas|bahasa|pendidikan|bs\s/i.test(uraian || '') ? 'Buku' : 'Buah'
 }
 
+// ---- Riwayat pengetikan (saran isian) ----
+const KOLOM_RIWAYAT = ['merek', 'no_tgl_ba', 'rekanan', 'lokasi', 'satuan', 'keterangan']
+const SATUAN_UMUM = ['Buku', 'Buah', 'Unit', 'Set', 'Paket', 'Lembar', 'Pasang', 'Rim']
+const BAWAAN_KET = /^BOSP Tahap \d \d{4}$/
+
+function bacaRiwayat(sekolahId) {
+  try {
+    return JSON.parse(localStorage.getItem(`aset_riwayat_${sekolahId}`) || '{}') || {}
+  } catch { return {} }
+}
+
+// Catat nilai yang baru disimpan: yang terbaru di depan, tanpa dobel (huruf besar/kecil diabaikan), maks 30
+function catatRiwayat(sekolahId, daftarPayload) {
+  const r = bacaRiwayat(sekolahId)
+  for (const p of daftarPayload) {
+    for (const k of KOLOM_RIWAYAT) {
+      const v = (p[k] || '').toString().trim()
+      if (!v) continue
+      if (k === 'keterangan' && BAWAAN_KET.test(v)) continue // bawaan otomatis, bukan ketikan
+      const lama = (r[k] || []).filter((x) => x.toLowerCase() !== v.toLowerCase())
+      r[k] = [v, ...lama].slice(0, 30)
+    }
+  }
+  try { localStorage.setItem(`aset_riwayat_${sekolahId}`, JSON.stringify(r)) } catch { /* abaikan */ }
+}
+
+// Gabungan: riwayat di perangkat ini + nilai yang sudah tersimpan di database (milik sekolah)
+function bangunSaran(sekolahId, info) {
+  const r = bacaRiwayat(sekolahId)
+  const dariDb = Object.values(info)
+  const hasil = {}
+  for (const k of KOLOM_RIWAYAT) {
+    const gabung = [...(r[k] || []), ...dariDb.map((o) => o[k]).filter(Boolean)]
+    if (k === 'satuan') gabung.push(...SATUAN_UMUM)
+    const lihat = new Set()
+    hasil[k] = gabung.filter((v) => {
+      const kunci = String(v).toLowerCase()
+      if (!String(v).trim() || lihat.has(kunci) || (k === 'keterangan' && BAWAAN_KET.test(v))) return false
+      lihat.add(kunci)
+      return true
+    })
+  }
+  return hasil
+}
+
 function ambil(obj, kunci) {
   if (!obj) return ''
   for (const k of kunci) if (obj[k]) return String(obj[k])
@@ -87,6 +132,7 @@ export default function AsetSekolah({ tersemat = false }) {
   const [edit, setEdit] = useState(null)
   const [bulk, setBulk] = useState(false)
   const [showCetak, setShowCetak] = useState(false)
+  const [verRiwayat, setVerRiwayat] = useState(0)
 
   async function muat() {
     if (!sekolahId) return
@@ -177,6 +223,9 @@ export default function AsetSekolah({ tersemat = false }) {
     })
   }, [semuaAset, mode, cari, tampilSembunyi])
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const saran = useMemo(() => bangunSaran(sekolahId, info), [sekolahId, info, verRiwayat])
+
   const untukCetak = useMemo(() => terlihat.filter((a) => !a.disembunyikan), [terlihat])
   const totalNilai = untukCetak.reduce((s, a) => s + a.nilai, 0)
   const totalUnit = untukCetak.reduce((s, a) => s + a.jumlah, 0)
@@ -214,6 +263,8 @@ export default function AsetSekolah({ tersemat = false }) {
       alert('Gagal menyimpan: ' + err.message)
       return false
     }
+    catatRiwayat(sekolahId, daftar)
+    setVerRiwayat((n) => n + 1)
     await muat()
     return true
   }
@@ -446,6 +497,7 @@ export default function AsetSekolah({ tersemat = false }) {
       {edit && (
         <ModalEdit
           a={edit}
+          saran={saran}
           onClose={() => setEdit(null)}
           onKembali={() => kembalikanKeBku(edit)}
           onSimpan={async (nilai) => {
@@ -458,6 +510,7 @@ export default function AsetSekolah({ tersemat = false }) {
       {bulk && (
         <ModalMassal
           jumlah={untukCetak.length}
+          saran={saran}
           onClose={() => setBulk(false)}
           onTerapkan={async ({ rekanan, lokasi, no_tgl_ba, timpa }) => {
             const daftar = untukCetak.map((a) => {
@@ -516,7 +569,20 @@ function Kartu({ ikon, warna, label, nilai }) {
   )
 }
 
-function ModalEdit({ a, onClose, onSimpan, onKembali }) {
+// Kolom isian dengan daftar saran dari riwayat pengetikan (muncul saat mengetik / klik dua kali / panah bawah)
+function InputSaran({ nama, saran, ...props }) {
+  const id = `dl-aset-${nama}`
+  return (
+    <>
+      <input className="input-field" autoComplete="off" list={id} {...props} />
+      <datalist id={id}>
+        {(saran?.[nama] || []).map((v) => <option key={v} value={v} />)}
+      </datalist>
+    </>
+  )
+}
+
+function ModalEdit({ a, saran, onClose, onSimpan, onKembali }) {
   const [f, setF] = useState({
     merek: a.merek, no_tgl_ba: a.noBA, rekanan: a.rekanan, lokasi: a.lokasi,
     jumlah: a.jumlahKosong ? '' : String(a.jumlah), satuan: a.satuan, status_bm: a.status, keterangan: a.ket,
@@ -562,25 +628,25 @@ function ModalEdit({ a, onClose, onSimpan, onKembali }) {
             </div>
             <div>
               <label className="label-field">Satuan</label>
-              <input className="input-field" value={f.satuan} onChange={set('satuan')} placeholder="Buku / Buah / Unit" />
+              <InputSaran nama="satuan" saran={saran} value={f.satuan} onChange={set('satuan')} placeholder="Buku / Buah / Unit" />
             </div>
           </div>
           <div>
             <label className="label-field">Merek / Type / Ukuran</label>
-            <input className="input-field" value={f.merek} onChange={set('merek')} />
+            <InputSaran nama="merek" saran={saran} value={f.merek} onChange={set('merek')} />
           </div>
           <div>
             <label className="label-field">No & Tgl Berita Acara Pembayaran</label>
-            <input className="input-field" value={f.no_tgl_ba} onChange={set('no_tgl_ba')} />
+            <InputSaran nama="no_tgl_ba" saran={saran} value={f.no_tgl_ba} onChange={set('no_tgl_ba')} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label-field">Nama Perusahaan / Rekanan</label>
-              <input className="input-field" value={f.rekanan} onChange={set('rekanan')} />
+              <InputSaran nama="rekanan" saran={saran} value={f.rekanan} onChange={set('rekanan')} />
             </div>
             <div>
               <label className="label-field">Lokasi</label>
-              <input className="input-field" value={f.lokasi} onChange={set('lokasi')} />
+              <InputSaran nama="lokasi" saran={saran} value={f.lokasi} onChange={set('lokasi')} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -592,7 +658,7 @@ function ModalEdit({ a, onClose, onSimpan, onKembali }) {
             </div>
             <div>
               <label className="label-field">Keterangan</label>
-              <input className="input-field" value={f.keterangan} onChange={set('keterangan')} />
+              <InputSaran nama="keterangan" saran={saran} value={f.keterangan} onChange={set('keterangan')} />
             </div>
           </div>
           <div className="flex justify-between gap-3 pt-2">
@@ -614,7 +680,7 @@ function ModalEdit({ a, onClose, onSimpan, onKembali }) {
   )
 }
 
-function ModalMassal({ jumlah, onClose, onTerapkan }) {
+function ModalMassal({ jumlah, saran, onClose, onTerapkan }) {
   const [f, setF] = useState({ rekanan: '', lokasi: '', no_tgl_ba: '', timpa: false })
   const [saving, setSaving] = useState(false)
   return (
@@ -630,15 +696,15 @@ function ModalMassal({ jumlah, onClose, onTerapkan }) {
         <div className="space-y-3">
           <div>
             <label className="label-field">Nama Perusahaan / Rekanan</label>
-            <input className="input-field" value={f.rekanan} onChange={(e) => setF({ ...f, rekanan: e.target.value })} />
+            <InputSaran nama="rekanan" saran={saran} value={f.rekanan} onChange={(e) => setF({ ...f, rekanan: e.target.value })} />
           </div>
           <div>
             <label className="label-field">Lokasi</label>
-            <input className="input-field" value={f.lokasi} onChange={(e) => setF({ ...f, lokasi: e.target.value })} />
+            <InputSaran nama="lokasi" saran={saran} value={f.lokasi} onChange={(e) => setF({ ...f, lokasi: e.target.value })} />
           </div>
           <div>
             <label className="label-field">No & Tgl Berita Acara Pembayaran</label>
-            <input className="input-field" value={f.no_tgl_ba} onChange={(e) => setF({ ...f, no_tgl_ba: e.target.value })} />
+            <InputSaran nama="no_tgl_ba" saran={saran} value={f.no_tgl_ba} onChange={(e) => setF({ ...f, no_tgl_ba: e.target.value })} />
           </div>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={f.timpa} onChange={(e) => setF({ ...f, timpa: e.target.checked })} />
