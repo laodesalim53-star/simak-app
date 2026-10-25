@@ -36,6 +36,7 @@ const MATA_PELAJARAN = [
   'Bhs. Indonesia',
   'IPA',
   'IPS',
+  'IPAS',
   'Matematika',
   'SBK',
   'Mulok',
