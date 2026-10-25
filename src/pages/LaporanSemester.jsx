@@ -150,6 +150,7 @@ const DAFTAR_BUKU = [
   'Bhs. Indonesia',
   'IPA',
   'IPS',
+  'IPAS',
   'Bhs. Inggris',
   'Matematika',
   'SBK',
