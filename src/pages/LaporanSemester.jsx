@@ -25,6 +25,12 @@ import { supabase } from '../lib/supabaseClient'
 //   - Laporan SUDAH tersimpan: dimuat apa adanya, tidak ditimpa.
 //   - Kolom "Rusak Sedang" (Gedung), "Keterangan", dan Tabel 1 tetap manual.
 //
+// BANTUAN PEMERINTAH (Tabel Buku):
+//   Buku dengan kategori berawalan "Buku Pengayaan GLN" (kiriman pemerintah)
+//   dan sudah punya mapel + kurikulum dihitung seperti buku lain, lalu kolom
+//   "Keterangan" baris tersebut otomatis berisi "N eks bantuan pemerintah".
+//   Catatan manual yang sudah diketik di Keterangan tidak ditimpa.
+//
 // Butuh: buku_laporan_semester.sql (kolom mapel, kurikulum, jumlah_rusak_*
 // pada tabel buku) dan Perpustakaan.jsx yang sudah diperbarui.
 
@@ -171,12 +177,22 @@ function dataBukuKosong() {
   return awal
 }
 
+// Buku kiriman pemerintah = kategori berawalan "Buku Pengayaan GLN"
+// (contoh: "Buku Pengayaan GLN (B2)"). Pakai awalan yang sama untuk
+// bantuan pemerintah di tahun-tahun berikutnya.
+const POLA_BANTUAN_PEMERINTAH = /^buku pengayaan gln/i
+const POLA_KETERANGAN_BANTUAN = /eks bantuan pemerintah/i
+
 // Hitung dari baris tabel `buku`. Hanya buku yang sudah diisi mata pelajaran
 // DAN kurikulumnya yang dihitung; sisanya dilaporkan lewat `tidakDihitung`.
+// Buku bantuan pemerintah juga dihitung per baris mapel, lalu kolom
+// "Keterangan" diisi otomatis (tanpa menimpa catatan manual).
 function terapkanBuku(dasar, rows) {
   const total = {}
+  const bantuan = {}
   DAFTAR_BUKU.forEach((b) => {
     total[b] = { Tematik: 0, Kumer: 0, Baik: 0, 'Rusak Berat': 0, 'Rusak Ringan': 0 }
+    bantuan[b] = 0
   })
   let tidakDihitung = 0
   rows.forEach((r) => {
@@ -192,11 +208,20 @@ function terapkanBuku(dasar, rows) {
     t['Rusak Berat'] += rb
     t['Rusak Ringan'] += rr
     t.Baik += Math.max(jumlah - rb - rr, 0)
+    if (POLA_BANTUAN_PEMERINTAH.test(r.kategori || '')) bantuan[r.mapel] += jumlah
   })
   const hasil = {}
   DAFTAR_BUKU.forEach((b) => {
     hasil[b] = { ...dasar[b] }
     BUKU_KOLOM.forEach((k) => { hasil[b][k] = teksAngka(total[b][k]) })
+    // Keterangan otomatis: hanya kalau masih kosong atau sebelumnya juga
+    // hasil otomatis. Catatan manual tidak ditimpa.
+    const lama = hasil[b].keterangan || ''
+    if (bantuan[b] > 0 && (!lama || POLA_KETERANGAN_BANTUAN.test(lama))) {
+      hasil[b].keterangan = `${bantuan[b]} eks bantuan pemerintah`
+    } else if (bantuan[b] === 0 && POLA_KETERANGAN_BANTUAN.test(lama)) {
+      hasil[b].keterangan = ''
+    }
   })
   return { data: hasil, tidakDihitung }
 }
@@ -301,7 +326,8 @@ export default function LaporanSemester() {
   async function ambilBuku() {
     const { data, error } = await supabase
       .from('buku')
-      .select('mapel, kurikulum, jumlah_total, jumlah_rusak_berat, jumlah_rusak_ringan')
+      .select('mapel, kurikulum, kategori, jumlah_total, jumlah_rusak_berat, jumlah_rusak_ringan')
+      .eq('sekolah_id', sekolahId)
     if (error) {
       console.error('Gagal mengambil data buku:', error)
       setErrorSimpan(
@@ -321,8 +347,12 @@ export default function LaporanSemester() {
   function infoBuku(rows, tidakDihitung) {
     if (rows.length === 0) return 'Data Perpustakaan masih kosong, tabel Buku tidak terisi.'
     const hitung = rows.length - tidakDihitung
+    const bantuan = rows.filter((r) => POLA_BANTUAN_PEMERINTAH.test(r.kategori || '')).length
     return (
       `Tabel Buku terisi dari ${hitung} judul Perpustakaan.` +
+      (bantuan > 0
+        ? ` Buku bantuan pemerintah (${bantuan} judul) ditandai otomatis di kolom Keterangan.`
+        : '') +
       (tidakDihitung > 0
         ? ` ${tidakDihitung} judul tidak dihitung karena mata pelajaran/kurikulumnya belum diisi (wajar untuk buku non-pelajaran).`
         : '')
@@ -367,7 +397,7 @@ export default function LaporanSemester() {
 
   // Tombol manual: perbarui Tabel 3 dari Perpustakaan
   async function tarikDariPerpustakaan() {
-    if (!window.confirm('Isi ulang Tabel Buku dari data Perpustakaan? Angka di kolom Tematik, Kumer, Baik, Rusak Berat, dan Rusak Ringan akan diganti. "Keterangan" tidak berubah.')) return
+    if (!window.confirm('Isi ulang Tabel Buku dari data Perpustakaan? Angka di kolom Tematik, Kumer, Baik, Rusak Berat, dan Rusak Ringan akan diganti. "Keterangan" hanya diisi otomatis untuk buku bantuan pemerintah; catatan manual Anda tidak ditimpa.')) return
     setMemuatData(true)
     setErrorSimpan('')
     const rows = await ambilBuku()
