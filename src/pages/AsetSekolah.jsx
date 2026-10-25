@@ -47,6 +47,7 @@ const SATUAN_UMUM = ['Buku', 'Buah', 'Unit', 'Set', 'Paket', 'Lembar', 'Pasang',
 const BAWAAN_KET = /^BOSP Tahap \d \d{4}$/
 
 function bacaRiwayat(sekolahId) {
+  if (!sekolahId) return {} // tanpa id sekolah: jangan pernah memakai kunci bersama
   try {
     return JSON.parse(localStorage.getItem(`aset_riwayat_${sekolahId}`) || '{}') || {}
   } catch { return {} }
@@ -54,6 +55,7 @@ function bacaRiwayat(sekolahId) {
 
 // Catat nilai yang baru disimpan: yang terbaru di depan, tanpa dobel (huruf besar/kecil diabaikan), maks 30
 function catatRiwayat(sekolahId, daftarPayload) {
+  if (!sekolahId) return
   const r = bacaRiwayat(sekolahId)
   for (const p of daftarPayload) {
     for (const k of KOLOM_RIWAYAT) {
@@ -92,24 +94,38 @@ function ambil(obj, kunci) {
   return ''
 }
 
-async function ambilSemuaBku(tahun, dari, sampai) {
-  const semua = []
-  const langkah = 1000
-  for (let mulai = 0; ; mulai += langkah) {
-    const { data, error } = await supabase
-      .from('bku_kas')
-      .select('id, tanggal, bulan, no_bukti, uraian, kode_kegiatan, kode_rekening, jumlah_barang, penerimaan, pengeluaran')
-      .eq('tahun', tahun)
-      .gte('bulan', dari)
-      .lte('bulan', sampai)
-      .order('tanggal', { ascending: true })
-      .order('id', { ascending: true })
-      .range(mulai, mulai + langkah - 1)
-    if (error) throw error
-    semua.push(...(data || []))
-    if (!data || data.length < langkah) break
+// Tarik BKU dengan pagar ganda: filter sekolah_id di sisi aplikasi + RLS di database.
+// Kalau tabel bku_kas belum punya kolom sekolah_id, jatuh ke mode "RLS saja" dan diberi tanda.
+async function ambilSemuaBku(tahun, dari, sampai, sekolahId) {
+  const tarik = async (pakaiFilter) => {
+    const semua = []
+    const langkah = 1000
+    for (let mulai = 0; ; mulai += langkah) {
+      let q = supabase
+        .from('bku_kas')
+        .select('id, tanggal, bulan, no_bukti, uraian, kode_kegiatan, kode_rekening, jumlah_barang, penerimaan, pengeluaran')
+        .eq('tahun', tahun)
+        .gte('bulan', dari)
+        .lte('bulan', sampai)
+      if (pakaiFilter) q = q.eq('sekolah_id', sekolahId)
+      const { data, error } = await q
+        .order('tanggal', { ascending: true })
+        .order('id', { ascending: true })
+        .range(mulai, mulai + langkah - 1)
+      if (error) throw error
+      semua.push(...(data || []))
+      if (!data || data.length < langkah) break
+    }
+    return semua
   }
-  return semua
+  try {
+    return { rows: await tarik(true), terfilter: true }
+  } catch (err) {
+    if (err?.code === '42703' || /sekolah_id/i.test(err?.message || '')) {
+      return { rows: await tarik(false), terfilter: false }
+    }
+    throw err
+  }
 }
 
 export default function AsetSekolah({ tersemat = false }) {
@@ -133,20 +149,26 @@ export default function AsetSekolah({ tersemat = false }) {
   const [bulk, setBulk] = useState(false)
   const [showCetak, setShowCetak] = useState(false)
   const [verRiwayat, setVerRiwayat] = useState(0)
+  const [bkuTerfilter, setBkuTerfilter] = useState(true)
 
   async function muat() {
     if (!sekolahId) return
     setLoading(true)
     setError('')
+    // Kosongkan dulu: data sekolah sebelumnya (mis. ganti akun tanpa muat ulang) tidak boleh tersisa di layar
+    setBkuRows([])
+    setInfo({})
+    setProfSekolah(null)
     try {
       const { dari, sampai } = TAHAP[tahap]
-      const [rows, infoRes, profRes] = await Promise.all([
-        ambilSemuaBku(tahun, dari, sampai),
+      const [hasilBku, infoRes, profRes] = await Promise.all([
+        ambilSemuaBku(tahun, dari, sampai, sekolahId),
         supabase.from('aset_sekolah_info').select('*').eq('sekolah_id', sekolahId).eq('tahun', tahun),
         supabase.from('profil_sekolah').select('*').eq('sekolah_id', sekolahId).maybeSingle(),
       ])
       if (infoRes.error) throw infoRes.error
-      setBkuRows(rows)
+      setBkuRows(hasilBku.rows)
+      setBkuTerfilter(hasilBku.terfilter)
       setInfo(Object.fromEntries((infoRes.data || []).map((r) => [r.kunci, r])))
       setProfSekolah(profRes.data || null)
     } catch (err) {
@@ -326,6 +348,7 @@ export default function AsetSekolah({ tersemat = false }) {
       bendNama: ambil(profSekolah, ['nama_bendahara', 'bendahara']),
       bendNip: ambil(profSekolah, ['nip_bendahara']),
     }
+    if (!sekolahId) return dasar
     try {
       const s = JSON.parse(localStorage.getItem(`aset_ttd_${sekolahId}`) || 'null')
       return { ...dasar, ...(s || {}) }
@@ -399,6 +422,16 @@ export default function AsetSekolah({ tersemat = false }) {
           <span>
             Gagal memuat: {error}
             {/aset_sekolah_info/.test(error) && ' — jalankan aset_sekolah.sql di SQL Editor Supabase dulu.'}
+          </span>
+        </div>
+      )}
+
+      {!loading && !bkuTerfilter && (
+        <div className="flex items-start gap-2 text-sm text-amber-700 bg-amber-50 rounded-lg p-3 mb-3">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+          <span>
+            Tabel bku_kas belum punya kolom sekolah_id, jadi pemisahan antar sekolah hanya mengandalkan RLS di
+            database. Jalankan audit_isolasi_aset.sql untuk memastikan RLS-nya benar.
           </span>
         </div>
       )}
@@ -732,7 +765,9 @@ function CetakAset({ sekolahId, namaSekolah, judul, rows, total, awal, onClose }
   const ubah = (k) => (e) => {
     const baru = { ...ttd, [k]: e.target.value }
     setTtd(baru)
-    try { localStorage.setItem(`aset_ttd_${sekolahId}`, JSON.stringify(baru)) } catch { /* abaikan */ }
+    if (sekolahId) {
+      try { localStorage.setItem(`aset_ttd_${sekolahId}`, JSON.stringify(baru)) } catch { /* abaikan */ }
+    }
   }
   const sel = { border: '1px solid #000', padding: '3px 5px', fontSize: '10px', verticalAlign: 'top' }
 
