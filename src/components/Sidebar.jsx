@@ -119,8 +119,8 @@ function getGroupsAdmin(
         { to: '/presensi', label: 'Presensi', icon: ClipboardCheck },
         // Upgrade Fitur: status paket (free/standar/premium) melekat ke akun
         // masing-masing, jadi menu ini tampil untuk semua role, bukan cuma admin.
-        { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
         { to: '/link-layanan', label: 'Link Layanan', icon: Link2 },
+         { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
         // Tab "Admin Pusat" sekarang jadi bagian dari halaman /pesan (lihat
         // Pesan.jsx) — badge menggabungkan unread pesan biasa + admin pusat.
         // GABUNGAN: "Live Chat" (percakapan dengan pengunjung publik di Beranda)
@@ -157,26 +157,23 @@ function getGroupsAdmin(
       ],
     },
     {
-      label: 'Akademik',
-      links: [
-        { to: '/siswa', label: 'Data Siswa', icon: Users },
-        { to: '/guru', label: 'Data Guru', icon: GraduationCap },
-        { to: '/nilai-asesmen', label: 'Nilai Asesmen', icon: FileSpreadsheet },
-        // PERBAIKAN: baris "Rapor Siswa" (/rapor) dihapus dari sini — sudah
-        // bisa diakses lewat kartu "Rapor" di halaman Administrasi Kelas
-        // (menu di atas), jadi baris ini dulu bikin dobel untuk admin.
-        { to: '/portofolio-siswa', label: 'Portofolio Siswa', icon: FolderHeart },
-        // PINDAHAN: "Catatan Siswa" dan "Jurnal Mengajar" sekarang jadi kartu
-        // di halaman Administrasi Kelas (menu di atas).
-        { to: '/sertifikat', label: 'Sertifikat & Penghargaan', icon: Award },
-        { to: '/buat-ujian', label: 'Buat Ujian', icon: FilePlus },
-        { to: '/bank-soal', label: 'Bank Soal', icon: Database },
-        { to: '/simulasi-tka', label: 'Simulasi TKA', icon: GraduationCap },
-        { to: '/materi-kelas', label: 'Materi Pembelajaran', icon: BookMarked },
-        { to: '/buat-kuis-seru', label: 'Kuis Seru (Kls 1-3)', icon: Gamepad2 },
-        { to: '/rapor-kumer', label: 'Raport Kumer', icon: FileBadge },
-      ],
-    },
+label: 'Akademik',
+links: [
+  { to: '/siswa', label: 'Data Siswa', icon: Users },
+  { to: '/guru', label: 'Data Guru', icon: GraduationCap },
+  { to: '/nilai-asesmen', label: 'Nilai Asesmen', icon: FileSpreadsheet },
+  // "Rapor Siswa" sudah ada di kartu Administrasi Kelas
+  // PINDAHAN: "Catatan Siswa", "Jurnal Mengajar", dan "Portofolio Siswa"
+  // sekarang jadi kartu di halaman Administrasi Kelas.
+  { to: '/sertifikat', label: 'Sertifikat & Penghargaan', icon: Award },
+  { to: '/buat-ujian', label: 'Buat Ujian', icon: FilePlus },
+  { to: '/bank-soal', label: 'Bank Soal', icon: Database },
+  { to: '/simulasi-tka', label: 'Simulasi TKA', icon: GraduationCap },
+  { to: '/materi-kelas', label: 'Materi Pembelajaran', icon: BookMarked },
+  { to: '/buat-kuis-seru', label: 'Kuis Seru (Kls 1-3)', icon: Gamepad2 },
+  { to: '/rapor-kumer', label: 'Raport Kumer', icon: FileBadge },
+  ],
+  },
     {
       label: 'Keuangan & Aset',
       links: [
