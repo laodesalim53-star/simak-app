@@ -21,6 +21,10 @@ import {
  * (lihat aset_sekolah.sql), dikunci pada isi barisnya — bukan id — sehingga tetap menempel
  * walaupun BKU diunggah ulang (Input Data Massal BKU menghapus lalu menyisipkan ulang).
  *
+ * TANGGAL BKU: kolom "No & Tgl Berita Acara" yang belum diisi manual otomatis menampilkan
+ * tanggal transaksi dari BKU (dd/mm/yyyy). Nilai otomatis ini TIDAK disimpan ke database;
+ * begitu diisi manual, isian manual yang dipakai. Kosongkan isian untuk kembali ke tanggal BKU.
+ *
  * BARIS MANUAL: baris yang ditambah lewat tombol "Tambah Baris" juga disimpan di
  * aset_sekolah_info dengan manual = true (plus kolom jenis, tanggal, nilai). Kuncinya
  * "manual|<uuid>", jadi tidak terpengaruh unggah ulang BKU. SQL yang diperlukan:
@@ -46,6 +50,17 @@ const BUKAN_BELANJA = /(terima|setor)\s+(ppn|pph|pajak)|tarik\s+tunai|pergeseran
 const nf = (n) => Number(n || 0).toLocaleString('id-ID')
 const rupiah = (n) => 'Rp ' + nf(n)
 
+// Tanggal hari ini menurut zona waktu perangkat (bukan UTC), format YYYY-MM-DD
+function tanggalHariIni() {
+  return new Date().toLocaleDateString('sv-SE')
+}
+
+// 'YYYY-MM-DD' (atau timestamp ISO) -> 'dd/mm/yyyy' tanpa Date(), jadi tidak bergeser zona waktu
+function fmtTanggal(t) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(t || ''))
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : ''
+}
+
 function tahapDariBulan(b) { return b <= 6 ? 1 : 2 }
 
 function tebakSatuan(uraian) {
@@ -62,13 +77,14 @@ function barisBaru() {
     manual: true,
     baru: true,
     bkuId: null,
-    tanggal: new Date().toISOString().slice(0, 10),
+    tanggal: tanggalHariIni(),
     noBukti: '',
     kodeRek: '',
     modal: true,
     jenis: '',
     merek: '',
     noBA: '',
+    noBAIsi: '',
     rekanan: '',
     lokasi: '',
     jumlah: 1,
@@ -318,7 +334,9 @@ export default function AsetSekolah({ tersemat = false }) {
         modal: (r.kode_rekening || '').startsWith('5.2'),
         jenis: uraian,
         merek: o.merek || '',
-        noBA: o.no_tgl_ba || '',
+        // Isian manual dipakai dulu; kalau kosong, tarik tanggal dari BKU
+        noBA: o.no_tgl_ba || fmtTanggal(r.tanggal),
+        noBAIsi: o.no_tgl_ba || '', // hanya yang benar-benar diketik (untuk disimpan/ditampilkan di form)
         rekanan: o.rekanan || '',
         lokasi: o.lokasi || '',
         jumlah: qty,
@@ -355,7 +373,8 @@ export default function AsetSekolah({ tersemat = false }) {
         modal: true,
         jenis: o.jenis || '',
         merek: o.merek || '',
-        noBA: o.no_tgl_ba || '',
+        noBA: o.no_tgl_ba || fmtTanggal(o.tanggal),
+        noBAIsi: o.no_tgl_ba || '',
         rekanan: o.rekanan || '',
         lokasi: o.lokasi || '',
         jumlah: qty,
@@ -402,7 +421,8 @@ export default function AsetSekolah({ tersemat = false }) {
       kunci: a.kunci,
       tahun,
       merek: a.merek || null,
-      no_tgl_ba: a.noBA || null,
+      // Hanya isian manual yang disimpan; tanggal otomatis dari BKU tidak ikut tersimpan
+      no_tgl_ba: a.noBAIsi || null,
       rekanan: a.rekanan || null,
       lokasi: a.lokasi || null,
       jumlah: a.jumlahKosong ? null : a.jumlah,
@@ -643,7 +663,9 @@ export default function AsetSekolah({ tersemat = false }) {
                   </div>
                 </td>
                 <td>{a.merek || '-'}</td>
-                <td>{a.noBA || '-'}</td>
+                <td className="whitespace-nowrap" title={a.noBAIsi ? undefined : 'Otomatis dari tanggal BKU'}>
+                  {a.noBA || '-'}
+                </td>
                 <td>{a.rekanan || '-'}</td>
                 <td>{a.lokasi || '-'}</td>
                 <td className={a.jumlahKosong ? 'text-amber-600' : ''}>{nf(a.jumlah)}</td>
@@ -703,7 +725,8 @@ export default function AsetSekolah({ tersemat = false }) {
               const ubah = {}
               if (rekanan && (timpa || !a.rekanan)) ubah.rekanan = rekanan
               if (lokasi && (timpa || !a.lokasi)) ubah.lokasi = lokasi
-              if (no_tgl_ba && (timpa || !a.noBA)) ubah.no_tgl_ba = no_tgl_ba
+              // noBAIsi: tanggal otomatis dari BKU dianggap "kosong" sehingga boleh diganti
+              if (no_tgl_ba && (timpa || !a.noBAIsi)) ubah.no_tgl_ba = no_tgl_ba
               return payloadDari(a, ubah)
             })
             const ok = await simpanBanyak(daftar)
@@ -774,7 +797,7 @@ function ModalEdit({ a, saran, onClose, onSimpan, onKembali }) {
     jenis: a.jenis || '',
     tanggal: a.tanggal || '',
     nilai: a.manual && a.nilai ? String(a.nilai) : '',
-    merek: a.merek, no_tgl_ba: a.noBA, rekanan: a.rekanan, lokasi: a.lokasi,
+    merek: a.merek, no_tgl_ba: a.noBAIsi || '', rekanan: a.rekanan, lokasi: a.lokasi,
     jumlah: a.jumlahKosong ? '' : String(a.jumlah), satuan: a.satuan, status_bm: a.status, keterangan: a.ket,
   })
   const [saving, setSaving] = useState(false)
@@ -858,7 +881,13 @@ function ModalEdit({ a, saran, onClose, onSimpan, onKembali }) {
           </div>
           <div>
             <label className="label-field">No & Tgl Berita Acara Pembayaran</label>
-            <InputSaran nama="no_tgl_ba" saran={saran} value={f.no_tgl_ba} onChange={set('no_tgl_ba')} />
+            <InputSaran
+              nama="no_tgl_ba"
+              saran={saran}
+              value={f.no_tgl_ba}
+              onChange={set('no_tgl_ba')}
+              placeholder={a.noBA ? `Kosong = ${a.noBA} (tanggal BKU)` : ''}
+            />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
