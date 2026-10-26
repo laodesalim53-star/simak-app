@@ -7,6 +7,8 @@ import StoryBar from '../components/StoryBar'
 import StoryUploader from '../components/StoryUploader'
 import PintasanKUA from '../components/PintasanKUA'
 import PengumumanAturanKepegawaian from '../components/PengumumanAturanKepegawaian'
+// BARU: kisi menu layanan (isi sama dengan Sidebar.jsx) untuk DashboardSekolah.
+import MenuLayanan from '../components/MenuLayanan'
 import { Users, GraduationCap, DoorOpen, Megaphone, LayoutDashboard, ClipboardCheck, FileClock, Briefcase, UserCheck, AlertTriangle, Link2, ArrowRight, Gavel, FileText } from 'lucide-react'
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
@@ -414,14 +416,14 @@ function DashboardSekolah({ sekolahId }) {
 
         {loadError && <DataErrorBanner />}
 
-<StoryBar key={storyRefreshKey} />
-<StoryUploader onPosted={() => setStoryRefreshKey((k) => k + 1)} />
+        <StoryBar key={storyRefreshKey} />
+        <StoryUploader onPosted={() => setStoryRefreshKey((k) => k + 1)} />
 
-<div className="mb-6 empty:hidden">
-  <PengumumanAturanKepegawaian />
-</div>
+        <div className="mb-6 empty:hidden">
+          <PengumumanAturanKepegawaian />
+        </div>
 
-<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
           {cards.map(({ label, value, icon, theme, sublabel }, i) => (
             <StatCard
               key={label}
@@ -436,6 +438,9 @@ function DashboardSekolah({ sekolahId }) {
             />
           ))}
         </div>
+
+        {/* BARU: kisi menu layanan sesuai Sidebar.jsx (tab per kelompok + kotak cari) */}
+        <MenuLayanan />
 
         <PintasanLinkLayanan />
 
@@ -778,6 +783,7 @@ function DashboardKantor({ sekolahId }) {
     </Layout>
   )
 }
+
 /* ================================================================
    ==================  DASBOR PUSKESMAS  ==============================
    ================================================================ */
@@ -983,6 +989,7 @@ function DashboardPuskesmas({ sekolahId }) {
     </Layout>
   )
 }
+
 /* ================================================================
    ==================  DASBOR POLRES  =================================
    ================================================================ */
@@ -1021,7 +1028,7 @@ function DashboardPolres({ sekolahId }) {
       const [personelCount, perkaraCount, suratCount, pengumumanRecent, akunMenungguCount] =
         await Promise.all([
           supabase.from(TABEL_PERSONEL_POLRES).select('*', { count: 'exact', head: true })
-          .eq('sekolah_id', sekolahId).eq('status', 'aktif'),
+            .eq('sekolah_id', sekolahId).eq('status', 'aktif'),
           supabase.from('perkara_reskrim').select('*', { count: 'exact', head: true }),
           supabase.from('surat_reskrim').select('*', { count: 'exact', head: true }),
           supabase.from('pengumuman').select('id, judul, kategori, dibuat_pada')
