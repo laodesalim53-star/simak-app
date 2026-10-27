@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Printer, Save, Plus, Trash2, RotateCcw, FolderOpen } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
@@ -23,11 +23,11 @@ const CONTOH = {
   tglProposal: '27 Juli 2024',
   // Tanda tangan
   jabatan1: 'Ketua',
-  nama1: 'La Mono',
+  nama1: '',
   jabatan2: 'Sekretaris',
-  nama2: 'Abdul Parman, S.Pd',
+  nama2: '',
   mengetahuiJabatan: 'Kepala Dusun Pakarena',
-  mengetahuiNama: 'La Musa',
+  mengetahuiNama: '',
   tebusan: 'Gubernur Provinsi Maluku di Ambon\nSekretaris Daerah Provinsi Maluku di Ambon',
   // Proposal
   dasar:
@@ -71,34 +71,34 @@ const CONTOH = {
   skTempat: 'Pakarena',
   skTanggal: '02 April 2023',
   skJabatan: 'Kepala Dusun Pakarena',
-  skPejabat: 'La Musa',
+  skPejabat: '',
   // Susunan panitia
-  pelindung: 'La Mudi (Kepala Dusun Pakarena)\nLa Jidi',
+  pelindung: '',
   inti: [
-    { jabatan: 'Ketua', nama: 'La Mono' },
-    { jabatan: 'Sekretaris', nama: 'Abdul Parman, S.Pd' },
-    { jabatan: 'Bendahara', nama: 'La Mudi' },
+    { jabatan: 'Ketua', nama: '' },
+    { jabatan: 'Sekretaris', nama: '' },
+    { jabatan: 'Bendahara', nama: '' },
   ],
   seksi: [
     {
       nama: 'Seksi Usaha Dana',
-      ketua: 'La Hadiran',
-      anggota: 'La Tahi Tomia\nTaufan Idrus\nWa Intan\nWa Sahida\nWa Salma\nWa Juhuri\nWa Kalsum\nLa Sukrin\nWa Ana Rumbia, S.Pd',
+      ketua: '',
+      anggota: '',
     },
     {
       nama: 'Seksi Humas',
-      ketua: 'Abdullah Rumfot',
-      anggota: 'La Hamid\nBasra Umasugi\nLa Tarmin\nLa Luha\nLa Kefen\nLa Nako\nLa Amirudin\nLa Mustapa\nLa Nggili',
+      ketua: '',
+      anggota: '',
     },
     {
       nama: 'Seksi Perlengkapan',
-      ketua: 'La Joni, S.Pd',
-      anggota: 'La Hasim\nLa Sarif\nLa Murjani\nLa Hasiru\nLa Ucu\nLa Ena\nLa Harta',
+      ketua: '',
+      anggota: '',
     },
     {
       nama: 'Seksi Petukangan',
-      ketua: 'La Pia',
-      anggota: 'La Daenuru\nLa Mare\nLa Haris\nLa Ramli\nHi. La Ndoke\nLa Rasid\nMuhammad Rasid',
+      ketua: '',
+      anggota: '',
     },
   ],
 }
@@ -163,7 +163,28 @@ export default function ProposalPembangunan() {
   const [pesan, setPesan] = useState('')
   const [menyimpan, setMenyimpan] = useState(false)
 
-  const set = (k, v) => setD((p) => ({ ...p, [k]: v }))
+  // Template awal dari database (tabel proposal_template, diisi lewat SQL).
+  // Dipakai untuk sekolah yang belum punya proposal sendiri; kalau tabelnya
+  // belum ada / kosong, otomatis memakai CONTOH di atas.
+  const [templ, setTempl] = useState(null)
+  const sudahDiedit = useRef(false)
+  useEffect(() => {
+    supabase
+      .from('proposal_template')
+      .select('data')
+      .eq('jenis', 'pembangunan')
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data?.data) return
+        setTempl(data.data)
+        if (!sudahDiedit.current) setD({ ...kloning(CONTOH), ...data.data })
+      })
+  }, [])
+
+  const set = (k, v) => {
+    sudahDiedit.current = true
+    setD((p) => ({ ...p, [k]: v }))
+  }
 
   const total = useMemo(
     () => d.rab.reduce((a, s) => a + s.items.reduce((b, it) => b + (Number(it.qty) || 0) * (Number(it.harga) || 0), 0), 0),
@@ -176,6 +197,7 @@ export default function ProposalPembangunan() {
       .from('proposal_dokumen')
       .select('id, judul, updated_at')
       .eq('jenis', 'pembangunan')
+      .eq('sekolah_id', sekolahId)
       .order('updated_at', { ascending: false })
     setRiwayat(data || [])
   }
@@ -184,17 +206,18 @@ export default function ProposalPembangunan() {
   }, [sekolahId])
 
   async function simpan() {
+    if (!sekolahId) return setPesan('Sekolah belum terdeteksi. Muat ulang halaman.')
     setMenyimpan(true)
     setPesan('')
     const judul = d.panitia || 'Proposal Pembangunan'
     const payload = { jenis: 'pembangunan', judul, data: d, updated_at: new Date().toISOString() }
     let res
     if (docId) {
-      res = await supabase.from('proposal_dokumen').update(payload).eq('id', docId).select('id').single()
+      res = await supabase.from('proposal_dokumen').update(payload).eq('id', docId).eq('sekolah_id', sekolahId).select('id').single()
     } else {
       res = await supabase
         .from('proposal_dokumen')
-        .insert({ ...payload, sekolah_id: sekolahId, dibuat_oleh: session?.user?.id })
+        .insert({ ...payload, sekolah_id: sekolahId })
         .select('id')
         .single()
     }
@@ -207,15 +230,16 @@ export default function ProposalPembangunan() {
     setMenyimpan(false)
   }
   async function buka(id) {
-    const { data, error } = await supabase.from('proposal_dokumen').select('id, data').eq('id', id).single()
+    const { data, error } = await supabase.from('proposal_dokumen').select('id, data').eq('id', id).eq('sekolah_id', sekolahId).single()
     if (error) return setPesan('Gagal membuka: ' + error.message)
+    sudahDiedit.current = true
     setD({ ...kloning(CONTOH), ...data.data })
     setDocId(data.id)
     setPesan('Dokumen dibuka.')
   }
   async function hapus(id) {
     if (!window.confirm('Hapus proposal tersimpan ini?')) return
-    await supabase.from('proposal_dokumen').delete().eq('id', id)
+    await supabase.from('proposal_dokumen').delete().eq('id', id).eq('sekolah_id', sekolahId)
     if (id === docId) setDocId(null)
     muatRiwayat()
   }
@@ -239,7 +263,7 @@ export default function ProposalPembangunan() {
     setDocId(null)
   }
   function contoh() {
-    setD(kloning(CONTOH))
+    setD({ ...kloning(CONTOH), ...(templ || {}) })
     setDocId(null)
   }
 
@@ -291,7 +315,7 @@ export default function ProposalPembangunan() {
         </button>
         <h1 className="font-display text-lg font-bold text-slate-800 mr-auto ml-2">Proposal Bantuan Pembangunan / Renovasi</h1>
         <button onClick={contoh} className="px-3 py-2 rounded-lg border border-slate-300 text-sm flex items-center gap-1.5 touch-manipulation">
-          <RotateCcw size={15} /> Isi contoh
+          <RotateCcw size={15} /> Isi template awal
         </button>
         <button onClick={baru} className="px-3 py-2 rounded-lg border border-slate-300 text-sm touch-manipulation">Kosongkan</button>
         <button onClick={simpan} disabled={menyimpan} className="px-3 py-2 rounded-lg bg-slate-800 text-white text-sm flex items-center gap-1.5 disabled:opacity-60 touch-manipulation">
