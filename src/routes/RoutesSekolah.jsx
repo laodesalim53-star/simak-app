@@ -239,9 +239,14 @@ export default function RoutesSekolah() {
       <Route path="/gudang-sk/daftar-honor-panitia-ppdb" element={<ProtectedRoute adminOnly><DaftarHonorPanitiaPPDB /></ProtectedRoute>} />
 
       {/* Proposal — hub kartu + halaman tiap jenis proposal, khusus admin.
-          Setiap kartu baru: tambah import lazy di atas + satu Route di sini. */}
+          Setiap kartu baru: tambah import lazy di atas + satu Route di sini.
+          Jenis yang memakai halaman ProposalPembangunan dibedakan lewat prop `jenis`;
+          `key` wajib ada supaya isian tidak terbawa saat pindah antarjenis. */}
       <Route path="/proposal" element={<ProtectedRoute adminOnly><Proposal /></ProtectedRoute>} />
-      <Route path="/proposal/pembangunan" element={<ProtectedRoute adminOnly><ProposalPembangunan /></ProtectedRoute>} />
+      <Route path="/proposal/pembangunan" element={<ProtectedRoute adminOnly><ProposalPembangunan key="pembangunan" jenis="pembangunan" /></ProtectedRoute>} />
+      <Route path="/proposal/sarana-sekolah" element={<ProtectedRoute adminOnly><ProposalPembangunan key="sarana-sekolah" jenis="sarana-sekolah" /></ProtectedRoute>} />
+      <Route path="/proposal/rehab-kelas" element={<ProtectedRoute adminOnly><ProposalPembangunan key="rehab-kelas" jenis="rehab-kelas" /></ProtectedRoute>} />
+      <Route path="/proposal/taman" element={<ProtectedRoute adminOnly><ProposalPembangunan key="taman" jenis="taman" /></ProtectedRoute>} />
       <Route path="/proposal/kegiatan" element={<ProtectedRoute adminOnly><ProposalKegiatan /></ProtectedRoute>} />
 
       {/* Portal Ujian */}
