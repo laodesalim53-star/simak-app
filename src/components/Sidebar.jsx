@@ -120,7 +120,7 @@ function getGroupsAdmin(
         // Upgrade Fitur: status paket (free/standar/premium) melekat ke akun
         // masing-masing, jadi menu ini tampil untuk semua role, bukan cuma admin.
         { to: '/link-layanan', label: 'Link Layanan', icon: Link2 },
-         { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
+        { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
         // Tab "Admin Pusat" sekarang jadi bagian dari halaman /pesan (lihat
         // Pesan.jsx) — badge menggabungkan unread pesan biasa + admin pusat.
         // GABUNGAN: "Live Chat" (percakapan dengan pengunjung publik di Beranda)
@@ -216,6 +216,7 @@ links: [
         // Administrasi Kelas.
         { to: '/surat', label: 'Surat Masuk/Keluar', icon: Mail },
         { to: '/kelengkapan-surat-pengantar', label: 'Kelengkapan Surat Pengantar', icon: FileText },
+           { to: '/proposal', label: 'Proposal', icon: FolderHeart },
         // PERBAIKAN: Portal Ujian berada di bawah path /gudang-sk/portal-ujian,
         // sehingga NavLink "Gudang SK" ikut aktif di halaman Portal Ujian
         // (dan anak-anaknya, mis. Laporan Asesmen). `excludePrefix` membuat
