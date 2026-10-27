@@ -6,6 +6,14 @@ import { useAuth } from '../lib/AuthContext'
 
 // ───────────────────────── Data contoh (dari berkas PANITIA PEMBANGUNAN MASJID JABAL NUR)
 const CONTOH = {
+  // Kover (halaman sampul)
+  sertakanKover: true,
+  koverLabel: 'PROPOSAL',
+  koverJudul: 'PERMOHONAN BANTUAN DANA\nPEMBANGUNAN MASJID JABAL NUR\nDUSUN PAKARENA DESA KAIRATU',
+  koverDiajukan: 'Gubernur Maluku',
+  koverAlamat: '',
+  koverTahun: '2024',
+  koverLogo: '',
   // Kop & surat
   panitia: 'PANITIA PEMBANGUNAN MASJID JABAL NUR DUSUN PAKARENA',
   wilayah: 'DESA KAIRATU KECAMATAN KAIRATU KABUPATEN SERAM BAGIAN BARAT',
@@ -145,6 +153,7 @@ function dasarJenis(jenis) {
   Object.keys(b).forEach((k) => {
     if (typeof b[k] === 'string') b[k] = ''
   })
+  b.sertakanKover = true
   b.sertakanSK = true
   b.jabatan1 = 'Ketua'
   b.jabatan2 = 'Sekretaris'
@@ -227,6 +236,9 @@ export default function ProposalPembangunan({ jenis = 'pembangunan' }) {
     [d.rab]
   )
 
+  // Isi kover: kalau judul kover dikosongkan, pakai "Hal" surat, lalu judul jenis proposal.
+  const judulKover = baris(d.koverJudul).length > 0 ? baris(d.koverJudul) : [d.hal || JUDUL[jenis] || 'Proposal']
+
   // ── Simpan / muat (tabel proposal_dokumen, lihat proposal_dokumen.sql)
   async function muatRiwayat() {
     const { data } = await supabase
@@ -285,6 +297,7 @@ export default function ProposalPembangunan({ jenis = 'pembangunan' }) {
     Object.keys(kosong).forEach((k) => {
       if (typeof kosong[k] === 'string') kosong[k] = ''
     })
+    kosong.sertakanKover = true
     kosong.sertakanSK = true
     kosong.rab = [{ judul: '', items: [{ nama: '', qty: 1, satuan: '', harga: 0 }] }]
     kosong.inti = [
@@ -316,6 +329,7 @@ export default function ProposalPembangunan({ jenis = 'pembangunan' }) {
     set('rab', d.rab.map((s, x) => (x === i ? { ...s, items: s.items.filter((_, y) => y !== j) } : s)))
 
   const TABS = [
+    ['kover', 'Kover'],
     ['surat', 'Surat'],
     ['isi', 'Isi Proposal'],
     ['rab', 'Anggaran'],
@@ -333,6 +347,9 @@ export default function ProposalPembangunan({ jenis = 'pembangunan' }) {
         .kertas table.rab { width:100%; border-collapse:collapse; font-size:11pt; }
         .kertas table.rab th, .kertas table.rab td { border:1px solid #000; padding:3px 6px; vertical-align:top; }
         .kertas .r { text-align:right; white-space:nowrap; }
+        /* Kover: bingkai ganda memenuhi 1 lembar, isi dibagi atas / tengah / bawah */
+        .kertas .halaman.kover { height:297mm; padding:12mm; }
+        .kertas .kover-bingkai { height:100%; border:4px double #000; padding:14mm 12mm; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; justify-content:space-between; text-align:center; }
         @media print {
           @page { size: A4; margin: 18mm 20mm; }
           body * { visibility: hidden !important; }
@@ -340,6 +357,7 @@ export default function ProposalPembangunan({ jenis = 'pembangunan' }) {
           #area-cetak { position:absolute; left:0; top:0; width:100%; }
           .kertas .halaman { box-shadow:none; margin:0; padding:0; width:auto; min-height:0; break-after:page; page-break-after:always; }
           .kertas .halaman:last-child { break-after:auto; page-break-after:auto; }
+          .kertas .halaman.kover { height:256mm; min-height:0; padding:0; }
           .kertas tr { break-inside: avoid; }
         }
       `}</style>
@@ -379,6 +397,47 @@ export default function ProposalPembangunan({ jenis = 'pembangunan' }) {
           </div>
 
           <div className="bg-white rounded-xl border border-slate-200 p-4">
+            {tab === 'kover' && (
+              <>
+                <label className="flex items-center gap-2 text-sm mb-4">
+                  <input type="checkbox" checked={!!d.sertakanKover} onChange={(e) => set('sertakanKover', e.target.checked)} />
+                  Sertakan halaman kover di cetakan
+                </label>
+                <Teks label="Tulisan besar di kover" value={d.koverLabel} onChange={(v) => set('koverLabel', v)} hint='Kosongkan untuk memakai "PROPOSAL".' />
+                <Area
+                  label="Judul proposal"
+                  rows={4}
+                  value={d.koverJudul}
+                  onChange={(v) => set('koverJudul', v)}
+                  hint='Satu baris per baris judul. Kosongkan untuk memakai isian "Hal" dari tab Surat.'
+                />
+                <Area
+                  label="Diajukan kepada (opsional)"
+                  rows={2}
+                  value={d.koverDiajukan}
+                  onChange={(v) => set('koverDiajukan', v)}
+                  hint="Satu baris per baris. Kosongkan jika tidak ingin ditampilkan."
+                />
+                <Teks
+                  label="Alamat gambar logo (opsional)"
+                  value={d.koverLogo}
+                  onChange={(v) => set('koverLogo', v)}
+                  hint="Tempel tautan gambar (https://...). Kosongkan jika tidak memakai logo."
+                />
+                <Area
+                  label="Alamat sekretariat / kontak (opsional)"
+                  rows={2}
+                  value={d.koverAlamat}
+                  onChange={(v) => set('koverAlamat', v)}
+                  hint="Satu baris per baris, tampil di bagian bawah kover."
+                />
+                <Teks label="Tahun" value={d.koverTahun} onChange={(v) => set('koverTahun', v)} />
+                <p className="text-[11px] text-slate-400">
+                  Nama panitia dan wilayah di bagian bawah kover diambil otomatis dari tab Surat.
+                </p>
+              </>
+            )}
+
             {tab === 'surat' && (
               <>
                 <Teks label="Nama panitia / pemohon" value={d.panitia} onChange={(v) => set('panitia', v)} />
@@ -523,6 +582,48 @@ export default function ProposalPembangunan({ jenis = 'pembangunan' }) {
         {/* ───── PRATINJAU / AREA CETAK */}
         <div className="overflow-x-auto">
           <div id="area-cetak" className="kertas">
+            {/* Halaman 0: kover (opsional) */}
+            {d.sertakanKover && (
+              <div className="halaman kover" style={{ marginTop: 0 }}>
+                <div className="kover-bingkai">
+                  <div>
+                    {d.koverLogo && (
+                      <img
+                        src={d.koverLogo}
+                        alt=""
+                        style={{ height: '32mm', maxWidth: '60mm', objectFit: 'contain', display: 'block', margin: '0 auto 10mm' }}
+                      />
+                    )}
+                    <p style={{ fontSize: '30pt', fontWeight: 700, letterSpacing: '0.3em', textIndent: '0.3em' }}>
+                      {d.koverLabel || 'PROPOSAL'}
+                    </p>
+                  </div>
+
+                  <div>
+                    {judulKover.map((l, i) => (
+                      <h4 key={i} style={{ fontSize: '16pt', lineHeight: 1.5, textTransform: 'uppercase' }}>{l}</h4>
+                    ))}
+                    {baris(d.koverDiajukan).length > 0 && (
+                      <div style={{ marginTop: '14mm' }}>
+                        <p>Diajukan kepada :</p>
+                        {baris(d.koverDiajukan).map((l, i) => <p key={i}><b>{l}</b></p>)}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <p>Disusun oleh :</p>
+                    <p style={{ fontSize: '14pt' }}><b>{d.panitia}</b></p>
+                    {d.wilayah && <p><b>{d.wilayah}</b></p>}
+                    {baris(d.koverAlamat).map((l, i) => (
+                      <p key={i} style={{ fontSize: '11pt' }}>{l}</p>
+                    ))}
+                    {d.koverTahun && <p style={{ marginTop: '6mm', fontSize: '14pt' }}><b>{d.koverTahun}</b></p>}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Halaman 1: surat permohonan */}
             <div className="halaman" style={{ marginTop: 0 }}>
               <Kop d={d} dalam />
