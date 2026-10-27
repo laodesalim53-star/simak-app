@@ -39,7 +39,14 @@ const GRUP = [
   {
     judul: 'Kegiatan',
     kartu: [
-      { key: 'kegiatan-umum', label: 'Proposal Kegiatan (Umum)', desc: 'Latar belakang, tujuan, sasaran, waktu, susunan panitia, anggaran.', icon: FileText },
+      {
+        key: 'kegiatan-umum',
+        label: 'Proposal Kegiatan (Umum)',
+        desc: 'Latar belakang, tujuan, waktu dan tempat, sasaran, susunan panitia, anggaran, rekening.',
+        icon: FileText,
+        to: '/proposal/kegiatan',
+        aktif: true,
+      },
       { key: 'kegiatan-siswa', label: 'Kegiatan Siswa / Lomba / Study Tour', desc: 'Pembinaan siswa, lomba, perkemahan, wisata edukasi.', icon: Award },
       { key: 'hari-besar', label: 'Peringatan Hari Besar (PHBN / PHBI / Natal)', desc: 'HUT RI, Maulid, Isra Mi\'raj, Natal, dll.', icon: CalendarDays },
       { key: 'keagamaan', label: 'Kegiatan Keagamaan & Pembinaan Majelis', desc: 'TPQ, pengajian, pesantren kilat, Ramadan.', icon: BookOpenCheck },
