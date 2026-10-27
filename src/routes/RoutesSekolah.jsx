@@ -49,6 +49,8 @@ const LaporanPertanggungjawabanKepsek = lazy(() => import('../pages/LaporanPerta
 
 
 const GudangSK = lazy(() => import('../pages/GudangSK'))
+const Proposal = lazy(() => import('../pages/Proposal'))
+const ProposalPembangunan = lazy(() => import('../pages/ProposalPembangunan'))
 const KelengkapanSuratPengantar = lazy(() => import('../pages/KelengkapanSuratPengantar'))
 const SKBebanMengajar = lazy(() => import('../pages/SKBebanMengajar'))
 const KeteranganMelaksanakanTugas = lazy(() => import('../pages/KeteranganMelaksanakanTugas'))
@@ -246,6 +248,9 @@ export default function RoutesSekolah() {
       <Route path="/gudang-sk/portal-ujian/berita-acara-ujian-sekolah" element={<ProtectedRoute adminOnly><BeritaAcaraUjianSekolah /></ProtectedRoute>} />
       <Route path="/gudang-sk/portal-ujian/pakta-integritas-pengawas" element={<ProtectedRoute adminOnly><PaktaIntegritasPengawas /></ProtectedRoute>} />
       <Route path="/gudang-sk/portal-ujian/laporan-asesmen" element={<ProtectedRoute adminOnly><LaporanAsesmenSekolah /></ProtectedRoute>} />
+      {/* Proposal — hub kartu jenis proposal, khusus admin */}
+      <Route path="/proposal" element={<ProtectedRoute adminOnly><Proposal /></ProtectedRoute>} />
+      <Route path="/proposal/pembangunan" element={<ProtectedRoute adminOnly><ProposalPembangunan /></ProtectedRoute>} />
       <Route path="/kelengkapan-surat-pengantar" element={<ProtectedRoute adminOnly><KelengkapanSuratPengantar /></ProtectedRoute>} />
       <Route path="/data-ujian-8355" element={<ProtectedRoute adminOnly><DataUjian8355 /></ProtectedRoute>} />
       <Route path="/cetak-8355" element={<ProtectedRoute adminOnly><Cetak8355 /></ProtectedRoute>} />
