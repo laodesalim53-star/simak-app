@@ -1,8 +1,10 @@
 import SKPenugasanTunggal from '../components/SKPenugasanTunggal'
 import useIsPlh from '../hooks/useIsPlh'
+import { useAuth } from '../lib/AuthContext'
 
 // SK PLH/Plt Kepala Sekolah — route: /gudang-sk/plh-kepsek
-// Hanya tampil untuk guru yang ditunjuk sebagai PLH (tabel plh_kepsek)
+// Bisa dibuka oleh admin (lewat Gudang SK) dan guru yang ditunjuk sebagai PLH
+// (lewat menu sidebar guru; penunjukan ada di tabel plh_kepsek).
 const KONFIG = {
   judulBar: 'SK PLH / Plt Kepala Sekolah',
   labelTentang: 'PENUNJUKAN PELAKSANA HARIAN (PLH) / PELAKSANA TUGAS (PLT) KEPALA SEKOLAH',
@@ -18,7 +20,8 @@ const KONFIG = {
     'Peraturan Menteri yang mengatur penugasan guru sebagai kepala sekolah yang berlaku (sesuaikan nomor dan tahunnya);',
     'Ketentuan kepegawaian yang mengatur kewenangan Pelaksana Harian dan Pelaksana Tugas (sesuaikan nomor dan tahunnya);',
   ].join('\n'),
-  memperhatikan: 'Surat keterangan/penugasan dari Dinas Pendidikan dan hasil musyawarah dewan guru {sekolah}.',
+  memperhatikan:
+    'Surat keterangan/penugasan dari Dinas Pendidikan dan hasil musyawarah dewan guru {sekolah}.',
   diktumLain: [
     'Pelaksana Harian/Pelaksana Tugas bertugas melaksanakan tugas rutin kepala sekolah, yaitu pengelolaan administrasi, layanan pembelajaran, dan koordinasi dengan pendidik dan tenaga kependidikan, serta bertanggung jawab kepada Kepala Dinas Pendidikan.',
     'Pelaksana Harian/Pelaksana Tugas tidak berwenang mengambil keputusan atau tindakan yang bersifat strategis dan berdampak pada perubahan status kepegawaian dan anggaran, kecuali mendapat persetujuan pejabat yang berwenang.',
@@ -30,14 +33,20 @@ const KONFIG = {
 
 export default function SKPLHKepsek() {
   const { loading, isPlh } = useIsPlh()
+  const { isAdmin } = useAuth()
 
-  if (loading) return <div style={{ padding: 24 }}>Memuat…</div>
+  if (loading) {
+    return <div style={{ padding: 24 }}>Memuat…</div>
+  }
 
-  if (!isPlh) {
+  if (!isAdmin && !isPlh) {
     return (
       <div style={{ padding: 24, textAlign: 'center' }}>
         <h3>Akses dibatasi</h3>
-        <p>Halaman ini hanya dapat dilihat oleh guru yang ditunjuk sebagai PLH/Plt Kepala Sekolah.</p>
+        <p>
+          Halaman ini hanya dapat dilihat oleh admin dan guru yang ditunjuk sebagai
+          PLH/Plt Kepala Sekolah.
+        </p>
       </div>
     )
   }
