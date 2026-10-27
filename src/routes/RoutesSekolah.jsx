@@ -70,6 +70,7 @@ const DaftarHonorPanitiaPPDB = lazy(() => import('../pages/DaftarHonorPanitiaPPD
 // --- Proposal (hub kartu + halaman per jenis proposal) ---
 const Proposal = lazy(() => import('../pages/Proposal'))
 const ProposalPembangunan = lazy(() => import('../pages/ProposalPembangunan'))
+const ProposalKegiatan = lazy(() => import('../pages/ProposalKegiatan'))
 
 const PortalUjian = lazy(() => import('../pages/PortalUjian'))
 const KartuPesertaUjian = lazy(() => import('../pages/KartuPesertaUjian'))
@@ -241,6 +242,7 @@ export default function RoutesSekolah() {
           Setiap kartu baru: tambah import lazy di atas + satu Route di sini. */}
       <Route path="/proposal" element={<ProtectedRoute adminOnly><Proposal /></ProtectedRoute>} />
       <Route path="/proposal/pembangunan" element={<ProtectedRoute adminOnly><ProposalPembangunan /></ProtectedRoute>} />
+      <Route path="/proposal/kegiatan" element={<ProtectedRoute adminOnly><ProposalKegiatan /></ProtectedRoute>} />
 
       {/* Portal Ujian */}
       <Route path="/gudang-sk/portal-ujian" element={<ProtectedRoute adminOnly><PortalUjian /></ProtectedRoute>} />
