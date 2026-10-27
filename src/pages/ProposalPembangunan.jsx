@@ -129,6 +129,38 @@ const huruf = (i) => String.fromCharCode(97 + i)
 const URUTAN = ['Pertama', 'Kedua', 'Ketiga', 'Keempat', 'Kelima', 'Keenam']
 const kloning = (o) => JSON.parse(JSON.stringify(o))
 
+// Judul halaman per jenis proposal (jenis = kunci di proposal_template & proposal_dokumen).
+const JUDUL = {
+  pembangunan: 'Proposal Bantuan Pembangunan / Renovasi',
+  'sarana-sekolah': 'Proposal Pengadaan Sarana & Prasarana Sekolah',
+  'rehab-kelas': 'Proposal Rehabilitasi Ruang Kelas / Toilet',
+  taman: 'Proposal Penataan Lingkungan & Taman',
+}
+
+// Isian dasar tiap jenis. Jenis 'pembangunan' memakai CONTOH (Masjid Jabal Nur);
+// jenis lain memakai versi kosong supaya teks masjid tidak ikut terbawa.
+function dasarJenis(jenis) {
+  const b = kloning(CONTOH)
+  if (jenis === 'pembangunan') return b
+  Object.keys(b).forEach((k) => {
+    if (typeof b[k] === 'string') b[k] = ''
+  })
+  b.sertakanSK = true
+  b.jabatan1 = 'Ketua'
+  b.jabatan2 = 'Sekretaris'
+  b.lampiran = '1 (Satu) Berkas'
+  b.salamBuka = 'Dengan hormat,'
+  b.rekPengantar = 'Bantuan dapat disalurkan melalui rekening berikut:'
+  b.rab = [{ judul: '', items: [{ nama: '', qty: 1, satuan: '', harga: 0 }] }]
+  b.inti = [
+    { jabatan: 'Ketua', nama: '' },
+    { jabatan: 'Sekretaris', nama: '' },
+    { jabatan: 'Bendahara', nama: '' },
+  ]
+  b.seksi = [{ nama: '', ketua: '', anggota: '' }]
+  return b
+}
+
 // ───────────────────────── Komponen kecil form
 const inputCls = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500'
 
@@ -157,10 +189,10 @@ function Area({ label, value, onChange, rows = 4, hint }) {
 }
 
 // ───────────────────────── Halaman
-export default function ProposalPembangunan() {
+export default function ProposalPembangunan({ jenis = 'pembangunan' }) {
   const navigate = useNavigate()
   const { sekolahId, session } = useAuth()
-  const [d, setD] = useState(() => kloning(CONTOH))
+  const [d, setD] = useState(() => dasarJenis(jenis))
   const [tab, setTab] = useState('surat')
   const [docId, setDocId] = useState(null)
   const [riwayat, setRiwayat] = useState([])
@@ -169,21 +201,21 @@ export default function ProposalPembangunan() {
 
   // Template awal dari database (tabel proposal_template, diisi lewat SQL).
   // Dipakai untuk sekolah yang belum punya proposal sendiri; kalau tabelnya
-  // belum ada / kosong, otomatis memakai CONTOH di atas.
+  // belum ada / kosong, otomatis memakai isian dasar di atas.
   const [templ, setTempl] = useState(null)
   const sudahDiedit = useRef(false)
   useEffect(() => {
     supabase
       .from('proposal_template')
       .select('data')
-      .eq('jenis', 'pembangunan')
+      .eq('jenis', jenis)
       .maybeSingle()
       .then(({ data }) => {
         if (!data?.data) return
         setTempl(data.data)
-        if (!sudahDiedit.current) setD({ ...kloning(CONTOH), ...data.data })
+        if (!sudahDiedit.current) setD({ ...dasarJenis(jenis), ...data.data })
       })
-  }, [])
+  }, [jenis])
 
   const set = (k, v) => {
     sudahDiedit.current = true
@@ -200,21 +232,21 @@ export default function ProposalPembangunan() {
     const { data } = await supabase
       .from('proposal_dokumen')
       .select('id, judul, updated_at')
-      .eq('jenis', 'pembangunan')
+      .eq('jenis', jenis)
       .eq('sekolah_id', sekolahId)
       .order('updated_at', { ascending: false })
     setRiwayat(data || [])
   }
   useEffect(() => {
     if (sekolahId) muatRiwayat()
-  }, [sekolahId])
+  }, [sekolahId, jenis])
 
   async function simpan() {
     if (!sekolahId) return setPesan('Sekolah belum terdeteksi. Muat ulang halaman.')
     setMenyimpan(true)
     setPesan('')
-    const judul = d.panitia || 'Proposal Pembangunan'
-    const payload = { jenis: 'pembangunan', judul, data: d, updated_at: new Date().toISOString() }
+    const judul = d.panitia || JUDUL[jenis] || 'Proposal Pembangunan'
+    const payload = { jenis, judul, data: d, updated_at: new Date().toISOString() }
     let res
     if (docId) {
       res = await supabase.from('proposal_dokumen').update(payload).eq('id', docId).eq('sekolah_id', sekolahId).select('id').single()
@@ -237,7 +269,7 @@ export default function ProposalPembangunan() {
     const { data, error } = await supabase.from('proposal_dokumen').select('id, data').eq('id', id).eq('sekolah_id', sekolahId).single()
     if (error) return setPesan('Gagal membuka: ' + error.message)
     sudahDiedit.current = true
-    setD({ ...kloning(CONTOH), ...data.data })
+    setD({ ...dasarJenis(jenis), ...data.data })
     setDocId(data.id)
     setPesan('Dokumen dibuka.')
   }
@@ -267,7 +299,7 @@ export default function ProposalPembangunan() {
     setDocId(null)
   }
   function contoh() {
-    setD({ ...kloning(CONTOH), ...(templ || {}) })
+    setD({ ...dasarJenis(jenis), ...(templ || {}) })
     setDocId(null)
   }
 
@@ -317,7 +349,7 @@ export default function ProposalPembangunan() {
         <button onClick={() => navigate('/proposal')} className="flex items-center gap-1 text-sm text-slate-600 md:hover:text-slate-900 touch-manipulation">
           <ArrowLeft size={16} /> Proposal
         </button>
-        <h1 className="font-display text-lg font-bold text-slate-800 mr-auto ml-2">Proposal Bantuan Pembangunan / Renovasi</h1>
+        <h1 className="font-display text-lg font-bold text-slate-800 mr-auto ml-2">{JUDUL[jenis] || JUDUL.pembangunan}</h1>
         <button onClick={contoh} className="px-3 py-2 rounded-lg border border-slate-300 text-sm flex items-center gap-1.5 touch-manipulation">
           <RotateCcw size={15} /> Isi template awal
         </button>
