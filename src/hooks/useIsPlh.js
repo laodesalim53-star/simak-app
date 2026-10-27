@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'        // SESUAIKAN
-import { useAuth } from '../context/AuthContext'  // SESUAIKAN
+import { useAuth } from '../lib/AuthContext'
+import { supabase } from '../lib/supabaseClient'
 
 export default function useIsPlh() {
   const { user } = useAuth()
