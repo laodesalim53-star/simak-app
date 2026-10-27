@@ -49,6 +49,7 @@ const KONFIG = {
     judulRekapTahunan: 'Rekapitulasi Absen ASN',
     labelNomorInduk: 'NIP',
     bucket: 'profil-kantor',
+    kolomPangkat: 'pangkat_golongan', // kolom Pangkat/Gol di tabelPegawai (null = isi manual)
 
     tabelPegawai: 'pegawai_kantor',
     selectPegawai: 'id, nama_lengkap, jabatan, nip',
@@ -100,6 +101,7 @@ const KONFIG = {
     judulRekapTahunan: 'Rekapitulasi Absen Guru & Tenaga Kependidikan',
     labelNomorInduk: 'NIP',
     bucket: 'profil-sekolah',
+    kolomPangkat: 'pangkat_golongan', // sama dengan kolom di halaman Data Guru
 
     tabelPegawai: 'guru',
     selectPegawai: 'id, nip, nama_lengkap, mata_pelajaran',
@@ -383,7 +385,28 @@ export default function DaftarHadirPegawai() {
         console.error(`Gagal memuat ${K.tabelPegawai} — cek KONFIG.${jenis}:`, errorPegawai)
       }
 
-      const daftarPegawai = (pegawai || []).map(K.petakanPegawai)
+      let daftarPegawai = (pegawai || []).map(K.petakanPegawai)
+
+      // Pangkat/Golongan diambil lewat query terpisah supaya halaman tetap jalan
+      // kalau kolomnya belum ada di tabel (kalau error, Pangkat/Gol cukup kosong
+      // dan bisa diisi manual di mode Rekap Tahunan).
+      if (K.kolomPangkat && daftarPegawai.length > 0) {
+        const { data: dataPangkat, error: errorPangkat } = await supabase
+          .from(K.tabelPegawai)
+          .select(`id, ${K.kolomPangkat}`)
+          .in('id', daftarPegawai.map((p) => p.id))
+        if (errorPangkat) {
+          console.warn(`Kolom ${K.kolomPangkat} di ${K.tabelPegawai} tidak bisa dibaca — Pangkat/Gol diisi manual:`, errorPangkat.message)
+        } else {
+          const petaPangkat = new Map(
+            (dataPangkat || []).map((r) => [String(r.id), r[K.kolomPangkat] || ''])
+          )
+          daftarPegawai = daftarPegawai.map((p) => ({
+            ...p,
+            pangkat: petaPangkat.get(String(p.id)) || p.pangkat || '',
+          }))
+        }
+      }
       setPegawaiList(daftarPegawai)
 
       const tanggalAwal = `${tahun}-${String(bulan).padStart(2, '0')}-01`
