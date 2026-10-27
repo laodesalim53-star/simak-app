@@ -19,8 +19,10 @@ import {
   X,
   Receipt,
   Coins,
+  ShieldCheck,
 } from 'lucide-react'
 import Layout from '../components/Layout'
+import useIsPlh from '../hooks/useIsPlh'
 
 // Palet warna per kartu — sama polanya dengan PusatLaporanGuru.jsx. Kalau mau
 // ganti warna satu kartu, cukup ganti nilai `warna` di objek SK-nya.
@@ -127,6 +129,9 @@ const PALET_WARNA = {
 // Cara mengaktifkan SK baru: ubah `siap: false` menjadi `siap: true`, lalu
 // pastikan `path` menunjuk ke route halaman SK-nya di App.jsx.
 // Kartu dikelompokkan lewat `kategori` (lihat KATEGORI di bawah).
+//
+// Properti `hanyaPlh: true` berarti kartu hanya tampil untuk guru yang
+// ditunjuk sebagai PLH/Plt Kepala Sekolah (lihat hooks/useIsPlh.js).
 const KATEGORI = [
   { id: 'tugas', judul: 'Tugas Guru & Pegawai', keterangan: 'SK pembagian tugas dan surat keterangan pelaksanaan tugas.' },
   { id: 'honor', judul: 'Honorarium & Tenaga Pendukung', keterangan: 'SK honor dan penugasan tenaga non-guru.' },
@@ -185,6 +190,17 @@ const daftarSK = [
     warna: 'violet',
     siap: true,
   },
+  {
+    id: 'plh-kepsek',
+    kategori: 'tugas',
+    judul: 'SK PLH / Plt Kepala Sekolah',
+    deskripsi: 'Penunjukan Pelaksana Harian atau Pelaksana Tugas Kepala Sekolah. Hanya tampil untuk guru yang ditunjuk sebagai PLH.',
+    icon: ShieldCheck,
+    path: '/gudang-sk/plh-kepsek',
+    warna: 'indigo',
+    siap: true,
+    hanyaPlh: true,
+  },
 
   // ---- Honorarium & Tenaga Pendukung ----
   {
@@ -217,17 +233,19 @@ const daftarSK = [
     warna: 'indigo',
     siap: true,
   },
- {
-   id: 'daftar-honor-literasi-numerasi',
-   kategori: 'honor',
-   judul: 'Daftar Honor Literasi & Numerasi',
-   deskripsi: 'Daftar penerimaan honorarium guru yang mengikuti kegiatan literasi dan numerasi, lengkap dengan potongan PPh 21 dan kolom paraf.',
-   icon: Receipt,
-   path: '/gudang-sk/daftar-honor-literasi-numerasi',
-   warna: 'rose',
-   siap: true,
+  {
+    id: 'daftar-honor-literasi-numerasi',
+    kategori: 'honor',
+    judul: 'Daftar Honor Literasi & Numerasi',
+    deskripsi: 'Daftar penerimaan honorarium guru yang mengikuti kegiatan literasi dan numerasi, lengkap dengan potongan PPh 21 dan kolom paraf.',
+    icon: Receipt,
+    path: '/gudang-sk/daftar-honor-literasi-numerasi',
+    warna: 'rose',
+    siap: true,
   },
-    {
+
+  // ---- Asesmen & Kegiatan Sekolah ----
+  {
     id: 'daftar-honor-pengawas-asesmen',
     kategori: 'kegiatan',
     judul: 'Daftar Honor Pengawas Asesmen',
@@ -257,17 +275,16 @@ const daftarSK = [
     warna: 'rose',
     siap: true,
   },
-   {
-   id: 'bendahara-bos',
-   kategori: 'kegiatan',
-   judul: 'SK Bendahara BOS',
-   deskripsi: 'Penetapan bendahara pengelola dana BOS beserta uraian tugas dan tanggung jawabnya.',
-   icon: Coins,
-   path: '/gudang-sk/bendahara-bos',
-   warna: 'amber',
-   siap: true,
- },
-  // ---- Asesmen & Kegiatan Sekolah ----
+  {
+    id: 'bendahara-bos',
+    kategori: 'kegiatan',
+    judul: 'SK Bendahara BOS',
+    deskripsi: 'Penetapan bendahara pengelola dana BOS beserta uraian tugas dan tanggung jawabnya.',
+    icon: Coins,
+    path: '/gudang-sk/bendahara-bos',
+    warna: 'amber',
+    siap: true,
+  },
   {
     id: 'mengawas-asesmen',
     kategori: 'kegiatan',
@@ -398,12 +415,19 @@ function IsiKartu({ item, warna }) {
 
 export default function GudangSK() {
   const [cari, setCari] = useState('')
+  const { isPlh } = useIsPlh()
+
+  // Saring kartu yang khusus PLH: hanya tampil kalau guru ini ditunjuk PLH.
+  const daftarTampil = useMemo(
+    () => daftarSK.filter((sk) => !sk.hanyaPlh || isPlh),
+    [isPlh]
+  )
 
   // Kelompokkan hasil pencarian per kategori; kategori yang kosong tidak
   // ditampilkan. `urutan` dipakai supaya jeda animasi berlanjut antar kelompok.
   const kelompok = useMemo(() => {
     const kata = cari.trim().toLowerCase()
-    const cocok = daftarSK.filter(
+    const cocok = daftarTampil.filter(
       (sk) => !kata || `${sk.judul} ${sk.deskripsi}`.toLowerCase().includes(kata)
     )
     let urutan = 0
@@ -413,9 +437,9 @@ export default function GudangSK() {
         .filter((sk) => sk.kategori === k.id)
         .map((sk) => ({ sk, urutan: urutan++ })),
     })).filter((k) => k.items.length > 0)
-  }, [cari])
+  }, [cari, daftarTampil])
 
-  const jumlahSiap = daftarSK.filter((sk) => sk.siap).length
+  const jumlahSiap = daftarTampil.filter((sk) => sk.siap).length
 
   return (
     <Layout
@@ -448,7 +472,7 @@ export default function GudangSK() {
           <div className="relative min-w-0">
             <p className="font-display font-semibold text-lg text-white">Gudang SK</p>
             <p className="text-xs sm:text-sm text-blue-200/80">
-              {jumlahSiap} dari {daftarSK.length} jenis SK sudah siap dipakai.
+              {jumlahSiap} dari {daftarTampil.length} jenis SK sudah siap dipakai.
             </p>
           </div>
         </div>
