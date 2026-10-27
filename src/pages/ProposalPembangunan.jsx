@@ -359,6 +359,10 @@ export default function ProposalPembangunan({ jenis = 'pembangunan' }) {
           .kertas .halaman:last-child { break-after:auto; page-break-after:auto; }
           .kertas .halaman.kover { height:256mm; min-height:0; padding:0; }
           .kertas tr { break-inside: avoid; }
+          /* Sembunyikan watermark LisensiCetak khusus di halaman proposal ini.
+             Selektor "body div.…" lebih spesifik daripada aturan di LisensiCetak,
+             jadi menang walau sama-sama !important. */
+          body div.lisensi-cetak-akhir { display: none !important; visibility: hidden !important; }
         }
       `}</style>
 
