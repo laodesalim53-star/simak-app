@@ -39,6 +39,10 @@ const CONTOH = {
     'Kegiatan renovasi atap Masjid Jabal Nur Dusun Pakarena Desa Kairatu Kecamatan Kairatu direncanakan berjalan pada bulan Maret tahun 2024.',
   anggaranPengantar: 'Renovasi atap Masjid Jabal Nur Dusun Pakarena membutuhkan biaya sebesar',
   anggaranPenutup: 'Dan estimasi anggarannya sebagaimana terlampir.',
+  bank: '',
+  noRek: '',
+  atasNamaRek: '',
+  rekPengantar: 'Bantuan dapat disalurkan melalui rekening berikut:',
   penutup:
     'Demikian proposal ini kami buat dan harapan kami kiranya Bapak dapat mempertimbangkannya. Atas bantuan dan kerja samanya yang baik, kami ucapkan terima kasih.',
   // RAB
@@ -382,6 +386,13 @@ export default function ProposalPembangunan() {
                 <Teks label="D. Kalimat sebelum nominal anggaran" value={d.anggaranPengantar} onChange={(v) => set('anggaranPengantar', v)} hint="Nominal diambil otomatis dari tab Anggaran." />
                 <Teks label="Kalimat sesudah nominal" value={d.anggaranPenutup} onChange={(v) => set('anggaranPenutup', v)} />
                 <Area label="E. Penutup" rows={4} value={d.penutup} onChange={(v) => set('penutup', v)} />
+                <div className="border border-slate-200 rounded-lg p-3 mb-3 bg-slate-50">
+                  <p className="text-xs font-semibold text-slate-600 mb-2">Rekening penerima bantuan (opsional)</p>
+                  <Teks label="Nama bank" value={d.bank} onChange={(v) => set('bank', v)} />
+                  <Teks label="Nomor rekening" value={d.noRek} onChange={(v) => set('noRek', v)} hint="Kosongkan jika tidak ingin menampilkan rekening di surat dan proposal." />
+                  <Teks label="Atas nama" value={d.atasNamaRek} onChange={(v) => set('atasNamaRek', v)} />
+                  <Teks label="Kalimat pengantar" value={d.rekPengantar} onChange={(v) => set('rekPengantar', v)} />
+                </div>
                 <Teks label="Tanggal proposal" value={d.tglProposal} onChange={(v) => set('tglProposal', v)} />
               </>
             )}
@@ -494,6 +505,7 @@ export default function ProposalPembangunan() {
               {baris(d.kepada).map((l, i) => <p key={i}><b>{l}</b></p>)}
               <p style={{ marginTop: 14 }}><i>{d.salamBuka}</i></p>
               {paragraf(d.isiSurat).map((p, i) => <p key={i} style={{ marginTop: 10, textIndent: '1.2cm' }}>{p}</p>)}
+              <Rekening d={d} />
               <p style={{ marginTop: 10 }}><i>{d.salamTutup}</i></p>
               <Ttd d={d} tanggal={d.tglSurat} />
               {baris(d.tebusan).length > 0 && (
@@ -520,6 +532,7 @@ export default function ProposalPembangunan() {
               </p>
               <h4 style={{ marginTop: 12 }}>E. Penutup</h4>
               <p style={{ marginTop: 6, textIndent: '1.2cm' }}>{d.penutup}</p>
+              <Rekening d={d} />
               <Ttd d={d} tanggal={d.tglProposal} />
             </div>
 
@@ -659,6 +672,23 @@ export default function ProposalPembangunan() {
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+// Blok rekening penerima bantuan — tampil hanya kalau nomor rekening diisi.
+function Rekening({ d }) {
+  if (!d.noRek) return null
+  return (
+    <div style={{ marginTop: 10, breakInside: 'avoid' }}>
+      <p>{d.rekPengantar}</p>
+      <table style={{ marginLeft: 24 }}>
+        <tbody>
+          {d.bank && <tr><td style={{ width: 120 }}>Bank</td><td>: {d.bank}</td></tr>}
+          <tr><td style={{ width: 120 }}>No. Rekening</td><td>: <b>{d.noRek}</b></td></tr>
+          {d.atasNamaRek && <tr><td style={{ width: 120 }}>Atas Nama</td><td>: {d.atasNamaRek}</td></tr>}
+        </tbody>
+      </table>
     </div>
   )
 }
