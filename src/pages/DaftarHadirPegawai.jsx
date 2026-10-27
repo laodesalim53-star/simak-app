@@ -12,6 +12,25 @@ const NAMA_BULAN = [
   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
 ]
 
+// Singkatan bulan untuk kepala kolom Rekap Tahunan (mengikuti format manual)
+const BULAN_PENDEK = [
+  'JAN', 'FEB', 'MARET', 'APRIL', 'MEI', 'JUNI',
+  'JULI', 'AGUS', 'SEPT', 'OKT', 'NOV', 'DES',
+]
+
+// Baris-baris tabel Rekap Tahunan (urutan & istilah sesuai format manual)
+const BARIS_REKAP = [
+  { key: 'hadir', label: 'HADIR' },
+  { key: 'izin', label: 'IZIN' },
+  { key: 'sakit', label: 'SAKIT' },
+  { key: 'cuti', label: 'CUTI' },
+  { key: 'dinas', label: 'TUGAS DINAS' },
+]
+const BARIS_ALPA = { key: 'alpa', label: 'ALPA' } // hanya tampil kalau ada data alpa
+
+const REKAP_KOSONG = () =>
+  Array.from({ length: 12 }, () => ({ hadir: 0, izin: 0, sakit: 0, cuti: 0, dinas: 0, alpa: 0 }))
+
 // =====================================================================
 // KONFIGURASI PER TENANT
 // Halaman ini dipakai bersama oleh tenant KANTOR (KUA), SEKOLAH, dan
@@ -27,6 +46,7 @@ const KONFIG = {
     judulHalaman: 'Daftar Hadir Pegawai',
     subjudul: 'Rekap kehadiran pegawai per bulan, otomatis dari data pegawai, siap cetak.',
     istilahPegawai: 'Pegawai',
+    judulRekapTahunan: 'Rekapitulasi Absen ASN',
     labelNomorInduk: 'NIP',
     bucket: 'profil-kantor',
 
@@ -77,6 +97,7 @@ const KONFIG = {
     judulHalaman: 'Daftar Hadir Guru & Tenaga Kependidikan',
     subjudul: 'Rekap kehadiran guru dan tenaga kependidikan per bulan, siap cetak.',
     istilahPegawai: 'Guru & Tenaga Kependidikan',
+    judulRekapTahunan: 'Rekapitulasi Absen Guru & Tenaga Kependidikan',
     labelNomorInduk: 'NIP',
     bucket: 'profil-sekolah',
 
@@ -135,6 +156,7 @@ const KONFIG = {
     judulHalaman: 'Daftar Hadir Personel',
     subjudul: 'Rekap kehadiran personel per bulan, otomatis dari data personel, siap cetak.',
     istilahPegawai: 'Personel',
+    judulRekapTahunan: 'Rekapitulasi Absen Personel',
     labelNomorInduk: 'NRP',
     bucket: 'profil-polres',
 
@@ -149,6 +171,7 @@ const KONFIG = {
       nama_lengkap: p.pangkat ? `${p.pangkat} ${p.nama}` : p.nama,
       nip: p.nrp,
       jabatan: p.jabatan || '',
+      pangkat: p.pangkat || '',
     }),
 
     tabelPresensi: 'presensi_personel_polres',
@@ -267,10 +290,18 @@ export default function DaftarHadirPegawai() {
   const [bulan, setBulan] = useState(now.getMonth() + 1) // 1-12
   const [tahun, setTahun] = useState(now.getFullYear())
 
-  // Mode cetak: 'kolektif' (semua pegawai, 1 tabel lebar) atau 'perorangan'
-  // (1 pegawai, format Daftar Hadir Manual: kedatangan & kepulangan + ttd)
+  // Mode cetak: 'kolektif' (semua pegawai, 1 tabel lebar), 'perorangan'
+  // (1 pegawai, format Daftar Hadir Manual: kedatangan & kepulangan + ttd), atau
+  // 'rekap' (1 pegawai, Rekapitulasi Absen setahun: kolom Jan–Des)
   const [mode, setMode] = useState('kolektif')
   const [pegawaiTerpilihId, setPegawaiTerpilihId] = useState('')
+
+  // ==== State untuk Rekap Tahunan ====
+  // { pegawaiId, bulan: [ {hadir, izin, sakit, cuti, dinas, alpa} x 12 ] }
+  const [rekapTahunan, setRekapTahunan] = useState(null)
+  const [loadingRekap, setLoadingRekap] = useState(false)
+  // Pangkat/Gol diisi manual per pegawai (belum ada kolomnya di database)
+  const [pangkatMap, setPangkatMap] = useState({})
 
   // ==== State untuk fitur edit presensi ====
   // modalEdit: { pegawaiId, hari } saat form edit terbuka, null saat tertutup
@@ -473,6 +504,48 @@ export default function DaftarHadirPegawai() {
     }
   }, [pegawaiList, pegawaiTerpilihId])
 
+  // ==== Muat rekap setahun (Jan–Des) untuk 1 pegawai, hanya saat mode Rekap ====
+  // Hanya mengambil 1 pegawai supaya aman dari batas 1000 baris Supabase.
+  useEffect(() => {
+    if (mode !== 'rekap' || !sekolahId || !pegawaiTerpilihId) return
+    let dibatalkan = false
+
+    async function muatRekapTahunan() {
+      setLoadingRekap(true)
+      let q = supabase
+        .from(K.tabelPresensi)
+        .select(`${K.kolomRelasi}, ${KOLOM_TANGGAL}, ${KOLOM_STATUS}`)
+        .eq(K.kolomRelasi, pegawaiTerpilihId)
+        .gte(KOLOM_TANGGAL, `${tahun}-01-01`)
+        .lte(KOLOM_TANGGAL, `${tahun}-12-31`)
+      if (K.filterSekolahPresensi) q = q.eq('sekolah_id', sekolahId)
+
+      const { data, error } = await q
+      if (dibatalkan) return
+      if (error) {
+        console.error(`Gagal memuat rekap tahunan dari ${K.tabelPresensi}:`, error)
+      }
+
+      const hasil = REKAP_KOSONG()
+      for (const baris of data || []) {
+        // Ambil bulan langsung dari teks "YYYY-MM-DD" (hindari geser zona waktu)
+        const idx = parseInt(String(baris[KOLOM_TANGGAL]).slice(5, 7), 10) - 1
+        const status = String(baris[KOLOM_STATUS] || '').toLowerCase()
+        if (idx >= 0 && idx < 12 && hasil[idx][status] !== undefined) {
+          hasil[idx][status] += 1
+        }
+      }
+      setRekapTahunan({ pegawaiId: String(pegawaiTerpilihId), tahun, bulan: hasil })
+      setLoadingRekap(false)
+    }
+
+    muatRekapTahunan()
+    return () => {
+      dibatalkan = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, tahun, pegawaiTerpilihId, sekolahId, jenis])
+
   // Profil yang sudah diseragamkan (sama bentuknya untuk semua tenant)
   const P = useMemo(() => (profilMentah ? K.petakanProfil(profilMentah) : null), [profilMentah, K])
 
@@ -486,6 +559,8 @@ export default function DaftarHadirPegawai() {
   // Tanggal pada tanda tangan = hari terakhir bulan yang dicetak
   // (mis. Februari 2026 -> 28 Februari 2026), bukan tanggal hari ini.
   const tanggalAkhirBulan = formatTanggalIndonesia(new Date(tahun, bulan - 1, jumlahHari))
+  // Rekap Tahunan: tanggal tanda tangan = 31 Desember tahun yang dipilih
+  const tanggalAkhirTahun = formatTanggalIndonesia(new Date(tahun, 11, 31))
 
   const unitKerja = P?.namaUnit || '-'
   const barisJabatanPerorangan = P?.barisJabatanPerorangan || K.petakanProfil({}).barisJabatanPerorangan
@@ -503,6 +578,23 @@ export default function DaftarHadirPegawai() {
 
   const pegawaiTerpilih = pegawaiList.find((p) => String(p.id) === String(pegawaiTerpilihId)) || null
   const dataBulanPegawaiTerpilih = pegawaiTerpilih ? presensiMap[pegawaiTerpilih.id] || {} : {}
+
+  // ==== Data turunan untuk mode Rekap Tahunan ====
+  const rekapBulan =
+    rekapTahunan &&
+    pegawaiTerpilih &&
+    rekapTahunan.pegawaiId === String(pegawaiTerpilih.id) &&
+    rekapTahunan.tahun === tahun
+      ? rekapTahunan.bulan
+      : REKAP_KOSONG()
+  const adaAlpa = rekapBulan.some((b) => b.alpa > 0)
+  const barisRekapTampil = adaAlpa ? [...BARIS_REKAP, BARIS_ALPA] : BARIS_REKAP
+  // JUMLAH per bulan = total semua status yang tercatat di bulan itu
+  const jumlahPerBulan = rekapBulan.map((b) => b.hadir + b.izin + b.sakit + b.cuti + b.dinas + b.alpa)
+  const tampilAngka = (n) => (n > 0 ? n : '')
+  const pangkatGol = pegawaiTerpilih
+    ? pangkatMap[pegawaiTerpilih.id] ?? pegawaiTerpilih.pangkat ?? ''
+    : ''
 
   // ==== Fungsi-fungsi fitur edit presensi ====
 
@@ -640,19 +732,28 @@ export default function DaftarHadirPegawai() {
     ? pegawaiList.find((p) => p.id === modalEdit.pegawaiId)
     : null
 
+  const DAFTAR_MODE = [
+    { value: 'kolektif', label: 'Kolektif' },
+    { value: 'perorangan', label: 'Perorangan' },
+    { value: 'rekap', label: 'Rekap Tahunan' },
+  ]
+
   return (
     <Layout title={K.judulHalaman} subtitle={K.subjudul}>
       <div className="no-print flex flex-wrap items-center justify-between gap-3 mb-5">
         <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={bulan}
-            onChange={(e) => setBulan(Number(e.target.value))}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
-          >
-            {NAMA_BULAN.map((nama, i) => (
-              <option key={nama} value={i + 1}>{nama}</option>
-            ))}
-          </select>
+          {/* Mode Rekap Tahunan tidak butuh pilihan bulan (selalu Jan–Des) */}
+          {mode !== 'rekap' && (
+            <select
+              value={bulan}
+              onChange={(e) => setBulan(Number(e.target.value))}
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
+            >
+              {NAMA_BULAN.map((nama, i) => (
+                <option key={nama} value={i + 1}>{nama}</option>
+              ))}
+            </select>
+          )}
           <select
             value={tahun}
             onChange={(e) => setTahun(Number(e.target.value))}
@@ -664,27 +765,21 @@ export default function DaftarHadirPegawai() {
           </select>
 
           <div className="flex items-center rounded-lg border border-slate-300 overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setMode('kolektif')}
-              className={`px-3 py-2 text-sm font-medium transition-colors ${
-                mode === 'kolektif' ? 'bg-teal-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              Kolektif
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode('perorangan')}
-              className={`px-3 py-2 text-sm font-medium transition-colors border-l border-slate-300 ${
-                mode === 'perorangan' ? 'bg-teal-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              Perorangan
-            </button>
+            {DAFTAR_MODE.map((m, i) => (
+              <button
+                key={m.value}
+                type="button"
+                onClick={() => setMode(m.value)}
+                className={`px-3 py-2 text-sm font-medium transition-colors ${
+                  i > 0 ? 'border-l border-slate-300' : ''
+                } ${mode === m.value ? 'bg-teal-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+              >
+                {m.label}
+              </button>
+            ))}
           </div>
 
-          {mode === 'perorangan' && (
+          {(mode === 'perorangan' || mode === 'rekap') && (
             <select
               value={pegawaiTerpilihId}
               onChange={(e) => setPegawaiTerpilihId(e.target.value)}
@@ -696,7 +791,19 @@ export default function DaftarHadirPegawai() {
             </select>
           )}
 
-          {!hanyaLihat && (
+          {mode === 'rekap' && pegawaiTerpilih && (
+            <input
+              type="text"
+              value={pangkatGol}
+              onChange={(e) =>
+                setPangkatMap((prev) => ({ ...prev, [pegawaiTerpilih.id]: e.target.value }))
+              }
+              placeholder="Pangkat/Gol (mis. Pengatur Muda II/a)"
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-60"
+            />
+          )}
+
+          {!hanyaLihat && mode !== 'rekap' && (
             <span className="text-xs text-slate-400 hidden sm:inline">Klik sel tanggal untuk edit presensi</span>
           )}
         </div>
@@ -837,6 +944,113 @@ export default function DaftarHadirPegawai() {
                 </div>
               </div>
             </>
+          )}
+        </div>
+      ) : mode === 'rekap' ? (
+        // === MODE REKAP TAHUNAN: Rekapitulasi Absen 1 pegawai, kolom Jan–Des (A4 lanskap) ===
+        <div
+          className="lembar-cetak lembar-rekap print-only bg-white rounded-2xl border border-slate-100 p-5 sm:p-8 mx-auto"
+          style={{ width: '297mm' }}
+        >
+          <KopSurat />
+
+          <div className="text-center mb-4">
+            <h1 className="font-display text-base font-bold uppercase text-slate-900 underline">
+              {K.judulRekapTahunan} Tahun {tahun}
+            </h1>
+          </div>
+
+          {pegawaiTerpilih ? (
+            loadingRekap ? (
+              <p className="no-print text-sm text-slate-500">Memuat rekap tahunan...</p>
+            ) : (
+              <>
+                <table className="text-[11px] text-slate-800 mb-2 font-semibold uppercase">
+                  <tbody>
+                    <tr>
+                      <td className="w-28 align-top py-[1px]">Nama</td>
+                      <td className="align-top py-[1px]">: {pegawaiTerpilih.nama_lengkap}</td>
+                    </tr>
+                    <tr>
+                      <td className="align-top py-[1px]">{K.labelNomorInduk}</td>
+                      <td className="align-top py-[1px]">: {pegawaiTerpilih.nip || '-'}</td>
+                    </tr>
+                    <tr>
+                      <td className="align-top py-[1px]">Pangkat/Gol</td>
+                      <td className="align-top py-[1px] normal-case">
+                        : {pangkatGol || '..............................'}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                <table className="w-full border-collapse text-[11px] table-fixed">
+                  <thead>
+                    <tr className="bg-slate-100 text-center">
+                      <th rowSpan={2} className="border border-slate-500 px-1 py-1 w-9 align-middle">NO</th>
+                      <th rowSpan={2} className="border border-slate-500 px-2 py-1 w-36 align-middle">KETERANGAN</th>
+                      <th colSpan={12} className="border border-slate-500 px-1 py-1">BULAN</th>
+                    </tr>
+                    <tr className="bg-slate-100 text-center">
+                      {BULAN_PENDEK.map((nama) => (
+                        <th key={nama} className="border border-slate-500 px-1 py-1">{nama}</th>
+                      ))}
+                    </tr>
+                    <tr className="text-center italic text-[10px]">
+                      {Array.from({ length: 14 }, (_, i) => (
+                        <td key={i} className="border border-slate-500 py-0.5">{i + 1}</td>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {barisRekapTampil.map((baris, i) => (
+                      <tr key={baris.key}>
+                        <td className="border border-slate-400 text-center py-1">{i + 1}</td>
+                        <td className="border border-slate-400 px-2 py-1">{baris.label}</td>
+                        {rekapBulan.map((b, idx) => (
+                          <td key={idx} className="border border-slate-400 text-center">
+                            {tampilAngka(b[baris.key])}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                    <tr className="font-bold">
+                      <td className="border border-slate-400 py-1" />
+                      <td className="border border-slate-400 px-2 py-1">JUMLAH</td>
+                      {jumlahPerBulan.map((jml, idx) => (
+                        <td key={idx} className="border border-slate-400 text-center">
+                          {tampilAngka(jml)}
+                        </td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
+
+                {/* Tanda tangan pimpinan di sisi kanan, tanggal = 31 Desember */}
+                <div className="ttd-block flex justify-end mt-6 text-[12px] text-slate-800">
+                  <div className="w-80 text-center leading-snug">
+                    <p>{tempatTtd ? `${tempatTtd}, ${tanggalAkhirTahun}` : tanggalAkhirTahun}</p>
+                    <p>Mengetahui,</p>
+                    {barisJabatanPerorangan.map((baris, i) => (
+                      <p key={i} className="font-semibold uppercase">{baris}</p>
+                    ))}
+                    <div className="h-16 flex items-end justify-center">
+                      {ttdKepalaUrl && (
+                        <img src={ttdKepalaUrl} alt={`Tanda Tangan ${jabatanKepala}`} className="max-h-16 object-contain" />
+                      )}
+                    </div>
+                    <p className="font-bold uppercase underline">
+                      {P?.kepala || '..............................'}
+                    </p>
+                    <p className="text-[11px]">{barisNomorKepala}</p>
+                  </div>
+                </div>
+              </>
+            )
+          ) : (
+            <p className="no-print text-sm text-slate-500">
+              Belum ada {K.istilahPegawai.toLowerCase()} untuk dipilih.
+            </p>
           )}
         </div>
       ) : (
@@ -1111,6 +1325,15 @@ export default function DaftarHadirPegawai() {
             cursor: default !important;
           }
 
+          /* Rekap Tahunan: A4 lanskap, 1 lembar */
+          .lembar-rekap {
+            page: rekap;
+            padding: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+          }
+          .lembar-rekap tr { page-break-inside: avoid; }
+
           /* Padatkan mode Kolektif supaya tanda tangan muat 1 lembar */
           .lembar-kolektif {
             page: kolektif;
@@ -1137,6 +1360,10 @@ export default function DaftarHadirPegawai() {
         /* Named page lebih spesifik dari @page biasa, jadi tidak tertimpa
            "@page { margin-bottom: 24mm }" milik LisensiCetak. */
         @page kolektif {
+          size: A4 landscape;
+          margin: 6mm 6mm 12mm 6mm;
+        }
+        @page rekap {
           size: A4 landscape;
           margin: 6mm 6mm 12mm 6mm;
         }
