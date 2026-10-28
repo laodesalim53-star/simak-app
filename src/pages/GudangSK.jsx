@@ -411,7 +411,6 @@ function IsiKartu({ item, warna }) {
 export default function GudangSK() {
   const [cari, setCari] = useState('')
 
-
   // Kelompokkan hasil pencarian per kategori; kategori yang kosong tidak
   // ditampilkan. `urutan` dipakai supaya jeda animasi berlanjut antar kelompok.
   const kelompok = useMemo(() => {
@@ -428,7 +427,7 @@ export default function GudangSK() {
     })).filter((k) => k.items.length > 0)
   }, [cari])
 
-  {jumlahSiap} dari {daftarSK.length} jenis SK sudah siap dipakai.
+  const jumlahSiap = daftarSK.filter((sk) => sk.siap).length
 
   return (
     <Layout
@@ -461,7 +460,7 @@ export default function GudangSK() {
           <div className="relative min-w-0">
             <p className="font-display font-semibold text-lg text-white">Gudang SK</p>
             <p className="text-xs sm:text-sm text-blue-200/80">
-              {jumlahSiap} dari {daftarTampil.length} jenis SK sudah siap dipakai.
+              {jumlahSiap} dari {daftarSK.length} jenis SK sudah siap dipakai.
             </p>
           </div>
         </div>
