@@ -219,8 +219,9 @@ function getGroupsAdmin(
         // sehingga NavLink "Gudang SK" ikut aktif di halaman Portal Ujian
         // (dan anak-anaknya, mis. Laporan Asesmen). `excludePrefix` membuat
         // Gudang SK mati kalau sedang berada di bawah Portal Ujian.
-        { to: '/gudang-sk', label: 'Gudang SK', icon: FileStack, excludePrefix: '/gudang-sk/portal-ujian' },
+        { to: '/gudang-sk', label: 'Gudang SK', icon: FileStack, excludePrefix: ['/gudang-sk/portal-ujian', '/gudang-sk/plh-kepsek'] },
         { to: '/gudang-sk/portal-ujian', label: 'Portal Ujian', icon: ClipboardCheck },
+        { to: '/gudang-sk/plh-kepsek', label: 'SK PLH Kepala Sekolah', icon: ShieldCheck },
         { to: '/ppdb-admin', label: 'PPDB Siswa Baru', icon: UserPlus },
         // Laporan Kepegawaian Guru: satu pintu untuk semua laporan guru,
         // TERMASUK Laporan Bulanan, Cetak Sampul, Data Ujian 8355 & Cetak
@@ -489,6 +490,8 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   { to: '/riwayat-pesanan', label: 'Riwayat Pesanan', icon: Receipt },
   { to: '/pesanan-masuk', label: 'Pesanan Masuk (Toko)', icon: Inbox },
   { to: '/administrasi-kelas', label: 'Administrasi Kelas', icon: LayoutGrid },
+  // SK PLH/Plt Kepala Sekolah — tampil untuk semua guru.
+  { to: '/gudang-sk/plh-kepsek', label: 'SK PLH Kepala Sekolah', icon: ShieldCheck },
   { to: '/rapat', label: 'Rapat Video', icon: Video },
   { to: '/galeri', label: 'Galeri Kegiatan', icon: Images },
   { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
@@ -520,8 +523,6 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   { to: '/daftar-hadir-pegawai', label: 'Daftar Hadir Guru & Tendik', icon: ClipboardList },
   { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
   { to: '/link-layanan', label: 'Link Layanan', icon: Link2 },
-  // SK PLH/Plt Kepala Sekolah — tampil untuk semua guru.
-  { to: '/gudang-sk/plh-kepsek', label: 'SK PLH Kepala Sekolah', icon: ShieldCheck },
   { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
   ]
 }
@@ -587,8 +588,11 @@ function getLinksPuskesmasPegawai(jumlahPesanBelumDibaca = 0) {
 // tidak menyala bersamaan.
 function NavItem({ to, label, icon: Icon, end, badge, onNavigate, external, excludePrefix }) {
   const { pathname } = useLocation()
-  const cekAktif = (isActive) =>
-    isActive && !(excludePrefix && pathname.startsWith(excludePrefix))
+  const cekAktif = (isActive) => {
+    if (!isActive || !excludePrefix) return isActive
+    const daftar = Array.isArray(excludePrefix) ? excludePrefix : [excludePrefix]
+    return !daftar.some((p) => pathname.startsWith(p))
+  }
 
   const content = (isActive) => (
     <>
