@@ -208,7 +208,7 @@ export default function RoutesSekolah() {
       <Route path="/gudang-sk/tenaga-kebersihan" element={<SKTenagaKebersihan />} />
       <Route path="/gudang-sk/operator-dapodik" element={<SKOperatorDapodik />} />
       <Route path="/gudang-sk/bendahara-bos" element={<SKBendaharaBOS />} />
-      <Route path="/gudang-sk/plh-kepsek" element={<SKPLHKepsek />} />
+      <Route path="/gudang-sk/plh-kepsek" element={<ProtectedRoute><SKPLHKepsek /></ProtectedRoute>} />
       <Route path="/gudang-sk/pengawas-asesmen" element={<ProtectedRoute adminOnly><SKPengawasAsesmen /></ProtectedRoute>} />
       <Route path="/gudang-sk/daftar-honor-literasi-numerasi" element={<DaftarHonorLiterasiNumerasi />} />
       <Route path="/gudang-sk/daftar-honor-pengawas-asesmen" element={<DaftarHonorPengawasAsesmen />} />
