@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Save } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
+import { supabase } from '../lib/supabaseClient'
 import {
   AreaLembar,
   BagianSK as Bagian,
@@ -27,637 +28,483 @@ import {
 } from './CetakSK'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SKPenugasanTunggal — komponen bersama untuk SK penetapan/pengangkatan SATU
-// ORANG, dengan data langsung tertulis di diktum "Pertama" — TANPA lampiran.
-// Formatnya mengikuti contoh SK Bendahara Sekolah yang dipakai sekolah
-// (Menimbang satu paragraf, ada Memperhatikan, diktum berlabel
-// Pertama/Kedua/Ketiga/… bukan KESATU/KEDUA).
-//
-// Dipakai oleh:
-//   • SK Bendahara BOS        (pages/SKBendaharaBOS.jsx)
-//   • SK Honor Guru           (pages/SKHonorGuru.jsx)
-//   • SK Tenaga Kebersihan    (pages/SKTenagaKebersihan.jsx)
-//   • SK Operator Dapodik     (pages/SKOperatorDapodik.jsx)
-//
-// Semua di atas dulunya dua-halaman (Keputusan + Lampiran tabel banyak-orang)
-// lewat SKPenugasan.jsx. Atas permintaan, keempatnya sekarang satu-orang,
-// satu halaman, tanpa tabel — SKPenugasan.jsx masih ada sebagai referensi
-// tapi tidak lagi dipakai oleh keempat halaman ini.
-//
-// Catatan spasi cetak: lembar ini punya CSS pemadatan khusus (lihat blok
-// <style> di bawah, di-scope lewat class "sk-print-compact" yang HANYA
-// membungkus <LembarSK>) supaya isi + blok tanda tangan (BlokTTD) muat di
-// satu halaman A4. Ini sengaja tidak diletakkan di CetakSK.jsx supaya SK lain
-// yang memakai komponen sama tidak ikut berubah spasinya.
-//
-// Bentuk `konfig`:
-//   {
-//     judulBar,            // judul di BarAtasCetak
-//     labelTentang,         // baris "TENTANG …", huruf besar, mis. 'PENETAPAN BENDAHARA BOS'
-//     jabatan,              // dipakai di "Untuk menjadi {jabatan} pada {sekolah}"
-//     placeholderNomor,
-//     tipePeriode,          // 'anggaran' (default, dipakai Bendahara BOS — field "Tahun
-//                           //   anggaran", label "TAHUN ANGGARAN {tahun}") atau 'pelajaran'
-//                           //   (Honor Guru/Kebersihan/Dapodik — field "Tahun pelajaran"
-//                           //   otomatis format 2026/2027, label "TAHUN PELAJARAN {tp}").
-//                           //   Penanda {tahun} dan {tp} sama-sama tersedia apa pun mode-nya.
-//     objek,                // opsional, isi penanda {objek}
-//     menimbang,            // string, SATU alinea (boleh lebih dari satu baris)
-//     mengingat,            // string, satu butir per baris → tercetak bernomor 1. 2. 3.
-//     memperhatikan,        // string, satu baris. Kosong ('') → baris Memperhatikan tidak tercetak
-//     tampilHonor,          // boolean, opsional. Kalau true, menampilkan 2 field tambahan
-//                           //   ("Honorarium per bulan", "Sumber dana") → penanda {honor}, {sumber}.
-//     sumberAwal,           // opsional, nilai awal field "Sumber dana"
-//     masaAwal,             // string, opsional. Kalau diisi (boleh ''), menampilkan field
-//                           //   "Masa berlaku" yang isinya masuk ke penanda {masa}.
-//     tugas,                // string, opsional, satu butir per baris → SATU diktum a. b. c. …
-//     tugasSetelahBaris,    // angka, opsional (default 1)
-//     diktumLain,           // string, satu butir per baris → diktum Kedua, Ketiga, dst.
-//
-//     // ── BARU (opsional; tanpa ini tampilan SK lain tidak berubah) ──
-//     identitas,            // 'guru-honor' → diktum Pertama memakai format model SK Pengangkatan
-//                           //   Guru Honor: "Mengangkat dan menugaskan saudara/i … sebagai
-//                           //   {jabatan} pada {sekolah}:" + Nama, Tempat/Tanggal Lahir,
-//                           //   Pendidikan Terakhir, Jabatan/Tugas, Unit Kerja (tanpa NIP &
-//                           //   Pangkat/Golongan). Default: format lama (Nama/NIP/Pangkat-Gol).
-//     tugasAwal,            // opsional, nilai awal "Jabatan/Tugas" (mode guru-honor), mis. 'Guru Kelas'
-//     tembusan,             // string, satu butir per baris. Kalau diisi → blok "Tembusan
-//                           //   disampaikan kepada Yth.:" bernomor di bawah tanda tangan.
-//   }
-// Penanda di teks: {sekolah}, {tahun}, {tp}, {objek}, {jabatan}, {honor}, {sumber}, {masa},
-// {tanggal} (tanggal penetapan, mis. "01 Juli 2026").
+// SK PLH Kepala Sekolah
+//  • Admin  : bisa mengisi/mengubah semua isian + Simpan + Cetak.
+//  • Guru   : hanya melihat lembar SK + Cetak (panel isian tidak tampil).
+//  • Terisi otomatis: kop & kepala sekolah dari Profil Sekolah, PLH dari Data Guru,
+//    Menimbang/Mengingat/diktum dari template (boleh diubah admin).
+// Penanda di teks: {sekolah}, {tahun}, {kepsek}, {plh}, {alasan}, {masa}, {tanggal}
 // ─────────────────────────────────────────────────────────────────────────────
 
-const URUTAN_DIKTUM = [
-  'Pertama',
-  'Kedua',
-  'Ketiga',
-  'Keempat',
-  'Kelima',
-  'Keenam',
-  'Ketujuh',
-  'Kedelapan',
-  'Kesembilan',
-  'Kesepuluh',
-]
+const URUTAN_DIKTUM = ['Pertama', 'Kedua', 'Ketiga', 'Keempat', 'Kelima', 'Keenam', 'Ketujuh', 'Kedelapan', 'Kesembilan', 'Kesepuluh']
 
-const tahunAnggaranSekarang = () => String(new Date().getFullYear())
+const TEMPLATE = {
+  alasan: 'sedang menjalankan cuti',
+  menimbang:
+    'bahwa Kepala {sekolah} ({kepsek}) {alasan}, sehingga untuk kelancaran penyelenggaraan tugas dan layanan pendidikan di sekolah, perlu menunjuk Pelaksana Harian (PLH) Kepala Sekolah;',
+  mengingat: [
+    'Undang-Undang Nomor 20 Tahun 2003 tentang Sistem Pendidikan Nasional;',
+    'Peraturan Pemerintah Nomor 57 Tahun 2021 tentang Standar Nasional Pendidikan;',
+    'Peraturan Menteri Pendidikan, Kebudayaan, Riset, dan Teknologi Nomor 40 Tahun 2021 tentang Penugasan Guru sebagai Kepala Sekolah;',
+  ].join('\n'),
+  memperhatikan: '',
+  diktumLain: [
+    'Pelaksana Harian (PLH) bertugas melaksanakan tugas dan tanggung jawab Kepala Sekolah sehari-hari, meliputi memimpin penyelenggaraan pendidikan, mengelola administrasi sekolah, serta melaporkan pelaksanaan tugas kepada Kepala Sekolah definitif dan pejabat yang berwenang.',
+    'Penunjukan sebagaimana dimaksud dalam diktum Pertama berlaku {masa}.',
+    'Keputusan ini mulai berlaku pada tanggal ditetapkan, dengan ketentuan apabila di kemudian hari terdapat kekeliruan akan diperbaiki sebagaimana mestinya.',
+  ].join('\n'),
+  tembusan: ['Pengawas Pembina {sekolah}', 'Yang bersangkutan', 'Arsip'].join('\n'),
+}
 
-// Daftar tanpa nomor/huruf — satu baris teks jadi satu alinea rata kiri-kanan,
-// sesuai model (Menimbang tidak berpoin a./b./c.).
+const FORM_AWAL = () => ({
+  nomor: '',
+  tempat: '',
+  tanggal: isoHariIni(),
+  tahun: tahunPelajaranSekarang(),
+  alasan: TEMPLATE.alasan,
+  plh: { guruId: '', nama: '', nip: '', pangkatGol: '', jabatan: 'Guru' },
+  tglMulai: '',
+  tglSelesai: '',
+  menimbang: TEMPLATE.menimbang,
+  mengingat: TEMPLATE.mengingat,
+  memperhatikan: TEMPLATE.memperhatikan,
+  diktumLain: TEMPLATE.diktumLain,
+  tembusan: TEMPLATE.tembusan,
+})
+
+const tglTeks = (iso) => {
+  try {
+    return iso ? formatTanggalSK(iso) : ''
+  } catch {
+    return iso || ''
+  }
+}
+
 function DaftarPolos({ items }) {
-  return items.map((teks, i) => (
+  return items.map((t, i) => (
     <p key={i} className="sk-justify">
-      {teks}
+      {t}
     </p>
   ))
 }
-
-// Daftar bernomor angka (1. 2. 3.) — dipakai untuk Mengingat & Tembusan.
 function DaftarAngka({ items }) {
-  return items.map((teks, i) => (
+  return items.map((t, i) => (
     <div key={i} className="sk-item">
       <span className="no">{i + 1}.</span>
-      <span className="isi">{teks}</span>
+      <span className="isi">{t}</span>
     </div>
   ))
 }
 
-// Daftar berhuruf (a. b. c. …) — dipakai untuk diktum "uraian tugas".
-function DaftarHuruf({ items }) {
-  return items.map((teks, i) => (
-    <div key={i} className="sk-item">
-      <span className="no">{String.fromCharCode(97 + i)}.</span>
-      <span className="isi">{teks}</span>
-    </div>
-  ))
-}
-
-// CSS pemadatan khusus lembar cetak SK satu-orang. Di-scope lewat
-// ".sk-print-compact" (dibungkus hanya di sekitar <LembarSK>) supaya panel
-// isian (no-print) dan komponen SK lain yang memakai CetakSK.jsx tidak
-// ikut berubah. Tujuannya: kurangi jarak antar-paragraf/baris secukupnya
-// agar BlokTTD (dan Tembusan) tidak terdorong ke halaman 2.
-function GayaPadatSatuHalaman() {
+function GayaPadat() {
   return (
     <style>{`
-      .sk-print-compact .lembar-sk {
-        font-size: 11pt;
-        line-height: 1.22;
-      }
-
-      .sk-print-compact .sk-kop {
-        padding-bottom: 4px;
-        margin-bottom: 8px;
-      }
-      .sk-print-compact .sk-kop-logo {
-        width: 16mm;
-        height: 16mm;
-      }
-      .sk-print-compact .sk-kop-atas {
-        font-size: 10.5pt;
-      }
-      .sk-print-compact .sk-kop-nama {
-        font-size: 13pt;
-        line-height: 1.15;
-      }
-      .sk-print-compact .sk-kop-alamat {
-        font-size: 9.5pt;
-      }
-
-      .sk-print-compact .sk-judul {
-        margin-bottom: 6px;
-      }
-      .sk-print-compact .sk-judul p {
-        margin: 1px 0;
-      }
-      .sk-print-compact .sk-judul .tentang {
-        margin: 2px 0;
-      }
-
-      .sk-print-compact .sk-tengah {
-        margin: 4px 0;
-      }
-
-      .sk-print-compact table.sk-def {
-        margin-top: 3px;
-        margin-bottom: 3px;
-      }
-      .sk-print-compact table.sk-def > tbody > tr > td {
-        padding: 0 0 2px;
-        vertical-align: top;
-      }
-      .sk-print-compact .sk-item {
-        margin: 0;
-      }
-      .sk-print-compact .sk-justify {
-        margin: 0;
-      }
-
-      .sk-print-compact .sk-data {
-        margin: 2px 0 4px 8mm;
-      }
-      .sk-print-compact .sk-data td {
-        padding: 0;
-      }
-
-      .sk-print-compact .sk-ttd {
-        margin-top: 8px;
-      }
-      .sk-print-compact .sk-ttd table {
-        margin-bottom: 2px;
-      }
-      .sk-print-compact .sk-ttd .ruang {
-        height: 14mm;
-      }
-
-      /* Tembusan (opsional) — lebih kecil & rapat supaya tetap satu halaman */
-      .sk-print-compact .sk-tembusan {
-        margin-top: 6px;
-        font-size: 9.5pt;
-        line-height: 1.15;
-      }
-      .sk-print-compact .sk-tembusan p {
-        margin: 0;
-      }
+      .sk-print-compact .lembar-sk{font-size:11pt;line-height:1.22}
+      .sk-print-compact .sk-kop{padding-bottom:4px;margin-bottom:8px}
+      .sk-print-compact .sk-judul{margin-bottom:6px}
+      .sk-print-compact .sk-judul p{margin:1px 0}
+      .sk-print-compact .sk-tengah{margin:4px 0}
+      .sk-print-compact table.sk-def{margin:3px 0}
+      .sk-print-compact table.sk-def>tbody>tr>td{padding:0 0 2px;vertical-align:top}
+      .sk-print-compact .sk-item,.sk-print-compact .sk-justify{margin:0}
+      .sk-print-compact .sk-data{margin:2px 0 4px 8mm}
+      .sk-print-compact .sk-data td{padding:0}
+      .sk-print-compact .sk-ttd{margin-top:8px}
+      .sk-print-compact .sk-ttd .ruang{height:14mm}
+      .sk-print-compact .sk-tembusan{margin-top:6px;font-size:9.5pt;line-height:1.15}
+      .sk-print-compact .sk-tembusan p{margin:0}
     `}</style>
   )
 }
 
-export default function SKPenugasanTunggal({ konfig }) {
-  const navigate = useNavigate()
-  const { sekolahId } = useAuth()
-  const sudahMuat = useRef(false)
+// gabungkan: nilai tersimpan menang, tapi hanya kalau tidak kosong
+const gabung = (dasar, simpan) => {
+  const hasil = { ...dasar }
+  Object.entries(simpan || {}).forEach(([k, v]) => {
+    if (v !== '' && v != null) hasil[k] = v
+  })
+  return hasil
+}
 
-  const periodePelajaran = konfig.tipePeriode === 'pelajaran'
-  const modeGuruHonor = konfig.identitas === 'guru-honor'
+export default function SKPLHKepalaSekolah() {
+  const navigate = useNavigate()
+  const { sekolahId, isAdmin } = useAuth() // hanya admin yang boleh mengubah
 
   const [sekolah, setSekolah] = useState(SEKOLAH_KOSONG)
-  const [sk, setSk] = useState({
-    nomor: '',
-    tempat: '',
-    tanggal: isoHariIni(),
-    tahun: periodePelajaran ? tahunPelajaranSekarang() : tahunAnggaranSekarang(),
-  })
-  const [menimbang, setMenimbang] = useState(konfig.menimbang)
-  const [mengingat, setMengingat] = useState(konfig.mengingat)
-  const [memperhatikan, setMemperhatikan] = useState(konfig.memperhatikan || '')
-  const [diktumLain, setDiktumLain] = useState(konfig.diktumLain || '')
-  const [tugas, setTugas] = useState(konfig.tugas || '')
-  const [honor, setHonor] = useState('')
-  const [sumber, setSumber] = useState(konfig.sumberAwal || '')
-  const [masa, setMasa] = useState(konfig.masaAwal || '')
-  const [tembusan, setTembusan] = useState(konfig.tembusan || '')
-
+  const [f, setF] = useState(FORM_AWAL())
   const [guru, setGuru] = useState([])
-  const [orang, setOrang] = useState({
-    guruId: '',
-    nama: '',
-    nip: '',
-    pangkatGol: '',
-    ttl: '', // khusus mode guru-honor: "Tempat, Tanggal Lahir"
-    pendidikan: '', // khusus mode guru-honor
-  })
-  const [jabatanTugas, setJabatanTugas] = useState(konfig.jabatan || '')
-  const [tugasGuru, setTugasGuru] = useState(konfig.tugasAwal || '') // "Jabatan/Tugas" mode guru-honor
-  const [unitKerja, setUnitKerja] = useState('') // kosong → otomatis nama sekolah
-
+  const [rowId, setRowId] = useState(null)
+  const [adaTersimpan, setAdaTersimpan] = useState(false)
   const [memuat, setMemuat] = useState(true)
+  const [menyimpan, setMenyimpan] = useState(false)
   const [galat, setGalat] = useState('')
+  const [info, setInfo] = useState('')
 
-  async function muatDariData() {
+  useEffect(() => {
     if (!sekolahId) {
       setMemuat(false)
       return
     }
-    setMemuat(true)
-    setGalat('')
-    try {
-      const [ps, gk] = await Promise.all([ambilProfilSekolah(sekolahId), ambilGuruDanKelas(sekolahId)])
-      const urut = urutkanGuru(gk.guru)
-      const kepsek = urut.find(isKepalaSekolah)
+    let aktif = true
+    ;(async () => {
+      setMemuat(true)
+      setGalat('')
+      try {
+        const [ps, saved, gk] = await Promise.all([
+          ambilProfilSekolah(sekolahId),
+          supabase
+            .from('sk_plh_kepsek')
+            .select('id,data')
+            .eq('sekolah_id', sekolahId)
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          isAdmin ? ambilGuruDanKelas(sekolahId) : Promise.resolve(null),
+        ])
+        if (!aktif) return
+        if (saved.error) throw saved.error
 
-      setSekolah({
-        ...ps.sekolah,
-        kepala: ps.sekolah.kepala || kepsek?.nama_lengkap || '',
-        nipKepala: ps.sekolah.nipKepala || kepsek?.nip || '',
-      })
-      if (ps.tempat && !sudahMuat.current) setSk((s) => ({ ...s, tempat: s.tempat || ps.tempat }))
-      setGuru(urut)
-      sudahMuat.current = true
-    } catch (e) {
-      console.error(`Gagal memuat data ${konfig.judulBar}:`, e)
-      setGalat(e?.message || 'Data tidak dapat dibaca.')
-    } finally {
-      setMemuat(false)
+        const urut = gk ? urutkanGuru(gk.guru) : []
+        const kepsek = urut.find(isKepalaSekolah)
+        const dasar = {
+          ...ps.sekolah,
+          kepala: ps.sekolah.kepala || kepsek?.nama_lengkap || '',
+          nipKepala: ps.sekolah.nipKepala || kepsek?.nip || '',
+        }
+        const tersimpan = saved.data?.data || null
+        setGuru(urut)
+        setSekolah(gabung(dasar, tersimpan?.sekolah))
+        const awal = FORM_AWAL()
+        if (tersimpan) {
+          const { sekolah: _abaikan, ...form } = tersimpan
+          setF({ ...awal, ...form, plh: { ...awal.plh, ...(form.plh || {}) } })
+          setRowId(saved.data.id)
+          setAdaTersimpan(true)
+        } else {
+          setF({ ...awal, tempat: ps.tempat || '' })
+        }
+      } catch (e) {
+        console.error('Gagal memuat SK PLH:', e)
+        if (aktif) setGalat(e?.message || 'Data tidak dapat dibaca.')
+      } finally {
+        if (aktif) setMemuat(false)
+      }
+    })()
+    return () => {
+      aktif = false
     }
-  }
+  }, [sekolahId, isAdmin])
 
-  useEffect(() => {
-    muatDariData()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sekolahId])
-
+  const ubah = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
+  const ubahPlh = (k) => (e) => setF((s) => ({ ...s, plh: { ...s.plh, [k]: e.target.value } }))
   const ubahSekolah = (k) => (e) => setSekolah((s) => ({ ...s, [k]: e.target.value }))
-  const ubahSk = (k) => (e) => setSk((s) => ({ ...s, [k]: e.target.value }))
-  const ubahOrang = (k) => (e) => setOrang((o) => ({ ...o, [k]: e.target.value }))
 
   function pilihGuru(guruId) {
     const g = guru.find((x) => x.id === guruId)
-    // Tempat/tanggal lahir & pendidikan: nama kolom di tabel guru belum dipastikan,
-    // jadi dicoba beberapa kemungkinan; kalau kosong tinggal diketik manual.
-    let tglLahir = ''
-    try {
-      tglLahir = g?.tanggal_lahir ? formatTanggalSK(g.tanggal_lahir) : ''
-    } catch {
-      tglLahir = g?.tanggal_lahir || ''
-    }
-    setOrang({
-      guruId,
-      nama: g?.nama_lengkap || '',
-      nip: g?.nip || '',
-      pangkatGol: g?.pangkat_golongan || '',
-      ttl: [g?.tempat_lahir, tglLahir].filter(Boolean).join(', '),
-      pendidikan: g?.pendidikan_terakhir || g?.pendidikan || '',
-    })
+    setF((s) => ({
+      ...s,
+      plh: {
+        guruId,
+        nama: g?.nama_lengkap || '',
+        nip: g?.nip || '',
+        pangkatGol: g?.pangkat_golongan || '',
+        jabatan: s.plh.jabatan || 'Guru',
+      },
+    }))
+  }
+
+  async function simpan() {
+    if (!isAdmin || !sekolahId) return
+    setMenyimpan(true)
+    setInfo('')
+    setGalat('')
+    const payload = { sekolah_id: sekolahId, data: { ...f, sekolah }, updated_at: new Date().toISOString() }
+    const { data, error } = rowId
+      ? await supabase.from('sk_plh_kepsek').update(payload).eq('id', rowId).select('id').single()
+      : await supabase.from('sk_plh_kepsek').insert(payload).select('id').single()
+    setMenyimpan(false)
+    if (error) return setGalat('Gagal menyimpan: ' + error.message)
+    setRowId(data.id)
+    setAdaTersimpan(true)
+    setInfo('Data tersimpan. Guru kini bisa melihat dan mencetak SK ini.')
   }
 
   // ── Susun isi dokumen ──
   const namaSekolah = isi(sekolah.nama, 'NAMA SEKOLAH')
-  const tahun = isi(sk.tahun)
-
-  let tanggalTeks = ''
-  try {
-    tanggalTeks = formatTanggalSK(sk.tanggal)
-  } catch {
-    tanggalTeks = sk.tanggal || ''
-  }
-
-  const nilaiDasar = {
+  const awalMasa = f.tglMulai ? `mulai tanggal ${tglTeks(f.tglMulai)}` : 'terhitung sejak tanggal ditetapkan'
+  const akhirMasa = f.tglSelesai
+    ? `sampai dengan ${tglTeks(f.tglSelesai)}`
+    : 'sampai dengan Kepala Sekolah definitif kembali bertugas'
+  const nilai = {
     sekolah: namaSekolah,
-    tahun,
-    tp: tahun, // alias: {tahun} dan {tp} sama-sama merujuk field periode di atas
-    objek: konfig.objek || '',
-    jabatan: isi(jabatanTugas),
-    honor: isi(honor),
-    sumber: isi(sumber, konfig.sumberAwal || '…………'),
-    tanggal: tanggalTeks,
+    tahun: isi(f.tahun),
+    tp: isi(f.tahun),
+    kepsek: isi(sekolah.kepala, '…………'),
+    plh: isi(f.plh.nama, '…………'),
+    alasan: isi(f.alasan, '…………'),
+    masa: `${awalMasa} ${akhirMasa}`,
+    tanggal: tglTeks(f.tanggal),
+    jabatan: 'Pelaksana Harian (PLH) Kepala Sekolah',
+    honor: '',
+    sumber: '',
+    objek: '',
   }
-  // {masa} boleh berisi penanda lain (mis. "untuk Tahun Pelajaran {tp}"), jadi
-  // diproses dulu dengan nilaiDasar sebelum dipakai untuk menggantikan {masa}.
-  const nilai = { ...nilaiDasar, masa: isiTemplate(masa, nilaiDasar) }
+  const daftarMenimbang = pecahBaris(f.menimbang).map((t) => isiTemplate(t, nilai))
+  const daftarMengingat = pecahBaris(f.mengingat).map((t) => isiTemplate(t, nilai))
+  const teksMemperhatikan = isiTemplate(f.memperhatikan || '', nilai)
+  const daftarDiktum = pecahBaris(f.diktumLain)
+    .map((t) => isiTemplate(t, nilai))
+    .slice(0, URUTAN_DIKTUM.length - 1)
+  const daftarTembusan = pecahBaris(f.tembusan).map((t) => isiTemplate(t, nilai))
+  const skCetak = { nomor: f.nomor, tempat: f.tempat, tanggal: f.tanggal }
 
-  const labelPeriode = periodePelajaran ? 'TAHUN PELAJARAN' : 'TAHUN ANGGARAN'
-  const tentangBaris = [konfig.labelTentang, `${labelPeriode} ${tahun}`]
-  const daftarMenimbang = pecahBaris(menimbang).map((t) => isiTemplate(t, nilai))
-  const daftarMengingat = pecahBaris(mengingat).map((t) => isiTemplate(t, nilai))
-  const teksMemperhatikan = isiTemplate(memperhatikan, nilai)
-  const daftarTembusan = pecahBaris(tembusan).map((t) => isiTemplate(t, nilai))
-
-  // Gabungkan diktumLain (teks biasa) dengan diktum "tugas" (sub-list huruf a/b/c),
-  // disisipkan pada posisi konfig.tugasSetelahBaris (default: setelah baris pertama).
-  const barisTugas = konfig.tugas !== undefined ? pecahBaris(tugas).map((t) => isiTemplate(t, nilai)) : []
-  let entriesDiktum = pecahBaris(diktumLain).map((t) => ({ tipe: 'teks', isi: isiTemplate(t, nilai) }))
-  if (barisTugas.length) {
-    const posisi = Math.min(konfig.tugasSetelahBaris ?? 1, entriesDiktum.length)
-    entriesDiktum = [
-      ...entriesDiktum.slice(0, posisi),
-      { tipe: 'sublist', isi: barisTugas },
-      ...entriesDiktum.slice(posisi),
-    ]
+  if (memuat) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center text-sm text-slate-600 gap-2">
+        <Loader2 size={16} className="animate-spin" /> Memuat SK PLH Kepala Sekolah…
+      </div>
+    )
   }
-  entriesDiktum = entriesDiktum.slice(0, URUTAN_DIKTUM.length - 1)
 
-  const skCetak = { nomor: sk.nomor, tempat: sk.tempat, tanggal: sk.tanggal }
-  const namaOrang = isi(orang.nama)
-  const nipOrang = isi(orang.nip)
-  const pangkatGolOrang = isi(orang.pangkatGol)
+  const tampilLembar = isAdmin || adaTersimpan
 
   return (
     <div className="min-h-screen bg-slate-100">
       <GayaCetakSK />
-      <GayaPadatSatuHalaman />
-      <BarAtasCetak onKembali={() => navigate('/gudang-sk')} judul={konfig.judulBar} />
+      <GayaPadat />
+      <BarAtasCetak onKembali={() => navigate('/dashboard')} judul="SK PLH Kepala Sekolah" />
 
-      {/* ── Panel isian (tidak ikut tercetak) ── */}
       <div className="no-print max-w-3xl mx-auto px-3 pt-4">
-        {memuat && (
-          <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800 mb-4">
-            <Loader2 size={16} className="animate-spin" /> Mengambil data sekolah dan guru…
+        {galat && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 mb-4">{galat}</div>
+        )}
+        {info && (
+          <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 mb-4">{info}</div>
+        )}
+        {!isAdmin && (
+          <p className="text-sm text-slate-600 mb-3">
+            Anda dapat melihat dan mencetak SK ini. Perubahan isi hanya dapat dilakukan admin.
+          </p>
+        )}
+        {!isAdmin && !adaTersimpan && (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-600">
+            SK PLH Kepala Sekolah belum diisi. Hubungi admin.
           </div>
         )}
-        {!memuat && galat && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 mb-4">
-            Data guru belum bisa dibaca ({galat}). Anda tetap bisa mengetik data secara manual.
-          </div>
-        )}
 
-        <Bagian judul="Data SK" keterangan={`Nomor, tempat, tanggal penetapan, dan ${periodePelajaran ? 'tahun pelajaran' : 'tahun anggaran'}.`}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Nomor SK">
-              <input className={inputCls} value={sk.nomor} onChange={ubahSk('nomor')} placeholder={konfig.placeholderNomor || 'mis. 421.2/020/SD/2026'} />
-            </Field>
-            <Field label={periodePelajaran ? 'Tahun pelajaran' : 'Tahun anggaran'}>
-              <input
-                className={inputCls}
-                value={sk.tahun}
-                onChange={ubahSk('tahun')}
-                placeholder={periodePelajaran ? 'mis. 2026/2027' : 'mis. 2026'}
-              />
-            </Field>
-            <Field label="Ditetapkan di">
-              <input className={inputCls} value={sk.tempat} onChange={ubahSk('tempat')} placeholder="Nama kota/kabupaten" />
-            </Field>
-            <Field label="Pada tanggal">
-              <input type="date" className={inputCls} value={sk.tanggal} onChange={ubahSk('tanggal')} />
-            </Field>
-          </div>
-        </Bagian>
+        {isAdmin && (
+          <>
+            <Bagian judul="Data SK" keterangan="Nomor, tempat, tanggal penetapan, dan tahun pelajaran.">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Field label="Nomor SK">
+                  <input className={inputCls} value={f.nomor} onChange={ubah('nomor')} placeholder="mis. 421.2/020/SD/2026" />
+                </Field>
+                <Field label="Tahun pelajaran">
+                  <input className={inputCls} value={f.tahun} onChange={ubah('tahun')} placeholder="mis. 2026/2027" />
+                </Field>
+                <Field label="Ditetapkan di">
+                  <input className={inputCls} value={f.tempat} onChange={ubah('tempat')} />
+                </Field>
+                <Field label="Pada tanggal">
+                  <input type="date" className={inputCls} value={f.tanggal} onChange={ubah('tanggal')} />
+                </Field>
+              </div>
+            </Bagian>
 
-        <Bagian judul="Personel" keterangan="Satu orang. Pilih dari Data Guru, atau isi manual untuk orang yang tidak ada di Data Guru.">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Guru/pegawai" className="sm:col-span-2">
-              <select className={inputCls} value={orang.guruId} onChange={(e) => pilihGuru(e.target.value)}>
-                <option value="">— isi manual —</option>
-                {guru.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.nama_lengkap || '(tanpa nama)'}
-                    {g.nip ? ` — NIP. ${g.nip}` : ''}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Nama">
-              <input className={inputCls} value={orang.nama} onChange={ubahOrang('nama')} />
-            </Field>
-
-            {modeGuruHonor ? (
-              <>
-                <Field label="Tempat, tanggal lahir">
-                  <input className={inputCls} value={orang.ttl} onChange={ubahOrang('ttl')} placeholder="mis. Lor-Lor, 23 April 1986" />
+            <Bagian judul="Pelaksana Harian (PLH)" keterangan="Pilih dari Data Guru — nama, NIP, dan pangkat terisi otomatis. Bisa diisi manual.">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Field label="Guru yang ditunjuk" className="sm:col-span-2">
+                  <select className={inputCls} value={f.plh.guruId} onChange={(e) => pilihGuru(e.target.value)}>
+                    <option value="">— isi manual —</option>
+                    {guru.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.nama_lengkap || '(tanpa nama)'}
+                        {g.nip ? ` — NIP. ${g.nip}` : ''}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
-                <Field label="Pendidikan terakhir">
-                  <input className={inputCls} value={orang.pendidikan} onChange={ubahOrang('pendidikan')} placeholder="mis. S1 - PGSD" />
+                <Field label="Nama">
+                  <input className={inputCls} value={f.plh.nama} onChange={ubahPlh('nama')} />
                 </Field>
-                <Field label="Jabatan/Tugas">
-                  <input className={inputCls} value={tugasGuru} onChange={(e) => setTugasGuru(e.target.value)} placeholder="mis. Guru Kelas 1" />
-                </Field>
-                <Field label="Unit kerja (kosong = nama sekolah)" className="sm:col-span-2">
-                  <input className={inputCls} value={unitKerja} onChange={(e) => setUnitKerja(e.target.value)} placeholder={sekolah.nama || 'Nama sekolah, kabupaten'} />
-                </Field>
-              </>
-            ) : (
-              <>
                 <Field label="NIP (kosongkan kalau tidak ada)">
-                  <input className={inputCls} value={orang.nip} onChange={ubahOrang('nip')} inputMode="numeric" />
+                  <input className={inputCls} value={f.plh.nip} onChange={ubahPlh('nip')} inputMode="numeric" />
                 </Field>
                 <Field label="Pangkat/Golongan">
-                  <input className={inputCls} value={orang.pangkatGol} onChange={ubahOrang('pangkatGol')} placeholder="mis. Pengatur Tingkat I, II/c" />
+                  <input className={inputCls} value={f.plh.pangkatGol} onChange={ubahPlh('pangkatGol')} />
                 </Field>
-                <Field label="Ditunjuk menjadi (jabatan/tugas)">
-                  <input className={inputCls} value={jabatanTugas} onChange={(e) => setJabatanTugas(e.target.value)} placeholder={konfig.jabatan} />
+                <Field label="Jabatan saat ini">
+                  <input className={inputCls} value={f.plh.jabatan} onChange={ubahPlh('jabatan')} />
                 </Field>
-              </>
-            )}
-          </div>
-        </Bagian>
-
-        <Bagian
-          judul="Isi keputusan"
-          keterangan="Menimbang: satu alinea (tanpa huruf a/b/c). Mengingat & diktum lain: satu baris = satu butir. Penanda otomatis: {sekolah}, {tahun}/{tp}, {objek}, {jabatan}, {honor}, {sumber}, {masa}, {tanggal}."
-        >
-          <div className="grid grid-cols-1 gap-3">
-            <Field label="Menimbang">
-              <textarea className={inputCls} rows={4} value={menimbang} onChange={(e) => setMenimbang(e.target.value)} />
-            </Field>
-            <Field label="Mengingat">
-              <textarea className={inputCls} rows={6} value={mengingat} onChange={(e) => setMengingat(e.target.value)} />
-            </Field>
-            <Field label="Memperhatikan (kosongkan kalau tidak dipakai)">
-              <input className={inputCls} value={memperhatikan} onChange={(e) => setMemperhatikan(e.target.value)} />
-            </Field>
-
-            {konfig.tugas !== undefined && (
-              <Field label="Uraian tugas (jadi satu diktum tersendiri, bersub-poin a. b. c. …)">
-                <textarea className={inputCls} rows={5} value={tugas} onChange={(e) => setTugas(e.target.value)} />
-              </Field>
-            )}
-
-            {konfig.tampilHonor && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Field label="Honorarium per bulan">
-                  <input
-                    className={inputCls}
-                    value={honor}
-                    onChange={(e) => setHonor(e.target.value)}
-                    placeholder="mis. Rp500.000,00"
-                  />
+                <Field label="Mulai tugas PLH">
+                  <input type="date" className={inputCls} value={f.tglMulai} onChange={ubah('tglMulai')} />
                 </Field>
-                <Field label="Sumber dana">
-                  <input className={inputCls} value={sumber} onChange={(e) => setSumber(e.target.value)} />
+                <Field label="Selesai tugas (kosong = sampai Kepala Sekolah kembali)">
+                  <input type="date" className={inputCls} value={f.tglSelesai} onChange={ubah('tglSelesai')} />
+                </Field>
+                <Field label="Alasan PLH (masuk ke Menimbang)" className="sm:col-span-2">
+                  <input className={inputCls} value={f.alasan} onChange={ubah('alasan')} placeholder="mis. sedang menjalankan cuti / sedang dinas luar" />
                 </Field>
               </div>
-            )}
+            </Bagian>
 
-            {konfig.masaAwal !== undefined && (
-              <Field label="Masa berlaku">
-                <input className={inputCls} value={masa} onChange={(e) => setMasa(e.target.value)} />
-              </Field>
-            )}
+            <Bagian
+              judul="Isi keputusan"
+              keterangan="Sudah terisi template. Mengingat & diktum lain: satu baris = satu butir. Penanda otomatis: {sekolah}, {kepsek}, {plh}, {alasan}, {masa}, {tahun}, {tanggal}."
+            >
+              <div className="grid grid-cols-1 gap-3">
+                <Field label="Menimbang">
+                  <textarea className={inputCls} rows={4} value={f.menimbang} onChange={ubah('menimbang')} />
+                </Field>
+                <Field label="Mengingat">
+                  <textarea className={inputCls} rows={5} value={f.mengingat} onChange={ubah('mengingat')} />
+                </Field>
+                <Field label="Memperhatikan (kosongkan kalau tidak dipakai)">
+                  <input className={inputCls} value={f.memperhatikan} onChange={ubah('memperhatikan')} />
+                </Field>
+                <Field label="Diktum Kedua dan seterusnya (diktum Pertama dibuat otomatis dari data PLH)">
+                  <textarea className={inputCls} rows={6} value={f.diktumLain} onChange={ubah('diktumLain')} />
+                </Field>
+                <Field label="Tembusan (kosongkan kalau tidak dipakai)">
+                  <textarea className={inputCls} rows={3} value={f.tembusan} onChange={ubah('tembusan')} />
+                </Field>
+              </div>
+            </Bagian>
 
-            <Field label="Diktum Kedua dan seterusnya (diktum Pertama dibuat otomatis dari data Personel; penomoran menyesuaikan otomatis kalau ada Uraian tugas di atas)">
-              <textarea className={inputCls} rows={6} value={diktumLain} onChange={(e) => setDiktumLain(e.target.value)} />
-            </Field>
+            <Bagian judul="Kop dan penandatangan" keterangan="Kop dan Kepala Sekolah diambil dari Profil Sekolah.">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Field label="Baris atas kop (satu baris per garis)" className="sm:col-span-2">
+                  <textarea className={inputCls} rows={2} value={sekolah.kopAtas} onChange={ubahSekolah('kopAtas')} />
+                </Field>
+                <Field label="Nama sekolah">
+                  <input className={inputCls} value={sekolah.nama} onChange={ubahSekolah('nama')} />
+                </Field>
+                <Field label="NPSN">
+                  <input className={inputCls} value={sekolah.npsn} onChange={ubahSekolah('npsn')} inputMode="numeric" />
+                </Field>
+                <Field label="Alamat" className="sm:col-span-2">
+                  <input className={inputCls} value={sekolah.alamat} onChange={ubahSekolah('alamat')} />
+                </Field>
+                <Field label="Nama kepala sekolah">
+                  <input className={inputCls} value={sekolah.kepala} onChange={ubahSekolah('kepala')} />
+                </Field>
+                <Field label="NIP kepala sekolah">
+                  <input className={inputCls} value={sekolah.nipKepala} onChange={ubahSekolah('nipKepala')} inputMode="numeric" />
+                </Field>
+              </div>
+            </Bagian>
 
-            {konfig.tembusan !== undefined && (
-              <Field label="Tembusan (satu baris = satu butir; kosongkan kalau tidak dipakai)">
-                <textarea className={inputCls} rows={4} value={tembusan} onChange={(e) => setTembusan(e.target.value)} />
-              </Field>
-            )}
-          </div>
-        </Bagian>
-
-        <Bagian judul="Kop dan penandatangan" keterangan="Kop dan Kepala Sekolah diambil dari Profil Sekolah.">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Baris atas kop (satu baris per garis)" className="sm:col-span-2">
-              <textarea className={inputCls} rows={2} value={sekolah.kopAtas} onChange={ubahSekolah('kopAtas')} />
-            </Field>
-            <Field label="Nama sekolah">
-              <input className={inputCls} value={sekolah.nama} onChange={ubahSekolah('nama')} />
-            </Field>
-            <Field label="NPSN">
-              <input className={inputCls} value={sekolah.npsn} onChange={ubahSekolah('npsn')} inputMode="numeric" />
-            </Field>
-            <Field label="Alamat" className="sm:col-span-2">
-              <input className={inputCls} value={sekolah.alamat} onChange={ubahSekolah('alamat')} />
-            </Field>
-            <Field label="Nama kepala sekolah">
-              <input className={inputCls} value={sekolah.kepala} onChange={ubahSekolah('kepala')} />
-            </Field>
-            <Field label="NIP kepala sekolah">
-              <input className={inputCls} value={sekolah.nipKepala} onChange={ubahSekolah('nipKepala')} inputMode="numeric" />
-            </Field>
-          </div>
-        </Bagian>
-
-        <p className="text-xs text-slate-500 mb-2">
-          Pratinjau di bawah. Saat mencetak, matikan opsi "Header dan footer" di dialog cetak agar bersih.
-        </p>
+            <div className="flex items-center gap-3 mb-3">
+              <button
+                onClick={simpan}
+                disabled={menyimpan}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+              >
+                {menyimpan ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                Simpan SK
+              </button>
+              <span className="text-xs text-slate-500">Setelah disimpan, guru dapat melihat dan mencetak.</span>
+            </div>
+            <p className="text-xs text-slate-500 mb-2">
+              Pratinjau di bawah. Saat mencetak, matikan opsi "Header dan footer" di dialog cetak agar bersih.
+            </p>
+          </>
+        )}
       </div>
 
-      {/* ── Lembar cetak ── */}
-      <AreaLembar>
-        <div className="sk-print-compact">
-          <LembarSK>
-            <KopSK sekolah={sekolah} />
+      {tampilLembar && (
+        <AreaLembar>
+          <div className="sk-print-compact">
+            <LembarSK>
+              <KopSK sekolah={sekolah} />
 
-            <div className="sk-judul">
-              <p style={{ textDecoration: 'underline' }}>Surat Keputusan Kepala {namaSekolah}</p>
-              <p>Nomor: {isi(sk.nomor)}</p>
-              <p className="tentang">Tentang</p>
-              {tentangBaris.map((baris, i) => (
-                <p key={i}>{baris}</p>
-              ))}
-            </div>
+              <div className="sk-judul">
+                <p style={{ textDecoration: 'underline' }}>Surat Keputusan Kepala {namaSekolah}</p>
+                <p>Nomor: {isi(f.nomor)}</p>
+                <p className="tentang">Tentang</p>
+                <p>PENUNJUKAN PELAKSANA HARIAN (PLH) KEPALA SEKOLAH</p>
+                <p>TAHUN PELAJARAN {isi(f.tahun)}</p>
+              </div>
 
-            <p className="sk-tengah" style={{ marginTop: 4 }}>
-              Kepala {namaSekolah},
-            </p>
+              <p className="sk-tengah" style={{ marginTop: 4 }}>
+                Kepala {namaSekolah},
+              </p>
 
-            <table className="sk-def">
-              <tbody>
-                <tr>
-                  <td className="k">Menimbang</td>
-                  <td className="t">:</td>
-                  <td>
-                    <DaftarPolos items={daftarMenimbang} />
-                  </td>
-                </tr>
-                <tr>
-                  <td className="k">Mengingat</td>
-                  <td className="t">:</td>
-                  <td>
-                    <DaftarAngka items={daftarMengingat} />
-                  </td>
-                </tr>
-                {teksMemperhatikan && (
+              <table className="sk-def">
+                <tbody>
                   <tr>
-                    <td className="k">Memperhatikan</td>
+                    <td className="k">Menimbang</td>
                     <td className="t">:</td>
-                    <td className="sk-justify">{teksMemperhatikan}</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-
-            <p className="sk-tengah">M E M U T U S K A N</p>
-
-            <table className="sk-def">
-              <tbody>
-                <tr>
-                  <td className="k">Menetapkan</td>
-                  <td className="t">:</td>
-                  <td></td>
-                </tr>
-                <tr>
-                  <td className="k">Pertama</td>
-                  <td className="t">:</td>
-                  <td className="sk-justify">
-                    {modeGuruHonor ? (
-                      <>
-                        <p style={{ margin: 0 }}>
-                          Mengangkat dan menugaskan saudara/i yang namanya tersebut di bawah ini sebagai {isi(jabatanTugas)} pada {namaSekolah}:
-                        </p>
-                        <TabelData
-                          baris={[
-                            ['Nama', namaOrang],
-                            ['Tempat, Tanggal Lahir', isi(orang.ttl)],
-                            ['Pendidikan Terakhir', isi(orang.pendidikan)],
-                            ['Jabatan/Tugas', isi(tugasGuru)],
-                            ['Unit Kerja', unitKerja || namaSekolah],
-                          ]}
-                        />
-                      </>
-                    ) : (
-                      <>
-                        <p style={{ margin: 0 }}>Mengangkat Saudara :</p>
-                        <TabelData
-                          baris={[
-                            ['Nama', namaOrang],
-                            ['NIP', nipOrang],
-                            ['Pangkat/Golongan', pangkatGolOrang],
-                          ]}
-                        />
-                        <p style={{ margin: 0 }}>
-                          Untuk menjadi {isi(jabatanTugas)} pada {namaSekolah}.
-                        </p>
-                      </>
-                    )}
-                  </td>
-                </tr>
-                {entriesDiktum.map((entri, i) => (
-                  <tr key={i}>
-                    <td className="k">{URUTAN_DIKTUM[i + 1]}</td>
-                    <td className="t">:</td>
-                    <td className={entri.tipe === 'teks' ? 'sk-justify' : undefined}>
-                      {entri.tipe === 'teks' ? entri.isi : <DaftarHuruf items={entri.isi} />}
+                    <td>
+                      <DaftarPolos items={daftarMenimbang} />
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                  <tr>
+                    <td className="k">Mengingat</td>
+                    <td className="t">:</td>
+                    <td>
+                      <DaftarAngka items={daftarMengingat} />
+                    </td>
+                  </tr>
+                  {teksMemperhatikan && (
+                    <tr>
+                      <td className="k">Memperhatikan</td>
+                      <td className="t">:</td>
+                      <td className="sk-justify">{teksMemperhatikan}</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
 
-            <BlokTTD sk={skCetak} sekolah={sekolah} />
+              <p className="sk-tengah">M E M U T U S K A N</p>
 
-            {daftarTembusan.length > 0 && (
-              <div className="sk-tembusan">
-                <p>Tembusan disampaikan kepada Yth.:</p>
-                <DaftarAngka items={daftarTembusan} />
-              </div>
-            )}
-          </LembarSK>
-        </div>
-      </AreaLembar>
+              <table className="sk-def">
+                <tbody>
+                  <tr>
+                    <td className="k">Menetapkan</td>
+                    <td className="t">:</td>
+                    <td></td>
+                  </tr>
+                  <tr>
+                    <td className="k">Pertama</td>
+                    <td className="t">:</td>
+                    <td className="sk-justify">
+                      <p style={{ margin: 0 }}>Menunjuk Saudara/i :</p>
+                      <TabelData
+                        baris={[
+                          ['Nama', isi(f.plh.nama)],
+                          ['NIP', isi(f.plh.nip)],
+                          ['Pangkat/Golongan', isi(f.plh.pangkatGol)],
+                          ['Jabatan saat ini', isi(f.plh.jabatan)],
+                        ]}
+                      />
+                      <p style={{ margin: 0 }}>
+                        Sebagai Pelaksana Harian (PLH) Kepala {namaSekolah}.
+                      </p>
+                    </td>
+                  </tr>
+                  {daftarDiktum.map((teks, i) => (
+                    <tr key={i}>
+                      <td className="k">{URUTAN_DIKTUM[i + 1]}</td>
+                      <td className="t">:</td>
+                      <td className="sk-justify">{teks}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <BlokTTD sk={skCetak} sekolah={sekolah} />
+
+              {daftarTembusan.length > 0 && (
+                <div className="sk-tembusan">
+                  <p>Tembusan disampaikan kepada Yth.:</p>
+                  <DaftarAngka items={daftarTembusan} />
+                </div>
+              )}
+            </LembarSK>
+          </div>
+        </AreaLembar>
+      )}
     </div>
   )
 }
