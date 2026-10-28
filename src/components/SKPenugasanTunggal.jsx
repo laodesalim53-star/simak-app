@@ -226,7 +226,7 @@ function GayaPadatSatuHalaman() {
 
 export default function SKPenugasanTunggal({ konfig }) {
   const navigate = useNavigate()
-  const { sekolahId } = useAuth()
+  const { sekolahId, isAdmin } = useAuth()
   const sudahMuat = useRef(false)
 
   const periodePelajaran = konfig.tipePeriode === 'pelajaran'
@@ -377,7 +377,7 @@ export default function SKPenugasanTunggal({ konfig }) {
     <div className="min-h-screen bg-slate-100">
       <GayaCetakSK />
       <GayaPadatSatuHalaman />
-      <BarAtasCetak onKembali={() => navigate('/gudang-sk')} judul={konfig.judulBar} />
+      <BarAtasCetak onKembali={() => navigate(isAdmin ? '/gudang-sk' : '/dashboard')} judul={konfig.judulBar} />
 
       {/* ── Panel isian (tidak ikut tercetak) ── */}
       <div className="no-print max-w-3xl mx-auto px-3 pt-4">
