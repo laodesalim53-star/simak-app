@@ -144,8 +144,8 @@ export default function SKPLHKepalaSekolah() {
   const [info, setInfo] = useState('')
   const [ttdUrl, setTtdUrl] = useState('')
   const [ttdBusy, setTtdBusy] = useState(false)
-  const BUCKET_TTD = 'tanda-tangan'
-  const pathTtd = sekolahId ? `${sekolahId}/ttd-kepsek` : ''
+  const [ttdPath, setTtdPath] = useState('')
+  const BUCKET_TTD = 'profil-sekolah' // bucket & kolom yang sama dengan halaman Profil Sekolah
 
   useEffect(() => {
     if (!sekolahId) {
@@ -237,42 +237,81 @@ export default function SKPLHKepalaSekolah() {
   }
 
 
-  // Tanda tangan elektronik: satu file tetap per sekolah di bucket privat,
-  // dibaca lewat tautan bertanda waktu (berlaku 1 jam).
+  // Tanda tangan elektronik kepala sekolah: memakai penyimpanan yang sama dengan
+  // halaman Profil Sekolah (profil_sekolah.ttd_kepala_sekolah_path, bucket
+  // 'profil-sekolah'), jadi satu tanda tangan dipakai di semua dokumen.
+  function urlDariPath(path) {
+    if (!path) return ''
+    return supabase.storage.from(BUCKET_TTD).getPublicUrl(path).data?.publicUrl || ''
+  }
   async function muatTtd() {
-    if (!pathTtd) return
-    const { data, error } = await supabase.storage.from(BUCKET_TTD).createSignedUrl(pathTtd, 3600)
-    setTtdUrl(error ? '' : data?.signedUrl || '')
+    if (!sekolahId) return
+    const { data } = await supabase
+      .from('profil_sekolah')
+      .select('ttd_kepala_sekolah_path')
+      .eq('sekolah_id', sekolahId)
+      .maybeSingle()
+    const path = data?.ttd_kepala_sekolah_path || ''
+    setTtdPath(path)
+    setTtdUrl(urlDariPath(path))
   }
   useEffect(() => {
     muatTtd()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathTtd])
+  }, [sekolahId])
 
   async function unggahTtd(e) {
     const file = e.target.files?.[0]
     e.target.value = ''
-    if (!file || !isAdmin || !pathTtd) return
+    if (!file || !isAdmin || !sekolahId) return
     if (!['image/png', 'image/jpeg'].includes(file.type)) return setGalat('Tanda tangan harus berformat PNG atau JPG.')
     if (file.size > 1024 * 1024) return setGalat('Ukuran file maksimal 1 MB.')
     setTtdBusy(true)
     setGalat('')
     setInfo('')
-    const { error } = await supabase.storage.from(BUCKET_TTD).upload(pathTtd, file, { upsert: true, contentType: file.type })
-    if (error) setGalat('Gagal mengunggah tanda tangan: ' + error.message)
-    else {
-      setInfo('Tanda tangan tersimpan. Otomatis dipakai di cetakan SK ini.')
-      await muatTtd()
+    const ext = file.name.split('.').pop()
+    const path = `ttd-kepsek-${Date.now()}.${ext}`
+    const { error: errUnggah } = await supabase.storage.from(BUCKET_TTD).upload(path, file, { upsert: true })
+    if (errUnggah) {
+      setGalat('Gagal mengunggah tanda tangan: ' + errUnggah.message)
+      setTtdBusy(false)
+      return
+    }
+    const { error: errSimpan } = await supabase
+      .from('profil_sekolah')
+      .update({ ttd_kepala_sekolah_path: path, diperbarui_pada: new Date().toISOString() })
+      .eq('sekolah_id', sekolahId)
+    if (errSimpan) {
+      setGalat('Terunggah, tetapi gagal disimpan ke Profil Sekolah: ' + errSimpan.message)
+    } else {
+      if (ttdPath) await supabase.storage.from(BUCKET_TTD).remove([ttdPath]) // bersihkan file lama
+      setTtdPath(path)
+      setTtdUrl(urlDariPath(path))
+      setInfo('Tanda tangan tersimpan di Profil Sekolah dan otomatis dipakai di cetakan SK ini.')
     }
     setTtdBusy(false)
   }
 
   async function hapusTtd() {
-    if (!isAdmin || !pathTtd) return
+    if (!isAdmin || !sekolahId || !confirm('Hapus tanda tangan kepala sekolah?')) return
     setTtdBusy(true)
-    const { error } = await supabase.storage.from(BUCKET_TTD).remove([pathTtd])
-    if (error) setGalat('Gagal menghapus tanda tangan: ' + error.message)
-    else setTtdUrl('')
+    if (ttdPath) {
+      const { error } = await supabase.storage.from(BUCKET_TTD).remove([ttdPath])
+      if (error) {
+        setGalat('Gagal menghapus tanda tangan: ' + error.message)
+        setTtdBusy(false)
+        return
+      }
+    }
+    const { error: errSimpan } = await supabase
+      .from('profil_sekolah')
+      .update({ ttd_kepala_sekolah_path: null, diperbarui_pada: new Date().toISOString() })
+      .eq('sekolah_id', sekolahId)
+    if (errSimpan) setGalat('Gagal memperbarui Profil Sekolah: ' + errSimpan.message)
+    else {
+      setTtdPath('')
+      setTtdUrl('')
+    }
     setTtdBusy(false)
   }
 
@@ -421,7 +460,7 @@ export default function SKPLHKepalaSekolah() {
               </div>
             </Bagian>
 
-            <Bagian judul="Tanda tangan elektronik" keterangan="Unggah sekali (PNG latar transparan paling rapi, maksimal 1 MB). Setelah itu otomatis terpasang di cetakan SK. Hanya admin yang bisa mengunggah atau menghapus.">
+            <Bagian judul="Tanda tangan elektronik" keterangan="Sama dengan tanda tangan di Profil Sekolah: unggah sekali di sini atau di sana, otomatis terpasang di cetakan SK. PNG latar transparan paling rapi, maksimal 1 MB. Hanya admin yang bisa mengubah.">
               <div className="flex flex-wrap items-center gap-4">
                 <div className="h-20 w-40 rounded-lg border border-slate-200 bg-white flex items-center justify-center overflow-hidden">
                   {ttdUrl ? (
