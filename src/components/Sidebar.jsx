@@ -74,7 +74,6 @@ import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import PaketBadge, { usePaketSaatIni } from './PaketBadge'
 import { APP } from '../lib/appConfig'
-import useIsPlh from '../hooks/useIsPlh'
 
 // Dibandingkan langsung dengan import.meta.env supaya Vite membuang
 // fungsi menu tipe lain dari bundle.
@@ -477,9 +476,9 @@ function getLinksPolresPegawai(jumlahPesanBelumDibaca = 0) {
 // Menu GURU: tetap ringkas, tidak perlu dikelompokkan
 // Kuitansi, Kuitansi Jasa & Nota Belanja SENGAJA TIDAK ada di sini — ketiga
 // fitur ini admin-only (lihat RLS policy nota_hanya_admin di Supabase).
-// BARU: parameter `isPlh` — kalau true (guru ini ditunjuk sebagai PLH/Plt
-// Kepala Sekolah di tabel plh_kepsek), muncul menu "SK PLH Kepala Sekolah".
-function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null, isPlh = false) {
+// "SK PLH Kepala Sekolah" sekarang tampil untuk SEMUA guru (tidak lagi
+// bergantung pada penunjukan di tabel plh_kepsek).
+function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   return [
   // PERBAIKAN: "/" sekarang halaman Beranda publik, Dashboard di "/dashboard".
   { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
@@ -521,10 +520,8 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null, isPlh = 
   { to: '/daftar-hadir-pegawai', label: 'Daftar Hadir Guru & Tendik', icon: ClipboardList },
   { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
   { to: '/link-layanan', label: 'Link Layanan', icon: Link2 },
-  // BARU: hanya muncul untuk guru yang ditunjuk sebagai PLH/Plt Kepala Sekolah.
-  ...(isPlh
-    ? [{ to: '/gudang-sk/plh-kepsek', label: 'SK PLH Kepala Sekolah', icon: ShieldCheck }]
-    : []),
+  // SK PLH/Plt Kepala Sekolah — tampil untuk semua guru.
+  { to: '/gudang-sk/plh-kepsek', label: 'SK PLH Kepala Sekolah', icon: ShieldCheck },
   { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
   ]
 }
@@ -745,8 +742,6 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
   const labelPeran = getLabelPeran(profil, isSuperAdmin, isAdminUtama, isAdmin, isOrangTua, !!session)
   // Paket akun yang sedang login (free / standar / premium) untuk lencana di header.
   const paketSaatIni = usePaketSaatIni()
-  // BARU: apakah akun ini ditunjuk sebagai PLH/Plt Kepala Sekolah (tabel plh_kepsek).
-  const { isPlh } = useIsPlh()
 
   // PERBAIKAN: sebelumnya tombol ini cuma memanggil signOut() dan
   // menunggu redirect otomatis dari ProtectedRoute. Itu tidak berlaku di
@@ -1065,7 +1060,7 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
     ? getLinksPuskesmasPegawai(jumlahPesanBelumDibaca)
     : TIPE === 'polres'
     ? getLinksPolresPegawai(jumlahPesanBelumDibaca)
-    : getLinksGuru(jumlahPesanBelumDibaca, sekolahId, isPlh)
+    : getLinksGuru(jumlahPesanBelumDibaca, sekolahId)
   const linksOrangTua = TIPE === 'sekolah' ? getLinksOrangTua(jumlahPesanBelumDibaca, sekolahId) : []
 
   return (
