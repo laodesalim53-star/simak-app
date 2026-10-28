@@ -221,7 +221,6 @@ function getGroupsAdmin(
         // Gudang SK mati kalau sedang berada di bawah Portal Ujian.
         { to: '/gudang-sk', label: 'Gudang SK', icon: FileStack, excludePrefix: ['/gudang-sk/portal-ujian', '/gudang-sk/plh-kepsek'] },
         { to: '/gudang-sk/portal-ujian', label: 'Portal Ujian', icon: ClipboardCheck },
-        { to: '/gudang-sk/plh-kepsek', label: 'SK PLH Kepala Sekolah', icon: ShieldCheck },
         { to: '/ppdb-admin', label: 'PPDB Siswa Baru', icon: UserPlus },
         // Laporan Kepegawaian Guru: satu pintu untuk semua laporan guru,
         // TERMASUK Laporan Bulanan, Cetak Sampul, Data Ujian 8355 & Cetak
@@ -241,6 +240,7 @@ function getGroupsAdmin(
         { to: '/hari-libur', label: 'Hari Libur', icon: CalendarOff },
         { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
         { to: '/backup', label: 'Backup Data', icon: DatabaseBackup },
+        { to: '/plh-kepsek', label: 'SK PLH Kepala Sekolah', icon: ShieldCheck },
         // Manajemen Sekolah hanya untuk superadmin.
         ...(isSuperAdmin
           ? [
@@ -490,8 +490,7 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   { to: '/riwayat-pesanan', label: 'Riwayat Pesanan', icon: Receipt },
   { to: '/pesanan-masuk', label: 'Pesanan Masuk (Toko)', icon: Inbox },
   { to: '/administrasi-kelas', label: 'Administrasi Kelas', icon: LayoutGrid },
-  // SK PLH/Plt Kepala Sekolah — tampil untuk semua guru.
-  { to: '/gudang-sk/plh-kepsek', label: 'SK PLH Kepala Sekolah', icon: ShieldCheck },
+   { to: '/plh-kepsek', label: 'SK PLH Kepala Sekolah', icon: ShieldCheck },
   { to: '/rapat', label: 'Rapat Video', icon: Video },
   { to: '/galeri', label: 'Galeri Kegiatan', icon: Images },
   { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
