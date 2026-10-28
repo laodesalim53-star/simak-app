@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Loader2, Save, Trash2, Upload } from 'lucide-react'
+import QRCode from 'qrcode' // npm install qrcode
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import {
@@ -71,7 +72,7 @@ const FORM_AWAL = () => ({
   memperhatikan: TEMPLATE.memperhatikan,
   diktumLain: TEMPLATE.diktumLain,
   tembusan: TEMPLATE.tembusan,
-  pakaiTtd: true, // tampilkan tanda tangan elektronik di cetakan
+  modeTtd: 'gambar', // tanda tangan di cetakan: 'gambar' | 'qr' | 'tanpa'
 })
 
 const tglTeks = (iso) => {
@@ -144,6 +145,7 @@ export default function SKPLHKepalaSekolah() {
   const [info, setInfo] = useState('')
   const [ttdUrl, setTtdUrl] = useState('')
   const [ttdBusy, setTtdBusy] = useState(false)
+  const [qrUrl, setQrUrl] = useState('')
   const [ttdPath, setTtdPath] = useState('')
   const BUCKET_TTD = 'profil-sekolah' // bucket & kolom yang sama dengan halaman Profil Sekolah
 
@@ -315,6 +317,26 @@ export default function SKPLHKepalaSekolah() {
     setTtdBusy(false)
   }
 
+  // QR tanda tangan elektronik — isinya identitas penandatangan + data dokumen.
+  const payloadQr = [
+    'TANDA TANGAN ELEKTRONIK',
+    'Dokumen: SK Penunjukan PLH Kepala Sekolah',
+    `Nomor: ${f.nomor || '-'}`,
+    `Tanggal: ${tglTeks(f.tanggal) || '-'}`,
+    `Penandatangan: ${sekolah.kepala || '-'}`,
+    `NIP: ${sekolah.nipKepala || '-'}`,
+    `Jabatan: Kepala ${sekolah.nama || ''}`.trim(),
+  ].join('\n')
+  useEffect(() => {
+    let aktif = true
+    QRCode.toDataURL(payloadQr, { errorCorrectionLevel: 'M', margin: 1, width: 320 })
+      .then((u) => aktif && setQrUrl(u))
+      .catch(() => aktif && setQrUrl(''))
+    return () => {
+      aktif = false
+    }
+  }, [payloadQr])
+
   // ── Susun isi dokumen ──
   const namaSekolah = isi(sekolah.nama, 'NAMA SEKOLAH')
   const awalMasa = f.tglMulai ? `mulai tanggal ${tglTeks(f.tglMulai)}` : 'terhitung sejak tanggal ditetapkan'
@@ -343,6 +365,11 @@ export default function SKPLHKepalaSekolah() {
     .slice(0, URUTAN_DIKTUM.length - 1)
   const daftarTembusan = pecahBaris(f.tembusan).map((t) => isiTemplate(t, nilai))
   const skCetak = { nomor: f.nomor, tempat: f.tempat, tanggal: f.tanggal }
+  const modeTtd = f.modeTtd || 'gambar'
+  const lapisTtd = modeTtd === 'qr' ? qrUrl : modeTtd === 'gambar' ? ttdUrl : ''
+  const cssTtd = lapisTtd
+    ? `.sk-print-compact .sk-ttd .ruang{height:${modeTtd === 'qr' ? '20mm' : '18mm'};background:url("${lapisTtd}") center / contain no-repeat;-webkit-print-color-adjust:exact;print-color-adjust:exact}`
+    : ''
 
   if (memuat) {
     return (
@@ -358,9 +385,7 @@ export default function SKPLHKepalaSekolah() {
     <div className="min-h-screen bg-slate-100">
       <GayaCetakSK />
       <GayaPadat />
-      {ttdUrl && f.pakaiTtd && (
-        <style>{`.sk-print-compact .sk-ttd .ruang{height:18mm;background:url("${ttdUrl}") center / contain no-repeat;-webkit-print-color-adjust:exact;print-color-adjust:exact}`}</style>
-      )}
+      {cssTtd && <style>{cssTtd}</style>}
       <BarAtasCetak onKembali={() => navigate('/dashboard')} judul="SK PLH Kepala Sekolah" />
 
       <div className="no-print max-w-3xl mx-auto px-3 pt-4">
@@ -469,6 +494,9 @@ export default function SKPLHKepalaSekolah() {
                     <span className="text-xs text-slate-400">Belum ada</span>
                   )}
                 </div>
+                <div className="h-20 w-20 rounded-lg border border-slate-200 bg-white flex items-center justify-center overflow-hidden" title="QR yang dicetak">
+                  {qrUrl && <img src={qrUrl} alt="QR tanda tangan elektronik" className="max-h-full max-w-full object-contain" />}
+                </div>
                 <div className="flex flex-col gap-2">
                   <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
                     {ttdBusy ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
@@ -480,9 +508,13 @@ export default function SKPLHKepalaSekolah() {
                       <Trash2 size={15} /> Hapus
                     </button>
                   )}
-                  <label className="inline-flex items-center gap-2 text-sm text-slate-700">
-                    <input type="checkbox" checked={!!f.pakaiTtd} onChange={(e) => setF((x) => ({ ...x, pakaiTtd: e.target.checked }))} />
-                    Tampilkan di cetakan (klik Simpan SK)
+                  <label className="flex flex-col gap-1 text-sm text-slate-700">
+                    Tanda tangan di cetakan (klik Simpan SK)
+                    <select className={inputCls} value={f.modeTtd || 'gambar'} onChange={ubah('modeTtd')}>
+                      <option value="gambar">Gambar tanda tangan</option>
+                      <option value="qr">QR Code tanda tangan elektronik</option>
+                      <option value="tanpa">Tanpa tanda tangan (dibubuhi manual)</option>
+                    </select>
                   </label>
                 </div>
               </div>
