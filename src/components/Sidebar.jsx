@@ -216,7 +216,8 @@ links: [
         // Administrasi Kelas.
         { to: '/surat', label: 'Surat Masuk/Keluar', icon: Mail },
         { to: '/kelengkapan-surat-pengantar', label: 'Kelengkapan Surat Pengantar', icon: FileText },
-           { to: '/proposal', label: 'Proposal', icon: FolderHeart },
+        { to: '/sk-plh-kepala-sekolah', label: 'SK PLH Kepala Sekolah', icon: FileSignature },
+        { to: '/proposal', label: 'Proposal', icon: FolderHeart },
         // PERBAIKAN: Portal Ujian berada di bawah path /gudang-sk/portal-ujian,
         // sehingga NavLink "Gudang SK" ikut aktif di halaman Portal Ujian
         // (dan anak-anaknya, mis. Laporan Asesmen). `excludePrefix` membuat
@@ -520,6 +521,7 @@ function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
   // BARU: Daftar Hadir Guru & Tendik (guru hanya bisa melihat & mencetak)
   { to: '/daftar-hadir-pegawai', label: 'Daftar Hadir Guru & Tendik', icon: ClipboardList },
+  { to: '/sk-plh-kepala-sekolah', label: 'SK PLH Kepala Sekolah', icon: FileSignature },
   { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
   { to: '/link-layanan', label: 'Link Layanan', icon: Link2 },
   { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
