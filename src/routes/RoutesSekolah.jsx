@@ -20,6 +20,7 @@ const Guru = lazy(() => import('../pages/Guru'))
 const Kelas = lazy(() => import('../pages/Kelas'))
 const CatatanSiswa = lazy(() => import('../pages/CatatanSiswa'))
 const DaftarHadirPegawai = lazy(() => import('../pages/DaftarHadirPegawai'))
+const SKPLHKepalaSekolah = lazy(() => import('../pages/SKPLHKepalaSekolah'))
 
 const LaporanNominatifGuru = lazy(() => import('../pages/LaporanNominatifGuru'))
 const LaporanBiodataGuru = lazy(() => import('../pages/LaporanBiodataGuru'))
@@ -188,6 +189,8 @@ export default function RoutesSekolah() {
       <Route path="/kelas" element={<ProtectedRoute adminOnly><Kelas /></ProtectedRoute>} />
       {/* Daftar Hadir Guru & Tendik: BUKAN adminOnly (kontrol edit di dalam komponen) */}
       <Route path="/daftar-hadir-pegawai" element={<ProtectedRoute><DaftarHadirPegawai /></ProtectedRoute>} />
+      {/* SK PLH Kepala Sekolah: BUKAN adminOnly — guru bisa lihat & cetak, kontrol edit di dalam komponen (isAdmin) */}
+      <Route path="/sk-plh-kepala-sekolah" element={<ProtectedRoute><SKPLHKepalaSekolah /></ProtectedRoute>} />
       {/* Visi Misi Sekolah untuk guru: BUKAN adminOnly — guru hanya bisa lihat & cetak (kontrol edit di dalam komponen) */}
       <Route path="/visi-misi" element={<ProtectedRoute><VisiMisiSekolah /></ProtectedRoute>} />
       <Route path="/struktur-organisasi" element={<ProtectedRoute><BaganStrukturOrganisasi /></ProtectedRoute>} />
