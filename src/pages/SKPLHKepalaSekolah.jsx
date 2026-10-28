@@ -102,6 +102,7 @@ function GayaPadat() {
     <style>{`
       .sk-print-compact .lembar-sk{font-size:11pt;line-height:1.22}
       .sk-print-compact .sk-kop{padding-bottom:4px;margin-bottom:8px}
+      .sk-print-compact .sk-kop-alamat,.sk-print-compact .sk-kop-npsn{display:none}
       .sk-print-compact .sk-judul{margin-bottom:6px}
       .sk-print-compact .sk-judul p{margin:1px 0}
       .sk-print-compact .sk-tengah{margin:4px 0}
@@ -417,7 +418,7 @@ export default function SKPLHKepalaSekolah() {
         <AreaLembar>
           <div className="sk-print-compact">
             <LembarSK>
-              <KopSK sekolah={sekolah} />
+              <KopSK sekolah={{ ...sekolah, npsn: '', alamat: '' }} />
 
               <div className="sk-judul">
                 <p style={{ textDecoration: 'underline' }}>Surat Keputusan Kepala {namaSekolah}</p>
