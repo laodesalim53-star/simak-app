@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "../supabaseClient"; // sesuaikan path client Supabase di SIMAK
-
-// ===== Pengaturan akses =====
-// Hanya role "admin" yang boleh mengubah. Role lain (guru dll.) hanya lihat + cetak.
-const ADMIN_ROLES = ["admin"];
+import { supabase } from "../lib/supabaseClient";
+import { useAuth } from "../lib/AuthContext";
 
 const KOSONG = {
   nomor_sk: "",
@@ -33,9 +30,9 @@ const tgl = (d) =>
     ? new Date(d).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
     : "............";
 
-export default function SKPLHKepalaSekolah({ role, profil, user, sekolahId }) {
-  const peran = role || profil?.role || user?.role || "";
-  const isAdmin = ADMIN_ROLES.includes(String(peran).toLowerCase());
+export default function SKPLHKepalaSekolah() {
+  // isAdmin dari AuthContext: hanya admin yang boleh mengubah. Guru hanya lihat + cetak.
+  const { isAdmin, sekolahId } = useAuth();
 
   const [data, setData] = useState(KOSONG);
   const [rowId, setRowId] = useState(null);
