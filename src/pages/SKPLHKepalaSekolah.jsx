@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Loader2, Save } from 'lucide-react'
+import { Loader2, Save, Trash2, Upload } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import {
@@ -71,6 +71,7 @@ const FORM_AWAL = () => ({
   memperhatikan: TEMPLATE.memperhatikan,
   diktumLain: TEMPLATE.diktumLain,
   tembusan: TEMPLATE.tembusan,
+  pakaiTtd: true, // tampilkan tanda tangan elektronik di cetakan
 })
 
 const tglTeks = (iso) => {
@@ -141,6 +142,10 @@ export default function SKPLHKepalaSekolah() {
   const [menyimpan, setMenyimpan] = useState(false)
   const [galat, setGalat] = useState('')
   const [info, setInfo] = useState('')
+  const [ttdUrl, setTtdUrl] = useState('')
+  const [ttdBusy, setTtdBusy] = useState(false)
+  const BUCKET_TTD = 'tanda-tangan'
+  const pathTtd = sekolahId ? `${sekolahId}/ttd-kepsek` : ''
 
   useEffect(() => {
     if (!sekolahId) {
@@ -231,6 +236,46 @@ export default function SKPLHKepalaSekolah() {
     setInfo('Data tersimpan. Guru kini bisa melihat dan mencetak SK ini.')
   }
 
+
+  // Tanda tangan elektronik: satu file tetap per sekolah di bucket privat,
+  // dibaca lewat tautan bertanda waktu (berlaku 1 jam).
+  async function muatTtd() {
+    if (!pathTtd) return
+    const { data, error } = await supabase.storage.from(BUCKET_TTD).createSignedUrl(pathTtd, 3600)
+    setTtdUrl(error ? '' : data?.signedUrl || '')
+  }
+  useEffect(() => {
+    muatTtd()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathTtd])
+
+  async function unggahTtd(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !isAdmin || !pathTtd) return
+    if (!['image/png', 'image/jpeg'].includes(file.type)) return setGalat('Tanda tangan harus berformat PNG atau JPG.')
+    if (file.size > 1024 * 1024) return setGalat('Ukuran file maksimal 1 MB.')
+    setTtdBusy(true)
+    setGalat('')
+    setInfo('')
+    const { error } = await supabase.storage.from(BUCKET_TTD).upload(pathTtd, file, { upsert: true, contentType: file.type })
+    if (error) setGalat('Gagal mengunggah tanda tangan: ' + error.message)
+    else {
+      setInfo('Tanda tangan tersimpan. Otomatis dipakai di cetakan SK ini.')
+      await muatTtd()
+    }
+    setTtdBusy(false)
+  }
+
+  async function hapusTtd() {
+    if (!isAdmin || !pathTtd) return
+    setTtdBusy(true)
+    const { error } = await supabase.storage.from(BUCKET_TTD).remove([pathTtd])
+    if (error) setGalat('Gagal menghapus tanda tangan: ' + error.message)
+    else setTtdUrl('')
+    setTtdBusy(false)
+  }
+
   // ── Susun isi dokumen ──
   const namaSekolah = isi(sekolah.nama, 'NAMA SEKOLAH')
   const awalMasa = f.tglMulai ? `mulai tanggal ${tglTeks(f.tglMulai)}` : 'terhitung sejak tanggal ditetapkan'
@@ -274,6 +319,9 @@ export default function SKPLHKepalaSekolah() {
     <div className="min-h-screen bg-slate-100">
       <GayaCetakSK />
       <GayaPadat />
+      {ttdUrl && f.pakaiTtd && (
+        <style>{`.sk-print-compact .sk-ttd .ruang{height:18mm;background:url("${ttdUrl}") center / contain no-repeat;-webkit-print-color-adjust:exact;print-color-adjust:exact}`}</style>
+      )}
       <BarAtasCetak onKembali={() => navigate('/dashboard')} judul="SK PLH Kepala Sekolah" />
 
       <div className="no-print max-w-3xl mx-auto px-3 pt-4">
@@ -370,6 +418,34 @@ export default function SKPLHKepalaSekolah() {
                 <Field label="Tembusan (kosongkan kalau tidak dipakai)">
                   <textarea className={inputCls} rows={3} value={f.tembusan} onChange={ubah('tembusan')} />
                 </Field>
+              </div>
+            </Bagian>
+
+            <Bagian judul="Tanda tangan elektronik" keterangan="Unggah sekali (PNG latar transparan paling rapi, maksimal 1 MB). Setelah itu otomatis terpasang di cetakan SK. Hanya admin yang bisa mengunggah atau menghapus.">
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="h-20 w-40 rounded-lg border border-slate-200 bg-white flex items-center justify-center overflow-hidden">
+                  {ttdUrl ? (
+                    <img src={ttdUrl} alt="Tanda tangan" className="max-h-full max-w-full object-contain" />
+                  ) : (
+                    <span className="text-xs text-slate-400">Belum ada</span>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+                    {ttdBusy ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+                    {ttdUrl ? 'Ganti tanda tangan' : 'Upload tanda tangan'}
+                    <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={unggahTtd} disabled={ttdBusy} />
+                  </label>
+                  {ttdUrl && (
+                    <button onClick={hapusTtd} disabled={ttdBusy} className="inline-flex items-center gap-2 text-sm text-red-600">
+                      <Trash2 size={15} /> Hapus
+                    </button>
+                  )}
+                  <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                    <input type="checkbox" checked={!!f.pakaiTtd} onChange={(e) => setF((x) => ({ ...x, pakaiTtd: e.target.checked }))} />
+                    Tampilkan di cetakan (klik Simpan SK)
+                  </label>
+                </div>
               </div>
             </Bagian>
 
