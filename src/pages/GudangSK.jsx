@@ -22,7 +22,6 @@ import {
   ShieldCheck,
 } from 'lucide-react'
 import Layout from '../components/Layout'
-import useIsPlh from '../hooks/useIsPlh'
 
 // Palet warna per kartu — sama polanya dengan PusatLaporanGuru.jsx. Kalau mau
 // ganti warna satu kartu, cukup ganti nilai `warna` di objek SK-nya.
@@ -129,9 +128,6 @@ const PALET_WARNA = {
 // Cara mengaktifkan SK baru: ubah `siap: false` menjadi `siap: true`, lalu
 // pastikan `path` menunjuk ke route halaman SK-nya di App.jsx.
 // Kartu dikelompokkan lewat `kategori` (lihat KATEGORI di bawah).
-//
-// Properti `hanyaPlh: true` berarti kartu hanya tampil untuk guru yang
-// ditunjuk sebagai PLH/Plt Kepala Sekolah (lihat hooks/useIsPlh.js).
 const KATEGORI = [
   { id: 'tugas', judul: 'Tugas Guru & Pegawai', keterangan: 'SK pembagian tugas dan surat keterangan pelaksanaan tugas.' },
   { id: 'honor', judul: 'Honorarium & Tenaga Pendukung', keterangan: 'SK honor dan penugasan tenaga non-guru.' },
@@ -194,12 +190,11 @@ const daftarSK = [
     id: 'plh-kepsek',
     kategori: 'tugas',
     judul: 'SK PLH / Plt Kepala Sekolah',
-    deskripsi: 'Penunjukan Pelaksana Harian atau Pelaksana Tugas Kepala Sekolah. Hanya tampil untuk guru yang ditunjuk sebagai PLH.',
+    deskripsi: 'Penunjukan Pelaksana Harian atau Pelaksana Tugas Kepala Sekolah.',
     icon: ShieldCheck,
     path: '/gudang-sk/plh-kepsek',
     warna: 'indigo',
     siap: true,
-    hanyaPlh: true,
   },
 
   // ---- Honorarium & Tenaga Pendukung ----
@@ -415,19 +410,13 @@ function IsiKartu({ item, warna }) {
 
 export default function GudangSK() {
   const [cari, setCari] = useState('')
-  const { isPlh } = useIsPlh()
 
-  // Saring kartu yang khusus PLH: hanya tampil kalau guru ini ditunjuk PLH.
-  const daftarTampil = useMemo(
-    () => daftarSK.filter((sk) => !sk.hanyaPlh || isPlh),
-    [isPlh]
-  )
 
   // Kelompokkan hasil pencarian per kategori; kategori yang kosong tidak
   // ditampilkan. `urutan` dipakai supaya jeda animasi berlanjut antar kelompok.
   const kelompok = useMemo(() => {
     const kata = cari.trim().toLowerCase()
-    const cocok = daftarTampil.filter(
+    const cocok = daftarSK.filter(
       (sk) => !kata || `${sk.judul} ${sk.deskripsi}`.toLowerCase().includes(kata)
     )
     let urutan = 0
@@ -437,9 +426,9 @@ export default function GudangSK() {
         .filter((sk) => sk.kategori === k.id)
         .map((sk) => ({ sk, urutan: urutan++ })),
     })).filter((k) => k.items.length > 0)
-  }, [cari, daftarTampil])
+  }, [cari])
 
-  const jumlahSiap = daftarTampil.filter((sk) => sk.siap).length
+  {jumlahSiap} dari {daftarSK.length} jenis SK sudah siap dipakai.
 
   return (
     <Layout
