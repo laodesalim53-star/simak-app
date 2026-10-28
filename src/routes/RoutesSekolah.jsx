@@ -54,7 +54,6 @@ const SKHonorGuru = lazy(() => import('../pages/SKHonorGuru'))
 const SKTenagaKebersihan = lazy(() => import('../pages/SKTenagaKebersihan'))
 const SKOperatorDapodik = lazy(() => import('../pages/SKOperatorDapodik'))
 const SKBendaharaBOS = lazy(() => import('../pages/SKBendaharaBOS'))
-const SKPLHKepsek = lazy(() => import('../pages/SKPLHKepsek'))
 const SKPengawasAsesmen = lazy(() => import('../pages/SKPengawasAsesmen'))
 const DaftarHonorLiterasiNumerasi = lazy(() => import('../pages/DaftarHonorLiterasiNumerasi'))
 const DaftarHonorPengawasAsesmen = lazy(() => import('../pages/DaftarHonorPengawasAsesmen'))
@@ -75,6 +74,7 @@ const LaporanAsesmenSekolah = lazy(() => import('../pages/LaporanAsesmenSekolah'
 const DataUjian8355 = lazy(() => import('../pages/DataUjian8355'))
 const Cetak8355 = lazy(() => import('../pages/Cetak8355'))
 
+const SKPLHKepsek = lazy(() => import('../pages/SKPLHKepsek'))
 const Jadwal = lazy(() => import('../pages/Jadwal'))
 const Presensi = lazy(() => import('../pages/Presensi'))
 const Nilai = lazy(() => import('../pages/Nilai'))
@@ -208,7 +208,6 @@ export default function RoutesSekolah() {
       <Route path="/gudang-sk/tenaga-kebersihan" element={<ProtectedRoute adminOnly><SKTenagaKebersihan /></ProtectedRoute>} />
       <Route path="/gudang-sk/operator-dapodik" element={<ProtectedRoute adminOnly><SKOperatorDapodik /></ProtectedRoute>} />
       <Route path="/gudang-sk/bendahara-bos" element={<ProtectedRoute adminOnly><SKBendaharaBOS /></ProtectedRoute>} />
-      <Route path="/gudang-sk/plh-kepsek" element={<ProtectedRoute><SKPLHKepsek /></ProtectedRoute>} />
       <Route path="/gudang-sk/pengawas-asesmen" element={<ProtectedRoute adminOnly><SKPengawasAsesmen /></ProtectedRoute>} />
       <Route path="/gudang-sk/daftar-honor-literasi-numerasi" element={<ProtectedRoute adminOnly><DaftarHonorLiterasiNumerasi /></ProtectedRoute>} />
       <Route path="/gudang-sk/daftar-honor-pengawas-asesmen" element={<ProtectedRoute adminOnly><DaftarHonorPengawasAsesmen /></ProtectedRoute>} />
@@ -232,6 +231,7 @@ export default function RoutesSekolah() {
       <Route path="/cetak-8355" element={<ProtectedRoute adminOnly><Cetak8355 /></ProtectedRoute>} />
 
       {/* 4. Akademik */}
+      <Route path="/plh-kepsek" element={<ProtectedRoute><SKPLHKepsek /></ProtectedRoute>} />
       <Route path="/jadwal" element={<ProtectedRoute><Jadwal /></ProtectedRoute>} />
       <Route path="/presensi" element={<ProtectedRoute><Presensi /></ProtectedRoute>} />
       <Route path="/nilai" element={<ProtectedRoute><Nilai /></ProtectedRoute>} />
