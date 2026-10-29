@@ -121,7 +121,7 @@ const CSS = `
 .pip .sheet.satu .kop-surat-resmi{margin-bottom:8px}
 .pip .sheet.satu .jd{margin:6px 0 8px}
 .pip .sheet.satu .cb{margin:0 0 1px 24px}
-.pip .meterai{border:1px solid #000;width:84px;height:50px;margin:8px auto 26px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:8pt;line-height:1.3}
+.pip .meterai{border:1px solid #000;width:84px;height:54px;margin:10px auto 44px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:8pt;line-height:1.3}
 @media print{body *{visibility:hidden}.pip-print,.pip-print *{visibility:visible}.pip-print{position:absolute;left:0;top:0;width:100%}
 .pip .paper{background:none;padding:0;overflow:visible}.pip .sheet{margin:0;padding:0;width:auto;box-shadow:none;page-break-after:always;min-height:0}.pip .sheet:last-child{page-break-after:auto}
 .pip .sheet.satu{height:271mm;padding:0;page-break-after:auto}
