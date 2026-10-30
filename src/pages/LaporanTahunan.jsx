@@ -9,6 +9,7 @@
 //                       HANYA baris is_item = true yang dijumlahkan (baris lain judul/subtotal).
 //  - Realisasi (BKU)  : bku_kas         (tahun, bulan, penerimaan, pengeluaran)
 //  - Buku Kerja Kepsek: dokumen 'buku-kerja' yang sudah tersimpan
+//  - Rekap administrasi (surat, tamu, dll): lihat SUMBER + hitung(); galat query ditampilkan di Bagian E.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Printer, RefreshCw } from 'lucide-react'
@@ -26,14 +27,26 @@ import {
   PanelOtomatis,
 } from '../components/LaporanTahunanOtomatis'
 
-// Rekap jumlah dari tabel modul lain. SESUAIKAN nama tabel / kolom tanggal; tabel yang tidak ada tampil "–".
+// Rekap jumlah dari tabel modul lain.
+// tabel / tgl boleh berupa daftar kandidat; dicoba berurutan sampai ada yang berhasil.
+// SESUAIKAN dengan nama tabel / kolom tanggal yang sebenarnya di Supabase (lihat kotak merah di Bagian E bila gagal).
 const SUMBER = [
-  { id: 'mutasi', label: 'Mutasi siswa', tabel: 'mutasi_siswa', tgl: 'tanggal' },
-  { id: 'tamu', label: 'Kunjungan tamu', tabel: 'buku_tamu', tgl: 'tanggal' },
-  { id: 'surat_masuk', label: 'Surat masuk', tabel: 'surat_masuk', tgl: 'tanggal' },
-  { id: 'surat_keluar', label: 'Surat keluar', tabel: 'surat_keluar', tgl: 'tanggal' },
-  { id: 'inventaris', label: 'Barang inventaris', tabel: 'inventaris', tgl: null },
-  { id: 'notulen', label: 'Rapat (notulen)', tabel: 'notulen_rapat', tgl: 'tanggal' },
+  { id: 'mutasi', label: 'Mutasi siswa', tabel: ['mutasi_siswa'], tgl: ['tanggal'] },
+  { id: 'tamu', label: 'Kunjungan tamu', tabel: ['buku_tamu'], tgl: ['tanggal'] },
+  {
+    id: 'surat_masuk',
+    label: 'Surat masuk',
+    tabel: ['surat_masuk', 'agenda_surat_masuk', 'arsip_surat_masuk'],
+    tgl: ['tanggal', 'tanggal_surat', 'tanggal_terima', 'tanggal_diterima', 'created_at'],
+  },
+  {
+    id: 'surat_keluar',
+    label: 'Surat keluar',
+    tabel: ['surat_keluar', 'agenda_surat_keluar', 'arsip_surat_keluar'],
+    tgl: ['tanggal', 'tanggal_surat', 'tanggal_kirim', 'created_at'],
+  },
+  { id: 'inventaris', label: 'Barang inventaris', tabel: ['inventaris'], tgl: null },
+  { id: 'notulen', label: 'Rapat (notulen)', tabel: ['notulen_rapat'], tgl: ['tanggal'] },
 ]
 
 const NAMA_BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
@@ -44,11 +57,22 @@ const rupiah = (n) =>
 
 const persen = (n) => (n == null ? '–' : `${n.toFixed(1).replace('.', ',')}%`)
 
+// Mengembalikan { jumlah, galat }. Jumlah null = semua kandidat gagal; galat berisi pesan terakhir.
 async function hitung(s, sekolahId, tahun) {
-  let q = supabase.from(s.tabel).select('*', { count: 'exact', head: true }).eq('sekolah_id', sekolahId)
-  if (s.tgl) q = q.gte(s.tgl, `${tahun}-01-01`).lte(s.tgl, `${tahun}-12-31`)
-  const { count, error } = await q
-  return error ? null : count
+  const daftarTabel = [].concat(s.tabel)
+  const daftarTgl = s.tgl ? [].concat(s.tgl) : [null]
+  let galat = ''
+  for (const tabel of daftarTabel) {
+    for (const kolom of daftarTgl) {
+      let q = supabase.from(tabel).select('*', { count: 'exact', head: true }).eq('sekolah_id', sekolahId)
+      // lt awal tahun berikutnya: aman untuk kolom date maupun timestamp
+      if (kolom) q = q.gte(kolom, `${tahun}-01-01`).lt(kolom, `${tahun + 1}-01-01`)
+      const { count, error } = await q
+      if (!error) return { jumlah: count ?? 0, galat: '' }
+      galat = `${tabel}.${kolom || '-'}: ${error.message}`
+    }
+  }
+  return { jumlah: null, galat }
 }
 
 // Supabase membatasi 1000 baris per permintaan; ARKAS/BKU setahun bisa lebih, jadi diambil bertahap.
@@ -245,6 +269,7 @@ export default function LaporanTahunan() {
   const [tahun, setTahun] = useState(new Date().getFullYear())
   const [vm, setVm] = useState(null)
   const [angka, setAngka] = useState({})
+  const [galatAngka, setGalatAngka] = useState([])
   const [uang, setUang] = useState(KEUANGAN_KOSONG)
   const [memuatAngka, setMemuatAngka] = useState(false)
 
@@ -276,7 +301,8 @@ export default function LaporanTahunan() {
       Promise.all(SUMBER.map((s) => hitung(s, sekolahId, tahun))),
       muatKeuangan(sekolahId, tahun),
     ])
-    setAngka(Object.fromEntries(SUMBER.map((s, i) => [s.id, hasil[i]])))
+    setAngka(Object.fromEntries(SUMBER.map((s, i) => [s.id, hasil[i].jumlah])))
+    setGalatAngka(SUMBER.map((s, i) => (hasil[i].galat ? `${s.label} → ${hasil[i].galat}` : null)).filter(Boolean))
     setUang(keu)
     setMemuatAngka(false)
   }, [sekolahId, tahun])
@@ -454,6 +480,12 @@ export default function LaporanTahunan() {
         </Bagian>
 
         <Bagian huruf="E" judul={`Rekap Administrasi Tahun ${tahun}`}>
+          {galatAngka.length > 0 && (
+            <div className="no-print mb-2 rounded bg-red-50 p-2 text-xs text-red-700">
+              Sebagian data gagal dimuat (nama tabel/kolom, atau izin RLS):
+              <ul className="list-disc pl-5">{galatAngka.map((g, i) => <li key={i}>{g}</li>)}</ul>
+            </div>
+          )}
           <table className="w-full border-collapse">
             <thead><tr><Th className="w-8">No</Th><Th>Jenis</Th><Th className="w-28">Jumlah</Th></tr></thead>
             <tbody>
