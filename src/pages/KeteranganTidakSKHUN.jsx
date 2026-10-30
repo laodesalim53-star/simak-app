@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Printer, RotateCcw, Archive, Loader2 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
 
 // Surat Keterangan Tidak Memiliki SKHUN — route: /gudang-sk/keterangan-tidak-memiliki-skhun
@@ -53,6 +54,56 @@ const AWAL = {
   tanggalIjazah: '2016-06-25',
 }
 
+// Ambil nilai pertama yang terisi dari beberapa kemungkinan nama kolom.
+const ambil = (obj, kunci) => {
+  for (const k of kunci) if (obj && obj[k]) return String(obj[k]).trim()
+  return ''
+}
+
+// Muat data sekolah + kepala sekolah. Pakai select('*') supaya tidak error kalau
+// nama kolomnya berbeda. Urutan sumber kepala sekolah:
+//   1) kolom di profil_sekolah (nama_kepala_sekolah / nama_kepsek / kepala_sekolah ...)
+//   2) tabel guru yang jabatannya "Kepala Sekolah"
+// Sumber yang dipakai dicatat di console (console.info) untuk memudahkan pengecekan.
+async function muatDataKepsek(sekolahId) {
+  const hasil = { sekolah: '', alamat: '', kabupaten: '', kepsek: '', nip: '', sumber: '' }
+
+  const { data: ps } = await supabase
+    .from('profil_sekolah')
+    .select('*')
+    .eq('sekolah_id', sekolahId)
+    .maybeSingle()
+
+  if (ps) {
+    hasil.sekolah = ambil(ps, ['nama_sekolah'])
+    hasil.alamat = ambil(ps, ['alamat'])
+    hasil.kabupaten = ambil(ps, ['kabupaten'])
+    hasil.kepsek = ambil(ps, ['nama_kepala_sekolah', 'nama_kepsek', 'kepala_sekolah', 'kepsek'])
+    hasil.nip = ambil(ps, ['nip_kepala_sekolah', 'nip_kepsek', 'nip_kepala', 'nip_kepala_sekolah_baru'])
+    if (hasil.kepsek) hasil.sumber = 'profil_sekolah'
+  }
+
+  if (!hasil.kepsek) {
+    const { data: gr } = await supabase
+      .from('guru')
+      .select('*')
+      .eq('sekolah_id', sekolahId)
+      .ilike('jabatan', '%kepala sekolah%')
+      .limit(1)
+    const g = gr && gr[0]
+    if (g) {
+      hasil.kepsek = ambil(g, ['nama', 'nama_lengkap'])
+      hasil.nip = hasil.nip || ambil(g, ['nip'])
+      hasil.sumber = 'guru'
+    }
+  }
+  return hasil
+}
+
+// "Kepulauan Aru" dari "Kabupaten Kepulauan Aru" / "PEMERINTAH KABUPATEN KEPULAUAN ARU"
+const bersihKabupaten = (k) =>
+  k.replace(/^pemerintah\s+/i, '').replace(/^kabupaten\s+/i, '').replace(/^kab\.?\s+/i, '').trim()
+
 function Field({ label, children }) {
   return (
     <label className="block">
@@ -70,6 +121,32 @@ export default function KeteranganTidakSKHUN() {
   const [arsip, setArsip] = useState(true) // arsipkan otomatis saat cetak
   const [menyimpan, setMenyimpan] = useState(false)
   const [pesan, setPesan] = useState(null) // { ok: bool, teks: string }
+  const { profil } = useAuth()
+  const sekolahId = profil?.sekolah_id
+  const [kabupaten, setKabupaten] = useState('Kepulauan Aru')
+  const [sumberKepsek, setSumberKepsek] = useState('')
+
+  useEffect(() => {
+    if (!sekolahId) return
+    let batal = false
+    muatDataKepsek(sekolahId).then((d) => {
+      if (batal) return
+      const kab = bersihKabupaten(d.kabupaten)
+      if (kab) setKabupaten(kab)
+      setSumberKepsek(d.sumber)
+      console.info('[SKHUN] sumber kepala sekolah:', d.sumber || '(tidak ditemukan)', d)
+      setF((s) => ({
+        ...s,
+        sekolah: d.sekolah ? d.sekolah.toUpperCase() : s.sekolah,
+        pemda: kab ? `PEMERINTAH KABUPATEN ${kab.toUpperCase()}` : s.pemda,
+        alamat: s.alamat || d.alamat,
+        kepalaSekolah: s.kepalaSekolah || d.kepsek,
+        nipKepsek: s.nipKepsek || d.nip,
+      }))
+    })
+    return () => { batal = true }
+  }, [sekolahId])
+
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
 
   // Simpan / perbarui baris arsip di tabel `surat`. Mengembalikan true jika berhasil.
@@ -213,6 +290,11 @@ export default function KeteranganTidakSKHUN() {
             <Field label="Alamat sekolah (kop surat)">
               <input className={inputCls} value={f.alamat} onChange={set('alamat')} />
             </Field>
+            {sumberKepsek ? (
+              <p className="text-[11px] text-emerald-700">Kepala sekolah dimuat otomatis dari {sumberKepsek}. Bisa diubah manual.</p>
+            ) : (
+              <p className="text-[11px] text-amber-700">Data kepala sekolah belum ditemukan di profil sekolah atau data guru. Isi manual.</p>
+            )}
             <Field label="Nama kepala sekolah (beserta gelar)">
               <input className={inputCls} placeholder="mis. Nama, S.Pd." value={f.kepalaSekolah} onChange={set('kepalaSekolah')} />
             </Field>
@@ -248,7 +330,7 @@ export default function KeteranganTidakSKHUN() {
             </button>
             <button
               type="button"
-              onClick={() => setF(AWAL)}
+              onClick={() => setF((s) => ({ ...AWAL, pemda: s.pemda, sekolah: s.sekolah, alamat: s.alamat, kepalaSekolah: s.kepalaSekolah, nipKepsek: s.nipKepsek }))}
               className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50"
             >
               <RotateCcw size={16} /> Reset
@@ -288,7 +370,7 @@ export default function KeteranganTidakSKHUN() {
             </div>
 
             <p style={{ textAlign: 'justify' }}>
-              Yang bertanda tangan di bawah ini, Kepala {namaSekolahJudul}, Kabupaten Kepulauan Aru, menerangkan bahwa:
+              Yang bertanda tangan di bawah ini, Kepala {namaSekolahJudul}, Kabupaten {kabupaten}, menerangkan bahwa:
             </p>
 
             <table style={{ margin: '6px 0 10px 36px', borderCollapse: 'collapse' }}>
