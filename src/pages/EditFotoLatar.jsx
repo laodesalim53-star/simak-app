@@ -9,6 +9,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Layout from "../components/Layout";
+import HapusLatarDokumen from "./HapusLatarDokumen";
 
 /* ───────────────────────── Konstanta ───────────────────────── */
 
@@ -560,6 +561,7 @@ export default function EditFotoLatar() {
   const [items, setItems] = useState([]);
   const [activeId, setActiveId] = useState(null);
   const [notice, setNotice] = useState("");
+  const [tab, setTab] = useState("foto");
 
   // hapus latar lama
   const [method, setMethod] = useState("ai");
@@ -855,7 +857,13 @@ img{width:${wmm}mm;height:${hmm}mm;display:block;outline:0.1mm solid #bbb}
         <input ref={camRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
         <input ref={bgFileRef} type="file" accept="image/*" hidden onChange={(e) => { pickBgImage(e.target.files[0]); e.target.value = ""; }} />
 
-        <div className="ef-grid">
+        <div className="ef-chips">
+          <button type="button" className={"ef-chip" + (tab === "foto" ? " on" : "")} onClick={() => setTab("foto")}>Foto siswa</button>
+          <button type="button" className={"ef-chip" + (tab === "dokumen" ? " on" : "")} onClick={() => setTab("dokumen")}>Dokumen</button>
+        </div>
+        {tab === "dokumen" && <HapusLatarDokumen onNotice={setNotice} />}
+
+        <div className="ef-grid" style={{ display: tab === "foto" ? undefined : "none" }}>
           {/* ───────── Kiri: pratinjau ───────── */}
           <section className="ef-stage" aria-label="Pratinjau foto">
             {!active ? (
