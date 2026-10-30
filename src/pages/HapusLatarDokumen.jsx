@@ -97,12 +97,97 @@ function boxBlur(a, w, h, r) {
   return o;
 }
 
-/* ───────────── Pangkas meja / latar di luar kertas ───────────── */
+/* ───────────── Crop otomatis + luruskan kertas ───────────── */
+
+// Cari kertas (area terang terbesar), buang meja di sekelilingnya, lalu
+// luruskan perspektifnya kalau fotonya miring. Kalau kertas sudah memenuhi
+// bingkai atau tidak ketemu, gambar dikembalikan apa adanya.
+
+const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+
+function warpQuad(src, q, W, H) {
+  const w = src.width,
+    h = src.height;
+  const sd = src.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+  const [p0, p1, p2, p3] = q; // kiri-atas, kanan-atas, kanan-bawah, kiri-bawah
+  const sx = p0[0] - p1[0] + p2[0] - p3[0];
+  const sy = p0[1] - p1[1] + p2[1] - p3[1];
+  let A, B, D, E, G, K;
+  if (Math.abs(sx) < 1e-6 && Math.abs(sy) < 1e-6) {
+    A = p1[0] - p0[0];
+    B = p3[0] - p0[0];
+    D = p1[1] - p0[1];
+    E = p3[1] - p0[1];
+    G = 0;
+    K = 0;
+  } else {
+    const dx1 = p1[0] - p2[0],
+      dx2 = p3[0] - p2[0],
+      dy1 = p1[1] - p2[1],
+      dy2 = p3[1] - p2[1];
+    const den = dx1 * dy2 - dx2 * dy1 || 1e-9;
+    G = (sx * dy2 - dx2 * sy) / den;
+    K = (dx1 * sy - sx * dy1) / den;
+    A = p1[0] - p0[0] + G * p1[0];
+    B = p3[0] - p0[0] + K * p3[0];
+    D = p1[1] - p0[1] + G * p1[1];
+    E = p3[1] - p0[1] + K * p3[1];
+  }
+  const C = p0[0],
+    F = p0[1];
+
+  const out = new ImageData(W, H);
+  const od = out.data;
+  let o = 0;
+  for (let j = 0; j < H; j++) {
+    const v = (j + 0.5) / H;
+    for (let i = 0; i < W; i++) {
+      const u = (i + 0.5) / W;
+      const den = G * u + K * v + 1;
+      const x = (A * u + B * v + C) / den - 0.5;
+      const y = (D * u + E * v + F) / den - 0.5;
+      const xi = Math.floor(x),
+        yi = Math.floor(y);
+      const fx = x - xi,
+        fy = y - yi;
+      const xa = clamp(xi, 0, w - 1),
+        xb = clamp(xi + 1, 0, w - 1);
+      const ya = clamp(yi, 0, h - 1),
+        yb = clamp(yi + 1, 0, h - 1);
+      const i00 = (ya * w + xa) * 4,
+        i10 = (ya * w + xb) * 4,
+        i01 = (yb * w + xa) * 4,
+        i11 = (yb * w + xb) * 4;
+      for (let c = 0; c < 3; c++) {
+        const top = sd[i00 + c] * (1 - fx) + sd[i10 + c] * fx;
+        const bot = sd[i01 + c] * (1 - fx) + sd[i11 + c] * fx;
+        od[o + c] = top * (1 - fy) + bot * fy;
+      }
+      od[o + 3] = 255;
+      o += 4;
+    }
+  }
+  const c = document.createElement("canvas");
+  c.width = W;
+  c.height = H;
+  c.getContext("2d", { willReadFrequently: true }).putImageData(out, 0, 0);
+  return c;
+}
+
+function cropRect(src, x0, y0, x1, y1) {
+  const cw = Math.max(2, Math.round(x1 - x0)),
+    ch = Math.max(2, Math.round(y1 - y0));
+  const out = document.createElement("canvas");
+  out.width = cw;
+  out.height = ch;
+  out.getContext("2d", { willReadFrequently: true }).drawImage(src, Math.round(x0), Math.round(y0), cw, ch, 0, 0, cw, ch);
+  return out;
+}
 
 function autoCropPaper(src) {
   const w = src.width,
     h = src.height;
-  const k = Math.max(w, h) / 300;
+  const k = Math.max(w, h) / 400;
   const sw = Math.max(2, Math.round(w / k)),
     sh = Math.max(2, Math.round(h / k));
   const sm = document.createElement("canvas");
@@ -143,7 +228,7 @@ function autoCropPaper(src) {
     }
   }
 
-  // komponen terang terbesar = kertas
+  // komponen terang terbesar = kertas; catat empat sudut terjauhnya
   const lab = new Uint8Array(total);
   const stack = new Int32Array(total);
   let top = null;
@@ -151,10 +236,14 @@ function autoCropPaper(src) {
     if (lab[s] || lum[s] <= thr) continue;
     let sp = 0,
       n = 0;
-    let minx = sw,
-      maxx = 0,
-      miny = sh,
-      maxy = 0;
+    let minS = Infinity,
+      maxS = -Infinity,
+      minT = Infinity,
+      maxT = -Infinity;
+    let tl = null,
+      br = null,
+      tr = null,
+      bl = null;
     stack[sp++] = s;
     lab[s] = 1;
     while (sp > 0) {
@@ -162,35 +251,65 @@ function autoCropPaper(src) {
       n++;
       const x = p % sw,
         y = (p / sw) | 0;
-      if (x < minx) minx = x;
-      if (x > maxx) maxx = x;
-      if (y < miny) miny = y;
-      if (y > maxy) maxy = y;
+      const a = x + y,
+        b = x - y;
+      if (a < minS) (minS = a), (tl = [x, y]);
+      if (a > maxS) (maxS = a), (br = [x, y]);
+      if (b > maxT) (maxT = b), (tr = [x, y]);
+      if (b < minT) (minT = b), (bl = [x, y]);
       if (x > 0 && !lab[p - 1] && lum[p - 1] > thr) (lab[p - 1] = 1), (stack[sp++] = p - 1);
       if (x < sw - 1 && !lab[p + 1] && lum[p + 1] > thr) (lab[p + 1] = 1), (stack[sp++] = p + 1);
       if (y > 0 && !lab[p - sw] && lum[p - sw] > thr) (lab[p - sw] = 1), (stack[sp++] = p - sw);
       if (y < sh - 1 && !lab[p + sw] && lum[p + sw] > thr) (lab[p + sw] = 1), (stack[sp++] = p + sw);
     }
-    if (!top || n > top.n) top = { n, minx, maxx, miny, maxy };
+    if (!top || n > top.n) top = { n, tl, tr, br, bl };
   }
   if (!top || top.n < total * 0.15) return src;
 
+  // sudut piksel terluar, dikembalikan ke ukuran asli
   const fx = w / sw,
     fy = h / sh;
-  const ix = Math.round(w * 0.008),
-    iy = Math.round(h * 0.008);
-  const x0 = clamp(Math.round(top.minx * fx) + ix, 0, w - 2);
-  const y0 = clamp(Math.round(top.miny * fy) + iy, 0, h - 2);
-  const x1 = clamp(Math.round((top.maxx + 1) * fx) - ix, x0 + 1, w);
-  const y1 = clamp(Math.round((top.maxy + 1) * fy) - iy, y0 + 1, h);
-  const cw = x1 - x0,
-    ch = y1 - y0;
-  if (cw > w * 0.98 && ch > h * 0.98) return src;
-  const out = document.createElement("canvas");
-  out.width = cw;
-  out.height = ch;
-  out.getContext("2d", { willReadFrequently: true }).drawImage(src, x0, y0, cw, ch, 0, 0, cw, ch);
-  return out;
+  let q = [
+    [top.tl[0] * fx, top.tl[1] * fy],
+    [(top.tr[0] + 1) * fx, top.tr[1] * fy],
+    [(top.br[0] + 1) * fx, (top.br[1] + 1) * fy],
+    [top.bl[0] * fx, (top.bl[1] + 1) * fy],
+  ];
+
+  // luas segi empat (rumus tali sepatu); kalau hampir sebesar gambar, tidak perlu crop
+  let area = 0;
+  for (let i = 0; i < 4; i++) {
+    const a = q[i],
+      b = q[(i + 1) % 4];
+    area += a[0] * b[1] - b[0] * a[1];
+  }
+  area = Math.abs(area) / 2;
+  if (area > w * h * 0.93) return src;
+
+  // bentuk bukan segi empat (misalnya kertas terlipat atau tertutup tangan): potong persegi saja
+  const rectOnly = top.n * k * k < area * 0.75;
+
+  // geser sudut sedikit ke dalam supaya tepi meja tidak ikut
+  const cx = (q[0][0] + q[1][0] + q[2][0] + q[3][0]) / 4,
+    cy = (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4;
+  q = q.map(([x, y]) => [x + (cx - x) * 0.015, y + (cy - y) * 0.015]);
+
+  const dev = 0.012 * Math.max(w, h);
+  const straight =
+    Math.abs(q[0][0] - q[3][0]) < dev && Math.abs(q[1][0] - q[2][0]) < dev && Math.abs(q[0][1] - q[1][1]) < dev && Math.abs(q[3][1] - q[2][1]) < dev;
+  if (straight || rectOnly) {
+    const xs = q.map((p) => p[0]),
+      ys = q.map((p) => p[1]);
+    return cropRect(src, Math.max(0, Math.min(...xs)), Math.max(0, Math.min(...ys)), Math.min(w, Math.max(...xs)), Math.min(h, Math.max(...ys)));
+  }
+
+  // foto miring: luruskan jadi persegi panjang
+  let W = Math.round((dist(q[0], q[1]) + dist(q[3], q[2])) / 2);
+  let H = Math.round((dist(q[0], q[3]) + dist(q[1], q[2])) / 2);
+  const sc = Math.min(1, MAX_SRC / Math.max(W, H));
+  W = Math.max(2, Math.round(W * sc));
+  H = Math.max(2, Math.round(H * sc));
+  return warpQuad(src, q, W, H);
 }
 
 /* ───────────── Perkiraan warna kertas (untuk meratakan cahaya) ───────────── */
@@ -335,7 +454,7 @@ function Slider({ label, value, min, max, onChange, hint }) {
 export default function HapusLatarDokumen({ onNotice }) {
   const [src, setSrc] = useState(null); // { canvas, name }
   const [mode, setMode] = useState("putih");
-  const [crop, setCrop] = useState(false);
+  const [crop, setCrop] = useState(true);
   const [clean, setClean] = useState(25);
   const [pekat, setPekat] = useState(80);
   const [thr, setThr] = useState(190);
@@ -500,9 +619,9 @@ export default function HapusLatarDokumen({ onNotice }) {
           </div>
           <p className="ef-note">{info}</p>
           <label className="ef-check">
-            <input type="checkbox" checked={crop} onChange={(e) => setCrop(e.target.checked)} /> Pangkas meja di luar kertas
+            <input type="checkbox" checked={crop} onChange={(e) => setCrop(e.target.checked)} /> Crop otomatis dan luruskan kertas
           </label>
-          <p className="ef-note">Berhasil jika kertas lebih terang daripada alasnya. Foto miring belum diluruskan.</p>
+          <p className="ef-note">Kertas dipotong dari meja di sekelilingnya dan diluruskan walau difoto miring. Berhasil jika kertas lebih terang daripada alasnya. Matikan jika dokumen sudah pas.</p>
         </fieldset>
 
         <fieldset>
