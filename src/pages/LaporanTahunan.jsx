@@ -9,7 +9,9 @@
 //                       HANYA baris is_item = true yang dijumlahkan (baris lain judul/subtotal).
 //  - Realisasi (BKU)  : bku_kas         (tahun, bulan, penerimaan, pengeluaran)
 //  - Buku Kerja Kepsek: dokumen 'buku-kerja' yang sudah tersimpan
-//  - Rekap administrasi (surat, tamu, dll): lihat SUMBER + hitung(); galat query ditampilkan di Bagian E.
+//  - Surat masuk/keluar: tabel `surat` (kolom jenis 'masuk' / 'keluar', tanggal) - sama dengan halaman
+//                       Surat Masuk & Keluar; arsip keluar diisi otomatis oleh trigger trg_sync_surat.
+//  - Rekap administrasi lain (mutasi, tamu, dll): lihat SUMBER + hitung(); galat query ditampilkan di Bagian E.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Printer, RefreshCw } from 'lucide-react'
@@ -29,22 +31,13 @@ import {
 
 // Rekap jumlah dari tabel modul lain.
 // tabel / tgl boleh berupa daftar kandidat; dicoba berurutan sampai ada yang berhasil.
+// filter (opsional): { kolom: nilai } tambahan, mis. jenis surat.
 // SESUAIKAN dengan nama tabel / kolom tanggal yang sebenarnya di Supabase (lihat kotak merah di Bagian E bila gagal).
 const SUMBER = [
   { id: 'mutasi', label: 'Mutasi siswa', tabel: ['mutasi_siswa'], tgl: ['tanggal'] },
   { id: 'tamu', label: 'Kunjungan tamu', tabel: ['buku_tamu'], tgl: ['tanggal'] },
-  {
-    id: 'surat_masuk',
-    label: 'Surat masuk',
-    tabel: ['surat_masuk', 'agenda_surat_masuk', 'arsip_surat_masuk'],
-    tgl: ['tanggal', 'tanggal_surat', 'tanggal_terima', 'tanggal_diterima', 'created_at'],
-  },
-  {
-    id: 'surat_keluar',
-    label: 'Surat keluar',
-    tabel: ['surat_keluar', 'agenda_surat_keluar', 'arsip_surat_keluar'],
-    tgl: ['tanggal', 'tanggal_surat', 'tanggal_kirim', 'created_at'],
-  },
+  { id: 'surat_masuk', label: 'Surat masuk', tabel: ['surat'], tgl: ['tanggal'], filter: { jenis: 'masuk' } },
+  { id: 'surat_keluar', label: 'Surat keluar', tabel: ['surat'], tgl: ['tanggal'], filter: { jenis: 'keluar' } },
   { id: 'inventaris', label: 'Barang inventaris', tabel: ['inventaris'], tgl: null },
   { id: 'notulen', label: 'Rapat (notulen)', tabel: ['notulen_rapat'], tgl: ['tanggal'] },
 ]
@@ -64,10 +57,21 @@ async function hitung(s, sekolahId, tahun) {
   let galat = ''
   for (const tabel of daftarTabel) {
     for (const kolom of daftarTgl) {
-      let q = supabase.from(tabel).select('*', { count: 'exact', head: true }).eq('sekolah_id', sekolahId)
-      // lt awal tahun berikutnya: aman untuk kolom date maupun timestamp
-      if (kolom) q = q.gte(kolom, `${tahun}-01-01`).lt(kolom, `${tahun + 1}-01-01`)
-      const { count, error } = await q
+      const buat = (pakaiSekolah) => {
+        let q = supabase.from(tabel).select('*', { count: 'exact', head: true })
+        if (pakaiSekolah) q = q.eq('sekolah_id', sekolahId)
+        if (s.filter) {
+          for (const [k, v] of Object.entries(s.filter)) q = q.eq(k, v)
+        }
+        // lt awal tahun berikutnya: aman untuk kolom date maupun timestamp
+        if (kolom) q = q.gte(kolom, `${tahun}-01-01`).lt(kolom, `${tahun + 1}-01-01`)
+        return q
+      }
+      let { count, error } = await buat(true)
+      // Tabel tanpa kolom sekolah_id (mis. surat): ulangi tanpa filter itu, pembatasan sekolah oleh RLS.
+      if (error && s.filter && /sekolah_id/i.test(error.message || '')) {
+        ;({ count, error } = await buat(false))
+      }
       if (!error) return { jumlah: count ?? 0, galat: '' }
       galat = `${tabel}.${kolom || '-'}: ${error.message}`
     }
