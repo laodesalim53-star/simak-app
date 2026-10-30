@@ -37,7 +37,7 @@ import {
   FilePlus,
   CalendarOff,
   FileCheck2,
-  ImagePlus
+  ImagePlus,
   Award,
   Video,
   Store,
