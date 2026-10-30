@@ -4,7 +4,6 @@ import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import { ProtectedRoute } from '../components/RouteGuards'
 import { commonRoutes, adminUmumRoutes } from './RoutesCommon'
-import EditFotoLatar from '../pages/EditFotoLatar'
 
 // ============================================================
 // ROUTE KHUSUS SEKOLAH — semua halaman sekolah dari App.jsx lama,
