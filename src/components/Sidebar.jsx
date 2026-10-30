@@ -37,6 +37,7 @@ import {
   FilePlus,
   CalendarOff,
   FileCheck2,
+  ImagePlus
   Award,
   Video,
   Store,
@@ -288,6 +289,7 @@ function getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelum
         { to: '/dokumen', label: 'Dokumen Penting', icon: HardDrive },
         { to: '/scan-dokumen', label: 'Scan Dokumen', icon: ScanLine },
         { to: '/alat-pdf', label: 'Alat PDF', icon: FileType2 },
+        { to: '/edit-foto-latar', label: 'Edit Foto Latar', icon: ImagePlus },
         { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
         { to: '/link-layanan', label: 'Link Layanan', icon: Link2 },
       ],
