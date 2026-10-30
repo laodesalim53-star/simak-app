@@ -3,6 +3,7 @@ import { Printer, RotateCcw, Archive, Loader2 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import Layout from '../components/Layout'
+import KopSurat from '../components/KopSurat'
 
 // Surat Keterangan Tidak Memiliki SKHUN — route: /gudang-sk/keterangan-tidak-memiliki-skhun
 //
@@ -12,8 +13,7 @@ import Layout from '../components/Layout'
 // (jenis 'keluar'), sama seperti form manual di halaman Surat Masuk & Keluar.
 // Penanda di kolom catatan (SKHUN:<NISN>) mencegah data ganda: simpan ulang
 // akan memperbarui baris yang sama, bukan menambah baru.
-// Kolom yang bernilai "TODO" di bawah sebaiknya nanti ditarik dari profil_sekolah
-// (nama sekolah, alamat, kepala sekolah, NIP) seperti halaman cetak lainnya.
+// Kop surat memakai komponen bersama <KopSurat /> (logo, nama, alamat dari profil_sekolah).
 
 const BULAN = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -30,11 +30,9 @@ function tanggalIndo(iso) {
 const hariIni = () => new Date().toISOString().slice(0, 10)
 
 const AWAL = {
-  // Data sekolah — TODO: tarik dari profil_sekolah
-  pemda: 'PEMERINTAH KABUPATEN KEPULAUAN ARU',
-  dinas: 'DINAS PENDIDIKAN DAN KEBUDAYAAN',
+  // Data sekolah — kop surat dirender komponen <KopSurat /> (profil_sekolah);
+  // `sekolah` hanya dipakai untuk kalimat di isi surat dan tanda tangan.
   sekolah: 'SD NEGERI WARIA',
-  alamat: '',
   kepalaSekolah: '',
   nipKepsek: '',
   // Data surat
@@ -121,8 +119,8 @@ export default function KeteranganTidakSKHUN() {
   const [arsip, setArsip] = useState(true) // arsipkan otomatis saat cetak
   const [menyimpan, setMenyimpan] = useState(false)
   const [pesan, setPesan] = useState(null) // { ok: bool, teks: string }
-  const { profil } = useAuth()
-  const sekolahId = profil?.sekolah_id
+  const { sekolahId: sekolahIdAuth, profil } = useAuth()
+  const sekolahId = sekolahIdAuth ?? profil?.sekolah_id
   const [kabupaten, setKabupaten] = useState('Kepulauan Aru')
   const [sumberKepsek, setSumberKepsek] = useState('')
 
@@ -138,8 +136,6 @@ export default function KeteranganTidakSKHUN() {
       setF((s) => ({
         ...s,
         sekolah: d.sekolah ? d.sekolah.toUpperCase() : s.sekolah,
-        pemda: kab ? `PEMERINTAH KABUPATEN ${kab.toUpperCase()}` : s.pemda,
-        alamat: s.alamat || d.alamat,
         kepalaSekolah: s.kepalaSekolah || d.kepsek,
         nipKepsek: s.nipKepsek || d.nip,
       }))
@@ -287,9 +283,6 @@ export default function KeteranganTidakSKHUN() {
             <Field label="Tujuan surat (untuk arsip)">
               <input className={inputCls} placeholder="mis. Dinas Pendidikan / yang bersangkutan" value={f.tujuan} onChange={set('tujuan')} />
             </Field>
-            <Field label="Alamat sekolah (kop surat)">
-              <input className={inputCls} value={f.alamat} onChange={set('alamat')} />
-            </Field>
             {sumberKepsek ? (
               <p className="text-[11px] text-emerald-700">Kepala sekolah dimuat otomatis dari {sumberKepsek}. Bisa diubah manual.</p>
             ) : (
@@ -330,7 +323,7 @@ export default function KeteranganTidakSKHUN() {
             </button>
             <button
               type="button"
-              onClick={() => setF((s) => ({ ...AWAL, pemda: s.pemda, sekolah: s.sekolah, alamat: s.alamat, kepalaSekolah: s.kepalaSekolah, nipKepsek: s.nipKepsek }))}
+              onClick={() => setF((s) => ({ ...AWAL, sekolah: s.sekolah, kepalaSekolah: s.kepalaSekolah, nipKepsek: s.nipKepsek }))}
               className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50"
             >
               <RotateCcw size={16} /> Reset
@@ -353,13 +346,7 @@ export default function KeteranganTidakSKHUN() {
             }}
           >
             {/* Kop */}
-            <div className="text-center" style={{ lineHeight: 1.25 }}>
-              <div className="font-bold">{f.pemda}</div>
-              <div className="font-bold">{f.dinas}</div>
-              <div className="font-bold" style={{ fontSize: '14pt' }}>{f.sekolah}</div>
-              {f.alamat && <div style={{ fontSize: '10pt', fontStyle: 'italic' }}>{f.alamat}</div>}
-            </div>
-            <div style={{ borderBottom: '3px double #000', margin: '6px 0 16px' }} />
+            <KopSurat />
 
             <div className="text-center" style={{ lineHeight: 1.3 }}>
               <div className="font-bold underline">SURAT KETERANGAN</div>
