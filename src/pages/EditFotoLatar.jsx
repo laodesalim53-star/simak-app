@@ -408,6 +408,79 @@ function alphaBox(d, w, h) {
   return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
 }
 
+// Crop otomatis: cari kepala dan bahu dari siluet, lalu tentukan bingkai potret.
+// Foto setengah badan atau seluruh badan jadi terpotong ke kepala + bahu.
+function headShouldersBox(d, w, h) {
+  const base = alphaBox(d, w, h);
+  const y0 = base.y,
+    yEnd = Math.min(h, base.y + base.h);
+  if (yEnd - y0 < 20) return base;
+
+  // lebar siluet per baris, dihaluskan 5 baris
+  const cnt = new Float32Array(h);
+  for (let y = y0; y < yEnd; y++) {
+    let c = 0;
+    const row = y * w * 4;
+    for (let x = base.x; x < base.x + base.w; x++) if (d[row + x * 4 + 3] > 128) c++;
+    cnt[y] = c;
+  }
+  const sm = new Float32Array(h);
+  for (let y = y0; y < yEnd; y++) {
+    let s = 0,
+      k = 0;
+    for (let j = -2; j <= 2; j++) {
+      const yy = y + j;
+      if (yy >= y0 && yy < yEnd) {
+        s += cnt[yy];
+        k++;
+      }
+    }
+    sm[y] = s / k;
+  }
+
+  // bahu = baris pertama yang jauh lebih lebar daripada kepala
+  const minHead = base.h * 0.04;
+  let headW = 0,
+    ys = -1;
+  for (let y = y0; y < yEnd; y++) {
+    if (headW >= minHead && sm[y] > headW * 1.5) {
+      ys = y;
+      break;
+    }
+    if (sm[y] > headW) headW = sm[y];
+  }
+  if (ys < 0 || ys - y0 < base.h * 0.06) return base;
+
+  // bingkai: puncak kepala ±8% dari atas, awal bahu ±74% dari atas
+  const hh = ys - y0;
+  const yB = Math.min(yEnd, y0 + (hh * 0.92) / 0.66);
+  let minx = w,
+    maxx = 0,
+    sx = 0,
+    sn = 0;
+  for (let y = y0; y < yB; y++) {
+    const row = y * w * 4;
+    let a = -1,
+      b = -1;
+    for (let x = base.x; x < base.x + base.w; x++) {
+      if (d[row + x * 4 + 3] > 128) {
+        if (a < 0) a = x;
+        b = x;
+      }
+    }
+    if (a < 0) continue;
+    if (a < minx) minx = a;
+    if (b > maxx) maxx = b;
+    if (y < ys) {
+      sx += (a + b) / 2;
+      sn++;
+    }
+  }
+  if (maxx <= minx || !sn) return base;
+  const bw = maxx - minx + 1;
+  return { x: sx / sn - bw / 2, y: y0, w: bw, h: yB - y0 };
+}
+
 // Bangun "subjek" siap pakai: tepi dihaluskan, cahaya diperbaiki, dipertajam.
 function buildSubject(item, p) {
   const src = item.cut || item.base;
@@ -425,7 +498,8 @@ function buildSubject(item, p) {
   colorAdjust(d, p);
   if (p.sharp > 0) sharpen(d, w, h, p.sharp / 100);
   ctx.putImageData(img, 0, 0);
-  return { canvas: c, box: isCut ? alphaBox(d, w, h) : { x: 0, y: 0, w, h }, isCut };
+  const box = isCut ? (p.autoCrop ? headShouldersBox(d, w, h) : alphaBox(d, w, h)) : { x: 0, y: 0, w, h };
+  return { canvas: c, box, isCut };
 }
 
 /* ───────────────────── Render foto akhir ───────────────────── */
@@ -583,6 +657,7 @@ export default function EditFotoLatar() {
   const [sharp, setSharp] = useState(20);
   const [shrink, setShrink] = useState(1);
   const [feather, setFeather] = useState(2);
+  const [autoCrop, setAutoCrop] = useState(true);
   const [guides, setGuides] = useState(true);
   const [showOrig, setShowOrig] = useState(false);
 
@@ -609,8 +684,8 @@ export default function EditFotoLatar() {
   const tolFirst = useRef(true);
 
   const active = items.find((i) => i.id === activeId) || null;
-  const adj = { auto, bright, contrast, sat, sharp, shrink, feather };
-  const adjKey = [auto, bright, contrast, sat, sharp, shrink, feather].join("|");
+  const adj = { auto, bright, contrast, sat, sharp, shrink, feather, autoCrop };
+  const adjKey = [auto, bright, contrast, sat, sharp, shrink, feather, autoCrop].join("|");
 
   const patch = (id, p) =>
     setItems((l) => l.map((i) => (i.id === id ? { ...i, ...(typeof p === "function" ? p(i) : p) } : i)));
@@ -1071,7 +1146,10 @@ img{width:${wmm}mm;height:${hmm}mm;display:block;outline:0.1mm solid #bbb}
               <label className="ef-check">
                 <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} /> Perbaiki cahaya dan kontras otomatis
               </label>
-              <p className="ef-note">Posisi kepala dan bahu sudah diatur otomatis mengikuti ukuran foto.</p>
+              <label className="ef-check">
+                <input type="checkbox" checked={autoCrop} onChange={(e) => setAutoCrop(e.target.checked)} /> Crop otomatis (kepala dan bahu)
+              </label>
+              <p className="ef-note">Foto setengah badan atau seluruh badan dipotong otomatis ke kepala dan bahu, lalu diposisikan sesuai ukuran foto. Matikan jika foto sudah pas.</p>
               <Slider label="Kecerahan" value={bright} min={-40} max={40} onChange={setBright} />
               <Slider label="Kontras" value={contrast} min={-40} max={40} onChange={setContrast} />
               <Slider label="Warna (saturasi)" value={sat} min={-40} max={40} onChange={setSat} />
