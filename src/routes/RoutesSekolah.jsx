@@ -4,6 +4,7 @@ import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import { ProtectedRoute } from '../components/RouteGuards'
 import { commonRoutes, adminUmumRoutes } from './RoutesCommon'
+import EditFotoLatar from '../pages/EditFotoLatar'
 
 // ============================================================
 // ROUTE KHUSUS SEKOLAH — semua halaman sekolah dari App.jsx lama,
@@ -144,6 +145,7 @@ const PencairanDana = lazy(() => import('../pages/PencairanDana'))
 // Halaman gabungan (hub): Toko (etalase + riwayat + pesanan masuk) dan Alat / Media (rapat + scan + PDF)
 const PusatToko = lazy(() => import('../pages/PusatToko'))
 const AlatMedia = lazy(() => import('../pages/AlatMedia'))
+const EditFotoLatar = lazy(() => import('../pages/EditFotoLatar'))
 // Halaman gabungan (hub) Keuangan: Keuangan, BKU Bank, Kuitansi, Kuitansi Jasa, Nota Belanja
 const PusatKeuangan = lazy(() => import('../pages/PusatKeuangan'))
 
@@ -338,7 +340,8 @@ export default function RoutesSekolah() {
       <Route path="/pusat-toko" element={<ProtectedRoute><PusatToko /></ProtectedRoute>} />
 
       {/* 9b. Alat / Media — hub Rapat Video, Scan Dokumen, Alat PDF */}
-      <Route path="/alat-media" element={<ProtectedRoute><AlatMedia /></ProtectedRoute>} />
+      <<Route path="/alat-media" element={<ProtectedRoute><AlatMedia /></ProtectedRoute>} />
+      <Route path="/edit-foto-latar" element={<ProtectedRoute><EditFotoLatar /></ProtectedRoute>} />
 
       {/* 10. Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
