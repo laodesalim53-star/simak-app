@@ -8,6 +8,7 @@
 // `aiLib = await import("@imgly/background-removal")`.
 
 import { useState, useRef, useEffect } from "react";
+import Layout from "../components/Layout";
 
 /* ───────────────────────── Konstanta ───────────────────────── */
 
@@ -834,308 +835,304 @@ img{width:${wmm}mm;height:${hmm}mm;display:block;outline:0.1mm solid #bbb}
 
   /* ───────────────────────── Tampilan ───────────────────────── */
   return (
-    <div className="ef-root">
-      <style>{CSS}</style>
+    <Layout
+      title="Edit Foto Latar"
+      subtitle="Ganti latar foto siswa untuk raport, ijazah, dan berkas lain. Foto diproses di perangkat ini dan tidak diunggah ke server."
+    >
+      <div className="ef-root">
+        <style>{CSS}</style>
 
-      <header className="ef-head">
-        <h1>Edit Foto Latar</h1>
-        <p>
-          Ganti latar foto siswa untuk raport, ijazah, dan berkas lain. Foto diproses di perangkat ini dan tidak diunggah ke server.
-        </p>
-      </header>
+        {notice && (
+          <div className="ef-notice" role="status">
+            <span>{notice}</span>
+            <button type="button" onClick={() => setNotice("")}>
+              Tutup
+            </button>
+          </div>
+        )}
 
-      {notice && (
-        <div className="ef-notice" role="status">
-          <span>{notice}</span>
-          <button type="button" onClick={() => setNotice("")}>
-            Tutup
-          </button>
-        </div>
-      )}
+        <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+        <input ref={camRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+        <input ref={bgFileRef} type="file" accept="image/*" hidden onChange={(e) => { pickBgImage(e.target.files[0]); e.target.value = ""; }} />
 
-      <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
-      <input ref={camRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
-      <input ref={bgFileRef} type="file" accept="image/*" hidden onChange={(e) => { pickBgImage(e.target.files[0]); e.target.value = ""; }} />
-
-      <div className="ef-grid">
-        {/* ───────── Kiri: pratinjau ───────── */}
-        <section className="ef-stage" aria-label="Pratinjau foto">
-          {!active ? (
-            <div
-              className="ef-drop"
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                addFiles(e.dataTransfer.files);
-              }}
-            >
-              <strong>Mulai dengan memilih foto siswa</strong>
-              <span>Bisa banyak foto sekaligus. Latar lama dihapus otomatis.</span>
-              <div className="ef-btns">
-                <button type="button" className="ef-btn pri" onClick={() => fileRef.current.click()}>
-                  Pilih foto
-                </button>
-                <button type="button" className="ef-btn" onClick={() => camRef.current.click()}>
-                  Ambil dengan kamera
-                </button>
-              </div>
-              <small>Atau tarik berkas ke kotak ini.</small>
-            </div>
-          ) : (
-            <>
+        <div className="ef-grid">
+          {/* ───────── Kiri: pratinjau ───────── */}
+          <section className="ef-stage" aria-label="Pratinjau foto">
+            {!active ? (
               <div
-                className="ef-frame"
-                ref={frameRef}
-                style={{ width: `min(100%, ${rw === rh ? 340 : rh > rw * 1.4 ? 300 : 340}px)`, background: bgCss(bg.mode === "transparent" ? bg : { mode: "transparent" }) }}
-                onPointerDown={onDown}
-                onPointerMove={onMove}
-                onPointerUp={onUp}
-                onPointerCancel={onUp}
+                className="ef-drop"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  addFiles(e.dataTransfer.files);
+                }}
               >
-                <canvas ref={previewRef} />
-                {guides && !showOrig && (
-                  <div className="ef-guides" aria-hidden="true">
-                    <i style={{ left: "50%", top: 0, bottom: 0, width: 0, borderLeft: "1px dashed rgba(255,255,255,.7)" }} />
-                    <i style={{ top: "8%", left: 0, right: 0, height: 0, borderTop: "1px dashed rgba(255,255,255,.7)" }} />
-                  </div>
-                )}
-                {active.status === "busy" && (
-                  <div className="ef-busy" role="status">
-                    <span className="ef-spin" />
-                    <b>{active.msg || "Memproses…"}</b>
-                  </div>
-                )}
-                {active.status === "error" && (
-                  <div className="ef-busy" role="alert">
-                    <b>{active.msg}</b>
-                  </div>
-                )}
-              </div>
-              <p className="ef-hint">Geser foto di bingkai untuk memindahkan posisi. Ukuran {rw} × {rh} cm.</p>
-
-              <div className="ef-tools">
-                <label className="ef-row ef-grow">
-                  <span className="ef-rowlab">
-                    Perbesar / perkecil<b>{Math.round(active.zoom * 100)}%</b>
-                  </span>
-                  <input type="range" min="0.6" max="1.8" step="0.01" value={active.zoom} onChange={(e) => patch(active.id, { zoom: Number(e.target.value) })} />
-                </label>
-                <button type="button" className="ef-btn" onClick={() => patch(active.id, { zoom: 1, ox: 0, oy: 0 })}>
-                  Posisi otomatis
-                </button>
-                <button
-                  type="button"
-                  className="ef-btn"
-                  onPointerDown={() => setShowOrig(true)}
-                  onPointerUp={() => setShowOrig(false)}
-                  onPointerLeave={() => setShowOrig(false)}
-                >
-                  Tahan: lihat asli
-                </button>
-                <label className="ef-check">
-                  <input type="checkbox" checked={guides} onChange={(e) => setGuides(e.target.checked)} /> Garis bantu
-                </label>
-              </div>
-            </>
-          )}
-
-          {items.length > 0 && (
-            <div className="ef-strip" role="list" aria-label="Daftar foto">
-              {items.map((it) => (
-                <div key={it.id} role="listitem" className={"ef-thumb" + (it.id === activeId ? " on" : "")}>
-                  <button type="button" onClick={() => setActiveId(it.id)} aria-label={`Pilih ${it.label}`}>
-                    <img src={it.thumb} alt="" />
-                    <span className={"ef-badge " + it.status}>
-                      {it.status === "done" ? "Siap" : it.status === "busy" ? "Proses" : it.status === "error" ? "Gagal" : "Antre"}
-                    </span>
+                <strong>Mulai dengan memilih foto siswa</strong>
+                <span>Bisa banyak foto sekaligus. Latar lama dihapus otomatis.</span>
+                <div className="ef-btns">
+                  <button type="button" className="ef-btn pri" onClick={() => fileRef.current.click()}>
+                    Pilih foto
                   </button>
-                  <button type="button" className="ef-x" onClick={() => removeItem(it.id)} aria-label={`Hapus ${it.label}`}>
-                    ×
+                  <button type="button" className="ef-btn" onClick={() => camRef.current.click()}>
+                    Ambil dengan kamera
                   </button>
                 </div>
-              ))}
-              <button type="button" className="ef-add" onClick={() => fileRef.current.click()}>
-                + Tambah foto
-              </button>
-            </div>
-          )}
-        </section>
-
-        {/* ───────── Kanan: pengaturan ───────── */}
-        <aside className="ef-panel">
-          <fieldset>
-            <legend>1. Hapus latar lama</legend>
-            <div className="ef-chips">
-              <Chip active={method === "ai"} onClick={() => setMethod("ai")}>
-                AI (akurat)
-              </Chip>
-              <Chip active={method === "fast"} onClick={() => setMethod("fast")}>
-                Cepat (latar polos)
-              </Chip>
-            </div>
-            <p className="ef-note">
-              {method === "ai"
-                ? "Cocok untuk latar apa saja. Pertama kali memuat model dari internet, setelah itu lebih cepat."
-                : "Tanpa internet. Paling baik jika latar lama satu warna, misalnya dinding putih atau kain biru."}
-            </p>
-            {method === "fast" && <Slider label="Kepekaan warna latar" value={tol} min={15} max={120} onChange={setTol} />}
-            <div className="ef-btns">
-              <button type="button" className="ef-btn" disabled={!active} onClick={() => active && enqueue(active)}>
-                Proses ulang foto ini
-              </button>
-              <button type="button" className="ef-btn" disabled={!items.length} onClick={() => items.forEach(enqueue)}>
-                Proses ulang semua
-              </button>
-            </div>
-          </fieldset>
-
-          <fieldset>
-            <legend>2. Latar baru</legend>
-            <div className="ef-swatches">
-              {LATAR.map((p) => (
-                <button key={p.id} type="button" className={"ef-sw" + (bg.id === p.id ? " on" : "")} onClick={() => pickPreset(p)} aria-pressed={bg.id === p.id}>
-                  <i style={{ background: bgCss({ ...p, c2: p.c2 || shade(p.c1, -0.3) }) }} />
-                  <span>{p.nama}</span>
-                </button>
-              ))}
-              <button type="button" className={"ef-sw" + (bg.id === "gambar" ? " on" : "")} onClick={() => bgFileRef.current.click()}>
-                <i className="img">+</i>
-                <span>Gambar</span>
-              </button>
-            </div>
-            {bg.mode !== "transparent" && bg.mode !== "image" && (
+                <small>Atau tarik berkas ke kotak ini.</small>
+              </div>
+            ) : (
               <>
-                <div className="ef-chips">
-                  <Chip active={bg.mode === "solid"} onClick={() => setBg((b) => ({ ...b, mode: "solid" }))}>
-                    Polos
-                  </Chip>
-                  <Chip active={bg.mode === "linear"} onClick={() => setBg((b) => ({ ...b, mode: "linear" }))}>
-                    Gradasi atas–bawah
-                  </Chip>
-                  <Chip active={bg.mode === "radial"} onClick={() => setBg((b) => ({ ...b, mode: "radial" }))}>
-                    Sorot tengah
-                  </Chip>
-                </div>
-                <div className="ef-colors">
-                  <label>
-                    Warna {bg.mode === "solid" ? "latar" : "utama"}
-                    <input type="color" value={bg.c1} onChange={(e) => setColor1(e.target.value)} />
-                  </label>
-                  {bg.mode !== "solid" && (
-                    <label>
-                      Warna tepi
-                      <input type="color" value={bg.c2} onChange={(e) => setColor2(e.target.value)} />
-                    </label>
+                <div
+                  className="ef-frame"
+                  ref={frameRef}
+                  style={{ width: `min(100%, ${rw === rh ? 340 : rh > rw * 1.4 ? 300 : 340}px)`, background: bgCss(bg.mode === "transparent" ? bg : { mode: "transparent" }) }}
+                  onPointerDown={onDown}
+                  onPointerMove={onMove}
+                  onPointerUp={onUp}
+                  onPointerCancel={onUp}
+                >
+                  <canvas ref={previewRef} />
+                  {guides && !showOrig && (
+                    <div className="ef-guides" aria-hidden="true">
+                      <i style={{ left: "50%", top: 0, bottom: 0, width: 0, borderLeft: "1px dashed rgba(255,255,255,.7)" }} />
+                      <i style={{ top: "8%", left: 0, right: 0, height: 0, borderTop: "1px dashed rgba(255,255,255,.7)" }} />
+                    </div>
                   )}
+                  {active.status === "busy" && (
+                    <div className="ef-busy" role="status">
+                      <span className="ef-spin" />
+                      <b>{active.msg || "Memproses…"}</b>
+                    </div>
+                  )}
+                  {active.status === "error" && (
+                    <div className="ef-busy" role="alert">
+                      <b>{active.msg}</b>
+                    </div>
+                  )}
+                </div>
+                <p className="ef-hint">Geser foto di bingkai untuk memindahkan posisi. Ukuran {rw} × {rh} cm.</p>
+
+                <div className="ef-tools">
+                  <label className="ef-row ef-grow">
+                    <span className="ef-rowlab">
+                      Perbesar / perkecil<b>{Math.round(active.zoom * 100)}%</b>
+                    </span>
+                    <input type="range" min="0.6" max="1.8" step="0.01" value={active.zoom} onChange={(e) => patch(active.id, { zoom: Number(e.target.value) })} />
+                  </label>
+                  <button type="button" className="ef-btn" onClick={() => patch(active.id, { zoom: 1, ox: 0, oy: 0 })}>
+                    Posisi otomatis
+                  </button>
+                  <button
+                    type="button"
+                    className="ef-btn"
+                    onPointerDown={() => setShowOrig(true)}
+                    onPointerUp={() => setShowOrig(false)}
+                    onPointerLeave={() => setShowOrig(false)}
+                  >
+                    Tahan: lihat asli
+                  </button>
+                  <label className="ef-check">
+                    <input type="checkbox" checked={guides} onChange={(e) => setGuides(e.target.checked)} /> Garis bantu
+                  </label>
                 </div>
               </>
             )}
-            <p className="ef-note">Cek ketentuan warna latar dari sekolah atau dinas pendidikan untuk tiap jenis dokumen.</p>
-          </fieldset>
 
-          <fieldset>
-            <legend>3. Ukuran foto</legend>
-            <div className="ef-chips">
-              {Object.keys(RATIOS).map((k) => (
-                <Chip key={k} active={ratio === k} onClick={() => setRatio(k)}>
-                  {RATIOS[k][0]} × {RATIOS[k][1]} cm
-                </Chip>
-              ))}
-            </div>
-            <div className="ef-two">
-              <label>
-                Resolusi
-                <select value={dpi} onChange={(e) => setDpi(Number(e.target.value))}>
-                  <option value={300}>300 dpi (standar cetak)</option>
-                  <option value={600}>600 dpi (lebih tajam)</option>
-                </select>
-              </label>
-              <label>
-                Format
-                <select value={format} onChange={(e) => setFormat(e.target.value)} disabled={bg.mode === "transparent"}>
-                  <option value="jpg">JPG (ringan)</option>
-                  <option value="png">PNG</option>
-                </select>
-              </label>
-            </div>
-          </fieldset>
-
-          <fieldset>
-            <legend>4. Alat otomatis dan penyesuaian</legend>
-            <label className="ef-check">
-              <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} /> Perbaiki cahaya dan kontras otomatis
-            </label>
-            <p className="ef-note">Posisi kepala dan bahu sudah diatur otomatis mengikuti ukuran foto.</p>
-            <Slider label="Kecerahan" value={bright} min={-40} max={40} onChange={setBright} />
-            <Slider label="Kontras" value={contrast} min={-40} max={40} onChange={setContrast} />
-            <Slider label="Warna (saturasi)" value={sat} min={-40} max={40} onChange={setSat} />
-            <Slider label="Ketajaman" value={sharp} min={0} max={100} onChange={setSharp} />
-            <Slider label="Haluskan tepi rambut dan bahu" value={feather} min={0} max={6} onChange={setFeather} />
-            <Slider label="Kikis tepi (hilangkan sisa latar lama)" value={shrink} min={0} max={6} onChange={setShrink} />
-            <p className="ef-note">Untuk dokumen resmi, ubah hanya latar dan pencahayaan. Jangan memperhalus atau mengubah wajah.</p>
-          </fieldset>
-
-          <fieldset>
-            <legend>5. Simpan dan cetak</legend>
-            {active && (
-              <label className="ef-name">
-                Nama berkas foto ini
-                <input type="text" value={active.label} onChange={(e) => patch(active.id, { label: e.target.value })} />
-              </label>
+            {items.length > 0 && (
+              <div className="ef-strip" role="list" aria-label="Daftar foto">
+                {items.map((it) => (
+                  <div key={it.id} role="listitem" className={"ef-thumb" + (it.id === activeId ? " on" : "")}>
+                    <button type="button" onClick={() => setActiveId(it.id)} aria-label={`Pilih ${it.label}`}>
+                      <img src={it.thumb} alt="" />
+                      <span className={"ef-badge " + it.status}>
+                        {it.status === "done" ? "Siap" : it.status === "busy" ? "Proses" : it.status === "error" ? "Gagal" : "Antre"}
+                      </span>
+                    </button>
+                    <button type="button" className="ef-x" onClick={() => removeItem(it.id)} aria-label={`Hapus ${it.label}`}>
+                      ×
+                    </button>
+                  </div>
+                ))}
+                <button type="button" className="ef-add" onClick={() => fileRef.current.click()}>
+                  + Tambah foto
+                </button>
+              </div>
             )}
-            <div className="ef-btns">
-              <button type="button" className="ef-btn pri" disabled={!active || active.status !== "done" || busyExport} onClick={exportActive}>
-                Unduh foto ini
-              </button>
-              <button type="button" className="ef-btn" disabled={!doneCount || busyExport} onClick={exportAll}>
-                Unduh semua ({doneCount})
-              </button>
-            </div>
+          </section>
 
-            <div className="ef-two">
-              <label>
-                Kertas
-                <select value={paper} onChange={(e) => setPaper(e.target.value)}>
-                  {Object.entries(PAPERS).map(([k, v]) => (
-                    <option key={k} value={k}>
-                      {v.nama}
-                    </option>
-                  ))}
+          {/* ───────── Kanan: pengaturan ───────── */}
+          <aside className="ef-panel">
+            <fieldset>
+              <legend>1. Hapus latar lama</legend>
+              <div className="ef-chips">
+                <Chip active={method === "ai"} onClick={() => setMethod("ai")}>
+                  AI (akurat)
+                </Chip>
+                <Chip active={method === "fast"} onClick={() => setMethod("fast")}>
+                  Cepat (latar polos)
+                </Chip>
+              </div>
+              <p className="ef-note">
+                {method === "ai"
+                  ? "Cocok untuk latar apa saja. Pertama kali memuat model dari internet, setelah itu lebih cepat."
+                  : "Tanpa internet. Paling baik jika latar lama satu warna, misalnya dinding putih atau kain biru."}
+              </p>
+              {method === "fast" && <Slider label="Kepekaan warna latar" value={tol} min={15} max={120} onChange={setTol} />}
+              <div className="ef-btns">
+                <button type="button" className="ef-btn" disabled={!active} onClick={() => active && enqueue(active)}>
+                  Proses ulang foto ini
+                </button>
+                <button type="button" className="ef-btn" disabled={!items.length} onClick={() => items.forEach(enqueue)}>
+                  Proses ulang semua
+                </button>
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>2. Latar baru</legend>
+              <div className="ef-swatches">
+                {LATAR.map((p) => (
+                  <button key={p.id} type="button" className={"ef-sw" + (bg.id === p.id ? " on" : "")} onClick={() => pickPreset(p)} aria-pressed={bg.id === p.id}>
+                    <i style={{ background: bgCss({ ...p, c2: p.c2 || shade(p.c1, -0.3) }) }} />
+                    <span>{p.nama}</span>
+                  </button>
+                ))}
+                <button type="button" className={"ef-sw" + (bg.id === "gambar" ? " on" : "")} onClick={() => bgFileRef.current.click()}>
+                  <i className="img">+</i>
+                  <span>Gambar</span>
+                </button>
+              </div>
+              {bg.mode !== "transparent" && bg.mode !== "image" && (
+                <>
+                  <div className="ef-chips">
+                    <Chip active={bg.mode === "solid"} onClick={() => setBg((b) => ({ ...b, mode: "solid" }))}>
+                      Polos
+                    </Chip>
+                    <Chip active={bg.mode === "linear"} onClick={() => setBg((b) => ({ ...b, mode: "linear" }))}>
+                      Gradasi atas–bawah
+                    </Chip>
+                    <Chip active={bg.mode === "radial"} onClick={() => setBg((b) => ({ ...b, mode: "radial" }))}>
+                      Sorot tengah
+                    </Chip>
+                  </div>
+                  <div className="ef-colors">
+                    <label>
+                      Warna {bg.mode === "solid" ? "latar" : "utama"}
+                      <input type="color" value={bg.c1} onChange={(e) => setColor1(e.target.value)} />
+                    </label>
+                    {bg.mode !== "solid" && (
+                      <label>
+                        Warna tepi
+                        <input type="color" value={bg.c2} onChange={(e) => setColor2(e.target.value)} />
+                      </label>
+                    )}
+                  </div>
+                </>
+              )}
+              <p className="ef-note">Cek ketentuan warna latar dari sekolah atau dinas pendidikan untuk tiap jenis dokumen.</p>
+            </fieldset>
+
+            <fieldset>
+              <legend>3. Ukuran foto</legend>
+              <div className="ef-chips">
+                {Object.keys(RATIOS).map((k) => (
+                  <Chip key={k} active={ratio === k} onClick={() => setRatio(k)}>
+                    {RATIOS[k][0]} × {RATIOS[k][1]} cm
+                  </Chip>
+                ))}
+              </div>
+              <div className="ef-two">
+                <label>
+                  Resolusi
+                  <select value={dpi} onChange={(e) => setDpi(Number(e.target.value))}>
+                    <option value={300}>300 dpi (standar cetak)</option>
+                    <option value={600}>600 dpi (lebih tajam)</option>
+                  </select>
+                </label>
+                <label>
+                  Format
+                  <select value={format} onChange={(e) => setFormat(e.target.value)} disabled={bg.mode === "transparent"}>
+                    <option value="jpg">JPG (ringan)</option>
+                    <option value="png">PNG</option>
+                  </select>
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>4. Alat otomatis dan penyesuaian</legend>
+              <label className="ef-check">
+                <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} /> Perbaiki cahaya dan kontras otomatis
+              </label>
+              <p className="ef-note">Posisi kepala dan bahu sudah diatur otomatis mengikuti ukuran foto.</p>
+              <Slider label="Kecerahan" value={bright} min={-40} max={40} onChange={setBright} />
+              <Slider label="Kontras" value={contrast} min={-40} max={40} onChange={setContrast} />
+              <Slider label="Warna (saturasi)" value={sat} min={-40} max={40} onChange={setSat} />
+              <Slider label="Ketajaman" value={sharp} min={0} max={100} onChange={setSharp} />
+              <Slider label="Haluskan tepi rambut dan bahu" value={feather} min={0} max={6} onChange={setFeather} />
+              <Slider label="Kikis tepi (hilangkan sisa latar lama)" value={shrink} min={0} max={6} onChange={setShrink} />
+              <p className="ef-note">Untuk dokumen resmi, ubah hanya latar dan pencahayaan. Jangan memperhalus atau mengubah wajah.</p>
+            </fieldset>
+
+            <fieldset>
+              <legend>5. Simpan dan cetak</legend>
+              {active && (
+                <label className="ef-name">
+                  Nama berkas foto ini
+                  <input type="text" value={active.label} onChange={(e) => patch(active.id, { label: e.target.value })} />
+                </label>
+              )}
+              <div className="ef-btns">
+                <button type="button" className="ef-btn pri" disabled={!active || active.status !== "done" || busyExport} onClick={exportActive}>
+                  Unduh foto ini
+                </button>
+                <button type="button" className="ef-btn" disabled={!doneCount || busyExport} onClick={exportAll}>
+                  Unduh semua ({doneCount})
+                </button>
+              </div>
+
+              <div className="ef-two">
+                <label>
+                  Kertas
+                  <select value={paper} onChange={(e) => setPaper(e.target.value)}>
+                    {Object.entries(PAPERS).map(([k, v]) => (
+                      <option key={k} value={k}>
+                        {v.nama}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Jumlah per foto
+                  <input type="number" min="1" max="100" value={copies} onChange={(e) => setCopies(clamp(Number(e.target.value) || 1, 1, 100))} />
+                </label>
+              </div>
+              <label className="ef-name">
+                Isi lembar dengan
+                <select value={scope} onChange={(e) => setScope(e.target.value)}>
+                  <option value="aktif">Foto yang sedang dibuka</option>
+                  <option value="semua">Semua foto yang sudah siap</option>
                 </select>
               </label>
-              <label>
-                Jumlah per foto
-                <input type="number" min="1" max="100" value={copies} onChange={(e) => setCopies(clamp(Number(e.target.value) || 1, 1, 100))} />
-              </label>
-            </div>
-            <label className="ef-name">
-              Isi lembar dengan
-              <select value={scope} onChange={(e) => setScope(e.target.value)}>
-                <option value="aktif">Foto yang sedang dibuka</option>
-                <option value="semua">Semua foto yang sudah siap</option>
-              </select>
-            </label>
-            <button type="button" className="ef-btn" disabled={!active || (scope === "semua" && !doneCount)} onClick={cetakLembar}>
-              Cetak lembar foto
-            </button>
-            <p className="ef-note">Di jendela cetak, pilih skala 100% (tanpa “fit to page”) agar ukuran foto pas.</p>
-          </fieldset>
-        </aside>
+              <button type="button" className="ef-btn" disabled={!active || (scope === "semua" && !doneCount)} onClick={cetakLembar}>
+                Cetak lembar foto
+              </button>
+              <p className="ef-note">Di jendela cetak, pilih skala 100% (tanpa “fit to page”) agar ukuran foto pas.</p>
+            </fieldset>
+          </aside>
+        </div>
       </div>
-    </div>
+    </Layout>
   );
 }
 
 /* ───────────────────────── Gaya ───────────────────────── */
 
 const CSS = `
-.ef-root{--ink:#1b2430;--mute:#5d6877;--line:#dde1e7;--soft:#f4f5f7;--acc:#2b3fa0;color:var(--ink);padding:16px;max-width:1180px;margin:0 auto;font-size:14px;line-height:1.45}
+.ef-root{--ink:#1b2430;--mute:#5d6877;--line:#dde1e7;--soft:#f4f5f7;--acc:#2b3fa0;color:var(--ink);max-width:1180px;margin:0 auto;font-size:14px;line-height:1.45}
 .ef-root *{box-sizing:border-box}
-.ef-head h1{margin:0 0 4px;font-size:24px;letter-spacing:-.01em}
-.ef-head p{margin:0;color:var(--mute);max-width:68ch}
-.ef-notice{display:flex;gap:12px;justify-content:space-between;align-items:center;margin-top:14px;padding:10px 14px;background:#fff7e0;border:1px solid #f0d98a;border-radius:8px}
+.ef-notice{display:flex;gap:12px;justify-content:space-between;align-items:center;margin-bottom:14px;padding:10px 14px;background:#fff7e0;border:1px solid #f0d98a;border-radius:8px}
 .ef-notice button{border:0;background:none;color:var(--acc);font-weight:600;cursor:pointer}
-.ef-grid{display:grid;grid-template-columns:minmax(0,1fr) 390px;gap:22px;margin-top:18px;align-items:start}
+.ef-grid{display:grid;grid-template-columns:minmax(0,1fr) 390px;gap:22px;align-items:start}
 @media(max-width:920px){.ef-grid{grid-template-columns:1fr}}
 .ef-stage{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:18px;position:sticky;top:8px}
 @media(max-width:920px){.ef-stage{position:static}}
