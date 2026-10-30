@@ -19,6 +19,7 @@ import {
   X,
   Receipt,
   Coins,
+  FileX,
 } from 'lucide-react'
 import Layout from '../components/Layout'
 
@@ -308,6 +309,16 @@ const daftarSK = [
     warna: 'green',
     siap: true,
   },
+  {
+  id: 'keterangan-tidak-skhun',
+  kategori: 'tugas',
+  judul: 'Keterangan Tidak Memiliki SKHUN',
+  deskripsi: 'Surat keterangan alumni yang tidak memiliki SKHUN, lengkap dengan data ijazah dan nomor peserta ujian sekolah.',
+  icon: FileX,
+  path: '/gudang-sk/keterangan-tidak-memiliki-skhun',
+  warna: 'slate',
+  siap: true,
+},
 ]
 
 // Motif batik banner — sama seperti di PusatLaporanGuru.jsx dan Dashboard.jsx
