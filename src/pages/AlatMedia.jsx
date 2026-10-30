@@ -1,4 +1,4 @@
-import { Video, ScanLine, FileType2, Images, HardDrive } from 'lucide-react'
+import { Video, ScanLine, FileType2, Images, HardDrive, ImagePlus } from 'lucide-react'
 import Layout from '../components/Layout'
 import HubMenu from '../components/HubMenu'
 
@@ -20,6 +20,12 @@ const ITEM = [
     label: 'Alat PDF',
     desc: 'Gabung, pisah, dan olah file PDF.',
     icon: FileType2,
+  },
+    {
+    to: '/edit-foto-latar',
+    label: 'Edit Foto Latar',
+    desc: 'Ganti latar foto siswa (merah, biru, dll.) untuk raport dan ijazah, lalu cetak per lembar.',
+    icon: ImagePlus,
   },
   {
     to: '/galeri',
