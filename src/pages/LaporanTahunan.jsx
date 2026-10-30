@@ -328,10 +328,16 @@ export default function LaporanTahunan() {
   // Rekap Buku Kerja Kepala Sekolah (hanya baris yang benar-benar terisi)
   const bk = useMemo(() => {
     const d = bukuKerja.data || {}
+    // array biasa, atau objek berisi array (mis. per bulan)
+    const daftar = (x) => (Array.isArray(x) ? x : Object.values(x || {}).flat())
+    // baris dianggap terisi bila ada isian teks apa pun selain id
+    const terisi = (r) =>
+      r && typeof r === 'object' &&
+      Object.entries(r).some(([k, v]) => k !== 'id' && typeof v === 'string' && v.trim())
     return {
-      jurnal: (d.jurnal || []).filter((r) => r.kegiatan?.trim()).length,
-      program: (d.program || []).filter((r) => r.program?.trim()),
-      pembinaan: (d.pembinaan || []).filter((r) => r.topik?.trim()).length,
+      jurnal: daftar(d.jurnal).filter(terisi).length,
+      program: daftar(d.program).filter((r) => r?.program?.trim()),
+      pembinaan: daftar(d.pembinaan).filter(terisi).length,
       tahunAjaran: d.tahunAjaran || '',
     }
   }, [bukuKerja.data])
