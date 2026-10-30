@@ -338,9 +338,9 @@ export default function RoutesSekolah() {
       <Route path="/pencairan-dana" element={<ProtectedRoute superAdminOnly><PencairanDana /></ProtectedRoute>} />
       <Route path="/pusat-toko" element={<ProtectedRoute><PusatToko /></ProtectedRoute>} />
 
-      {/* 9b. Alat / Media — hub Rapat Video, Scan Dokumen, Alat PDF */}
-      <<Route path="/alat-media" element={<ProtectedRoute><AlatMedia /></ProtectedRoute>} />
-      <Route path="/edit-foto-latar" element={<ProtectedRoute><EditFotoLatar /></ProtectedRoute>} />
+{/* 9b. Alat / Media — hub Rapat Video, Scan Dokumen, Alat PDF */}
+<Route path="/alat-media" element={<ProtectedRoute><AlatMedia /></ProtectedRoute>} />
+<Route path="/edit-foto-latar" element={<ProtectedRoute><EditFotoLatar /></ProtectedRoute>} />
 
       {/* 10. Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
