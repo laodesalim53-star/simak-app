@@ -135,6 +135,9 @@ export default function Cetak8355() {
   const [siswaList, setSiswaList] = useState([])
   const [sekolah, setSekolah] = useState(null)
   const [logoUrl, setLogoUrl] = useState('')
+  // TAMBAHAN: URL logo kabupaten (dari kolom logo_kabupaten_path di
+  // profil_sekolah) untuk kop surat — sama seperti yang dipakai KopSurat.jsx.
+  const [logoKabupatenUrl, setLogoKabupatenUrl] = useState('')
 
   const [tahunPelajaran, setTahunPelajaran] = useState('')
   const [statusSekolah, setStatusSekolah] = useState('')
@@ -209,6 +212,18 @@ export default function Cetak8355() {
     if (sekolahRow?.logo_path) {
       const { data: pub } = supabase.storage.from('profil-sekolah').getPublicUrl(sekolahRow.logo_path)
       setLogoUrl(pub.publicUrl)
+    }
+    // TAMBAHAN: logo kabupaten — path berawalan http dipakai apa adanya,
+    // selain itu diubah jadi URL publik dari bucket 'profil-sekolah'
+    // (sama seperti urlLogo() di KopSurat.jsx).
+    if (sekolahRow?.logo_kabupaten_path) {
+      const pathKab = sekolahRow.logo_kabupaten_path
+      if (pathKab.startsWith('http')) {
+        setLogoKabupatenUrl(pathKab)
+      } else {
+        const { data: pubKab } = supabase.storage.from('profil-sekolah').getPublicUrl(pathKab)
+        setLogoKabupatenUrl(pubKab.publicUrl)
+      }
     }
     setLoading(false)
   }
@@ -302,8 +317,18 @@ export default function Cetak8355() {
     return (
       <>
         <div className="flex items-center gap-4 mb-2">
+          {/* TAMBAHAN: kalau ada logo kabupaten -> logo kabupaten di KIRI,
+              logo sekolah di KANAN (sama seperti KopSurat.jsx). Kalau tidak
+              ada logo kabupaten -> tampilan lama (logo sekolah di kiri,
+              kolom kanan kosong). */}
           <div className="w-16 h-16 shrink-0 flex items-center justify-center">
-            {logoUrl && <img src={logoUrl} alt="Logo sekolah" className="w-full h-full object-contain" />}
+            {(logoKabupatenUrl || logoUrl) && (
+              <img
+                src={logoKabupatenUrl || logoUrl}
+                alt={logoKabupatenUrl ? 'Logo Kabupaten' : 'Logo sekolah'}
+                className="w-full h-full object-contain"
+              />
+            )}
           </div>
           <div className="text-center flex-1">
             {sekolah?.kabupaten && <p className="font-display font-bold uppercase text-xs">{sekolah.kabupaten}</p>}
@@ -311,7 +336,11 @@ export default function Cetak8355() {
             <h1 className="font-display text-lg font-bold uppercase">{sekolah?.nama_sekolah || 'Nama Sekolah'}</h1>
             {sekolah?.kecamatan && <p className="font-display font-bold uppercase text-[11px]">{sekolah.kecamatan}</p>}
           </div>
-          <div className="w-16 shrink-0" />
+          <div className="w-16 h-16 shrink-0 flex items-center justify-center">
+            {logoKabupatenUrl && logoUrl && (
+              <img src={logoUrl} alt="Logo sekolah" className="w-full h-full object-contain" />
+            )}
+          </div>
         </div>
         <div className="border-t-4 border-double border-ink-950 mb-0.5" />
         <div className="border-t border-ink-950 mb-3" />
