@@ -6,11 +6,13 @@
 // Kalau ingin tanpa CDN:  npm i @imgly/background-removal
 // lalu ganti baris `aiLib = await import(...)` di fungsi aiRemove dengan
 // `aiLib = await import("@imgly/background-removal")`.
+//
+// Template pakaian (jas / batik Korpri) dan pencantik kulit ada di ./PakaianSeragam.jsx
 
 import { useState, useRef, useEffect } from "react";
 import Layout from "../components/Layout";
 import HapusLatarDokumen from "./HapusLatarDokumen";
-import PanelPakaian, { CLOTH_DEFAULT, clothKey, drawCloth, sampleSkin, skinSmooth } from "../components/PakaianSeragam";
+import PanelPakaian, { CLOTH_DEFAULT, clothKey, drawCloth, sampleSkin, skinSmooth } from "./PakaianSeragam";
 
 /* ───────────────────────── Konstanta ───────────────────────── */
 
@@ -411,6 +413,7 @@ function alphaBox(d, w, h) {
 
 // Crop otomatis: cari kepala dan bahu dari siluet, lalu tentukan bingkai potret.
 // Foto setengah badan atau seluruh badan jadi terpotong ke kepala + bahu.
+// Hasil juga membawa ys (baris awal bahu), headW (lebar kepala), cx (tengah) untuk template pakaian.
 function headShouldersBox(d, w, h) {
   const base = alphaBox(d, w, h);
   const y0 = base.y,
@@ -479,10 +482,41 @@ function headShouldersBox(d, w, h) {
   }
   if (maxx <= minx || !sn) return base;
   const bw = maxx - minx + 1;
-  return { x: sx / sn - bw / 2, y: y0, w: bw, h: yB - y0 };
+  return { x: sx / sn - bw / 2, y: y0, w: bw, h: yB - y0, ys, headW, cx: sx / sn };
 }
 
-// Bangun "subjek" siap pakai: tepi dihaluskan, cahaya diperbaiki, dipertajam.
+// Cadangan: kalau bahu tidak terdeteksi (misalnya foto sudah dipotong rapat di dada),
+// perkirakan posisi bahu dari kotak siluet supaya template pakaian tetap bisa digambar.
+function ensureGeo(d, w, h, hs) {
+  if (hs.ys !== undefined) return hs;
+  const y0 = hs.y,
+    yE = Math.min(h, hs.y + hs.h);
+  const ys = y0 + (yE - y0) * 0.68;
+  const lim = y0 + (yE - y0) * 0.55;
+  let headW = 0,
+    sx = 0,
+    sn = 0;
+  for (let y = Math.floor(y0); y < lim; y++) {
+    let a = -1,
+      b = -1,
+      c = 0;
+    const row = y * w * 4;
+    for (let x = Math.floor(hs.x); x < hs.x + hs.w && x < w; x++) {
+      if (d[row + x * 4 + 3] > 128) {
+        if (a < 0) a = x;
+        b = x;
+        c++;
+      }
+    }
+    if (a < 0) continue;
+    if (c > headW) headW = c;
+    sx += (a + b) / 2;
+    sn++;
+  }
+  return { ...hs, ys, headW: headW || hs.w * 0.5, cx: sn ? sx / sn : hs.x + hs.w / 2 };
+}
+
+// Bangun "subjek" siap pakai: tepi dihaluskan, cahaya diperbaiki, kulit dicantik, dipertajam.
 function buildSubject(item, p) {
   const src = item.cut || item.base;
   const isCut = !!item.cut;
@@ -497,10 +531,23 @@ function buildSubject(item, p) {
   const d = img.data;
   if (isCut && (p.shrink > 0 || p.feather > 0)) refineAlpha(d, w, h, p.shrink, p.feather);
   colorAdjust(d, p);
+  if (p.smooth > 0 || p.glow > 0) skinSmooth(d, w, h, p.smooth, p.glow);
   if (p.sharp > 0) sharpen(d, w, h, p.sharp / 100);
   ctx.putImageData(img, 0, 0);
-  const box = isCut ? (p.autoCrop ? headShouldersBox(d, w, h) : alphaBox(d, w, h)) : { x: 0, y: 0, w, h };
-  return { canvas: c, box, isCut };
+
+  let box,
+    geo = null,
+    skin = null;
+  if (isCut) {
+    const hs = ensureGeo(d, w, h, headShouldersBox(d, w, h));
+    box = p.autoCrop ? hs : alphaBox(d, w, h);
+    if (hs.ys !== undefined) {
+      const u = hs.ys - hs.y;
+      geo = { cx: hs.cx, ys: hs.ys, u, headW: hs.headW, bw: hs.w, ch: h };
+      skin = sampleSkin(d, w, h, hs.cx, hs.ys - 0.08 * u, Math.max(3, Math.round(hs.headW * 0.05)));
+    }
+  } else box = { x: 0, y: 0, w, h };
+  return { canvas: c, box, isCut, geo, skin };
 }
 
 /* ───────────────────── Render foto akhir ───────────────────── */
@@ -528,7 +575,7 @@ function drawBackground(ctx, W, H, bg) {
   ctx.fillRect(0, 0, W, H);
 }
 
-function renderPhoto(sub, bg, ratioKey, dpi, zoom, ox, oy) {
+function renderPhoto(sub, bg, ratioKey, dpi, zoom, ox, oy, cl) {
   const [rw, rh] = RATIOS[ratioKey];
   const W = Math.round((rw / 2.54) * dpi),
     H = Math.round((rh / 2.54) * dpi);
@@ -553,6 +600,14 @@ function renderPhoto(sub, bg, ratioKey, dpi, zoom, ox, oy) {
     dy = (H - s.height * fs) / 2 + oy * H;
   }
   ctx.drawImage(s, dx, dy, s.width * fs, s.height * fs);
+  // template pakaian (jas / batik Korpri), digambar dalam koordinat piksel foto subjek
+  if (sub.isCut && cl && cl.kind !== "none") {
+    ctx.save();
+    ctx.translate(dx, dy);
+    ctx.scale(fs, fs);
+    drawCloth(ctx, sub, cl);
+    ctx.restore();
+  }
   return c;
 }
 
@@ -662,6 +717,11 @@ export default function EditFotoLatar() {
   const [guides, setGuides] = useState(true);
   const [showOrig, setShowOrig] = useState(false);
 
+  // pencantik kulit & pakaian seragam
+  const [smooth, setSmooth] = useState(0);
+  const [glow, setGlow] = useState(0);
+  const [cl, setCl] = useState(CLOTH_DEFAULT);
+
   // cetak lembar
   const [paper, setPaper] = useState("A4");
   const [copies, setCopies] = useState(6);
@@ -685,8 +745,9 @@ export default function EditFotoLatar() {
   const tolFirst = useRef(true);
 
   const active = items.find((i) => i.id === activeId) || null;
-  const adj = { auto, bright, contrast, sat, sharp, shrink, feather, autoCrop };
-  const adjKey = [auto, bright, contrast, sat, sharp, shrink, feather, autoCrop].join("|");
+  const adj = { auto, bright, contrast, sat, sharp, shrink, feather, autoCrop, smooth, glow };
+  const adjKey = [auto, bright, contrast, sat, sharp, shrink, feather, autoCrop, smooth, glow].join("|");
+  const clKey = clothKey(cl);
 
   const patch = (id, p) =>
     setItems((l) => l.map((i) => (i.id === id ? { ...i, ...(typeof p === "function" ? p(i) : p) } : i)));
@@ -799,11 +860,12 @@ export default function EditFotoLatar() {
     let sub = subjRef.current && subjRef.current.id === active.id ? subjRef.current.sub : null;
     if (showOrig) sub = { canvas: active.base, box: { x: 0, y: 0, w: active.base.width, h: active.base.height }, isCut: false };
     if (!sub) return;
-    const out = renderPhoto(sub, bg, ratio, 300, active.zoom, active.ox, active.oy);
+    const out = renderPhoto(sub, bg, ratio, 300, active.zoom, active.ox, active.oy, cl);
     cv.width = out.width;
     cv.height = out.height;
     cv.getContext("2d").drawImage(out, 0, 0);
-  }, [subjTick, bg, ratio, active && active.id, active && active.zoom, active && active.ox, active && active.oy, showOrig]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subjTick, bg, ratio, active && active.id, active && active.zoom, active && active.ox, active && active.oy, showOrig, clKey]);
 
   /* ── geser posisi dengan jari / mouse ── */
   const onDown = (e) => {
@@ -842,7 +904,7 @@ export default function EditFotoLatar() {
   /* ── ekspor ── */
   const exportOne = async (item) => {
     const sub = buildSubject(item, adj);
-    const out = renderPhoto(sub, bg, ratio, dpi, item.zoom, item.ox, item.oy);
+    const out = renderPhoto(sub, bg, ratio, dpi, item.zoom, item.ox, item.oy, cl);
     const fmt = bg.mode === "transparent" ? "png" : format;
     let blob = await canvasToBlob(out, fmt === "png" ? "image/png" : "image/jpeg", 0.95);
     blob = await withDpi(blob, fmt, dpi);
@@ -877,7 +939,7 @@ export default function EditFotoLatar() {
     const per = cols * rows;
     const printBg = bg.mode === "transparent" ? { ...bg, mode: "solid", c1: "#ffffff" } : bg;
     const urls = targets.map((it) =>
-      renderPhoto(buildSubject(it, adj), printBg, ratio, 300, it.zoom, it.ox, it.oy).toDataURL("image/jpeg", 0.95)
+      renderPhoto(buildSubject(it, adj), printBg, ratio, 300, it.zoom, it.ox, it.oy, cl).toDataURL("image/jpeg", 0.95)
     );
     const list = [];
     urls.forEach((u) => {
@@ -1142,8 +1204,10 @@ img{width:${wmm}mm;height:${hmm}mm;display:block;outline:0.1mm solid #bbb}
               </div>
             </fieldset>
 
+            <PanelPakaian cl={cl} setCl={setCl} onNotice={setNotice} />
+
             <fieldset>
-              <legend>4. Alat otomatis dan penyesuaian</legend>
+              <legend>5. Alat otomatis dan penyesuaian</legend>
               <label className="ef-check">
                 <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} /> Perbaiki cahaya dan kontras otomatis
               </label>
@@ -1155,13 +1219,15 @@ img{width:${wmm}mm;height:${hmm}mm;display:block;outline:0.1mm solid #bbb}
               <Slider label="Kontras" value={contrast} min={-40} max={40} onChange={setContrast} />
               <Slider label="Warna (saturasi)" value={sat} min={-40} max={40} onChange={setSat} />
               <Slider label="Ketajaman" value={sharp} min={0} max={100} onChange={setSharp} />
+              <Slider label="Haluskan kulit" value={smooth} min={0} max={100} onChange={setSmooth} />
+              <Slider label="Cerahkan kulit" value={glow} min={0} max={30} onChange={setGlow} />
               <Slider label="Haluskan tepi rambut dan bahu" value={feather} min={0} max={6} onChange={setFeather} />
               <Slider label="Kikis tepi (hilangkan sisa latar lama)" value={shrink} min={0} max={6} onChange={setShrink} />
-              <p className="ef-note">Untuk dokumen resmi, ubah hanya latar dan pencahayaan. Jangan memperhalus atau mengubah wajah.</p>
+              <p className="ef-note">Untuk dokumen resmi, pakai efek haluskan dan cerahkan secukupnya, dan ikuti ketentuan sekolah atau dinas.</p>
             </fieldset>
 
             <fieldset>
-              <legend>5. Simpan dan cetak</legend>
+              <legend>6. Simpan dan cetak</legend>
               {active && (
                 <label className="ef-name">
                   Nama berkas foto ini
