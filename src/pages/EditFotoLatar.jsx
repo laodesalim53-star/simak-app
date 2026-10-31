@@ -544,7 +544,7 @@ function buildSubject(item, p) {
     if (hs.ys !== undefined) {
       const u = hs.ys - hs.y;
       geo = { cx: hs.cx, ys: hs.ys, u, headW: hs.headW, bw: hs.w, ch: h };
-      skin = sampleSkin(d, w, h, hs.cx, hs.ys - 0.08 * u, Math.max(3, Math.round(hs.headW * 0.05)));
+      skin = sampleSkin(d, w, h, hs.cx, hs.y + 0.5 * u, Math.max(3, Math.round(hs.headW * 0.04)), hs.headW * 0.27); // warna pipi
     }
   } else box = { x: 0, y: 0, w, h };
   return { canvas: c, box, isCut, geo, skin };
