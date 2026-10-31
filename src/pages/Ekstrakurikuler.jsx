@@ -12,6 +12,42 @@ const FORM_KOSONG = {
   tempat: '', deskripsi: '', aktif: true,
 }
 
+// Katalog pilihan cepat. Memilih salah satunya mengisi nama + deskripsi otomatis
+// (keduanya tetap bisa diedit). Tambah/ubah isi daftar ini sesuai kebutuhan sekolah.
+const KATALOG_EKSKUL = [
+  { nama: 'Pramuka', deskripsi: 'Kegiatan kepramukaan untuk membentuk karakter, kemandirian, kedisiplinan, dan kepedulian sosial siswa.' },
+  { nama: 'Drumband', deskripsi: 'Latihan permainan alat musik perkusi dan melodis secara berkelompok untuk melatih kekompakan dan seni musik.' },
+  { nama: 'Paskibra', deskripsi: 'Latihan baris-berbaris dan pengibaran bendera untuk menumbuhkan disiplin dan rasa cinta tanah air.' },
+  { nama: 'Dokter Kecil / UKS', deskripsi: 'Pembinaan siswa sebagai kader kesehatan sekolah: perilaku hidup bersih sehat dan pertolongan pertama.' },
+  { nama: 'Palang Merah Remaja (PMR)', deskripsi: 'Pelatihan kepalangmerahan, pertolongan pertama, dan kepedulian kemanusiaan.' },
+  { nama: 'Futsal', deskripsi: 'Latihan futsal untuk meningkatkan kebugaran, keterampilan bermain, dan sportivitas.' },
+  { nama: 'Sepak Bola', deskripsi: 'Latihan teknik dasar dan permainan sepak bola untuk kebugaran dan kerja sama tim.' },
+  { nama: 'Bola Voli', deskripsi: 'Latihan teknik dasar dan permainan bola voli untuk kebugaran dan kerja sama tim.' },
+  { nama: 'Bulu Tangkis', deskripsi: 'Latihan teknik dasar dan pertandingan bulu tangkis untuk kebugaran dan ketangkasan.' },
+  { nama: 'Tenis Meja', deskripsi: 'Latihan teknik dasar tenis meja untuk melatih konsentrasi, refleks, dan ketangkasan.' },
+  { nama: 'Atletik', deskripsi: 'Latihan lari, lompat, dan lempar untuk membangun kebugaran dan persiapan lomba olahraga antarsekolah.' },
+  { nama: 'Renang', deskripsi: 'Latihan teknik dasar renang dan keselamatan air untuk kebugaran dan keterampilan hidup.' },
+  { nama: 'Senam', deskripsi: 'Latihan senam kebugaran dan irama untuk kelenturan, kekuatan, dan kekompakan.' },
+  { nama: 'Pencak Silat', deskripsi: 'Latihan seni bela diri tradisional untuk membangun ketangkasan, disiplin, dan percaya diri.' },
+  { nama: 'Karate', deskripsi: 'Latihan bela diri karate untuk membangun disiplin, ketangkasan, dan percaya diri.' },
+  { nama: 'Taekwondo', deskripsi: 'Latihan bela diri taekwondo untuk membangun disiplin, kekuatan, dan percaya diri.' },
+  { nama: 'Seni Tari', deskripsi: 'Latihan tari tradisional dan kreasi untuk melestarikan budaya daerah dan melatih ekspresi.' },
+  { nama: 'Paduan Suara / Vokal', deskripsi: 'Latihan olah vokal dan bernyanyi bersama untuk melatih kepekaan musikal dan kekompakan.' },
+  { nama: 'Seni Musik', deskripsi: 'Latihan memainkan alat musik untuk mengembangkan bakat dan apresiasi seni musik.' },
+  { nama: 'Seni Lukis / Menggambar', deskripsi: 'Latihan menggambar dan melukis untuk mengembangkan kreativitas dan imajinasi.' },
+  { nama: 'Teater / Drama', deskripsi: 'Latihan seni peran dan pentas drama untuk melatih keberanian tampil dan ekspresi.' },
+  { nama: 'Tahfidz Al-Qur\'an', deskripsi: 'Pembinaan membaca dan menghafal ayat-ayat Al-Qur\'an secara bertahap.' },
+  { nama: 'Qiroah / Tilawah', deskripsi: 'Pembinaan seni baca Al-Qur\'an dengan tajwid dan lagu yang baik.' },
+  { nama: 'Kaligrafi', deskripsi: 'Latihan seni menulis indah huruf Arab untuk mengembangkan keterampilan dan apresiasi seni Islam.' },
+  { nama: 'Pidato / Public Speaking', deskripsi: 'Latihan berbicara di depan umum untuk melatih keberanian, penyusunan gagasan, dan kepercayaan diri.' },
+  { nama: 'English Club', deskripsi: 'Kegiatan belajar bahasa Inggris yang menyenangkan melalui percakapan, permainan, dan lagu.' },
+  { nama: 'Literasi / Jurnalistik', deskripsi: 'Pembinaan gemar membaca dan menulis, termasuk penyusunan majalah dinding dan berita sekolah.' },
+  { nama: 'Olimpiade Sains', deskripsi: 'Pembinaan siswa berprestasi dalam Matematika dan IPA untuk persiapan olimpiade dan lomba sains.' },
+  { nama: 'Robotika / Komputer', deskripsi: 'Pengenalan teknologi, pemrograman dasar, dan perakitan sederhana untuk melatih logika dan kreativitas.' },
+  { nama: 'Catur', deskripsi: 'Latihan permainan catur untuk melatih konsentrasi, strategi, dan kesabaran.' },
+  { nama: 'Kebun Sekolah', deskripsi: 'Kegiatan berkebun dan merawat tanaman untuk menumbuhkan kepedulian lingkungan dan kemandirian.' },
+]
+
 // Halaman ekstrakurikuler: admin mengelola daftar ekskul; admin dan guru pembina
 // mengelola anggota serta predikat per semester (aturan akses dijaga RLS di database).
 export default function Ekstrakurikuler() {
@@ -126,6 +162,29 @@ export default function Ekstrakurikuler() {
     if (terpilihId === x.id) setTerpilihId(null)
     muatDasar()
     muatAnggota()
+  }
+
+  // Pilihan dari katalog: isi nama + deskripsi otomatis. Deskripsi yang sudah
+  // diketik sendiri tidak ditimpa (hanya kosong / hasil katalog sebelumnya yang diganti).
+  function pilihKatalog(v) {
+    if (!v) return
+    const adaNama = (n) => KATALOG_EKSKUL.some((k) => k.nama === n)
+    const adaDeskripsi = (d) => KATALOG_EKSKUL.some((k) => k.deskripsi === d)
+    if (v === '__lain') {
+      setForm((f) => ({
+        ...f,
+        nama: adaNama(f.nama) ? '' : f.nama,
+        deskripsi: adaDeskripsi(f.deskripsi) ? '' : f.deskripsi,
+      }))
+      return
+    }
+    const k = KATALOG_EKSKUL.find((x) => x.nama === v)
+    if (!k) return
+    setForm((f) => ({
+      ...f,
+      nama: k.nama,
+      deskripsi: !f.deskripsi.trim() || adaDeskripsi(f.deskripsi) ? k.deskripsi : f.deskripsi,
+    }))
   }
 
   return (
@@ -274,8 +333,34 @@ export default function Ekstrakurikuler() {
               </button>
             </div>
             <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Pilih ekstrakurikuler</label>
+              <select
+                className={inputCls}
+                value={
+                  !form.nama
+                    ? ''
+                    : KATALOG_EKSKUL.some((k) => k.nama === form.nama)
+                      ? form.nama
+                      : '__lain'
+                }
+                onChange={(e) => pilihKatalog(e.target.value)}
+              >
+                <option value="">— pilih dari daftar —</option>
+                {KATALOG_EKSKUL.map((k) => {
+                  const sudahAda = ekskul.some((e) => e.nama === k.nama && e.id !== form.id)
+                  return (
+                    <option key={k.nama} value={k.nama} disabled={sudahAda}>
+                      {k.nama}
+                      {sudahAda ? ' (sudah ada)' : ''}
+                    </option>
+                  )
+                })}
+                <option value="__lain">Lainnya (ketik sendiri)</option>
+              </select>
+            </div>
+            <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Nama</label>
-              <input className={inputCls} value={form.nama} onChange={(e) => setForm({ ...form, nama: e.target.value })} placeholder="Pramuka, Drumband, Futsal…" />
+              <input className={inputCls} value={form.nama} onChange={(e) => setForm({ ...form, nama: e.target.value })} placeholder="Terisi otomatis dari pilihan, atau ketik sendiri" />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Pembina</label>
