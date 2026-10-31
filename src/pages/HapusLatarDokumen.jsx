@@ -2,6 +2,7 @@
 // Hapus latar dokumen — bersihkan foto/scan dokumen: bayangan dan warna kertas dihilangkan,
 // atau jadikan transparan (tanda tangan, stempel, teks). Semua proses di browser (canvas).
 // Unduh sebagai JPG, PNG, PDF, atau Word (.docx) — tanpa library tambahan.
+// Pilihan orientasi kertas (Otomatis / Portrait / Landscape) untuk PDF dan Word.
 // Baca dokumen (teks, tabel, gambar) memakai tesseract.js: jalankan  npm install tesseract.js
 // Dipakai sebagai tab di EditFotoLatar.jsx dan memakai kelas CSS "ef-*" milik halaman itu.
 
@@ -16,6 +17,18 @@ const MODES = [
 ];
 
 const FORMAT_TRANSPARAN = ["png", "pdf", "docx"];
+
+// [BARU] Orientasi kertas untuk PDF dan Word
+const ORIENTASI = [
+  { id: "auto", nama: "Otomatis" },
+  { id: "portrait", nama: "Portrait" },
+  { id: "landscape", nama: "Landscape" },
+];
+const A4_TW = { w: 11906, h: 16838 }; // ukuran A4 dalam twips
+const MARGIN_ISI_TW = 1134; // margin 2 cm
+const isiTw = (landscape) => (landscape ? A4_TW.h : A4_TW.w) - 2 * MARGIN_ISI_TW; // lebar isi halaman
+// "auto" mengikuti bentuk gambar (lebih lebar dari tinggi = landscape)
+const adalahLandscape = (orientasi, iw, ih) => (orientasi === "landscape" ? true : orientasi === "portrait" ? false : iw > ih);
 
 /* ───────────────────────── Util ───────────────────────── */
 
@@ -96,7 +109,8 @@ function flattenWhite(c) {
 const blobBytes = async (blob) => new Uint8Array(await blob.arrayBuffer());
 
 // ── PDF: satu halaman, gambar JPEG ditanam langsung (DCTDecode) ──
-async function buatPDF(canvas, { sesuaiGambar }) {
+// [BARU] orientasi: "auto" | "portrait" | "landscape" (diabaikan bila sesuaiGambar)
+async function buatPDF(canvas, { sesuaiGambar, orientasi = "auto" }) {
   const flat = flattenWhite(canvas);
   const jpg = await blobBytes(await canvasToBlob(flat, "image/jpeg", 0.92));
   const iw = flat.width,
@@ -110,7 +124,7 @@ async function buatPDF(canvas, { sesuaiGambar }) {
     ph = dh = ih * k;
     dx = dy = 0;
   } else {
-    const landscape = iw > ih;
+    const landscape = adalahLandscape(orientasi, iw, ih);
     pw = landscape ? 841.89 : 595.28;
     ph = landscape ? 595.28 : 841.89;
     const m = 18;
@@ -219,7 +233,8 @@ function buatZip(files) {
 }
 
 // ── DOCX: satu halaman A4, gambar ditanam di tengah ──
-async function buatDOCX(canvas, { transparan }) {
+// [BARU] orientasi: "auto" | "portrait" | "landscape"
+async function buatDOCX(canvas, { transparan, orientasi = "auto" }) {
   const png = transparan;
   const bytes = await blobBytes(await canvasToBlob(canvas, png ? "image/png" : "image/jpeg", 0.92));
   const ext = png ? "png" : "jpg";
@@ -227,9 +242,10 @@ async function buatDOCX(canvas, { transparan }) {
     ih = canvas.height;
 
   // ukuran halaman (twips; 1 twip = 635 EMU)
-  const landscape = !transparan && iw > ih;
-  const PW = landscape ? 16838 : 11906;
-  const PH = landscape ? 11906 : 16838;
+  // auto: dokumen mengikuti bentuk gambar, tanda tangan/stempel (transparan) tetap portrait
+  const landscape = orientasi === "auto" ? !transparan && iw > ih : orientasi === "landscape";
+  const PW = landscape ? A4_TW.h : A4_TW.w;
+  const PH = landscape ? A4_TW.w : A4_TW.h;
   const M = 567; // margin 1 cm
   const areaW = PW - 2 * M;
   const areaH = PH - 2 * M;
@@ -288,7 +304,6 @@ function simpanBlob(blob, namaFile) {
 
 const PT_BASE = 12;
 const PT_SNAP = [8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 22, 24];
-const TW_ISI = 9638; // lebar isi halaman A4 dengan margin 2 cm (twips)
 
 const med = (a) => {
   if (!a.length) return 0;
@@ -1007,14 +1022,16 @@ function pXml(b, avail) {
   return `<w:p><w:pPr><w:spacing w:before="0" w:after="${b.tight ? 0 : 120}"/>${ind}<w:jc w:val="${jcOf(b.align)}"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/><w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/></w:rPr>${runs}</w:r></w:p>`;
 }
 
+// [BARU] ctx.maxH = tinggi gambar maksimum (twips), tergantung orientasi halaman
 function imgXml(b, avail, ctx) {
   const m = ctx.media.get(b.src);
   if (!m || !b.w || !b.h) return "";
+  const maxH = ctx.maxH || 13000;
   let cxT = Math.max(300, Math.min(avail, b.wfrac * avail));
   let cyT = (cxT * b.h) / b.w;
-  if (cyT > 13000) {
-    cxT = (cxT * 13000) / cyT;
-    cyT = 13000;
+  if (cyT > maxH) {
+    cxT = (cxT * maxH) / cyT;
+    cyT = maxH;
   }
   const cx = Math.round(cxT * 635),
     cy = Math.round(cyT * 635),
@@ -1075,7 +1092,8 @@ function blocksXml(bs, avail, ctx) {
     .join("");
 }
 
-async function buatDOCXModel(blocks) {
+// [BARU] landscape: true → halaman A4 mendatar (lebar isi dan tinggi gambar maksimum ikut menyesuaikan)
+async function buatDOCXModel(blocks, { landscape = false } = {}) {
   const imgs = [];
   (function walk(bs) {
     for (const b of bs) {
@@ -1099,9 +1117,12 @@ async function buatDOCXModel(blocks) {
     }
   }
 
-  const ctx = { media, id: 1 };
-  const body = blocksXml(blocks, TW_ISI, ctx) || "<w:p/>";
-  const sect = `<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr>`;
+  const PW = landscape ? A4_TW.h : A4_TW.w;
+  const PH = landscape ? A4_TW.w : A4_TW.h;
+  const maxH = PH - 2 * MARGIN_ISI_TW - 400; // sisakan sedikit ruang agar gambar tidak mendorong halaman kosong
+  const ctx = { media, id: 1, maxH };
+  const body = blocksXml(blocks, isiTw(landscape), ctx) || "<w:p/>";
+  const sect = `<w:sectPr><w:pgSz w:w="${PW}" w:h="${PH}"${landscape ? ' w:orient="landscape"' : ""}/><w:pgMar w:top="${MARGIN_ISI_TW}" w:right="${MARGIN_ISI_TW}" w:bottom="${MARGIN_ISI_TW}" w:left="${MARGIN_ISI_TW}" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr>`;
   const docXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>${body}${sect}</w:body></w:document>`;
 
@@ -1529,6 +1550,29 @@ function Slider({ label, value, min, max, onChange, hint }) {
   );
 }
 
+// [BARU] Pilihan orientasi kertas (Otomatis / Portrait / Landscape)
+function PilihOrientasi({ value, onChange, disabled }) {
+  return (
+    <div className="ef-name">
+      <span>Orientasi kertas</span>
+      <div className="ef-chips" role="group" aria-label="Orientasi kertas">
+        {ORIENTASI.map((o) => (
+          <button
+            key={o.id}
+            type="button"
+            disabled={disabled}
+            className={"ef-chip" + (value === o.id ? " on" : "")}
+            onClick={() => onChange(o.id)}
+            aria-pressed={value === o.id}
+          >
+            {o.nama}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function HapusLatarDokumen({ onNotice }) {
   const [src, setSrc] = useState(null); // { canvas, name }
   const [mode, setMode] = useState("putih");
@@ -1547,6 +1591,10 @@ export default function HapusLatarDokumen({ onNotice }) {
   const [ocrBusy, setOcrBusy] = useState(false);
   const [ocrPct, setOcrPct] = useState(0);
   const [ocrLang, setOcrLang] = useState("ind+eng");
+  // [BARU] orientasi kertas: untuk unduhan gambar (PDF/Word) dan untuk Word hasil baca dokumen
+  const [orientasi, setOrientasi] = useState("auto");
+  const [orientasiHasil, setOrientasiHasil] = useState("auto");
+  const [halamanLand, setHalamanLand] = useState(false); // bentuk foto yang dibaca (dipakai oleh mode Otomatis)
 
   const fileRef = useRef(null);
   const camRef = useRef(null);
@@ -1616,6 +1664,8 @@ export default function HapusLatarDokumen({ onNotice }) {
   const transparan = mode === "transparan";
   // format efektif: mode transparan tidak bisa JPG
   const fmt = transparan ? (FORMAT_TRANSPARAN.includes(format) ? format : "png") : format;
+  // [BARU] orientasi hanya relevan untuk PDF/Word; PDF transparan memakai ukuran halaman = ukuran gambar
+  const tampilOrientasi = (fmt === "pdf" && !transparan) || fmt === "docx";
 
   const unduh = async () => {
     const out = resultRef.current;
@@ -1623,10 +1673,10 @@ export default function HapusLatarDokumen({ onNotice }) {
     const base = `${safeName(name)}_bersih`;
     try {
       if (fmt === "pdf") {
-        const blob = await buatPDF(out, { sesuaiGambar: transparan });
+        const blob = await buatPDF(out, { sesuaiGambar: transparan, orientasi });
         simpanBlob(blob, `${base}.pdf`);
       } else if (fmt === "docx") {
-        const blob = await buatDOCX(out, { transparan });
+        const blob = await buatDOCX(out, { transparan, orientasi });
         simpanBlob(blob, `${base}.docx`);
       } else {
         const png = fmt === "png";
@@ -1648,6 +1698,7 @@ export default function HapusLatarDokumen({ onNotice }) {
       // selalu dibaca dari versi "putih" supaya bersih, apa pun mode yang sedang dipilih
       const page = renderDoc(c.work, c.bg, { mode: "putih", clean, pekat, thr, inkMode, inkColor, trim });
       const blocks = await bacaDokumen(page, ocrLang, setOcrPct);
+      setHalamanLand(page.width > page.height); // [BARU] dipakai oleh orientasi "Otomatis"
       if (!blocks.length) notify("Tidak ada isi yang terbaca. Coba foto yang lebih jelas atau nyalakan Crop otomatis.");
       setHasilHtml(blocksHtml(blocks));
     } catch (e) {
@@ -1686,8 +1737,13 @@ export default function HapusLatarDokumen({ onNotice }) {
     if (!hasilRef.current) return;
     try {
       const blocks = domBlocks(hasilRef.current);
-      if (jenis === "docx") simpanBlob(await buatDOCXModel(blocks), `${safeName(name)}_hasil.docx`);
-      else simpanBlob(new Blob([blocksTxt(blocks)], { type: "text/plain;charset=utf-8" }), `${safeName(name)}_hasil.txt`);
+      if (jenis === "docx") {
+        // [BARU] "auto" mengikuti bentuk foto yang dibaca
+        const landscape = orientasiHasil === "landscape" || (orientasiHasil === "auto" && halamanLand);
+        simpanBlob(await buatDOCXModel(blocks, { landscape }), `${safeName(name)}_hasil.docx`);
+      } else {
+        simpanBlob(new Blob([blocksTxt(blocks)], { type: "text/plain;charset=utf-8" }), `${safeName(name)}_hasil.txt`);
+      }
     } catch (e) {
       console.error(e);
       notify("Gagal membuat berkas hasil.");
@@ -1856,8 +1912,23 @@ export default function HapusLatarDokumen({ onNotice }) {
               <option value="docx">Word (.docx)</option>
             </select>
           </label>
+          {/* [BARU] Orientasi kertas untuk PDF dan Word */}
+          {tampilOrientasi && (
+            <>
+              <PilihOrientasi value={orientasi} onChange={setOrientasi} />
+              <p className="ef-note">
+                {orientasi === "auto"
+                  ? transparan
+                    ? "Otomatis: halaman Word berdiri (portrait) untuk tanda tangan atau stempel."
+                    : "Otomatis: halaman mengikuti bentuk dokumen. Dokumen yang lebih lebar daripada tinggi memakai landscape."
+                  : orientasi === "portrait"
+                  ? "Kertas A4 berdiri (portrait)."
+                  : "Kertas A4 mendatar (landscape)."}
+              </p>
+            </>
+          )}
           {transparan && fmt === "png" && <p className="ef-note">Hasil transparan paling aman disimpan sebagai PNG.</p>}
-          {transparan && fmt === "pdf" && <p className="ef-note">PDF tidak menyimpan transparansi: latar akan jadi putih. Pakai PNG atau Word jika perlu ditempel ke dokumen lain.</p>}
+          {transparan && fmt === "pdf" && <p className="ef-note">PDF tidak menyimpan transparansi: latar akan jadi putih, dan ukuran halaman mengikuti ukuran gambar. Pakai PNG atau Word jika perlu ditempel ke dokumen lain.</p>}
           {transparan && fmt === "docx" && <p className="ef-note">Di Word, transparansi tetap terjaga. Ukuran awal 6 cm, bisa diperbesar atau dipindah.</p>}
           {!transparan && (fmt === "pdf" || fmt === "docx") && <p className="ef-note">Hasilnya satu halaman A4 berisi gambar dokumen, bukan teks yang bisa diedit.</p>}
           <div className="ef-btns">
@@ -1896,6 +1967,15 @@ export default function HapusLatarDokumen({ onNotice }) {
                 onClick={klikHasil}
                 style={{ marginTop: 8, padding: 8, background: "#fff", color: "#111", border: "1px solid #ccd", borderRadius: 8, maxHeight: 460, overflow: "auto", outline: "none" }}
               />
+              {/* [BARU] Orientasi halaman untuk Word hasil baca */}
+              <PilihOrientasi value={orientasiHasil} onChange={setOrientasiHasil} />
+              <p className="ef-note">
+                {orientasiHasil === "auto"
+                  ? `Otomatis: Word hasil baca memakai ${halamanLand ? "landscape" : "portrait"}, mengikuti bentuk foto dokumen.`
+                  : orientasiHasil === "portrait"
+                  ? "Word hasil baca memakai A4 berdiri (portrait)."
+                  : "Word hasil baca memakai A4 mendatar (landscape). Lebar tabel dan gambar menyesuaikan."}
+              </p>
               <div className="ef-btns">
                 <button type="button" className="ef-btn pri" onClick={salinSemua}>
                   Salin semua
