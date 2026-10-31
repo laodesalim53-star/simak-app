@@ -4,6 +4,7 @@
 // Unduh sebagai JPG, PNG, PDF, atau Word (.docx) — tanpa library tambahan.
 // Pilihan orientasi kertas (Otomatis / Portrait / Landscape) untuk PDF dan Word.
 // Baca dokumen (teks, tabel, gambar) memakai tesseract.js: jalankan  npm install tesseract.js
+// Hasil baca bisa diunduh sebagai Word atau PDF yang teksnya bisa diedit.
 // Dipakai sebagai tab di EditFotoLatar.jsx dan memakai kelas CSS "ef-*" milik halaman itu.
 
 import { useState, useRef, useEffect } from "react";
@@ -18,7 +19,7 @@ const MODES = [
 
 const FORMAT_TRANSPARAN = ["png", "pdf", "docx"];
 
-// [BARU] Orientasi kertas untuk PDF dan Word
+// Orientasi kertas untuk PDF dan Word
 const ORIENTASI = [
   { id: "auto", nama: "Otomatis" },
   { id: "portrait", nama: "Portrait" },
@@ -109,7 +110,7 @@ function flattenWhite(c) {
 const blobBytes = async (blob) => new Uint8Array(await blob.arrayBuffer());
 
 // ── PDF: satu halaman, gambar JPEG ditanam langsung (DCTDecode) ──
-// [BARU] orientasi: "auto" | "portrait" | "landscape" (diabaikan bila sesuaiGambar)
+// orientasi: "auto" | "portrait" | "landscape" (diabaikan bila sesuaiGambar)
 async function buatPDF(canvas, { sesuaiGambar, orientasi = "auto" }) {
   const flat = flattenWhite(canvas);
   const jpg = await blobBytes(await canvasToBlob(flat, "image/jpeg", 0.92));
@@ -233,7 +234,7 @@ function buatZip(files) {
 }
 
 // ── DOCX: satu halaman A4, gambar ditanam di tengah ──
-// [BARU] orientasi: "auto" | "portrait" | "landscape"
+// orientasi: "auto" | "portrait" | "landscape"
 async function buatDOCX(canvas, { transparan, orientasi = "auto" }) {
   const png = transparan;
   const bytes = await blobBytes(await canvasToBlob(canvas, png ? "image/png" : "image/jpeg", 0.92));
@@ -300,7 +301,7 @@ function simpanBlob(blob, namaFile) {
 // Alur: (1) cari garis tabel → sel; (2) hapus garis lalu OCR sekali; (3) tiap kata masuk ke sel tabel
 // atau jadi teks bebas; (4) goresan non-teks yang tersisa dipotong jadi gambar; (5) elemen yang sejajar
 // (kop surat berlogo, tanda tangan kiri-kanan) dibuat tabel tanpa garis. Hasilnya berupa HTML yang
-// bisa diedit dan disalin; Word/.txt dibaca balik dari HTML itu, jadi perbaikan manual ikut terbawa.
+// bisa diedit dan disalin; Word/PDF/.txt dibaca balik dari HTML itu, jadi perbaikan manual ikut terbawa.
 
 const PT_BASE = 12;
 const PT_SNAP = [8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 22, 24];
@@ -1022,7 +1023,7 @@ function pXml(b, avail) {
   return `<w:p><w:pPr><w:spacing w:before="0" w:after="${b.tight ? 0 : 120}"/>${ind}<w:jc w:val="${jcOf(b.align)}"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/><w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/></w:rPr>${runs}</w:r></w:p>`;
 }
 
-// [BARU] ctx.maxH = tinggi gambar maksimum (twips), tergantung orientasi halaman
+// ctx.maxH = tinggi gambar maksimum (twips), tergantung orientasi halaman
 function imgXml(b, avail, ctx) {
   const m = ctx.media.get(b.src);
   if (!m || !b.w || !b.h) return "";
@@ -1092,7 +1093,7 @@ function blocksXml(bs, avail, ctx) {
     .join("");
 }
 
-// [BARU] landscape: true → halaman A4 mendatar (lebar isi dan tinggi gambar maksimum ikut menyesuaikan)
+// landscape: true → halaman A4 mendatar (lebar isi dan tinggi gambar maksimum ikut menyesuaikan)
 async function buatDOCXModel(blocks, { landscape = false } = {}) {
   const imgs = [];
   (function walk(bs) {
@@ -1143,6 +1144,349 @@ async function buatDOCXModel(blocks, { landscape = false } = {}) {
     ...[...media.values()].map((m) => ({ name: `word/media/${m.name}`, data: m.bytes })),
   ]);
   return new Blob([zip], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+}
+
+/* ───────────────────────── Blok → PDF yang bisa diedit (teks asli, tabel, gambar) ───────────────────────── */
+
+// Teks ditulis sebagai teks PDF sungguhan (font Times-Roman standar, tidak ditanam),
+// tabel digambar sebagai garis, gambar ditanam sebagai JPEG. Halaman bertambah otomatis.
+
+const PDF_LH = 1.25; // tinggi baris = ukuran huruf × 1.25
+const PDF_PAD = 3; // padding sel tabel (pt)
+const PDF_GAP = 6; // jarak antar blok (pt)
+const PDF_M = 56.69; // margin 2 cm (pt)
+
+// Karakter di luar Latin-1 yang ada di WinAnsi (kutip melengkung, tanda pisah, dll.)
+const WIN_ANSI = {
+  0x20ac: 0x80, 0x201a: 0x82, 0x192: 0x83, 0x201e: 0x84, 0x2026: 0x85, 0x2020: 0x86, 0x2021: 0x87, 0x2c6: 0x88,
+  0x2030: 0x89, 0x160: 0x8a, 0x2039: 0x8b, 0x152: 0x8c, 0x17d: 0x8e, 0x2018: 0x91, 0x2019: 0x92, 0x201c: 0x93,
+  0x201d: 0x94, 0x2022: 0x95, 0x2013: 0x96, 0x2014: 0x97, 0x2dc: 0x98, 0x2122: 0x99, 0x161: 0x9a, 0x203a: 0x9b,
+  0x153: 0x9c, 0x17e: 0x9e, 0x178: 0x9f,
+};
+
+let _mctx = null;
+function lebarTeks(s, pt) {
+  if (!_mctx) _mctx = document.createElement("canvas").getContext("2d");
+  _mctx.font = `${pt}px "Times New Roman", Times, serif`; // lebarnya sama dengan Times-Roman
+  return _mctx.measureText(s).width;
+}
+
+function hexWin(s) {
+  let h = "";
+  for (const ch of s) {
+    let c = ch.codePointAt(0);
+    if (c > 255 || (c >= 0x80 && c <= 0x9f)) c = WIN_ANSI[c] || 63;
+    else if (c < 32) c = 32;
+    h += c.toString(16).padStart(2, "0");
+  }
+  return `<${h}>`;
+}
+
+// Bungkus teks per baris sesuai lebar; kata yang lebih lebar dari kolom dipotong.
+function bungkus(text, pt, width) {
+  const out = [];
+  for (const para of text.split("\n")) {
+    const words = para.split(/\s+/).filter(Boolean);
+    if (!words.length) {
+      out.push("");
+      continue;
+    }
+    let cur = "";
+    for (let w of words) {
+      while (lebarTeks(w, pt) > width && w.length > 1) {
+        let n = w.length - 1;
+        while (n > 1 && lebarTeks(w.slice(0, n), pt) > width) n--;
+        if (cur) {
+          out.push(cur);
+          cur = "";
+        }
+        out.push(w.slice(0, n));
+        w = w.slice(n);
+      }
+      const t = cur ? cur + " " + w : w;
+      if (!cur || lebarTeks(t, pt) <= width) cur = t;
+      else {
+        out.push(cur);
+        cur = w;
+      }
+    }
+    out.push(cur);
+  }
+  return out;
+}
+
+const sumR = (a, from, to) => a.slice(from, to).reduce((s, v) => s + v, 0);
+const keTabel = (b) => (b.t === "layout" ? { t: "tbl", border: false, wfrac: 1, cols: b.cols.map((c) => c.wfrac), rows: [b.cols.map((c) => ({ cs: 1, rs: 1, blocks: c.blocks }))] } : b);
+
+function paraPdf(b, avail) {
+  const ind = b.indent && !b.tight ? Math.min(0.8, b.indent) * avail : 0;
+  const w = Math.max(20, avail - ind);
+  return { ind, w, lines: bungkus(b.text, b.pt, w), lh: b.pt * PDF_LH, gap: b.tight ? 0 : PDF_GAP };
+}
+
+function gambarParaPdf(b, p, x, y, from, to, pg) {
+  for (let i = from; i < to; i++) {
+    const s = p.lines[i];
+    if (!s) continue;
+    const tw = lebarTeks(s, b.pt);
+    let tx = x + p.ind;
+    if (b.align === "center") tx += (p.w - tw) / 2;
+    else if (b.align === "right") tx += p.w - tw;
+    const by = y + (i - from) * p.lh + b.pt;
+    pg.ops.push(`BT /F1 ${b.pt} Tf ${tx.toFixed(2)} ${(pg.H - by).toFixed(2)} Td ${hexWin(s)} Tj ET`);
+  }
+}
+
+function ukurGambarPdf(b, avail, cfg) {
+  const m = cfg.imgs.get(b.src);
+  if (!m || !b.w || !b.h) return null;
+  const ind = Math.min(0.8, b.indent || 0) * avail;
+  let w = Math.max(20, Math.min(avail - ind, b.wfrac * avail));
+  let h = (w * b.h) / b.w;
+  if (h > cfg.maxH) {
+    w = (w * cfg.maxH) / h;
+    h = cfg.maxH;
+  }
+  return { m, w, h, ind };
+}
+
+// Susun tabel: lebar kolom, posisi sel (termasuk colspan/rowspan), dan tinggi tiap baris.
+function susunTabelPdf(tbIn, avail, cfg) {
+  const tb = keTabel(tbIn);
+  const C = tb.cols.length;
+  const total = Math.min(1, tb.wfrac) * avail;
+  const csum = tb.cols.reduce((a, x) => a + x, 0) || 1;
+  const gx = [0];
+  tb.cols.forEach((f) => gx.push(gx[gx.length - 1] + (f / csum) * total));
+  const R = tb.rows.length;
+  const occ = Array.from({ length: R }, () => Array(C).fill(false));
+  const cells = [];
+  tb.rows.forEach((row, r) => {
+    let ci = 0;
+    for (const cell of row) {
+      while (ci < C && occ[r][ci]) ci++;
+      if (ci >= C) break;
+      const cs = Math.max(1, Math.min(cell.cs, C - ci));
+      const rs = Math.max(1, Math.min(cell.rs, R - r));
+      for (let i = r; i < r + rs; i++) for (let j = ci; j < ci + cs; j++) occ[i][j] = true;
+      const w = gx[ci + cs] - gx[ci];
+      const h = tinggiBlocks(cell.blocks, Math.max(10, w - 2 * PDF_PAD), cfg) + 2 * PDF_PAD;
+      cells.push({ r, c: ci, cs, rs, w, h, blocks: cell.blocks });
+      ci += cs;
+    }
+  });
+  const rowH = Array(R).fill(12);
+  for (const c of cells) if (c.rs === 1) rowH[c.r] = Math.max(rowH[c.r], c.h);
+  for (const c of cells) {
+    if (c.rs > 1) {
+      const cur = sumR(rowH, c.r, c.r + c.rs);
+      if (cur < c.h) rowH[c.r + c.rs - 1] += c.h - cur;
+    }
+  }
+  return { tb, gx, rowH, cells, tinggi: sumR(rowH, 0, R) };
+}
+
+function tinggiBlok(b, avail, cfg) {
+  if (b.t === "p") {
+    const p = paraPdf(b, avail);
+    return p.lines.length * p.lh + p.gap;
+  }
+  if (b.t === "img") {
+    const g = ukurGambarPdf(b, avail, cfg);
+    return g ? g.h + PDF_GAP : 0;
+  }
+  return susunTabelPdf(b, avail, cfg).tinggi + PDF_GAP;
+}
+const tinggiBlocks = (bs, avail, cfg) => bs.reduce((s, b) => s + tinggiBlok(b, avail, cfg), 0);
+
+function tulisTabel(L, x, y, from, to, cfg) {
+  const pg = cfg.pg;
+  for (const c of L.cells) {
+    if (c.r < from || c.r >= to) continue;
+    const cx = x + L.gx[c.c];
+    const cy = y + sumR(L.rowH, from, c.r);
+    const ch = sumR(L.rowH, c.r, c.r + c.rs);
+    if (L.tb.border) pg.ops.push(`0 G 0.6 w ${cx.toFixed(2)} ${(pg.H - cy - ch).toFixed(2)} ${c.w.toFixed(2)} ${ch.toFixed(2)} re S`);
+    tulisBlocks(c.blocks, cx + PDF_PAD, cy + PDF_PAD, c.w - 2 * PDF_PAD, cfg);
+  }
+}
+
+// Menggambar satu blok di (x, y) tanpa pemisah halaman; mengembalikan tinggi yang terpakai.
+function tulisBlok(b, x, y, avail, cfg) {
+  const pg = cfg.pg;
+  if (b.t === "p") {
+    const p = paraPdf(b, avail);
+    gambarParaPdf(b, p, x, y, 0, p.lines.length, pg);
+    return p.lines.length * p.lh + p.gap;
+  }
+  if (b.t === "img") {
+    const g = ukurGambarPdf(b, avail, cfg);
+    if (!g) return 0;
+    let gx0 = x + g.ind;
+    if (b.align === "center") gx0 = x + (avail - g.w) / 2;
+    else if (b.align === "right") gx0 = x + avail - g.w;
+    pg.ops.push(`q ${g.w.toFixed(2)} 0 0 ${g.h.toFixed(2)} ${gx0.toFixed(2)} ${(pg.H - y - g.h).toFixed(2)} cm /${g.m.name} Do Q`);
+    return g.h + PDF_GAP;
+  }
+  const L = susunTabelPdf(b, avail, cfg);
+  tulisTabel(L, x, y, 0, L.tb.rows.length, cfg);
+  return L.tinggi + PDF_GAP;
+}
+
+function tulisBlocks(bs, x, y, avail, cfg) {
+  let yy = y;
+  for (const b of bs) yy += tulisBlok(b, x, yy, avail, cfg);
+  return yy - y;
+}
+
+async function srcKeJpeg(src) {
+  const img = await new Promise((res, rej) => {
+    const i = new Image();
+    i.onload = () => res(i);
+    i.onerror = rej;
+    i.src = src;
+  });
+  const c = document.createElement("canvas");
+  c.width = img.naturalWidth;
+  c.height = img.naturalHeight;
+  const x = c.getContext("2d");
+  x.fillStyle = "#fff"; // JPEG tidak punya transparansi
+  x.fillRect(0, 0, c.width, c.height);
+  x.drawImage(img, 0, 0);
+  return { bytes: await blobBytes(await canvasToBlob(c, "image/jpeg", 0.92)), w: c.width, h: c.height };
+}
+
+// landscape: true → A4 mendatar. Hasil: PDF multi-halaman dengan teks yang bisa diedit.
+async function buatPDFModel(blocks, { landscape = false } = {}) {
+  const PW = landscape ? 841.89 : 595.28;
+  const PH = landscape ? 595.28 : 841.89;
+  const top = PDF_M,
+    bottom = PH - PDF_M,
+    avail = PW - 2 * PDF_M;
+
+  // kumpulkan gambar unik, ubah ke JPEG
+  const srcs = [];
+  (function walk(bs) {
+    for (const b of bs) {
+      if (b.t === "img") {
+        if (!srcs.includes(b.src)) srcs.push(b.src);
+      } else if (b.t === "tbl") b.rows.forEach((r) => r.forEach((c) => walk(c.blocks)));
+      else if (b.t === "layout") b.cols.forEach((c) => walk(c.blocks));
+    }
+  })(blocks);
+  const imgs = new Map();
+  const imgList = [];
+  for (const s of srcs) {
+    try {
+      const j = await srcKeJpeg(s);
+      const m = { ...j, name: `Im${imgList.length}`, obj: 4 + imgList.length };
+      imgs.set(s, m);
+      imgList.push(m);
+    } catch {
+      /* gambar yang tidak bisa dibaca dilewati */
+    }
+  }
+
+  const pages = [{ ops: [], H: PH }];
+  const cfg = { imgs, maxH: bottom - top, pg: pages[0] };
+  let cy = top;
+  const halamanBaru = () => {
+    const p = { ops: [], H: PH };
+    pages.push(p);
+    cfg.pg = p;
+    cy = top;
+  };
+
+  for (const b of blocks) {
+    if (b.t === "p") {
+      const p = paraPdf(b, avail);
+      let i = 0;
+      while (i < p.lines.length) {
+        let fit = Math.floor((bottom - cy) / p.lh);
+        if (fit < 1) {
+          if (cy > top) {
+            halamanBaru();
+            continue;
+          }
+          fit = 1;
+        }
+        const to = Math.min(p.lines.length, i + fit);
+        gambarParaPdf(b, p, PDF_M, cy, i, to, cfg.pg);
+        cy += (to - i) * p.lh;
+        i = to;
+      }
+      cy += p.gap;
+    } else if (b.t === "img") {
+      const g = ukurGambarPdf(b, avail, cfg);
+      if (!g) continue;
+      if (cy + g.h > bottom && cy > top) halamanBaru();
+      cy += tulisBlok(b, PDF_M, cy, avail, cfg);
+    } else {
+      // tabel: dipecah antar baris (baris yang tersambung rowspan tetap satu kesatuan)
+      const L = susunTabelPdf(b, avail, cfg);
+      let r = 0;
+      while (r < L.rowH.length) {
+        let end = r + 1;
+        for (let again = true; again; ) {
+          again = false;
+          for (const c of L.cells) {
+            if (c.r >= r && c.r < end && c.r + c.rs > end) {
+              end = c.r + c.rs;
+              again = true;
+            }
+          }
+        }
+        const hh = sumR(L.rowH, r, end);
+        if (cy + hh > bottom && cy > top) halamanBaru();
+        tulisTabel(L, PDF_M, cy, r, end, cfg);
+        cy += hh;
+        r = end;
+      }
+      cy += PDF_GAP;
+    }
+  }
+
+  // rakit file PDF
+  const parts = [];
+  const offsets = [];
+  let pos = 0;
+  const push = (u8) => {
+    parts.push(u8);
+    pos += u8.length;
+  };
+  const txt = (s) => push(enc.encode(s));
+  const obj = (n, body) => {
+    offsets[n] = pos;
+    txt(`${n} 0 obj\n${body}\nendobj\n`);
+  };
+  const f2 = (n) => n.toFixed(2);
+
+  txt("%PDF-1.4\n");
+  push(new Uint8Array([0x25, 0xe2, 0xe3, 0xcf, 0xd3, 0x0a]));
+  const base = 4 + imgList.length; // nomor objek halaman pertama
+  obj(1, "<< /Type /Catalog /Pages 2 0 R >>");
+  obj(2, `<< /Type /Pages /Kids [${pages.map((_, i) => `${base + 2 * i} 0 R`).join(" ")}] /Count ${pages.length} >>`);
+  obj(3, "<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman /Encoding /WinAnsiEncoding >>");
+  for (const m of imgList) {
+    offsets[m.obj] = pos;
+    txt(`${m.obj} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${m.w} /Height ${m.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${m.bytes.length} >>\nstream\n`);
+    push(m.bytes);
+    txt("\nendstream\nendobj\n");
+  }
+  const xo = imgList.map((m) => `/${m.name} ${m.obj} 0 R`).join(" ");
+  pages.forEach((p, i) => {
+    const content = p.ops.join("\n");
+    obj(base + 2 * i, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${f2(PW)} ${f2(PH)}] /Resources << /Font << /F1 3 0 R >> /XObject << ${xo} >> >> /Contents ${base + 2 * i + 1} 0 R >>`);
+    obj(base + 2 * i + 1, `<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
+  });
+
+  const N = base + 2 * pages.length; // jumlah objek + 1
+  const xref = pos;
+  txt(`xref\n0 ${N}\n0000000000 65535 f \n`);
+  for (let n = 1; n < N; n++) txt(`${String(offsets[n]).padStart(10, "0")} 00000 n \n`);
+  txt(`trailer\n<< /Size ${N} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`);
+
+  return new Blob([concat(parts)], { type: "application/pdf" });
 }
 
 /* ───────────────────────── Filter dasar ───────────────────────── */
@@ -1550,7 +1894,7 @@ function Slider({ label, value, min, max, onChange, hint }) {
   );
 }
 
-// [BARU] Pilihan orientasi kertas (Otomatis / Portrait / Landscape)
+// Pilihan orientasi kertas (Otomatis / Portrait / Landscape)
 function PilihOrientasi({ value, onChange, disabled }) {
   return (
     <div className="ef-name">
@@ -1591,7 +1935,7 @@ export default function HapusLatarDokumen({ onNotice }) {
   const [ocrBusy, setOcrBusy] = useState(false);
   const [ocrPct, setOcrPct] = useState(0);
   const [ocrLang, setOcrLang] = useState("ind+eng");
-  // [BARU] orientasi kertas: untuk unduhan gambar (PDF/Word) dan untuk Word hasil baca dokumen
+  // orientasi kertas: untuk unduhan gambar (PDF/Word) dan untuk Word/PDF hasil baca dokumen
   const [orientasi, setOrientasi] = useState("auto");
   const [orientasiHasil, setOrientasiHasil] = useState("auto");
   const [halamanLand, setHalamanLand] = useState(false); // bentuk foto yang dibaca (dipakai oleh mode Otomatis)
@@ -1664,7 +2008,7 @@ export default function HapusLatarDokumen({ onNotice }) {
   const transparan = mode === "transparan";
   // format efektif: mode transparan tidak bisa JPG
   const fmt = transparan ? (FORMAT_TRANSPARAN.includes(format) ? format : "png") : format;
-  // [BARU] orientasi hanya relevan untuk PDF/Word; PDF transparan memakai ukuran halaman = ukuran gambar
+  // orientasi hanya relevan untuk PDF/Word; PDF transparan memakai ukuran halaman = ukuran gambar
   const tampilOrientasi = (fmt === "pdf" && !transparan) || fmt === "docx";
 
   const unduh = async () => {
@@ -1698,7 +2042,7 @@ export default function HapusLatarDokumen({ onNotice }) {
       // selalu dibaca dari versi "putih" supaya bersih, apa pun mode yang sedang dipilih
       const page = renderDoc(c.work, c.bg, { mode: "putih", clean, pekat, thr, inkMode, inkColor, trim });
       const blocks = await bacaDokumen(page, ocrLang, setOcrPct);
-      setHalamanLand(page.width > page.height); // [BARU] dipakai oleh orientasi "Otomatis"
+      setHalamanLand(page.width > page.height); // dipakai oleh orientasi "Otomatis"
       if (!blocks.length) notify("Tidak ada isi yang terbaca. Coba foto yang lebih jelas atau nyalakan Crop otomatis.");
       setHasilHtml(blocksHtml(blocks));
     } catch (e) {
@@ -1737,13 +2081,11 @@ export default function HapusLatarDokumen({ onNotice }) {
     if (!hasilRef.current) return;
     try {
       const blocks = domBlocks(hasilRef.current);
-      if (jenis === "docx") {
-        // [BARU] "auto" mengikuti bentuk foto yang dibaca
-        const landscape = orientasiHasil === "landscape" || (orientasiHasil === "auto" && halamanLand);
-        simpanBlob(await buatDOCXModel(blocks, { landscape }), `${safeName(name)}_hasil.docx`);
-      } else {
-        simpanBlob(new Blob([blocksTxt(blocks)], { type: "text/plain;charset=utf-8" }), `${safeName(name)}_hasil.txt`);
-      }
+      // "auto" mengikuti bentuk foto yang dibaca
+      const landscape = orientasiHasil === "landscape" || (orientasiHasil === "auto" && halamanLand);
+      if (jenis === "docx") simpanBlob(await buatDOCXModel(blocks, { landscape }), `${safeName(name)}_hasil.docx`);
+      else if (jenis === "pdf") simpanBlob(await buatPDFModel(blocks, { landscape }), `${safeName(name)}_hasil.pdf`);
+      else simpanBlob(new Blob([blocksTxt(blocks)], { type: "text/plain;charset=utf-8" }), `${safeName(name)}_hasil.txt`);
     } catch (e) {
       console.error(e);
       notify("Gagal membuat berkas hasil.");
@@ -1912,7 +2254,7 @@ export default function HapusLatarDokumen({ onNotice }) {
               <option value="docx">Word (.docx)</option>
             </select>
           </label>
-          {/* [BARU] Orientasi kertas untuk PDF dan Word */}
+          {/* Orientasi kertas untuk PDF dan Word */}
           {tampilOrientasi && (
             <>
               <PilihOrientasi value={orientasi} onChange={setOrientasi} />
@@ -1930,7 +2272,7 @@ export default function HapusLatarDokumen({ onNotice }) {
           {transparan && fmt === "png" && <p className="ef-note">Hasil transparan paling aman disimpan sebagai PNG.</p>}
           {transparan && fmt === "pdf" && <p className="ef-note">PDF tidak menyimpan transparansi: latar akan jadi putih, dan ukuran halaman mengikuti ukuran gambar. Pakai PNG atau Word jika perlu ditempel ke dokumen lain.</p>}
           {transparan && fmt === "docx" && <p className="ef-note">Di Word, transparansi tetap terjaga. Ukuran awal 6 cm, bisa diperbesar atau dipindah.</p>}
-          {!transparan && (fmt === "pdf" || fmt === "docx") && <p className="ef-note">Hasilnya satu halaman A4 berisi gambar dokumen, bukan teks yang bisa diedit.</p>}
+          {!transparan && (fmt === "pdf" || fmt === "docx") && <p className="ef-note">Hasilnya satu halaman A4 berisi gambar dokumen. Untuk PDF yang teksnya bisa diedit, pakai "Baca dokumen" di bagian 4.</p>}
           <div className="ef-btns">
             <button type="button" className="ef-btn pri" disabled={!src || busy} onClick={unduh}>
               Unduh {fmt === "docx" ? "Word" : fmt.toUpperCase()}
@@ -1942,7 +2284,7 @@ export default function HapusLatarDokumen({ onNotice }) {
         <fieldset>
           <legend>4. Baca dokumen (teks, tabel, gambar)</legend>
           <style>{`.hl-alat{display:flex;gap:6px;margin:2px 0}.hl-alat button{font:inherit;font-size:11px;color:#222;padding:2px 8px;border:1px solid #bbb;border-radius:6px;background:#f4f5f7;cursor:pointer}[data-copy="1"] .hl-alat{display:none}.hl-box td p{margin:0}.hl-box img{display:inline-block}`}</style>
-          <p className="ef-note">Membaca isi dokumen: tulisan jadi teks, tabel jadi tabel asli, logo, stempel, dan foto dipotong jadi gambar. Semuanya bisa disalin atau diunduh ke Word.</p>
+          <p className="ef-note">Membaca isi dokumen: tulisan jadi teks, tabel jadi tabel asli, logo, stempel, dan foto dipotong jadi gambar. Semuanya bisa disalin atau diunduh ke Word atau PDF yang bisa diedit.</p>
           <label className="ef-name">
             Bahasa dokumen
             <select value={ocrLang} onChange={(e) => setOcrLang(e.target.value)} disabled={ocrBusy}>
@@ -1967,14 +2309,14 @@ export default function HapusLatarDokumen({ onNotice }) {
                 onClick={klikHasil}
                 style={{ marginTop: 8, padding: 8, background: "#fff", color: "#111", border: "1px solid #ccd", borderRadius: 8, maxHeight: 460, overflow: "auto", outline: "none" }}
               />
-              {/* [BARU] Orientasi halaman untuk Word hasil baca */}
+              {/* Orientasi halaman untuk Word dan PDF hasil baca */}
               <PilihOrientasi value={orientasiHasil} onChange={setOrientasiHasil} />
               <p className="ef-note">
                 {orientasiHasil === "auto"
-                  ? `Otomatis: Word hasil baca memakai ${halamanLand ? "landscape" : "portrait"}, mengikuti bentuk foto dokumen.`
+                  ? `Otomatis: Word dan PDF hasil baca memakai ${halamanLand ? "landscape" : "portrait"}, mengikuti bentuk foto dokumen.`
                   : orientasiHasil === "portrait"
-                  ? "Word hasil baca memakai A4 berdiri (portrait)."
-                  : "Word hasil baca memakai A4 mendatar (landscape). Lebar tabel dan gambar menyesuaikan."}
+                  ? "Word dan PDF hasil baca memakai A4 berdiri (portrait)."
+                  : "Word dan PDF hasil baca memakai A4 mendatar (landscape). Lebar tabel dan gambar menyesuaikan."}
               </p>
               <div className="ef-btns">
                 <button type="button" className="ef-btn pri" onClick={salinSemua}>
@@ -1986,11 +2328,14 @@ export default function HapusLatarDokumen({ onNotice }) {
                 <button type="button" className="ef-btn" onClick={() => unduhHasil("docx")}>
                   Unduh Word
                 </button>
+                <button type="button" className="ef-btn" onClick={() => unduhHasil("pdf")}>
+                  Unduh PDF (bisa diedit)
+                </button>
                 <button type="button" className="ef-btn" onClick={() => unduhHasil("txt")}>
                   Unduh .txt
                 </button>
               </div>
-              <p className="ef-note">Kotak di atas bisa diedit langsung. Tabel dan gambar punya tombol salin sendiri. Periksa hasilnya: huruf mirip (O/0, l/1) kadang salah baca, dan tabel tanpa garis tidak terdeteksi.</p>
+              <p className="ef-note">Kotak di atas bisa diedit langsung. Tabel dan gambar punya tombol salin sendiri. Periksa hasilnya: huruf mirip (O/0, l/1) kadang salah baca, dan tabel tanpa garis tidak terdeteksi. PDF memakai font Times standar; edit teksnya dengan editor PDF seperti Acrobat, Foxit, atau Sejda.</p>
             </>
           )}
         </fieldset>
