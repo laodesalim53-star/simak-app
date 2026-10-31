@@ -1,6 +1,7 @@
 // src/pages/HapusLatarDokumen.jsx
 // Hapus latar dokumen — bersihkan foto/scan dokumen: bayangan dan warna kertas dihilangkan,
 // atau jadikan transparan (tanda tangan, stempel, teks). Semua proses di browser (canvas).
+// Unduh sebagai JPG, PNG, PDF, atau Word (.docx) — tanpa library tambahan.
 // Dipakai sebagai tab di EditFotoLatar.jsx dan memakai kelas CSS "ef-*" milik halaman itu.
 
 import { useState, useRef, useEffect } from "react";
@@ -12,6 +13,8 @@ const MODES = [
   { id: "bw", nama: "Hitam putih (scan)", info: "Hasil mirip mesin fotokopi: teks hitam tajam di atas kertas putih. Bagus untuk dokumen teks yang akan dicetak." },
   { id: "transparan", nama: "Transparan", info: "Kertas dihapus, hanya tinta yang tersisa. Cocok untuk tanda tangan, stempel, atau logo yang akan ditempel ke dokumen lain." },
 ];
+
+const FORMAT_TRANSPARAN = ["png", "pdf", "docx"];
 
 /* ───────────────────────── Util ───────────────────────── */
 
@@ -44,6 +47,235 @@ async function fileToCanvas(file) {
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(src, 0, 0, c.width, c.height);
   return c;
+}
+
+/* ───────────────────────── Ekspor PDF & Word ───────────────────────── */
+
+const enc = new TextEncoder();
+
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32(u8) {
+  let c = 0xffffffff;
+  for (let i = 0; i < u8.length; i++) c = CRC_TABLE[(c ^ u8[i]) & 255] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+const concat = (parts) => {
+  const len = parts.reduce((s, p) => s + p.length, 0);
+  const out = new Uint8Array(len);
+  let o = 0;
+  for (const p of parts) {
+    out.set(p, o);
+    o += p.length;
+  }
+  return out;
+};
+
+// Rata putih: untuk PDF, piksel transparan diratakan ke latar putih.
+function flattenWhite(c) {
+  const f = document.createElement("canvas");
+  f.width = c.width;
+  f.height = c.height;
+  const x = f.getContext("2d");
+  x.fillStyle = "#fff";
+  x.fillRect(0, 0, f.width, f.height);
+  x.drawImage(c, 0, 0);
+  return f;
+}
+
+const blobBytes = async (blob) => new Uint8Array(await blob.arrayBuffer());
+
+// ── PDF: satu halaman, gambar JPEG ditanam langsung (DCTDecode) ──
+async function buatPDF(canvas, { sesuaiGambar }) {
+  const flat = flattenWhite(canvas);
+  const jpg = await blobBytes(await canvasToBlob(flat, "image/jpeg", 0.92));
+  const iw = flat.width,
+    ih = flat.height;
+
+  // satuan poin (1 pt = 1/72 inci)
+  let pw, ph, dw, dh, dx, dy;
+  if (sesuaiGambar) {
+    const k = 72 / 150; // anggap 150 dpi
+    pw = dw = iw * k;
+    ph = dh = ih * k;
+    dx = dy = 0;
+  } else {
+    const landscape = iw > ih;
+    pw = landscape ? 841.89 : 595.28;
+    ph = landscape ? 595.28 : 841.89;
+    const m = 18;
+    const k = Math.min((pw - 2 * m) / iw, (ph - 2 * m) / ih);
+    dw = iw * k;
+    dh = ih * k;
+    dx = (pw - dw) / 2;
+    dy = (ph - dh) / 2;
+  }
+  const f = (n) => n.toFixed(2);
+  const content = `q ${f(dw)} 0 0 ${f(dh)} ${f(dx)} ${f(dy)} cm /Im0 Do Q`;
+
+  const parts = [];
+  const offsets = [];
+  let pos = 0;
+  const push = (u8) => {
+    parts.push(u8);
+    pos += u8.length;
+  };
+  const txt = (s) => push(enc.encode(s));
+  const obj = (n, body) => {
+    offsets[n] = pos;
+    txt(`${n} 0 obj\n${body}\nendobj\n`);
+  };
+
+  txt("%PDF-1.4\n");
+  push(new Uint8Array([0x25, 0xe2, 0xe3, 0xcf, 0xd3, 0x0a]));
+  obj(1, "<< /Type /Catalog /Pages 2 0 R >>");
+  obj(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
+  obj(3, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${f(pw)} ${f(ph)}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>`);
+
+  offsets[4] = pos;
+  txt(`4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${iw} /Height ${ih} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpg.length} >>\nstream\n`);
+  push(jpg);
+  txt("\nendstream\nendobj\n");
+
+  obj(5, `<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
+
+  const xref = pos;
+  txt(`xref\n0 6\n0000000000 65535 f \n`);
+  for (let n = 1; n <= 5; n++) txt(`${String(offsets[n]).padStart(10, "0")} 00000 n \n`);
+  txt(`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`);
+
+  return new Blob([concat(parts)], { type: "application/pdf" });
+}
+
+// ── ZIP tanpa kompresi (cukup untuk DOCX; gambar sudah terkompresi) ──
+function buatZip(files) {
+  const local = [];
+  const central = [];
+  let offset = 0;
+  const d = new Date();
+  const dosTime = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+  const dosDate = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+
+  for (const { name, data } of files) {
+    const nm = enc.encode(name);
+    const crc = crc32(data);
+
+    const lh = new Uint8Array(30 + nm.length);
+    const lv = new DataView(lh.buffer);
+    lv.setUint32(0, 0x04034b50, true);
+    lv.setUint16(4, 20, true);
+    lv.setUint16(6, 0x0800, true);
+    lv.setUint16(8, 0, true);
+    lv.setUint16(10, dosTime, true);
+    lv.setUint16(12, dosDate, true);
+    lv.setUint32(14, crc, true);
+    lv.setUint32(18, data.length, true);
+    lv.setUint32(22, data.length, true);
+    lv.setUint16(26, nm.length, true);
+    lv.setUint16(28, 0, true);
+    lh.set(nm, 30);
+
+    const ch = new Uint8Array(46 + nm.length);
+    const cv = new DataView(ch.buffer);
+    cv.setUint32(0, 0x02014b50, true);
+    cv.setUint16(4, 20, true);
+    cv.setUint16(6, 20, true);
+    cv.setUint16(8, 0x0800, true);
+    cv.setUint16(10, 0, true);
+    cv.setUint16(12, dosTime, true);
+    cv.setUint16(14, dosDate, true);
+    cv.setUint32(16, crc, true);
+    cv.setUint32(20, data.length, true);
+    cv.setUint32(24, data.length, true);
+    cv.setUint16(28, nm.length, true);
+    cv.setUint32(42, offset, true);
+    ch.set(nm, 46);
+
+    local.push(lh, data);
+    central.push(ch);
+    offset += lh.length + data.length;
+  }
+
+  const cdSize = central.reduce((s, p) => s + p.length, 0);
+  const end = new Uint8Array(22);
+  const ev = new DataView(end.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(8, files.length, true);
+  ev.setUint16(10, files.length, true);
+  ev.setUint32(12, cdSize, true);
+  ev.setUint32(16, offset, true);
+
+  return concat([...local, ...central, end]);
+}
+
+// ── DOCX: satu halaman A4, gambar ditanam di tengah ──
+async function buatDOCX(canvas, { transparan }) {
+  const png = transparan;
+  const bytes = await blobBytes(await canvasToBlob(canvas, png ? "image/png" : "image/jpeg", 0.92));
+  const ext = png ? "png" : "jpg";
+  const iw = canvas.width,
+    ih = canvas.height;
+
+  // ukuran halaman (twips; 1 twip = 635 EMU)
+  const landscape = !transparan && iw > ih;
+  const PW = landscape ? 16838 : 11906;
+  const PH = landscape ? 11906 : 16838;
+  const M = 567; // margin 1 cm
+  const areaW = PW - 2 * M;
+  const areaH = PH - 2 * M;
+
+  let cxT, cyT;
+  if (transparan) {
+    // tanda tangan/stempel: lebar awal 6 cm (bisa diubah di Word)
+    cxT = Math.min(areaW, 3402);
+    cyT = (cxT * ih) / iw;
+  } else {
+    const k = Math.min(areaW / iw, (areaH * 0.97) / ih);
+    cxT = iw * k;
+    cyT = ih * k;
+  }
+  const cx = Math.round(cxT * 635),
+    cy = Math.round(cyT * 635);
+
+  const docXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/><w:jc w:val="${transparan ? "left" : "center"}"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="1" name="Dokumen" descr="Dokumen yang sudah dibersihkan"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="0" name="dokumen.${ext}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p><w:sectPr><w:pgSz w:w="${PW}" w:h="${PH}"${landscape ? ' w:orient="landscape"' : ""}/><w:pgMar w:top="${M}" w:right="${M}" w:bottom="${M}" w:left="${M}" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>`;
+
+  const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="${ext}" ContentType="image/${png ? "png" : "jpeg"}"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`;
+
+  const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`;
+
+  const docRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.${ext}"/></Relationships>`;
+
+  const zip = buatZip([
+    { name: "[Content_Types].xml", data: enc.encode(contentTypes) },
+    { name: "_rels/.rels", data: enc.encode(rels) },
+    { name: "word/document.xml", data: enc.encode(docXml) },
+    { name: "word/_rels/document.xml.rels", data: enc.encode(docRels) },
+    { name: `word/media/image1.${ext}`, data: bytes },
+  ]);
+  return new Blob([zip], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+}
+
+function simpanBlob(blob, namaFile) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = namaFile;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 
 /* ───────────────────────── Filter dasar ───────────────────────── */
@@ -523,22 +755,32 @@ export default function HapusLatarDokumen({ onNotice }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src, mode, crop, clean, pekat, thr, inkMode, inkColor, trim, showOrig]);
 
+  const info = MODES.find((m) => m.id === mode).info;
+  const transparan = mode === "transparan";
+  // format efektif: mode transparan tidak bisa JPG
+  const fmt = transparan ? (FORMAT_TRANSPARAN.includes(format) ? format : "png") : format;
+
   const unduh = async () => {
     const out = resultRef.current;
     if (!out) return;
-    const png = mode === "transparan" || format === "png";
-    const blob = await canvasToBlob(out, png ? "image/png" : "image/jpeg", 0.95);
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `${safeName(name)}_bersih.${png ? "png" : "jpg"}`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    const base = `${safeName(name)}_bersih`;
+    try {
+      if (fmt === "pdf") {
+        const blob = await buatPDF(out, { sesuaiGambar: transparan });
+        simpanBlob(blob, `${base}.pdf`);
+      } else if (fmt === "docx") {
+        const blob = await buatDOCX(out, { transparan });
+        simpanBlob(blob, `${base}.docx`);
+      } else {
+        const png = fmt === "png";
+        const blob = await canvasToBlob(out, png ? "image/png" : "image/jpeg", 0.95);
+        simpanBlob(blob, `${base}.${png ? "png" : "jpg"}`);
+      }
+    } catch (e) {
+      console.error(e);
+      notify("Gagal membuat berkas. Coba format lain atau gambar yang lebih kecil.");
+    }
   };
-
-  const info = MODES.find((m) => m.id === mode).info;
-  const transparan = mode === "transparan";
 
   return (
     <div className="ef-grid">
@@ -667,15 +909,20 @@ export default function HapusLatarDokumen({ onNotice }) {
           )}
           <label className="ef-name">
             Format
-            <select value={transparan ? "png" : format} onChange={(e) => setFormat(e.target.value)} disabled={transparan}>
-              <option value="jpg">JPG (ringan)</option>
+            <select value={fmt} onChange={(e) => setFormat(e.target.value)}>
+              {!transparan && <option value="jpg">JPG (ringan)</option>}
               <option value="png">PNG</option>
+              <option value="pdf">PDF</option>
+              <option value="docx">Word (.docx)</option>
             </select>
           </label>
-          {transparan && <p className="ef-note">Hasil transparan selalu disimpan sebagai PNG.</p>}
+          {transparan && fmt === "png" && <p className="ef-note">Hasil transparan paling aman disimpan sebagai PNG.</p>}
+          {transparan && fmt === "pdf" && <p className="ef-note">PDF tidak menyimpan transparansi: latar akan jadi putih. Pakai PNG atau Word jika perlu ditempel ke dokumen lain.</p>}
+          {transparan && fmt === "docx" && <p className="ef-note">Di Word, transparansi tetap terjaga. Ukuran awal 6 cm, bisa diperbesar atau dipindah.</p>}
+          {!transparan && (fmt === "pdf" || fmt === "docx") && <p className="ef-note">Hasilnya satu halaman A4 berisi gambar dokumen, bukan teks yang bisa diedit.</p>}
           <div className="ef-btns">
             <button type="button" className="ef-btn pri" disabled={!src || busy} onClick={unduh}>
-              Unduh hasil
+              Unduh {fmt === "docx" ? "Word" : fmt.toUpperCase()}
             </button>
           </div>
           <p className="ef-note">Untuk dokumen resmi, hasil ini hanya merapikan tampilan. Isi dokumen tidak diubah.</p>
