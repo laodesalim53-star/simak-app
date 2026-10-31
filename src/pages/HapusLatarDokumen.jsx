@@ -2,6 +2,7 @@
 // Hapus latar dokumen — bersihkan foto/scan dokumen: bayangan dan warna kertas dihilangkan,
 // atau jadikan transparan (tanda tangan, stempel, teks). Semua proses di browser (canvas).
 // Unduh sebagai JPG, PNG, PDF, atau Word (.docx) — tanpa library tambahan.
+// Ekstrak teks (OCR) memakai tesseract.js: jalankan  npm install tesseract.js
 // Dipakai sebagai tab di EditFotoLatar.jsx dan memakai kelas CSS "ef-*" milik halaman itu.
 
 import { useState, useRef, useEffect } from "react";
@@ -276,6 +277,64 @@ function simpanBlob(blob, namaFile) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+/* ───────────────────────── Ekstrak teks (OCR) ───────────────────────── */
+
+// Tesseract.js dimuat hanya saat dipakai (dynamic import), jadi tidak membebani bundel utama.
+// Data bahasa diunduh sekali dari CDN lalu disimpan cache oleh browser.
+async function ocrCanvas(canvas, lang, onProgress) {
+  const { createWorker } = await import("tesseract.js");
+  const worker = await createWorker(lang, 1, {
+    logger: (m) => {
+      if (m.status === "recognizing text") onProgress(Math.round(m.progress * 100));
+    },
+  });
+  try {
+    const { data } = await worker.recognize(flattenWhite(canvas));
+    return (data.text || "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  } finally {
+    await worker.terminate();
+  }
+}
+
+async function salinTeks(teks) {
+  try {
+    await navigator.clipboard.writeText(teks);
+    return true;
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = teks;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+    return ok;
+  }
+}
+
+const escXml = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+// DOCX berisi teks hasil OCR (bisa diedit di Word), satu baris = satu paragraf.
+function buatDOCXTeks(teks) {
+  const paras = teks
+    .split("\n")
+    .map((l) => `<w:p><w:r><w:t xml:space="preserve">${escXml(l)}</w:t></w:r></w:p>`)
+    .join("");
+  const docXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${paras}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body></w:document>`;
+  const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`;
+  const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`;
+  const zip = buatZip([
+    { name: "[Content_Types].xml", data: enc.encode(contentTypes) },
+    { name: "_rels/.rels", data: enc.encode(rels) },
+    { name: "word/document.xml", data: enc.encode(docXml) },
+  ]);
+  return new Blob([zip], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
 }
 
 /* ───────────────────────── Filter dasar ───────────────────────── */
@@ -697,6 +756,10 @@ export default function HapusLatarDokumen({ onNotice }) {
   const [showOrig, setShowOrig] = useState(false);
   const [busy, setBusy] = useState(false);
   const [name, setName] = useState("");
+  const [teks, setTeks] = useState("");
+  const [ocrBusy, setOcrBusy] = useState(false);
+  const [ocrPct, setOcrPct] = useState(0);
+  const [ocrLang, setOcrLang] = useState("ind+eng");
 
   const fileRef = useRef(null);
   const camRef = useRef(null);
@@ -714,6 +777,7 @@ export default function HapusLatarDokumen({ onNotice }) {
       cacheRef.current = null;
       setSrc({ canvas, name: f.name });
       setName(f.name.replace(/\.[^.]+$/, ""));
+      setTeks("");
     } catch {
       notify(`Berkas ${f.name} tidak bisa dibuka.`);
     }
@@ -780,6 +844,35 @@ export default function HapusLatarDokumen({ onNotice }) {
       console.error(e);
       notify("Gagal membuat berkas. Coba format lain atau gambar yang lebih kecil.");
     }
+  };
+
+  const ekstrak = async () => {
+    const out = resultRef.current;
+    if (!out || ocrBusy) return;
+    setOcrBusy(true);
+    setOcrPct(0);
+    try {
+      const t = await ocrCanvas(out, ocrLang, setOcrPct);
+      setTeks(t);
+      if (!t) notify("Tidak ada teks yang terbaca. Coba mode Putihkan kertas atau Hitam putih, atau foto yang lebih jelas.");
+    } catch (e) {
+      console.error(e);
+      notify("Gagal membaca teks. Pastikan internet aktif untuk memuat data bahasa, lalu coba lagi.");
+    } finally {
+      setOcrBusy(false);
+    }
+  };
+
+  const salin = async () => {
+    if (!teks) return;
+    notify((await salinTeks(teks)) ? "Teks disalin." : "Gagal menyalin. Blok teks lalu salin manual.");
+  };
+
+  const unduhTeks = (jenis) => {
+    if (!teks) return;
+    const base = `${safeName(name)}_teks`;
+    if (jenis === "docx") simpanBlob(buatDOCXTeks(teks), `${base}.docx`);
+    else simpanBlob(new Blob([teks], { type: "text/plain;charset=utf-8" }), `${base}.txt`);
   };
 
   return (
@@ -926,6 +1019,47 @@ export default function HapusLatarDokumen({ onNotice }) {
             </button>
           </div>
           <p className="ef-note">Untuk dokumen resmi, hasil ini hanya merapikan tampilan. Isi dokumen tidak diubah.</p>
+        </fieldset>
+
+        <fieldset>
+          <legend>4. Salin teks (ekstrak)</legend>
+          <p className="ef-note">Baca tulisan di dokumen jadi teks yang bisa disalin atau diedit. Hasil terbaik dari mode Putihkan kertas atau Hitam putih.</p>
+          <label className="ef-name">
+            Bahasa dokumen
+            <select value={ocrLang} onChange={(e) => setOcrLang(e.target.value)} disabled={ocrBusy}>
+              <option value="ind+eng">Indonesia + Inggris</option>
+              <option value="ind">Indonesia</option>
+              <option value="eng">Inggris</option>
+            </select>
+          </label>
+          <div className="ef-btns">
+            <button type="button" className="ef-btn pri" disabled={!src || busy || ocrBusy} onClick={ekstrak}>
+              {ocrBusy ? `Membaca… ${ocrPct}%` : "Ekstrak teks"}
+            </button>
+          </div>
+          {teks && (
+            <>
+              <textarea
+                value={teks}
+                onChange={(e) => setTeks(e.target.value)}
+                rows={10}
+                spellCheck={false}
+                style={{ width: "100%", boxSizing: "border-box", marginTop: 8, padding: 8, font: "inherit", fontSize: 13, lineHeight: 1.45, resize: "vertical" }}
+              />
+              <div className="ef-btns">
+                <button type="button" className="ef-btn pri" onClick={salin}>
+                  Salin teks
+                </button>
+                <button type="button" className="ef-btn" onClick={() => unduhTeks("txt")}>
+                  Unduh .txt
+                </button>
+                <button type="button" className="ef-btn" onClick={() => unduhTeks("docx")}>
+                  Unduh Word
+                </button>
+              </div>
+              <p className="ef-note">Periksa hasilnya sebelum dipakai. Huruf yang mirip (O/0, l/1) kadang salah baca, dan teks bisa langsung diperbaiki di kotak di atas.</p>
+            </>
+          )}
         </fieldset>
       </aside>
     </div>
