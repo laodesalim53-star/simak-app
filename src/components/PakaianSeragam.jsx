@@ -141,11 +141,11 @@ export function drawCloth(ctx, sub, cl) {
   const shift = cl.up * 0.01 * u;
   const W2 = (g.bw / 2) * (cl.wid / 100) * 1.03; // setengah lebar bahu
   const nw = g.headW * 0.26; // setengah lebar leher
-  const nxo = nw * 1.3;
-  const ny = g.ys + shift - 0.05 * u; // pangkal leher
+  const nxo = nw * (jas ? 1.3 : 1.75); // batik: leher V lebih lebar
+  const ny = g.ys + shift - 0.08 * u; // pangkal leher
   const ty = g.ys + shift + 0.12 * u; // ujung bahu
   const bot = g.ch + u;
-  const vy = ny + (jas ? (pria ? 0.95 : 1.05) : pria ? 0.5 : 0.42) * u; // titik bawah V
+  const vy = ny + (jas ? (pria ? 0.95 : 1.05) : pria ? 0.36 : 0.3) * u; // titik bawah V
 
   const body = new Path2D();
   body.moveTo(cx - W2, ty);
@@ -172,8 +172,8 @@ export function drawCloth(ctx, sub, cl) {
     ctx.fillStyle = "#f3f5f8";
   } else {
     const gr = ctx.createLinearGradient(0, ny, 0, vy);
-    gr.addColorStop(0, shade(skin, -0.12));
-    gr.addColorStop(1, skin);
+    gr.addColorStop(0, shade(skin, -0.08));
+    gr.addColorStop(1, shade(skin, -0.03));
     ctx.fillStyle = gr;
   }
   ctx.fill(dalam);
@@ -305,24 +305,28 @@ export function drawCloth(ctx, sub, cl) {
 
 /* ───────────────────────── Warna kulit leher ───────────────────────── */
 
-export function sampleSkin(d, w, h, cx, y, r) {
+// Rata-rata warna kulit di sekitar (cx, y). Jika dx > 0, diambil dua titik: cx - dx dan cx + dx (pipi kiri dan kanan).
+export function sampleSkin(d, w, h, cx, y, r, dx = 0) {
   let R = 0,
     G = 0,
     B = 0,
     n = 0;
-  for (let yy = Math.round(y - r); yy <= y + r; yy++) {
-    if (yy < 0 || yy >= h) continue;
-    for (let xx = Math.round(cx - r); xx <= cx + r; xx++) {
-      if (xx < 0 || xx >= w) continue;
-      const i = (yy * w + xx) * 4;
-      if (d[i + 3] > 200) {
-        R += d[i];
-        G += d[i + 1];
-        B += d[i + 2];
-        n++;
+  const centers = dx > 0 ? [cx - dx, cx + dx] : [cx];
+  centers.forEach((c) => {
+    for (let yy = Math.round(y - r); yy <= y + r; yy++) {
+      if (yy < 0 || yy >= h) continue;
+      for (let xx = Math.round(c - r); xx <= c + r; xx++) {
+        if (xx < 0 || xx >= w) continue;
+        const i = (yy * w + xx) * 4;
+        if (d[i + 3] > 200 && d[i] > d[i + 2]) {
+          R += d[i];
+          G += d[i + 1];
+          B += d[i + 2];
+          n++;
+        }
       }
     }
-  }
+  });
   if (!n) return "#d9a982";
   const hx = (v) => Math.round(v / n).toString(16).padStart(2, "0");
   return "#" + hx(R) + hx(G) + hx(B);
