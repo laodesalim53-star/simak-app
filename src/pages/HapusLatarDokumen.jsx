@@ -2,7 +2,7 @@
 // Hapus latar dokumen — bersihkan foto/scan dokumen: bayangan dan warna kertas dihilangkan,
 // atau jadikan transparan (tanda tangan, stempel, teks). Semua proses di browser (canvas).
 // Unduh sebagai JPG, PNG, PDF, atau Word (.docx) — tanpa library tambahan.
-// Ekstrak teks (OCR) memakai tesseract.js: jalankan  npm install tesseract.js
+// Baca dokumen (teks, tabel, gambar) memakai tesseract.js: jalankan  npm install tesseract.js
 // Dipakai sebagai tab di EditFotoLatar.jsx dan memakai kelas CSS "ef-*" milik halaman itu.
 
 import { useState, useRef, useEffect } from "react";
@@ -279,24 +279,24 @@ function simpanBlob(blob, namaFile) {
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 
-/* ───────────────────────── Ekstrak teks (OCR) ───────────────────────── */
+/* ───────────────────────── Baca dokumen lengkap (teks, tabel, gambar) ───────────────────────── */
 
-// Tesseract.js dimuat hanya saat dipakai (dynamic import), jadi tidak membebani bundel utama.
-// Data bahasa diunduh sekali dari CDN lalu disimpan cache oleh browser.
-async function ocrCanvas(canvas, lang, onProgress) {
-  const { createWorker } = await import("tesseract.js");
-  const worker = await createWorker(lang, 1, {
-    logger: (m) => {
-      if (m.status === "recognizing text") onProgress(Math.round(m.progress * 100));
-    },
-  });
-  try {
-    const { data } = await worker.recognize(flattenWhite(canvas));
-    return (data.text || "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
-  } finally {
-    await worker.terminate();
-  }
-}
+// Alur: (1) cari garis tabel → sel; (2) hapus garis lalu OCR sekali; (3) tiap kata masuk ke sel tabel
+// atau jadi teks bebas; (4) goresan non-teks yang tersisa dipotong jadi gambar; (5) elemen yang sejajar
+// (kop surat berlogo, tanda tangan kiri-kanan) dibuat tabel tanpa garis. Hasilnya berupa HTML yang
+// bisa diedit dan disalin; Word/.txt dibaca balik dari HTML itu, jadi perbaikan manual ikut terbawa.
+
+const PT_BASE = 12;
+const PT_SNAP = [8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 22, 24];
+const TW_ISI = 9638; // lebar isi halaman A4 dengan margin 2 cm (twips)
+
+const med = (a) => {
+  if (!a.length) return 0;
+  const s = [...a].sort((x, y) => x - y);
+  return s[s.length >> 1];
+};
+const escXml = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const escHtml = (s) => escXml(s).replace(/"/g, "&quot;");
 
 async function salinTeks(teks) {
   try {
@@ -309,30 +309,817 @@ async function salinTeks(teks) {
     ta.style.opacity = "0";
     document.body.appendChild(ta);
     ta.select();
-    const ok = document.execCommand("copy");
+    let ok = false;
+    try {
+      ok = document.execCommand("copy");
+    } catch {}
     ta.remove();
     return ok;
   }
 }
 
-const escXml = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+function pilihDanSalin(node) {
+  const sel = window.getSelection();
+  const rg = document.createRange();
+  rg.selectNode(node);
+  sel.removeAllRanges();
+  sel.addRange(rg);
+  let ok = false;
+  try {
+    ok = document.execCommand("copy");
+  } catch {}
+  sel.removeAllRanges();
+  return ok;
+}
 
-// DOCX berisi teks hasil OCR (bisa diedit di Word), satu baris = satu paragraf.
-function buatDOCXTeks(teks) {
-  const paras = teks
-    .split("\n")
-    .map((l) => `<w:p><w:r><w:t xml:space="preserve">${escXml(l)}</w:t></w:r></w:p>`)
+async function salinGambar(img) {
+  const c = document.createElement("canvas");
+  c.width = img.naturalWidth;
+  c.height = img.naturalHeight;
+  c.getContext("2d").drawImage(img, 0, 0);
+  const blob = await canvasToBlob(c, "image/png");
+  await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+}
+
+/* ── Mask piksel ── */
+
+function buatMask(canvas) {
+  const w = canvas.width,
+    h = canvas.height;
+  const d = canvas.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+  const dark = new Uint8Array(w * h); // tinta gelap (garis, huruf)
+  const non = new Uint8Array(w * h); // apa pun yang bukan putih (termasuk foto, stempel)
+  for (let i = 0, p = 0; p < w * h; i += 4, p++) {
+    const l = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000;
+    if (l < 150) dark[p] = 1;
+    if (l < 225) non[p] = 1;
+  }
+  return { w, h, dark, non };
+}
+
+// Tandai piksel yang menjadi bagian dari garis lurus (horizontal/vertikal) sepanjang minLen.
+function runMask(dark, w, h, vertical, minLen, gap = 2) {
+  const out = new Uint8Array(w * h);
+  const n1 = vertical ? w : h;
+  const n2 = vertical ? h : w;
+  for (let a = 0; a < n1; a++) {
+    let start = -1,
+      last = -1;
+    const flush = () => {
+      if (start >= 0 && last - start + 1 >= minLen) {
+        for (let b = start; b <= last; b++) out[vertical ? b * w + a : a * w + b] = 1;
+      }
+    };
+    for (let b = 0; b < n2; b++) {
+      if (dark[vertical ? b * w + a : a * w + b]) {
+        if (start < 0) start = b;
+        last = b;
+      } else if (start >= 0 && b - last > gap) {
+        flush();
+        start = -1;
+      }
+    }
+    flush();
+  }
+  return out;
+}
+
+// Kumpulan piksel yang saling menempel (8 arah). bbox dan jumlah dihitung dari `orig` bila ada.
+function findBlobs(mask, w, h, orig) {
+  const seen = new Uint8Array(w * h);
+  const stack = new Int32Array(w * h);
+  const out = [];
+  for (let s = 0; s < w * h; s++) {
+    if (!mask[s] || seen[s]) continue;
+    let sp = 0,
+      n = 0,
+      x0 = w,
+      y0 = h,
+      x1 = -1,
+      y1 = -1;
+    stack[sp++] = s;
+    seen[s] = 1;
+    while (sp) {
+      const p = stack[--sp];
+      const x = p % w,
+        y = (p / w) | 0;
+      if (!orig || orig[p]) {
+        n++;
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+      }
+      for (let dy = -1; dy <= 1; dy++) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= h) continue;
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx;
+          if (xx < 0 || xx >= w || (!dx && !dy)) continue;
+          const q = yy * w + xx;
+          if (mask[q] && !seen[q]) {
+            seen[q] = 1;
+            stack[sp++] = q;
+          }
+        }
+      }
+    }
+    if (n) out.push({ x0, y0, x1: x1 + 1, y1: y1 + 1, n });
+  }
+  return out;
+}
+
+// Dari penanda per baris/kolom → posisi tengah tiap garis (garis terlalu tebal = bukan garis).
+function lineBands(flags, maxThick) {
+  const cs = [];
+  let s = -1;
+  for (let i = 0; i <= flags.length; i++) {
+    if (i < flags.length && flags[i]) {
+      if (s < 0) s = i;
+    } else if (s >= 0) {
+      if (i - s <= maxThick) cs.push((s + i - 1) / 2);
+      s = -1;
+    }
+  }
+  const m = [];
+  for (const c of cs) {
+    if (m.length && c - m[m.length - 1] < 8) m[m.length - 1] = (m[m.length - 1] + c) / 2;
+    else m.push(c);
+  }
+  return m;
+}
+
+/* ── Tabel ── */
+
+function detectTables(dark, w, h) {
+  const Hm = runMask(dark, w, h, false, Math.max(40, Math.round(w * 0.04)));
+  const Vm = runMask(dark, w, h, true, Math.max(40, Math.round(h * 0.03)));
+  const G = new Uint8Array(w * h);
+  for (let i = 0; i < G.length; i++) G[i] = Hm[i] | Vm[i];
+  const blobs = findBlobs(maxFilter(G, w, h, 2), w, h, G);
+
+  // proporsi panjang a0..a1 yang tertutup garis di sekitar pos
+  const cover = (vertical, pos, a0, a1) => {
+    const M = vertical ? Vm : Hm;
+    const s = Math.round(a0) + 3,
+      e = Math.round(a1) - 3;
+    if (e <= s) return 1;
+    let hit = 0;
+    for (let t = s; t < e; t++) {
+      for (let d = -4; d <= 4; d++) {
+        const x = vertical ? Math.round(pos) + d : t;
+        const y = vertical ? t : Math.round(pos) + d;
+        if (x >= 0 && x < w && y >= 0 && y < h && M[y * w + x]) {
+          hit++;
+          break;
+        }
+      }
+    }
+    return hit / (e - s);
+  };
+
+  const tables = [];
+  for (const b of blobs) {
+    const bw = b.x1 - b.x0,
+      bh = b.y1 - b.y0;
+    if (bw < 60 || bh < 40) continue;
+    const rowF = new Uint8Array(bh),
+      colF = new Uint8Array(bw);
+    for (let y = 0; y < bh; y++) {
+      const base = (b.y0 + y) * w + b.x0;
+      for (let x = 0; x < bw; x++) {
+        if (Hm[base + x]) rowF[y] = 1;
+        if (Vm[base + x]) colF[x] = 1;
+      }
+    }
+    // garis pendek (misalnya garis bawah teks di dalam sel) dibuang
+    const ys = lineBands(rowF, 14)
+      .map((v) => v + b.y0)
+      .filter((y) => cover(false, y, b.x0, b.x1) >= 0.15);
+    const xs = lineBands(colF, 14)
+      .map((v) => v + b.x0)
+      .filter((x) => cover(true, x, b.y0, b.y1) >= 0.15);
+    if (ys.length < 2 || xs.length < 2 || (ys.length - 1) * (xs.length - 1) < 2) continue;
+
+    const R = ys.length - 1,
+      C = xs.length - 1;
+    const right = [],
+      bottom = [];
+    for (let r = 0; r < R; r++) {
+      right.push([]);
+      bottom.push([]);
+      for (let c = 0; c < C; c++) {
+        right[r].push(c === C - 1 ? true : cover(true, xs[c + 1], ys[r], ys[r + 1]) > 0.4);
+        bottom[r].push(r === R - 1 ? true : cover(false, ys[r + 1], xs[c], xs[c + 1]) > 0.4);
+      }
+    }
+    // sel yang tidak punya garis pemisah digabung (colspan / rowspan)
+    const own = Array.from({ length: R }, () => Array(C).fill(false));
+    const cells = [];
+    for (let r = 0; r < R; r++) {
+      for (let c = 0; c < C; c++) {
+        if (own[r][c]) continue;
+        let cs = 1;
+        while (c + cs < C && !right[r][c + cs - 1] && !own[r][c + cs]) cs++;
+        let rs = 1;
+        grow: while (r + rs < R) {
+          for (let k = c; k < c + cs; k++) if (bottom[r + rs - 1][k] || own[r + rs][k]) break grow;
+          rs++;
+        }
+        for (let i = r; i < r + rs; i++) for (let j = c; j < c + cs; j++) own[i][j] = true;
+        cells.push({ r, c, cs, rs, x0: xs[c], x1: xs[c + cs], y0: ys[r], y1: ys[r + rs], ws: [] });
+      }
+    }
+    tables.push({ x0: xs[0], y0: ys[0], x1: xs[C], y1: ys[R], xs, ys, R, C, cells });
+  }
+  return { tables, G };
+}
+
+/* ── OCR kata per kata ── */
+
+async function ocrWords(canvas, lang, onProgress) {
+  const { createWorker } = await import("tesseract.js");
+  const worker = await createWorker(lang, 1, {
+    logger: (m) => {
+      if (m.status === "recognizing text") onProgress(Math.round(m.progress * 100));
+    },
+  });
+  try {
+    const { data } = await worker.recognize(canvas, {}, { blocks: true });
+    const raw = [];
+    for (const b of data.blocks || []) for (const p of b.paragraphs || []) for (const l of p.lines || []) for (const wd of l.words || []) raw.push(wd);
+    if (!raw.length) for (const wd of data.words || []) raw.push(wd);
+    return raw
+      .filter((wd) => wd.text && wd.text.trim() && wd.bbox)
+      .map((wd) => ({ t: wd.text.trim(), c: wd.confidence ?? 0, x0: wd.bbox.x0, y0: wd.bbox.y0, x1: wd.bbox.x1, y1: wd.bbox.y1 }))
+      .filter((wd) => !(wd.c < 30 && wd.t.length <= 2));
+  } finally {
+    await worker.terminate();
+  }
+}
+
+/* ── Kata → baris → paragraf ── */
+
+const mkSeg = (ws) => ({
+  ws,
+  text: ws.map((x) => x.t).join(" "),
+  x0: Math.min(...ws.map((x) => x.x0)),
+  x1: Math.max(...ws.map((x) => x.x1)),
+  y0: Math.min(...ws.map((x) => x.y0)),
+  y1: Math.max(...ws.map((x) => x.y1)),
+  h: med(ws.map((x) => x.y1 - x.y0)),
+});
+
+// Kata dikelompokkan jadi baris (y sama), baris dipecah jadi segmen bila ada celah lebar
+// (misalnya "Nomor ..." di kiri dan "Tanggal ..." di kanan pada baris yang sama).
+function groupLines(words) {
+  if (!words.length) return [];
+  const hh = med(words.map((x) => x.y1 - x.y0)) || 20;
+  const sorted = [...words].sort((a, b) => a.y0 + a.y1 - (b.y0 + b.y1));
+  const lines = [];
+  for (const wd of sorted) {
+    const cy = (wd.y0 + wd.y1) / 2;
+    let ln = null;
+    for (let i = lines.length - 1; i >= 0 && i >= lines.length - 6; i--) {
+      if (Math.abs(cy - lines[i].cy) < hh * 0.6) {
+        ln = lines[i];
+        break;
+      }
+    }
+    if (!ln) {
+      ln = { ws: [], cy };
+      lines.push(ln);
+    }
+    ln.ws.push(wd);
+    ln.cy = ln.ws.reduce((s, x) => s + (x.y0 + x.y1) / 2, 0) / ln.ws.length;
+  }
+  const segs = [];
+  for (const ln of lines) {
+    ln.ws.sort((a, b) => a.x0 - b.x0);
+    let cur = [ln.ws[0]];
+    for (let i = 1; i < ln.ws.length; i++) {
+      if (ln.ws[i].x0 - ln.ws[i - 1].x1 > hh * 3) {
+        segs.push(mkSeg(cur));
+        cur = [];
+      }
+      cur.push(ln.ws[i]);
+    }
+    segs.push(mkSeg(cur));
+  }
+  return segs;
+}
+
+// Baris yang menyambung (jarak rapat, huruf sama besar, baris sebelumnya penuh sampai tepi kanan)
+// digabung jadi satu paragraf; selain itu tiap baris jadi paragraf sendiri.
+function buildParas(segs, ext, tol) {
+  const cw = Math.max(1, ext.x1 - ext.x0);
+  const order = [...segs].sort((a, b) => a.y0 - b.y0 || a.x0 - b.x0);
+  const paras = [];
+  for (const s of order) {
+    let tgt = null;
+    for (let i = paras.length - 1; i >= 0 && i >= paras.length - 8; i--) {
+      const p = paras[i],
+        prev = p.segs[p.segs.length - 1];
+      const gap = s.y0 - prev.y1;
+      const ratio = s.h / Math.max(1, prev.h);
+      if (
+        s.y0 > prev.y0 + prev.h * 0.6 &&
+        gap < 0.7 * Math.max(prev.h, s.h) &&
+        ratio > 0.75 &&
+        ratio < 1.33 &&
+        prev.x1 >= ext.x1 - tol * cw &&
+        s.x0 >= p.x0 - 1.5 * s.h &&
+        s.x0 <= p.x0 + 4.5 * s.h
+      ) {
+        tgt = p;
+        break;
+      }
+    }
+    if (tgt) {
+      tgt.segs.push(s);
+      tgt.x0 = Math.min(tgt.x0, s.x0);
+      tgt.x1 = Math.max(tgt.x1, s.x1);
+      tgt.y1 = Math.max(tgt.y1, s.y1);
+    } else {
+      paras.push({ segs: [s], x0: s.x0, x1: s.x1, y0: s.y0, y1: s.y1 });
+    }
+  }
+  for (const p of paras) {
+    p.text = p.segs.map((s) => s.text).join(" ");
+    p.h = med(p.segs.map((s) => s.h));
+  }
+  return paras;
+}
+
+// Rata kiri / tengah / kanan / menjorok, dilihat dari posisi terhadap bidang tempatnya.
+function place(x0, x1, ext) {
+  const cw = Math.max(1, ext.x1 - ext.x0);
+  const L = (x0 - ext.x0) / cw,
+    Rr = (ext.x1 - x1) / cw;
+  if (L > 0.05 && Rr > 0.05 && Math.abs(L - Rr) < 0.08) return { align: "center", indent: 0 };
+  if (Rr < 0.05 && L > 0.2) return { align: "right", indent: 0 };
+  return { align: "left", indent: L > 0.06 ? Math.min(0.8, L) : 0 };
+}
+
+/* ── Elemen → blok ── */
+
+function paraBlock(p, ext, base, tight = false) {
+  const pl = place(p.x0, p.x1, ext);
+  const ratio = base ? p.h / base : 1;
+  let pt = PT_BASE;
+  if (ratio < 0.85 || ratio > 1.18) {
+    const want = PT_BASE * ratio;
+    pt = PT_SNAP.reduce((b, v) => (Math.abs(v - want) < Math.abs(b - want) ? v : b), PT_SNAP[0]);
+  }
+  return { t: "p", text: p.text, align: pl.align, indent: tight ? 0 : pl.indent, pt, tight };
+}
+
+function tableBlock(t, ext, base) {
+  const cw = Math.max(1, ext.x1 - ext.x0),
+    tw = Math.max(1, t.x1 - t.x0);
+  const cols = [];
+  for (let c = 0; c < t.C; c++) cols.push((t.xs[c + 1] - t.xs[c]) / tw);
+  const rows = Array.from({ length: t.R }, () => []);
+  for (const cell of t.cells) {
+    const cx = { x0: cell.x0 + 3, x1: cell.x1 - 3 };
+    const paras = buildParas(groupLines(cell.ws), cx, 0.12);
+    rows[cell.r].push({ c: cell.c, cs: cell.cs, rs: cell.rs, blocks: paras.map((p) => paraBlock(p, cx, base, true)) });
+  }
+  for (const r of rows) r.sort((a, b) => a.c - b.c);
+  return { t: "tbl", border: true, wfrac: Math.min(1, tw / cw), cols, rows };
+}
+
+function imgBlock(im, ext) {
+  const cw = Math.max(1, ext.x1 - ext.x0);
+  const pl = place(im.x0, im.x1, ext);
+  return { t: "img", src: im.src, w: im.w, h: im.h, wfrac: Math.min(1, (im.x1 - im.x0) / cw), align: pl.align, indent: pl.indent };
+}
+
+function clusterCols(els) {
+  const s = [...els].sort((a, b) => a.x0 - b.x0);
+  const cols = [];
+  for (const e of s) {
+    const c = cols.find((k) => Math.min(k.x1, e.x1) - Math.max(k.x0, e.x0) > 0.3 * Math.min(k.x1 - k.x0, e.x1 - e.x0));
+    if (c) {
+      c.els.push(e);
+      c.x0 = Math.min(c.x0, e.x0);
+      c.x1 = Math.max(c.x1, e.x1);
+    } else cols.push({ x0: e.x0, x1: e.x1, els: [e] });
+  }
+  return cols.sort((a, b) => a.x0 - b.x0);
+}
+
+// Urutkan dari atas ke bawah; elemen yang tumpang-tindih secara vertikal (logo di samping kop,
+// tanda tangan kiri-kanan) dijadikan satu baris tabel tanpa garis.
+function layoutBlocks(els, ext) {
+  const sorted = [...els].sort((a, b) => a.y0 - b.y0 || a.x0 - b.x0);
+  const bands = [];
+  for (const e of sorted) {
+    const b = bands[bands.length - 1];
+    if (b) {
+      const ov = Math.min(b.y1, e.y1) - Math.max(b.y0, e.y0);
+      if (ov > 0.3 * Math.min(b.y1 - b.y0, e.y1 - e.y0)) {
+        b.els.push(e);
+        b.y1 = Math.max(b.y1, e.y1);
+        continue;
+      }
+    }
+    bands.push({ els: [e], y0: e.y0, y1: e.y1 });
+  }
+  const cw = Math.max(1, ext.x1 - ext.x0);
+  const out = [];
+  for (const b of bands) {
+    if (b.els.length === 1) {
+      out.push(b.els[0].mk(ext));
+      continue;
+    }
+    const cols = clusterCols(b.els);
+    if (cols.length === 1) {
+      [...b.els].sort((a, c) => a.y0 - c.y0).forEach((e) => out.push(e.mk(ext)));
+      continue;
+    }
+    const bs = [ext.x0];
+    for (let i = 0; i < cols.length - 1; i++) bs.push((cols[i].x1 + cols[i + 1].x0) / 2);
+    bs.push(ext.x1);
+    out.push({
+      t: "layout",
+      cols: cols.map((c, i) => ({
+        wfrac: Math.max(0.05, (bs[i + 1] - bs[i]) / cw),
+        blocks: [...c.els].sort((a, d) => a.y0 - d.y0).map((e) => e.mk({ x0: bs[i], x1: bs[i + 1] })),
+      })),
+    });
+  }
+  return out;
+}
+
+/* ── Gambar (sisa goresan yang bukan teks dan bukan garis tabel) ── */
+
+function detectImages(page, m, words, tables) {
+  const { w, h, non } = m;
+  const rest = new Uint8Array(non);
+  const clear = (x0, y0, x1, y1) => {
+    for (let y = Math.max(0, Math.floor(y0)); y < Math.min(h, Math.ceil(y1)); y++) {
+      rest.fill(0, y * w + Math.max(0, Math.floor(x0)), y * w + Math.min(w, Math.ceil(x1)));
+    }
+  };
+  for (const t of tables) clear(t.x0 - 6, t.y0 - 6, t.x1 + 7, t.y1 + 7);
+  for (const wd of words) if (wd.c >= 60) clear(wd.x0 - 2, wd.y0 - 2, wd.x1 + 3, wd.y1 + 3);
+
+  const r = Math.max(5, Math.round(Math.max(w, h) * 0.006));
+  const blobs = findBlobs(maxFilter(rest, w, h, r), w, h, rest);
+  const out = [];
+  for (const b of blobs) {
+    const bw = b.x1 - b.x0,
+      bh = b.y1 - b.y0;
+    if (bw < 36 || bh < 30 || b.n < 250 || bw * bh > 0.8 * w * h) continue;
+    // kalau hampir seluruhnya tertutup kotak kata, itu teks yang kurang jelas, bukan gambar
+    let cov = 0;
+    for (const wd of words) {
+      const ox = Math.min(b.x1, wd.x1) - Math.max(b.x0, wd.x0),
+        oy = Math.min(b.y1, wd.y1) - Math.max(b.y0, wd.y0);
+      if (ox > 0 && oy > 0) cov += ox * oy;
+    }
+    if (cov > 0.4 * bw * bh) continue;
+    const pad = 4;
+    const c = cropRect(page, Math.max(0, b.x0 - pad), Math.max(0, b.y0 - pad), Math.min(w, b.x1 + pad), Math.min(h, b.y1 + pad));
+    out.push({
+      x0: b.x0,
+      y0: b.y0,
+      x1: b.x1,
+      y1: b.y1,
+      w: c.width,
+      h: c.height,
+      src: c.width * c.height < 90000 ? c.toDataURL("image/png") : c.toDataURL("image/jpeg", 0.9),
+    });
+  }
+  return out;
+}
+
+/* ── Alur utama ── */
+
+async function bacaDokumen(page, lang, onProgress) {
+  const w = page.width,
+    h = page.height;
+  const m = buatMask(page);
+  const { tables, G } = detectTables(m.dark, w, h);
+
+  // salinan untuk OCR: garis tabel dihapus supaya tidak terbaca sebagai huruf
+  const oc = document.createElement("canvas");
+  oc.width = w;
+  oc.height = h;
+  const octx = oc.getContext("2d", { willReadFrequently: true });
+  octx.drawImage(page, 0, 0);
+  if (tables.length) {
+    const G1 = maxFilter(G, w, h, 1);
+    const id = octx.getImageData(0, 0, w, h);
+    for (const t of tables) {
+      for (let y = Math.max(0, Math.floor(t.y0) - 6); y < Math.min(h, Math.ceil(t.y1) + 7); y++) {
+        for (let x = Math.max(0, Math.floor(t.x0) - 6); x < Math.min(w, Math.ceil(t.x1) + 7); x++) {
+          if (G1[y * w + x]) {
+            const i = (y * w + x) * 4;
+            id.data[i] = id.data[i + 1] = id.data[i + 2] = 255;
+          }
+        }
+      }
+    }
+    octx.putImageData(id, 0, 0);
+  }
+
+  const words = await ocrWords(oc, lang, onProgress);
+
+  // kata → sel tabel atau teks bebas
+  let free = [];
+  for (const wd of words) {
+    const cx = (wd.x0 + wd.x1) / 2,
+      cy = (wd.y0 + wd.y1) / 2;
+    const t = tables.find((tb) => cx >= tb.x0 - 3 && cx <= tb.x1 + 3 && cy >= tb.y0 - 3 && cy <= tb.y1 + 3);
+    if (!t) {
+      free.push(wd);
+      continue;
+    }
+    const cell = t.cells.find((c) => cx >= c.x0 && cx < c.x1 && cy >= c.y0 && cy < c.y1);
+    if (cell) cell.ws.push(wd);
+  }
+
+  const imgs = detectImages(page, m, words, tables);
+  free = free.filter((wd) => {
+    const cx = (wd.x0 + wd.x1) / 2,
+      cy = (wd.y0 + wd.y1) / 2;
+    return !(wd.c < 60 && imgs.some((im) => cx >= im.x0 && cx <= im.x1 && cy >= im.y0 && cy <= im.y1));
+  });
+
+  // batas isi halaman (dipakai untuk menilai rata kiri/tengah/kanan)
+  const xa = [],
+    xb = [];
+  free.forEach((wd) => (xa.push(wd.x0), xb.push(wd.x1)));
+  [...tables, ...imgs].forEach((e) => (xa.push(e.x0), xb.push(e.x1)));
+  if (!xa.length) return [];
+  const ext = { x0: Math.min(...xa), x1: Math.max(...xb) };
+  const base = med((free.length ? free : words).map((x) => x.y1 - x.y0)) || 20;
+
+  const els = [];
+  for (const p of buildParas(groupLines(free), ext, 0.08)) {
+    els.push({ x0: p.x0, y0: p.y0, x1: p.x1, y1: p.y1, mk: (e) => paraBlock(p, e, base) });
+  }
+  for (const t of tables) els.push({ x0: t.x0, y0: t.y0, x1: t.x1, y1: t.y1, mk: (e) => tableBlock(t, e, base) });
+  for (const im of imgs) els.push({ x0: im.x0, y0: im.y0, x1: im.x1, y1: im.y1, mk: (e) => imgBlock(im, e) });
+  return layoutBlocks(els, ext);
+}
+
+/* ── Blok → HTML (pratinjau yang bisa diedit dan disalin) ── */
+
+function blockHtml(b) {
+  if (b.t === "p") {
+    const st = `margin:0 0 ${b.tight ? 0 : 0.5}em;text-align:${b.align};font-size:${b.pt}px;line-height:1.35;${b.indent ? `padding-left:${(b.indent * 100).toFixed(1)}%;` : ""}`;
+    return `<p data-pt="${b.pt}" data-indent="${b.indent.toFixed(3)}"${b.tight ? ' data-tight="1"' : ""} style="${st}">${escHtml(b.text).replace(/\n/g, "<br>")}</p>`;
+  }
+  if (b.t === "img") {
+    const wp = Math.min(100, (b.wfrac / (1 - Math.min(0.8, b.indent || 0))) * 100).toFixed(1);
+    return `<div data-kind="fig" data-iw="${b.w}" data-ih="${b.h}" data-w="${b.wfrac.toFixed(3)}" data-indent="${(b.indent || 0).toFixed(3)}" style="margin:6px 0 6px ${((b.indent || 0) * 100).toFixed(1)}%;text-align:${b.align}"><img src="${b.src}" alt="Gambar" style="width:${wp}%;max-width:100%;height:auto;display:inline-block;vertical-align:top"><div class="hl-alat" contenteditable="false"><button type="button" data-act="salin-gambar">Salin gambar</button><button type="button" data-act="unduh-gambar">Unduh</button></div></div>`;
+  }
+  const tbl =
+    b.t === "layout"
+      ? { border: false, wfrac: 1, cols: b.cols.map((c) => c.wfrac), rows: [b.cols.map((c) => ({ cs: 1, rs: 1, blocks: c.blocks }))] }
+      : b;
+  const colgroup = tbl.cols.map((f) => `<col style="width:${(f * 100).toFixed(2)}%">`).join("");
+  const bd = tbl.border ? "1px solid #333" : "none";
+  const rows = tbl.rows
+    .map(
+      (r) =>
+        `<tr>${r
+          .map((c) => `<td${c.cs > 1 ? ` colspan="${c.cs}"` : ""}${c.rs > 1 ? ` rowspan="${c.rs}"` : ""} style="border:${bd};padding:2px 4px;vertical-align:top">${blocksHtml(c.blocks)}</td>`)
+          .join("")}</tr>`
+    )
     .join("");
+  const t = `<table data-kind="${tbl.border ? "tbl" : "layout"}" data-w="${tbl.wfrac.toFixed(3)}" data-cols="${tbl.cols.map((f) => f.toFixed(4)).join(",")}" style="border-collapse:collapse;table-layout:fixed;width:${(tbl.wfrac * 100).toFixed(1)}%;margin:6px 0">${colgroup}${rows}</table>`;
+  return tbl.border ? `<div data-kind="tblwrap"><div class="hl-alat" contenteditable="false"><button type="button" data-act="salin-tabel">Salin tabel</button></div>${t}</div>` : t;
+}
+const blocksHtml = (bs) => bs.map(blockHtml).join("");
+
+/* ── HTML (setelah diedit) → blok ── */
+
+const BLK = "P,DIV,TABLE,IMG,UL,OL,H1,H2,H3,H4,H5,H6";
+
+function pText(n) {
+  let s = "";
+  for (const c of n.childNodes) {
+    if (c.nodeType === 3) s += c.nodeValue;
+    else if (c.nodeName === "BR") s += "\n";
+    else if (c.nodeType === 1) s += pText(c) + (/^(DIV|P|LI)$/.test(c.nodeName) ? "\n" : "");
+  }
+  return s;
+}
+
+const mkP = (text) => ({ t: "p", text, align: "left", indent: 0, pt: PT_BASE, tight: false });
+
+function domP(el) {
+  const text = pText(el)
+    .replace(/\u00a0/g, " ")
+    .split("\n")
+    .map((l) => l.replace(/[ \t]+/g, " ").trim())
+    .join("\n")
+    .trim();
+  if (!text) return null;
+  const al = el.style.textAlign;
+  return {
+    t: "p",
+    text,
+    align: al === "center" || al === "right" ? al : "left",
+    indent: Number(el.dataset.indent) || 0,
+    pt: Number(el.dataset.pt) || PT_BASE,
+    tight: el.dataset.tight === "1",
+  };
+}
+
+function domImg(im, wrap) {
+  const al = wrap.style.textAlign;
+  return {
+    t: "img",
+    src: im.src,
+    w: Number(wrap.dataset.iw) || im.naturalWidth,
+    h: Number(wrap.dataset.ih) || im.naturalHeight,
+    wfrac: Number(wrap.dataset.w) || 0.5,
+    align: al === "center" || al === "right" ? al : "left",
+    indent: Number(wrap.dataset.indent) || 0,
+  };
+}
+
+function domTable(el) {
+  const rows = [...el.rows].map((tr) => [...tr.cells].map((td) => ({ cs: td.colSpan || 1, rs: td.rowSpan || 1, blocks: domBlocks(td) })));
+  let cols = (el.dataset.cols || "").split(",").map(Number).filter((x) => x > 0);
+  if (!cols.length) {
+    const n = Math.max(1, ...rows.map((r) => r.reduce((s, c) => s + c.cs, 0)));
+    cols = Array(n).fill(1 / n);
+  }
+  return { t: "tbl", border: el.dataset.kind !== "layout", wfrac: Number(el.dataset.w) || 1, cols, rows };
+}
+
+function domBlocks(root) {
+  const out = [];
+  for (const n of root.childNodes) {
+    if (n.nodeType === 3) {
+      const t = n.nodeValue.replace(/\s+/g, " ").trim();
+      if (t) out.push(mkP(t));
+      continue;
+    }
+    if (n.nodeType !== 1 || n.classList.contains("hl-alat")) continue;
+    const tag = n.tagName,
+      kind = n.dataset ? n.dataset.kind : "";
+    if (tag === "TABLE") out.push(domTable(n));
+    else if (tag === "IMG") out.push(domImg(n, n));
+    else if (kind === "fig") {
+      const im = n.querySelector("img");
+      if (im) out.push(domImg(im, n));
+    } else if (kind === "tblwrap" || (tag !== "P" && n.querySelector(BLK))) out.push(...domBlocks(n));
+    else if (tag !== "BR") {
+      const p = domP(n);
+      if (p) out.push(p);
+    }
+  }
+  return out;
+}
+
+/* ── Blok → teks biasa ── */
+
+function blocksTxt(bs) {
+  return bs
+    .map((b) => {
+      if (b.t === "p") return b.text;
+      if (b.t === "img") return "[Gambar]";
+      if (b.t === "layout") return b.cols.map((c) => blocksTxt(c.blocks)).join("\n");
+      return b.rows.map((r) => r.map((c) => blocksTxt(c.blocks).replace(/\s*\n+\s*/g, " ")).join("\t")).join("\n");
+    })
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+/* ── Blok → Word (.docx): paragraf, tabel asli (gabung sel), gambar ── */
+
+const jcOf = (a) => (a === "center" ? "center" : a === "right" ? "right" : "left");
+
+function pXml(b, avail) {
+  const runs = b.text
+    .split("\n")
+    .map((l) => `<w:t xml:space="preserve">${escXml(l)}</w:t>`)
+    .join("<w:br/>");
+  const sz = Math.round(b.pt * 2);
+  const ind = b.indent && !b.tight ? `<w:ind w:left="${Math.round(b.indent * avail)}"/>` : "";
+  return `<w:p><w:pPr><w:spacing w:before="0" w:after="${b.tight ? 0 : 120}"/>${ind}<w:jc w:val="${jcOf(b.align)}"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/><w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/></w:rPr>${runs}</w:r></w:p>`;
+}
+
+function imgXml(b, avail, ctx) {
+  const m = ctx.media.get(b.src);
+  if (!m || !b.w || !b.h) return "";
+  let cxT = Math.max(300, Math.min(avail, b.wfrac * avail));
+  let cyT = (cxT * b.h) / b.w;
+  if (cyT > 13000) {
+    cxT = (cxT * 13000) / cyT;
+    cyT = 13000;
+  }
+  const cx = Math.round(cxT * 635),
+    cy = Math.round(cyT * 635),
+    id = ctx.id++;
+  const ind = b.indent ? `<w:ind w:left="${Math.round(b.indent * avail)}"/>` : "";
+  return `<w:p><w:pPr><w:spacing w:before="0" w:after="120"/>${ind}<w:jc w:val="${jcOf(b.align)}"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${id}" name="Gambar ${id}"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="${id}" name="${m.name}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${m.rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
+}
+
+const SPACER = `<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="120" w:lineRule="exact"/></w:pPr></w:p>`;
+
+function tblXml(tb, avail, ctx) {
+  const C = tb.cols.length;
+  const total = Math.round(Math.min(1, tb.wfrac) * avail);
+  const grid = tb.cols.map((f) => Math.max(240, Math.round(f * total)));
+  const tw = grid.reduce((a, x) => a + x, 0);
+  const pend = Array(C).fill(null);
+  let rowsXml = "";
+  for (const row of tb.rows) {
+    let cells = "",
+      ci = 0;
+    const fillPending = () => {
+      while (ci < C && pend[ci] && pend[ci].left > 0) {
+        const pc = pend[ci];
+        cells += `<w:tc><w:tcPr><w:tcW w:w="${pc.w}" w:type="dxa"/>${pc.cs > 1 ? `<w:gridSpan w:val="${pc.cs}"/>` : ""}<w:vMerge/></w:tcPr><w:p/></w:tc>`;
+        pc.left--;
+        ci += pc.cs;
+      }
+    };
+    for (const cell of row) {
+      fillPending();
+      if (ci >= C) break;
+      const cs = Math.max(1, Math.min(cell.cs, C - ci));
+      const w = grid.slice(ci, ci + cs).reduce((a, x) => a + x, 0);
+      if (cell.rs > 1) pend[ci] = { left: cell.rs - 1, cs, w };
+      let inner = blocksXml(cell.blocks, Math.max(300, w - 160), ctx);
+      if (!/(<\/w:p>|<w:p\/>)$/.test(inner)) inner += "<w:p/>";
+      cells += `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/>${cs > 1 ? `<w:gridSpan w:val="${cs}"/>` : ""}${cell.rs > 1 ? '<w:vMerge w:val="restart"/>' : ""}</w:tcPr>${inner}</w:tc>`;
+      ci += cs;
+    }
+    fillPending();
+    if (cells) rowsXml += `<w:tr>${cells}</w:tr>`;
+  }
+  const line = (n) => `<w:${n} w:val="single" w:sz="4" w:space="0" w:color="000000"/>`;
+  const borders = tb.border ? `<w:tblBorders>${["top", "left", "bottom", "right", "insideH", "insideV"].map(line).join("")}</w:tblBorders>` : "";
+  return `<w:tbl><w:tblPr><w:tblW w:w="${tw}" w:type="dxa"/>${borders}<w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="80" w:type="dxa"/><w:right w:w="80" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>${grid.map((g) => `<w:gridCol w:w="${g}"/>`).join("")}</w:tblGrid>${rowsXml}</w:tbl>${SPACER}`;
+}
+
+function blocksXml(bs, avail, ctx) {
+  return bs
+    .map((b) => {
+      if (b.t === "p") return pXml(b, avail);
+      if (b.t === "img") return imgXml(b, avail, ctx);
+      if (b.t === "layout") {
+        return tblXml({ border: false, wfrac: 1, cols: b.cols.map((c) => c.wfrac), rows: [b.cols.map((c) => ({ cs: 1, rs: 1, blocks: c.blocks }))] }, avail, ctx);
+      }
+      return tblXml(b, avail, ctx);
+    })
+    .join("");
+}
+
+async function buatDOCXModel(blocks) {
+  const imgs = [];
+  (function walk(bs) {
+    for (const b of bs) {
+      if (b.t === "img") imgs.push(b);
+      else if (b.t === "tbl") b.rows.forEach((r) => r.forEach((c) => walk(c.blocks)));
+      else if (b.t === "layout") b.cols.forEach((c) => walk(c.blocks));
+    }
+  })(blocks);
+
+  const media = new Map();
+  let n = 0;
+  for (const b of imgs) {
+    if (media.has(b.src)) continue;
+    try {
+      const bytes = new Uint8Array(await (await fetch(b.src)).arrayBuffer());
+      const ext = b.src.startsWith("data:image/png") ? "png" : "jpg";
+      n++;
+      media.set(b.src, { bytes, ext, name: `image${n}.${ext}`, rid: `rId${n}` });
+    } catch {
+      /* gambar yang tidak bisa dibaca dilewati */
+    }
+  }
+
+  const ctx = { media, id: 1 };
+  const body = blocksXml(blocks, TW_ISI, ctx) || "<w:p/>";
+  const sect = `<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr>`;
   const docXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${paras}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body></w:document>`;
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>${body}${sect}</w:body></w:document>`;
+
   const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`;
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="jpg" ContentType="image/jpeg"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`;
   const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`;
+  const docRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${[...media.values()]
+    .map((m) => `<Relationship Id="${m.rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${m.name}"/>`)
+    .join("")}</Relationships>`;
+
   const zip = buatZip([
     { name: "[Content_Types].xml", data: enc.encode(contentTypes) },
     { name: "_rels/.rels", data: enc.encode(rels) },
     { name: "word/document.xml", data: enc.encode(docXml) },
+    { name: "word/_rels/document.xml.rels", data: enc.encode(docRels) },
+    ...[...media.values()].map((m) => ({ name: `word/media/${m.name}`, data: m.bytes })),
   ]);
   return new Blob([zip], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
 }
@@ -756,7 +1543,7 @@ export default function HapusLatarDokumen({ onNotice }) {
   const [showOrig, setShowOrig] = useState(false);
   const [busy, setBusy] = useState(false);
   const [name, setName] = useState("");
-  const [teks, setTeks] = useState("");
+  const [hasilHtml, setHasilHtml] = useState("");
   const [ocrBusy, setOcrBusy] = useState(false);
   const [ocrPct, setOcrPct] = useState(0);
   const [ocrLang, setOcrLang] = useState("ind+eng");
@@ -766,6 +1553,7 @@ export default function HapusLatarDokumen({ onNotice }) {
   const previewRef = useRef(null);
   const resultRef = useRef(null);
   const cacheRef = useRef(null);
+  const hasilRef = useRef(null);
 
   const notify = (m) => onNotice && onNotice(m);
 
@@ -777,7 +1565,7 @@ export default function HapusLatarDokumen({ onNotice }) {
       cacheRef.current = null;
       setSrc({ canvas, name: f.name });
       setName(f.name.replace(/\.[^.]+$/, ""));
-      setTeks("");
+      setHasilHtml("");
     } catch {
       notify(`Berkas ${f.name} tidak bisa dibuka.`);
     }
@@ -819,6 +1607,11 @@ export default function HapusLatarDokumen({ onNotice }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src, mode, crop, clean, pekat, thr, inkMode, inkColor, trim, showOrig]);
 
+  // isi pratinjau hasil baca dipasang langsung ke DOM supaya suntingan pengguna tidak ditimpa React
+  useEffect(() => {
+    if (hasilRef.current) hasilRef.current.innerHTML = hasilHtml;
+  }, [hasilHtml]);
+
   const info = MODES.find((m) => m.id === mode).info;
   const transparan = mode === "transparan";
   // format efektif: mode transparan tidak bisa JPG
@@ -846,33 +1639,87 @@ export default function HapusLatarDokumen({ onNotice }) {
     }
   };
 
-  const ekstrak = async () => {
-    const out = resultRef.current;
-    if (!out || ocrBusy) return;
+  const bacaSemua = async () => {
+    const c = cacheRef.current;
+    if (!c || ocrBusy) return;
     setOcrBusy(true);
     setOcrPct(0);
     try {
-      const t = await ocrCanvas(out, ocrLang, setOcrPct);
-      setTeks(t);
-      if (!t) notify("Tidak ada teks yang terbaca. Coba mode Putihkan kertas atau Hitam putih, atau foto yang lebih jelas.");
+      // selalu dibaca dari versi "putih" supaya bersih, apa pun mode yang sedang dipilih
+      const page = renderDoc(c.work, c.bg, { mode: "putih", clean, pekat, thr, inkMode, inkColor, trim });
+      const blocks = await bacaDokumen(page, ocrLang, setOcrPct);
+      if (!blocks.length) notify("Tidak ada isi yang terbaca. Coba foto yang lebih jelas atau nyalakan Crop otomatis.");
+      setHasilHtml(blocksHtml(blocks));
     } catch (e) {
       console.error(e);
-      notify("Gagal membaca teks. Pastikan internet aktif untuk memuat data bahasa, lalu coba lagi.");
+      notify("Gagal membaca dokumen. Pastikan internet aktif untuk memuat data bahasa, lalu coba lagi.");
     } finally {
       setOcrBusy(false);
     }
   };
 
-  const salin = async () => {
-    if (!teks) return;
-    notify((await salinTeks(teks)) ? "Teks disalin." : "Gagal menyalin. Blok teks lalu salin manual.");
+  const salinSemua = () => {
+    const root = hasilRef.current;
+    if (!root) return;
+    root.setAttribute("data-copy", "1"); // sembunyikan tombol alat saat menyalin
+    const sel = window.getSelection();
+    const rg = document.createRange();
+    rg.selectNodeContents(root);
+    sel.removeAllRanges();
+    sel.addRange(rg);
+    let ok = false;
+    try {
+      ok = document.execCommand("copy");
+    } catch {}
+    sel.removeAllRanges();
+    root.removeAttribute("data-copy");
+    notify(ok ? "Disalin lengkap dengan tabel dan gambar. Tempel di Word." : "Gagal menyalin. Blok isinya lalu salin manual.");
   };
 
-  const unduhTeks = (jenis) => {
-    if (!teks) return;
-    const base = `${safeName(name)}_teks`;
-    if (jenis === "docx") simpanBlob(buatDOCXTeks(teks), `${base}.docx`);
-    else simpanBlob(new Blob([teks], { type: "text/plain;charset=utf-8" }), `${base}.txt`);
+  const salinTeksSaja = async () => {
+    if (!hasilRef.current) return;
+    const ok = await salinTeks(blocksTxt(domBlocks(hasilRef.current)));
+    notify(ok ? "Teks disalin." : "Gagal menyalin teks.");
+  };
+
+  const unduhHasil = async (jenis) => {
+    if (!hasilRef.current) return;
+    try {
+      const blocks = domBlocks(hasilRef.current);
+      if (jenis === "docx") simpanBlob(await buatDOCXModel(blocks), `${safeName(name)}_hasil.docx`);
+      else simpanBlob(new Blob([blocksTxt(blocks)], { type: "text/plain;charset=utf-8" }), `${safeName(name)}_hasil.txt`);
+    } catch (e) {
+      console.error(e);
+      notify("Gagal membuat berkas hasil.");
+    }
+  };
+
+  const klikHasil = async (e) => {
+    const btn = e.target.closest && e.target.closest("[data-act]");
+    if (!btn) return;
+    const act = btn.dataset.act;
+    try {
+      if (act === "salin-tabel") {
+        const t = btn.closest('[data-kind="tblwrap"]').querySelector("table");
+        notify(pilihDanSalin(t) ? "Tabel disalin. Tempel di Word atau Excel." : "Gagal menyalin tabel.");
+      } else {
+        const im = btn.closest('[data-kind="fig"]').querySelector("img");
+        if (act === "salin-gambar") {
+          await salinGambar(im);
+          notify("Gambar disalin.");
+        } else {
+          const a = document.createElement("a");
+          a.href = im.src;
+          a.download = `${safeName(name)}_gambar.${im.src.startsWith("data:image/png") ? "png" : "jpg"}`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      notify("Gagal menyalin gambar. Klik kanan gambar lalu pilih Salin gambar.");
+    }
   };
 
   return (
@@ -1022,8 +1869,9 @@ export default function HapusLatarDokumen({ onNotice }) {
         </fieldset>
 
         <fieldset>
-          <legend>4. Salin teks (ekstrak)</legend>
-          <p className="ef-note">Baca tulisan di dokumen jadi teks yang bisa disalin atau diedit. Hasil terbaik dari mode Putihkan kertas atau Hitam putih.</p>
+          <legend>4. Baca dokumen (teks, tabel, gambar)</legend>
+          <style>{`.hl-alat{display:flex;gap:6px;margin:2px 0}.hl-alat button{font:inherit;font-size:11px;color:#222;padding:2px 8px;border:1px solid #bbb;border-radius:6px;background:#f4f5f7;cursor:pointer}[data-copy="1"] .hl-alat{display:none}.hl-box td p{margin:0}.hl-box img{display:inline-block}`}</style>
+          <p className="ef-note">Membaca isi dokumen: tulisan jadi teks, tabel jadi tabel asli, logo, stempel, dan foto dipotong jadi gambar. Semuanya bisa disalin atau diunduh ke Word.</p>
           <label className="ef-name">
             Bahasa dokumen
             <select value={ocrLang} onChange={(e) => setOcrLang(e.target.value)} disabled={ocrBusy}>
@@ -1033,31 +1881,36 @@ export default function HapusLatarDokumen({ onNotice }) {
             </select>
           </label>
           <div className="ef-btns">
-            <button type="button" className="ef-btn pri" disabled={!src || busy || ocrBusy} onClick={ekstrak}>
-              {ocrBusy ? `Membaca… ${ocrPct}%` : "Ekstrak teks"}
+            <button type="button" className="ef-btn pri" disabled={!src || busy || ocrBusy} onClick={bacaSemua}>
+              {ocrBusy ? `Membaca… ${ocrPct}%` : "Baca dokumen"}
             </button>
           </div>
-          {teks && (
+          {hasilHtml && (
             <>
-              <textarea
-                value={teks}
-                onChange={(e) => setTeks(e.target.value)}
-                rows={10}
+              <div
+                ref={hasilRef}
+                className="hl-box"
+                contentEditable
+                suppressContentEditableWarning
                 spellCheck={false}
-                style={{ width: "100%", boxSizing: "border-box", marginTop: 8, padding: 8, font: "inherit", fontSize: 13, lineHeight: 1.45, resize: "vertical" }}
+                onClick={klikHasil}
+                style={{ marginTop: 8, padding: 8, background: "#fff", color: "#111", border: "1px solid #ccd", borderRadius: 8, maxHeight: 460, overflow: "auto", outline: "none" }}
               />
               <div className="ef-btns">
-                <button type="button" className="ef-btn pri" onClick={salin}>
-                  Salin teks
+                <button type="button" className="ef-btn pri" onClick={salinSemua}>
+                  Salin semua
                 </button>
-                <button type="button" className="ef-btn" onClick={() => unduhTeks("txt")}>
-                  Unduh .txt
+                <button type="button" className="ef-btn" onClick={salinTeksSaja}>
+                  Salin teks saja
                 </button>
-                <button type="button" className="ef-btn" onClick={() => unduhTeks("docx")}>
+                <button type="button" className="ef-btn" onClick={() => unduhHasil("docx")}>
                   Unduh Word
                 </button>
+                <button type="button" className="ef-btn" onClick={() => unduhHasil("txt")}>
+                  Unduh .txt
+                </button>
               </div>
-              <p className="ef-note">Periksa hasilnya sebelum dipakai. Huruf yang mirip (O/0, l/1) kadang salah baca, dan teks bisa langsung diperbaiki di kotak di atas.</p>
+              <p className="ef-note">Kotak di atas bisa diedit langsung. Tabel dan gambar punya tombol salin sendiri. Periksa hasilnya: huruf mirip (O/0, l/1) kadang salah baca, dan tabel tanpa garis tidak terdeteksi.</p>
             </>
           )}
         </fieldset>
