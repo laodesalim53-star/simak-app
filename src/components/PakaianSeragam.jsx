@@ -17,6 +17,9 @@ export const CLOTH_DEFAULT = {
   up: 0, // geser baju naik (-) / turun (+)
   wid: 100, // lebar baju (%)
   ms: 100, // ukuran motif (%)
+  hijab: false, // wanita berhijab: leher V diisi hijab hitam
+  emb: true, // lambang Korpri di dada (batik)
+  chest: 60, // seberapa jauh bingkai turun ke dada (% tinggi kepala)
 };
 
 const JAS_WARNA = [
@@ -31,7 +34,7 @@ const DASI_WARNA = [
   { nama: "Emas", c: "#B88A1E" },
 ];
 
-export const clothKey = (c) => [c.kind, c.gender, c.jas, c.dasi, c.motif, c.imgId, c.up, c.wid, c.ms].join("|");
+export const clothKey = (c) => [c.kind, c.gender, c.jas, c.dasi, c.motif, c.imgId, c.up, c.wid, c.ms, c.hijab, c.emb, c.chest].join("|");
 
 /* ───────────────────────── Util warna ───────────────────────── */
 
@@ -51,55 +54,64 @@ function shade(h, a) {
 /* ───────────────────────── Motif batik ───────────────────────── */
 
 let _tile = null;
+// Pola mirip batik Korpri: dasar biru, ceplok bunga biru muda, kisi belah ketupat.
 function makeBatikTile() {
-  const s = 96;
+  const sz = 96;
   const c = document.createElement("canvas");
-  c.width = c.height = s;
+  c.width = c.height = sz;
   const x = c.getContext("2d");
-  const emas = "#E3BD55";
-  x.fillStyle = "#1B3A8C";
-  x.fillRect(0, 0, s, s);
-  x.strokeStyle = emas;
-  x.fillStyle = emas;
-  x.lineWidth = 2;
+  const dasar = "#1E3FA6",
+    tua = "#162F86",
+    muda = "#5B8DEF",
+    pucat = "#8FB3F7";
+  x.fillStyle = dasar;
+  x.fillRect(0, 0, sz, sz);
+  // kisi belah ketupat
+  x.strokeStyle = tua;
+  x.lineWidth = 3;
+  x.beginPath();
+  x.moveTo(0, 48);
+  x.lineTo(48, 0);
+  x.lineTo(96, 48);
+  x.lineTo(48, 96);
+  x.closePath();
+  x.stroke();
   const bunga = (cx, cy, r) => {
+    x.fillStyle = muda;
     for (let k = 0; k < 8; k++) {
       x.save();
       x.translate(cx, cy);
       x.rotate((k * Math.PI) / 4);
       x.beginPath();
-      x.ellipse(0, r * 0.62, r * 0.24, r * 0.4, 0, 0, Math.PI * 2);
-      x.stroke();
+      x.ellipse(0, r * 0.6, r * 0.22, r * 0.4, 0, 0, Math.PI * 2);
+      x.fill();
       x.restore();
     }
+    x.fillStyle = dasar;
     x.beginPath();
-    x.arc(cx, cy, r * 0.22, 0, Math.PI * 2);
+    x.arc(cx, cy, r * 0.3, 0, Math.PI * 2);
+    x.fill();
+    x.fillStyle = pucat;
+    x.beginPath();
+    x.arc(cx, cy, r * 0.14, 0, Math.PI * 2);
     x.fill();
   };
-  bunga(24, 24, 20);
-  bunga(72, 72, 20);
+  bunga(48, 48, 22);
+  bunga(0, 0, 16);
+  bunga(96, 0, 16);
+  bunga(0, 96, 16);
+  bunga(96, 96, 16);
+  x.fillStyle = pucat;
   [
-    [72, 24],
-    [24, 72],
+    [48, 10],
+    [48, 86],
+    [10, 48],
+    [86, 48],
   ].forEach(([px, py]) => {
     x.beginPath();
-    x.moveTo(px, py - 9);
-    x.lineTo(px + 9, py);
-    x.lineTo(px, py + 9);
-    x.lineTo(px - 9, py);
-    x.closePath();
-    x.stroke();
-    x.beginPath();
-    x.arc(px, py, 2.2, 0, Math.PI * 2);
+    x.arc(px, py, 2.4, 0, Math.PI * 2);
     x.fill();
   });
-  x.globalAlpha = 0.6;
-  for (let i = 0; i < 4; i++) {
-    x.beginPath();
-    x.arc(48, i * 24 + 12, 1.6, 0, Math.PI * 2);
-    x.fill();
-  }
-  x.globalAlpha = 1;
   return c;
 }
 
@@ -127,6 +139,41 @@ const poly = (pts) => {
   return p;
 };
 
+// Lambang Korpri sederhana: pohon beringin di atas pendopo dengan sepasang sayap.
+function drawEmblem(ctx, x, y, sz) {
+  const emas = "#D9A93B",
+    tua = "#8F6612";
+  ctx.save();
+  ctx.fillStyle = emas;
+  ctx.strokeStyle = tua;
+  ctx.lineWidth = Math.max(1, sz * 0.02);
+  [-1, 1].forEach((sg) => {
+    ctx.beginPath();
+    ctx.moveTo(x + sg * 0.5 * sz, y - 0.3 * sz);
+    ctx.quadraticCurveTo(x + sg * 0.64 * sz, y + 0.22 * sz, x + sg * 0.1 * sz, y + 0.4 * sz);
+    ctx.quadraticCurveTo(x + sg * 0.42 * sz, y + 0.2 * sz, x + sg * 0.5 * sz, y - 0.3 * sz);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  });
+  ctx.beginPath();
+  ctx.moveTo(x - 0.32 * sz, y - 0.04 * sz);
+  ctx.lineTo(x + 0.32 * sz, y - 0.04 * sz);
+  ctx.lineTo(x + 0.2 * sz, y - 0.14 * sz);
+  ctx.lineTo(x - 0.2 * sz, y - 0.14 * sz);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillRect(x - 0.26 * sz, y - 0.04 * sz, 0.52 * sz, 0.2 * sz);
+  ctx.strokeRect(x - 0.26 * sz, y - 0.04 * sz, 0.52 * sz, 0.2 * sz);
+  ctx.fillRect(x - 0.03 * sz, y - 0.18 * sz, 0.06 * sz, 0.05 * sz);
+  ctx.beginPath();
+  ctx.ellipse(x, y - 0.34 * sz, 0.26 * sz, 0.19 * sz, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
 export function drawCloth(ctx, sub, cl) {
   const g = sub && sub.geo;
   if (!g || !cl || cl.kind === "none") return;
@@ -136,15 +183,18 @@ export function drawCloth(ctx, sub, cl) {
   const mir = (pts) => pts.map(([x, y]) => [2 * cx - x, y]);
   const pria = cl.gender === "pria";
   const jas = cl.kind === "jas";
+  const hijab = !!cl.hijab && !pria;
   const skin = sub.skin || "#d9a982";
+  const k = (cl.chest || 0) / 100;
 
   const shift = cl.up * 0.01 * u;
   const W2 = (g.bw / 2) * (cl.wid / 100) * 1.03; // setengah lebar bahu
+  const W3 = W2 * (1 + 0.3 * k); // melebar ke bawah (lengan dan dada)
   const nw = g.headW * 0.26; // setengah lebar leher
-  const nxo = nw * (jas ? 1.3 : 1.75); // batik: leher V lebih lebar
+  const nxo = nw * (jas ? 1.3 : 1.75);
   const ny = g.ys + shift - 0.08 * u; // pangkal leher
   const ty = g.ys + shift + 0.12 * u; // ujung bahu
-  const bot = g.ch + u;
+  const bot = Math.max(g.ch + u, ty + 2.5 * u);
   const vy = ny + (jas ? (pria ? 0.95 : 1.05) : pria ? 0.36 : 0.3) * u; // titik bawah V
 
   const body = new Path2D();
@@ -153,14 +203,16 @@ export function drawCloth(ctx, sub, cl) {
   body.lineTo(cx, vy);
   body.lineTo(cx + nxo, ny);
   body.quadraticCurveTo(cx + W2 * 0.45, ny + 0.02 * u, cx + W2, ty);
-  body.lineTo(cx + W2, bot);
-  body.lineTo(cx - W2, bot);
+  body.lineTo(cx + W3, ty + 1.2 * u);
+  body.lineTo(cx + W3, bot);
+  body.lineTo(cx - W3, bot);
+  body.lineTo(cx - W3, ty + 1.2 * u);
   body.closePath();
 
   ctx.save();
   ctx.lineJoin = "round";
 
-  // 1. bagian dalam V (kemeja putih atau kulit leher)
+  // 1. bagian dalam V
   const dalam = poly([
     [cx - nxo, ny],
     [cx + nxo, ny],
@@ -172,11 +224,30 @@ export function drawCloth(ctx, sub, cl) {
     ctx.fillStyle = "#f3f5f8";
   } else {
     const gr = ctx.createLinearGradient(0, ny, 0, vy);
-    gr.addColorStop(0, shade(skin, -0.08));
-    gr.addColorStop(1, shade(skin, -0.03));
+    if (hijab) {
+      gr.addColorStop(0, "#1b1c21");
+      gr.addColorStop(1, "#0f1013");
+    } else {
+      gr.addColorStop(0, shade(skin, -0.08));
+      gr.addColorStop(1, shade(skin, -0.03));
+    }
     ctx.fillStyle = gr;
   }
   ctx.fill(dalam);
+
+  // hijab di atas kemeja putih (jas wanita)
+  if (jas && hijab) {
+    ctx.fillStyle = "#14151a";
+    ctx.fill(
+      poly([
+        [cx - nxo * 0.95, ny - 0.03 * u],
+        [cx + nxo * 0.95, ny - 0.03 * u],
+        [cx + nw * 0.55, ny + 0.26 * u],
+        [cx, ny + 0.42 * u],
+        [cx - nw * 0.55, ny + 0.26 * u],
+      ])
+    );
+  }
 
   // 2. dasi (pria berjas), digambar sebelum badan jas supaya terpotong rapi oleh V
   if (jas && pria) {
@@ -206,8 +277,7 @@ export function drawCloth(ctx, sub, cl) {
   ctx.fillStyle = jas ? cl.jas : batikFill(ctx, cl, u);
   ctx.fill(body);
 
-  // bayangan kain di sisi kiri dan kanan
-  const sh = ctx.createLinearGradient(cx - W2, 0, cx + W2, 0);
+  const sh = ctx.createLinearGradient(cx - W3, 0, cx + W3, 0);
   sh.addColorStop(0, "rgba(0,0,0,.32)");
   sh.addColorStop(0.22, "rgba(0,0,0,0)");
   sh.addColorStop(0.78, "rgba(0,0,0,0)");
@@ -218,7 +288,6 @@ export function drawCloth(ctx, sub, cl) {
   const garis = Math.max(1, u * 0.007);
 
   if (jas) {
-    // kerah jas (lapel)
     const lapel = [
       [cx - nxo * 0.98, ny - 0.01 * u],
       [cx - nxo * 2.2, ny + 0.17 * u],
@@ -233,7 +302,6 @@ export function drawCloth(ctx, sub, cl) {
       ctx.lineWidth = garis;
       ctx.stroke(p);
     });
-    // kerah kemeja
     const kerah = [
       [cx - nw * 0.9, ny - 0.08 * u],
       [cx - nxo * 1.35, ny + 0.02 * u],
@@ -248,7 +316,6 @@ export function drawCloth(ctx, sub, cl) {
       ctx.lineWidth = garis;
       ctx.stroke(p);
     });
-    // garis tengah dan kancing
     ctx.strokeStyle = "rgba(0,0,0,.4)";
     ctx.lineWidth = garis;
     ctx.beginPath();
@@ -259,8 +326,15 @@ export function drawCloth(ctx, sub, cl) {
     ctx.beginPath();
     ctx.arc(cx + u * 0.04, vy + 0.14 * u, u * 0.028, 0, Math.PI * 2);
     ctx.fill();
-  } else if (pria) {
-    // batik pria: kerah terbuka dan plakat kancing
+  } else {
+    // lambang Korpri di dada kiri dan kanan
+    if (cl.emb !== false) {
+      const ey = g.ys + shift + 0.5 * u;
+      drawEmblem(ctx, cx - 0.36 * u, ey, 0.3 * u);
+      drawEmblem(ctx, cx + 0.36 * u, ey, 0.3 * u);
+    }
+
+    // kerah batik berhias emas di ujungnya
     const kerah = [
       [cx - nw * 0.9, ny - 0.08 * u],
       [cx - nxo * 1.45, ny + 0.05 * u],
@@ -276,28 +350,36 @@ export function drawCloth(ctx, sub, cl) {
       ctx.strokeStyle = "rgba(0,0,0,.5)";
       ctx.lineWidth = garis;
       ctx.stroke(p);
+      const [, P2, P3] = pts;
+      const mx = (pts[0][0] + P2[0] + P3[0]) / 3,
+        my = (pts[0][1] + P2[1] + P3[1]) / 3;
+      ctx.fillStyle = "#D9A93B";
+      [0.3, 0.5, 0.7].forEach((t) => {
+        const px = P2[0] + (P3[0] - P2[0]) * t,
+          py = P2[1] + (P3[1] - P2[1]) * t;
+        ctx.beginPath();
+        ctx.ellipse(px + (mx - px) * 0.3, py + (my - py) * 0.3, u * 0.03, u * 0.014, Math.atan2(P3[1] - P2[1], P3[0] - P2[0]), 0, Math.PI * 2);
+        ctx.fill();
+      });
     });
+
+    // plakat dan kancing biru
     ctx.strokeStyle = "rgba(0,0,0,.45)";
     ctx.lineWidth = garis;
     ctx.beginPath();
     ctx.moveTo(cx, vy);
     ctx.lineTo(cx, bot);
     ctx.stroke();
-    ctx.fillStyle = "#E3BD55";
-    for (let i = 1; i <= 3; i++) {
+    for (let i = 1; i <= 4; i++) {
+      const by = vy + i * 0.22 * u;
+      ctx.fillStyle = "#14246E";
       ctx.beginPath();
-      ctx.arc(cx, vy + i * 0.2 * u, u * 0.02, 0, Math.PI * 2);
+      ctx.arc(cx, by, u * 0.026, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,.35)";
+      ctx.lineWidth = garis * 0.8;
+      ctx.stroke();
     }
-  } else {
-    // batik wanita: leher V dengan list emas
-    ctx.strokeStyle = "#E3BD55";
-    ctx.lineWidth = u * 0.014;
-    ctx.beginPath();
-    ctx.moveTo(cx - nxo, ny);
-    ctx.lineTo(cx, vy);
-    ctx.lineTo(cx + nxo, ny);
-    ctx.stroke();
   }
 
   ctx.restore();
@@ -479,6 +561,12 @@ export default function PanelPakaian({ cl, setCl, onNotice }) {
             {chip(cl.gender === "wanita", "Wanita", () => set({ gender: "wanita" }))}
           </div>
 
+          {cl.gender === "wanita" && (
+            <label className="ef-check">
+              <input type="checkbox" checked={!!cl.hijab} onChange={(e) => set({ hijab: e.target.checked })} /> Berhijab (hijab hitam)
+            </label>
+          )}
+
           {cl.kind === "jas" && (
             <>
               <div className="ef-swatches">{JAS_WARNA.map((j) => swatch(j.c, j.nama, cl.jas === j.c, () => set({ jas: j.c })))}</div>
@@ -502,11 +590,15 @@ export default function PanelPakaian({ cl, setCl, onNotice }) {
                   Unggah gambar motif
                 </button>
               </div>
+              <label className="ef-check">
+                <input type="checkbox" checked={cl.emb !== false} onChange={(e) => set({ emb: e.target.checked })} /> Lambang Korpri di dada
+              </label>
               <Geser label="Ukuran motif" value={cl.ms} min={50} max={200} suffix="%" onChange={(v) => set({ ms: v })} />
               <p className="ef-note">Motif bawaan hanya pendekatan. Untuk motif Korpri resmi, unggah foto atau gambar kain batiknya.</p>
             </>
           )}
 
+          <Geser label="Tampilkan dada (bingkai turun)" value={cl.chest} min={0} max={100} suffix="%" onChange={(v) => set({ chest: v })} />
           <Geser label="Naik / turunkan baju" value={cl.up} min={-12} max={12} onChange={(v) => set({ up: v })} />
           <Geser label="Lebar baju" value={cl.wid} min={80} max={125} suffix="%" onChange={(v) => set({ wid: v })} />
           <p className="ef-note">
