@@ -18,6 +18,9 @@ import {
   FileBadge,
   GraduationCap,
   ChevronRight,
+  TrendingUp,
+  ArrowRightLeft,
+  Trophy,
 } from 'lucide-react'
 
 // Halaman "hub" — kumpulan pintasan (kartu) ke halaman-halaman administrasi
@@ -38,6 +41,22 @@ const SEMUA_KARTU = [
     label: 'Kelas',
     icon: DoorOpen,
     desc: 'Kelola daftar kelas dan wali kelas.',
+    adminOnly: true,
+  },
+  // BARU: tahun ajaran + wizard kenaikan kelas / kelulusan massal.
+  {
+    to: '/tahun-ajaran',
+    label: 'Tahun Ajaran & Naik Kelas',
+    icon: TrendingUp,
+    desc: 'Kelola tahun ajaran dan proses kenaikan kelas / kelulusan.',
+    adminOnly: true,
+  },
+  // BARU: mutasi siswa masuk/keluar + daftar alumni.
+  {
+    to: '/mutasi-siswa',
+    label: 'Mutasi Siswa & Alumni',
+    icon: ArrowRightLeft,
+    desc: 'Catat siswa pindah/masuk dan lihat daftar alumni.',
     adminOnly: true,
   },
   {
@@ -118,6 +137,13 @@ const SEMUA_KARTU = [
     label: 'Portofolio Siswa',
     icon: GraduationCap,
     desc: 'Lihat ringkasan biodata, kehadiran, nilai & prestasi tiap siswa.',
+  },
+  // BARU: tidak adminOnly — guru pembina mengelola anggota ekskulnya (dijaga RLS).
+  {
+    to: '/ekstrakurikuler',
+    label: 'Ekstrakurikuler',
+    icon: Trophy,
+    desc: 'Daftar ekskul, anggota, dan predikat per semester.',
   },
   {
     to: '/pengajuan-kebutuhan-kelas',
