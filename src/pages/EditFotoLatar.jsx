@@ -12,7 +12,7 @@
 import { useState, useRef, useEffect } from "react";
 import Layout from "../components/Layout";
 import HapusLatarDokumen from "./HapusLatarDokumen";
-import PanelPakaian, { CLOTH_DEFAULT, clothKey, drawCloth, sampleSkin, skinSmooth } from "./PakaianSeragam";
+import PanelPakaian, { CLOTH_DEFAULT, clothKey, drawCloth, sampleSkin, skinSmooth } from "../components/PakaianSeragam";
 
 /* ───────────────────────── Konstanta ───────────────────────── */
 
