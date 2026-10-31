@@ -18,6 +18,9 @@ const Siswa = lazy(() => import('../pages/Siswa'))
 const HasilUjian = lazy(() => import('../pages/HasilUjian'))
 const Guru = lazy(() => import('../pages/Guru'))
 const Kelas = lazy(() => import('../pages/Kelas'))
+const TahunAjaran = lazy(() => import('../pages/TahunAjaran'))
+const MutasiSiswa = lazy(() => import('../pages/MutasiSiswa'))
+const Ekstrakurikuler = lazy(() => import('../pages/Ekstrakurikuler'))
 const CatatanSiswa = lazy(() => import('../pages/CatatanSiswa'))
 const DaftarHadirPegawai = lazy(() => import('../pages/DaftarHadirPegawai'))
 const SKPLHKepalaSekolah = lazy(() => import('../pages/SKPLHKepalaSekolah'))
@@ -189,6 +192,10 @@ export default function RoutesSekolah() {
       <Route path="/hasil-ujian" element={<ProtectedRoute><HasilUjian /></ProtectedRoute>} />
       <Route path="/guru" element={<ProtectedRoute adminOnly><Guru /></ProtectedRoute>} />
       <Route path="/kelas" element={<ProtectedRoute adminOnly><Kelas /></ProtectedRoute>} />
+      <Route path="/tahun-ajaran" element={<ProtectedRoute adminOnly><TahunAjaran /></ProtectedRoute>} />
+      <Route path="/mutasi-siswa" element={<ProtectedRoute adminOnly><MutasiSiswa /></ProtectedRoute>} />
+      {/* Ekskul: BUKAN adminOnly, guru pembina mengelola anggotanya (dijaga RLS) */}
+      <Route path="/ekstrakurikuler" element={<ProtectedRoute><Ekstrakurikuler /></ProtectedRoute>} />
       {/* Daftar Hadir Guru & Tendik: BUKAN adminOnly (kontrol edit di dalam komponen) */}
       <Route path="/daftar-hadir-pegawai" element={<ProtectedRoute><DaftarHadirPegawai /></ProtectedRoute>} />
       {/* SK PLH Kepala Sekolah: BUKAN adminOnly — guru bisa lihat & cetak, kontrol edit di dalam komponen (isAdmin) */}
