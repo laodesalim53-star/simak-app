@@ -547,7 +547,7 @@ function buildSubject(item, p) {
       skin = sampleSkin(d, w, h, hs.cx, hs.y + 0.5 * u, Math.max(3, Math.round(hs.headW * 0.04)), hs.headW * 0.27); // warna pipi
     }
   } else box = { x: 0, y: 0, w, h };
-  return { canvas: c, box, isCut, geo, skin };
+  return { canvas: c, box, isCut, geo, skin, cropped: !!p.autoCrop };
 }
 
 /* ───────────────────── Render foto akhir ───────────────────── */
@@ -585,7 +585,12 @@ function renderPhoto(sub, bg, ratioKey, dpi, zoom, ox, oy, cl) {
   const ctx = c.getContext("2d");
   ctx.imageSmoothingQuality = "high";
   drawBackground(ctx, W, H, bg);
-  const { canvas: s, box } = sub;
+  const { canvas: s } = sub;
+  let box = sub.box;
+  // bingkai diperpanjang ke dada supaya lambang dan kancing terlihat
+  if (sub.isCut && sub.cropped && sub.geo && cl && cl.kind !== "none" && cl.chest > 0) {
+    box = { ...box, h: box.h + sub.geo.u * (cl.chest / 100) };
+  }
   let fs, dx, dy;
   if (sub.isCut) {
     // posisi otomatis: puncak kepala ±8% dari atas, bahu rata dengan dasar bingkai
