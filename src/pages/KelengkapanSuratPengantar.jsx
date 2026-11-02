@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import KopSurat from '../components/KopSurat' // sesuaikan path jika KopSurat ada di folder lain
+import FormulirKP4 from '../components/FormulirKP4'
 
 // ============================================================
 // PENGATURAN — sesuaikan bila nama tabel/kolom di Supabase berbeda
@@ -18,6 +19,8 @@ function bacaGuru(g) {
     nuptk: g.nuptk ?? '',
     // dipakai untuk mencari Kepala Sekolah di daftar guru (cadangan)
     jabatan: g.jabatan ?? g.jabatan_guru ?? g.tugas_tambahan ?? g.tugas ?? g.status_jabatan ?? '',
+    // baris asli dari tabel — dipakai Formulir KP4 (tempat/tgl lahir, agama, dst.)
+    raw: g,
   }
 }
 
@@ -34,6 +37,7 @@ const POLA_KEPSEK = /kepala\s*sekolah|kepsek|kasek/i
 
 // ============================================================
 // JENIS SURAT — tinggal tambah satu objek di sini untuk menambah tab baru.
+// Objek dengan kp4: true ditampilkan memakai komponen FormulirKP4.
 // ============================================================
 const KE_BKD = (kab) => `Kepala Badan Kepegawaian Daerah (BKD)${kab ? `\n${kab}` : ''}`
 const KE_DINAS = (kab) => `Kepala Dinas Pendidikan dan Kebudayaan${kab ? `\n${kab}` : ''}`
@@ -46,6 +50,7 @@ const JENIS_SURAT = [
   { key: 'mutasi', label: 'Mutasi / Pindah Tugas', pokok: 'Usul Mutasi / Pindah Tugas.', tujuan: KE_DINAS, keterangan: TERIMA },
   { key: 'cuti', label: 'Cuti', pokok: 'Usul Cuti.', tujuan: KE_DINAS, keterangan: TERIMA },
   { key: 'lainnya', label: 'Lainnya', pokok: '', tujuan: KE_DINAS, keterangan: TERIMA },
+  { key: 'kp4', label: 'Formulir KP4', kp4: true, pokok: '', tujuan: KE_DINAS, keterangan: '' },
 ]
 
 // ============================================================
@@ -247,11 +252,13 @@ export default function KelengkapanSuratPengantar() {
 
   const [jenisKey, setJenisKey] = useState(JENIS_SURAT[0].key)
   const jenis = JENIS_SURAT.find((j) => j.key === jenisKey) || JENIS_SURAT[0]
+  const modeKp4 = Boolean(jenis.kp4)
 
   const [daftarGuru, setDaftarGuru] = useState([])
   const [galatGuru, setGalatGuru] = useState('')
   const [kabupaten, setKabupaten] = useState('')
   const [kecamatan, setKecamatan] = useState('')
+  const [namaSekolah, setNamaSekolah] = useState('')
   const [kepalaProfil, setKepalaProfil] = useState({ nama: '', nip: '' })
 
   const [nomor, setNomor] = useState('')
@@ -273,7 +280,7 @@ export default function KelengkapanSuratPengantar() {
   const [siapCetak, setSiapCetak] = useState(false)
   useEffect(() => setSiapCetak(true), [])
 
-  // Daftar guru + data profil sekolah (kabupaten, kecamatan, kepala sekolah)
+  // Daftar guru + data profil sekolah (kabupaten, kecamatan, nama sekolah, kepala sekolah)
   useEffect(() => {
     if (!sekolahId) return
     let batal = false
@@ -308,6 +315,7 @@ export default function KelengkapanSuratPengantar() {
         if (batal || !data) return
         setKabupaten(formatKabupaten(data.kabupaten))
         setKecamatan(data.kecamatan || '')
+        setNamaSekolah(data.nama_sekolah ?? data.nama ?? '')
         setKepalaProfil(bacaKepalaDariProfil(data))
       })
 
@@ -325,6 +333,17 @@ export default function KelengkapanSuratPengantar() {
 
   const kepala = kepalaKustom ?? kepalaOtomatis.nama
   const nipKepala = nipKepalaKustom ?? kepalaOtomatis.nip
+
+  // Guru pertama yang dipilih pada baris Surat Pengantar -> dipakai mengisi Formulir KP4 otomatis
+  const guruSurat = useMemo(() => {
+    for (const b of baris) {
+      const g = ambilGuruBaris(b, daftarGuru)
+      if (g && g.nama) {
+        return { id: b.guruId, nama: g.nama, nip: g.nip || '', raw: g.raw }
+      }
+    }
+    return null
+  }, [baris, daftarGuru])
 
   // Simpan hanya isian manual agar data otomatis selalu terbaru
   useEffect(() => {
@@ -397,147 +416,167 @@ export default function KelengkapanSuratPengantar() {
         })}
       </div>
 
-      <div className="mt-4 grid gap-6 lg:grid-cols-[380px_minmax(0,1fr)]">
-        {/* Form */}
-        <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Nomor surat">
-              <input className={inputCls} value={nomor} onChange={(e) => setNomor(e.target.value)} placeholder="038 / 19 / 2026" />
-            </Field>
-            <Field label="Tanggal surat">
-              <input type="date" className={inputCls} value={tanggal} onChange={(e) => setTanggal(e.target.value)} />
-            </Field>
-          </div>
-
-          <Field label="Tujuan surat (Yth)">
-            <textarea rows={2} className={inputCls} value={tujuan} onChange={(e) => setTujuanKustom(e.target.value)} />
-          </Field>
-
-          <Field label="Pokok isi surat">
-            <textarea
-              rows={2}
-              className={inputCls}
-              value={pokok}
-              onChange={(e) => setPokokKustom(e.target.value)}
-              placeholder="Tuliskan pokok isi surat"
-            />
-          </Field>
-
-          <div>
-            <p className="mb-1 text-xs font-medium text-slate-600">Guru</p>
-            {galatGuru && <p className="mb-2 rounded bg-amber-50 p-2 text-xs text-amber-800">{galatGuru}</p>}
-            <div className="space-y-3">
-              {baris.map((b, i) => (
-                <div key={b.id} className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-2.5">
-                  <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
-                    <span>Baris {i + 1}</span>
-                    {baris.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => setBaris((lama) => lama.filter((x) => x.id !== b.id))}
-                        className="text-red-600 hover:underline"
-                      >
-                        Hapus
-                      </button>
-                    )}
-                  </div>
-
-                  <select className={inputCls} value={b.guruId} onChange={(e) => ubahBaris(b.id, { guruId: e.target.value })}>
-                    <option value="">— Pilih guru —</option>
-                    {daftarGuru.map((g) => (
-                      <option key={g.id} value={g.id}>
-                        {g.nama}
-                        {g.nip ? ` (${g.nip})` : ''}
-                      </option>
-                    ))}
-                    <option value="__manual">Ketik manual…</option>
-                  </select>
-
-                  {b.guruId === '__manual' && (
-                    <div className="space-y-2">
-                      <input
-                        className={inputCls}
-                        placeholder="Nama lengkap"
-                        value={b.manual.nama}
-                        onChange={(e) => ubahBaris(b.id, { manual: { ...b.manual, nama: e.target.value } })}
-                      />
-                      <div className="grid grid-cols-2 gap-2">
-                        <input
-                          className={inputCls}
-                          placeholder="NIP"
-                          value={b.manual.nip}
-                          onChange={(e) => ubahBaris(b.id, { manual: { ...b.manual, nip: e.target.value } })}
-                        />
-                        <input
-                          className={inputCls}
-                          placeholder="NUPTK"
-                          value={b.manual.nuptk}
-                          onChange={(e) => ubahBaris(b.id, { manual: { ...b.manual, nuptk: e.target.value } })}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  <Field label="Banyaknya">
-                    <input className={inputCls} value={b.banyaknya} onChange={(e) => ubahBaris(b.id, { banyaknya: e.target.value })} />
-                  </Field>
-                </div>
-              ))}
+      {/* ===== Tab surat pengantar biasa ===== */}
+      {!modeKp4 && (
+        <div className="mt-4 grid gap-6 lg:grid-cols-[380px_minmax(0,1fr)]">
+          {/* Form */}
+          <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Nomor surat">
+                <input className={inputCls} value={nomor} onChange={(e) => setNomor(e.target.value)} placeholder="038 / 19 / 2026" />
+              </Field>
+              <Field label="Tanggal surat">
+                <input type="date" className={inputCls} value={tanggal} onChange={(e) => setTanggal(e.target.value)} />
+              </Field>
             </div>
-            <button
-              type="button"
-              onClick={() => setBaris((lama) => [...lama, barisBaru()])}
-              className="mt-2 text-sm font-medium text-blue-700 hover:underline"
-            >
-              + Tambah baris guru
-            </button>
-          </div>
 
-          <Field label="Keterangan">
-            <textarea rows={3} className={inputCls} value={keterangan} onChange={(e) => setKeteranganKustom(e.target.value)} />
-          </Field>
-
-          <div className="space-y-3 border-t border-slate-200 pt-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Penanda tangan</p>
-            <Field label="Ditetapkan di">
-              <input className={inputCls} value={tempat} onChange={(e) => setTempatKustom(e.target.value)} />
+            <Field label="Tujuan surat (Yth)">
+              <textarea rows={2} className={inputCls} value={tujuan} onChange={(e) => setTujuanKustom(e.target.value)} />
             </Field>
-            <Field label="Nama Kepala Sekolah">
-              <input
+
+            <Field label="Pokok isi surat">
+              <textarea
+                rows={2}
                 className={inputCls}
-                value={kepala}
-                onChange={(e) => setKepalaKustom(e.target.value || null)}
-                placeholder="Nama, gelar"
+                value={pokok}
+                onChange={(e) => setPokokKustom(e.target.value)}
+                placeholder="Tuliskan pokok isi surat"
               />
             </Field>
-            <Field label="NIP Kepala Sekolah">
-              <input className={inputCls} value={nipKepala} onChange={(e) => setNipKepalaKustom(e.target.value || null)} />
-            </Field>
-            {(kepalaKustom || nipKepalaKustom) && (
+
+            <div>
+              <p className="mb-1 text-xs font-medium text-slate-600">Guru</p>
+              {galatGuru && <p className="mb-2 rounded bg-amber-50 p-2 text-xs text-amber-800">{galatGuru}</p>}
+              <div className="space-y-3">
+                {baris.map((b, i) => (
+                  <div key={b.id} className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-2.5">
+                    <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
+                      <span>Baris {i + 1}</span>
+                      {baris.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setBaris((lama) => lama.filter((x) => x.id !== b.id))}
+                          className="text-red-600 hover:underline"
+                        >
+                          Hapus
+                        </button>
+                      )}
+                    </div>
+
+                    <select className={inputCls} value={b.guruId} onChange={(e) => ubahBaris(b.id, { guruId: e.target.value })}>
+                      <option value="">— Pilih guru —</option>
+                      {daftarGuru.map((g) => (
+                        <option key={g.id} value={g.id}>
+                          {g.nama}
+                          {g.nip ? ` (${g.nip})` : ''}
+                        </option>
+                      ))}
+                      <option value="__manual">Ketik manual…</option>
+                    </select>
+
+                    {b.guruId === '__manual' && (
+                      <div className="space-y-2">
+                        <input
+                          className={inputCls}
+                          placeholder="Nama lengkap"
+                          value={b.manual.nama}
+                          onChange={(e) => ubahBaris(b.id, { manual: { ...b.manual, nama: e.target.value } })}
+                        />
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            className={inputCls}
+                            placeholder="NIP"
+                            value={b.manual.nip}
+                            onChange={(e) => ubahBaris(b.id, { manual: { ...b.manual, nip: e.target.value } })}
+                          />
+                          <input
+                            className={inputCls}
+                            placeholder="NUPTK"
+                            value={b.manual.nuptk}
+                            onChange={(e) => ubahBaris(b.id, { manual: { ...b.manual, nuptk: e.target.value } })}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <Field label="Banyaknya">
+                      <input className={inputCls} value={b.banyaknya} onChange={(e) => ubahBaris(b.id, { banyaknya: e.target.value })} />
+                    </Field>
+                  </div>
+                ))}
+              </div>
               <button
                 type="button"
-                onClick={() => {
-                  setKepalaKustom(null)
-                  setNipKepalaKustom(null)
-                }}
-                className="text-xs font-medium text-blue-700 hover:underline"
+                onClick={() => setBaris((lama) => [...lama, barisBaru()])}
+                className="mt-2 text-sm font-medium text-blue-700 hover:underline"
               >
-                Kembalikan ke data otomatis
+                + Tambah baris guru
               </button>
-            )}
+            </div>
+
+            <Field label="Keterangan">
+              <textarea rows={3} className={inputCls} value={keterangan} onChange={(e) => setKeteranganKustom(e.target.value)} />
+            </Field>
+
+            <div className="space-y-3 border-t border-slate-200 pt-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Penanda tangan</p>
+              <Field label="Ditetapkan di">
+                <input className={inputCls} value={tempat} onChange={(e) => setTempatKustom(e.target.value)} />
+              </Field>
+              <Field label="Nama Kepala Sekolah">
+                <input
+                  className={inputCls}
+                  value={kepala}
+                  onChange={(e) => setKepalaKustom(e.target.value || null)}
+                  placeholder="Nama, gelar"
+                />
+              </Field>
+              <Field label="NIP Kepala Sekolah">
+                <input className={inputCls} value={nipKepala} onChange={(e) => setNipKepalaKustom(e.target.value || null)} />
+              </Field>
+              {(kepalaKustom || nipKepalaKustom) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setKepalaKustom(null)
+                    setNipKepalaKustom(null)
+                  }}
+                  className="text-xs font-medium text-blue-700 hover:underline"
+                >
+                  Kembalikan ke data otomatis
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Pratinjau */}
+          <div className="overflow-auto rounded-lg bg-slate-200 p-4">
+            <div className="mx-auto w-fit shadow-lg">
+              <LembarSurat layar {...propsLembar} />
+            </div>
           </div>
         </div>
+      )}
 
-        {/* Pratinjau */}
-        <div className="overflow-auto rounded-lg bg-slate-200 p-4">
-          <div className="mx-auto w-fit shadow-lg">
-            <LembarSurat layar {...propsLembar} />
-          </div>
-        </div>
-      </div>
+      {/* ===== Tab Formulir KP4 =====
+          Selalu terpasang (disembunyikan saat tab lain aktif) supaya isian keluarga tidak hilang
+          ketika berpindah tab. Data pegawai, tempat, tanggal, dan kepala sekolah diambil otomatis
+          dari Surat Pengantar. */}
+      <FormulirKP4
+        aktif={modeKp4}
+        daftarGuru={daftarGuru}
+        guruSurat={guruSurat}
+        namaSekolah={namaSekolah}
+        tempatDefault={tempat}
+        tanggalDefault={tanggal}
+        kepalaDefault={kepala}
+        nipKepalaDefault={nipKepala}
+        cssCetak={CSS_CETAK}
+      />
 
-      {/* Salinan khusus cetak, anak langsung <body> supaya halaman lain tidak ikut tercetak */}
-      {siapCetak &&
+      {/* Salinan khusus cetak surat pengantar, anak langsung <body> supaya halaman lain tidak ikut tercetak */}
+      {!modeKp4 &&
+        siapCetak &&
         createPortal(
           <div className="sp-print-root">
             <style>{CSS_CETAK}</style>
