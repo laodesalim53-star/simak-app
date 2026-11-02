@@ -39,9 +39,23 @@ function normalJk(v) {
   return v || ''
 }
 
+// Gabungkan kolom alamat dari tabel guru (alamat_jalan, RT, RW, dusun, desa, kecamatan)
+function gabungAlamat(r) {
+  return [
+    ambil(r, 'alamat_jalan', 'alamat', 'alamat_rumah'),
+    r?.rt ? `RT ${r.rt}` : '',
+    r?.rw ? `RW ${r.rw}` : '',
+    ambil(r, 'nama_dusun'),
+    ambil(r, 'desa_kelurahan'),
+    ambil(r, 'kecamatan'),
+  ]
+    .filter(Boolean)
+    .join(', ')
+}
+
 let urut = 0
 const idBaru = () => ++urut
-const pasanganBaru = () => ({ id: idBaru(), nama: '', tglLahir: '', tglNikah: '', pekerjaan: '', ket: '' })
+const pasanganBaru = () => ({ id: idBaru(), nama: '', nip: '', tglLahir: '', tglNikah: '', pekerjaan: '', ket: '' })
 const anakBaru = () => ({ id: idBaru(), nama: '', tglLahir: '', status: 'Kandung', sekolah: '', ket: '' })
 
 const pegawaiKosong = {
@@ -58,6 +72,7 @@ const pegawaiKosong = {
   unitKerja: null, // null = otomatis dari nama sekolah
   alamat: '',
   statusKawin: 'Kawin',
+  jumlahAnak: '', // info dari data guru (jumlah anak tanggungan)
 }
 
 const SEL = { border: '1px solid #000', padding: '1.5mm 2mm', fontSize: '10.5pt' }
@@ -150,7 +165,10 @@ function LembarKP4({ layar, p, unit, pasangan, anak, tempat, tanggal, kepala, ni
           {barisPasangan.map((r, i) => (
             <tr key={r.id}>
               <td style={{ ...td, textAlign: 'center' }}>{r.nama ? i + 1 : ''}</td>
-              <td style={td}>{r.nama}</td>
+              <td style={td}>
+                {r.nama}
+                {r.nip && <div style={{ fontSize: '9pt' }}>NIP. {r.nip}</div>}
+              </td>
               <td style={td}>{formatTanggal(r.tglLahir)}</td>
               <td style={td}>{formatTanggal(r.tglNikah)}</td>
               <td style={td}>{r.pekerjaan}</td>
@@ -284,8 +302,17 @@ export default function FormulirKP4({
       pendidikan: ambil(r, 'pendidikan_terakhir', 'pendidikan'),
       pangkat: ambil(r, 'pangkat_golongan', 'golongan', 'pangkat', 'pangkat_gol'),
       jabatan: g.jabatan,
-      alamat: ambil(r, 'alamat', 'alamat_rumah'),
+      alamat: gabungAlamat(r),
+      statusKawin: ambil(r, 'status_perkawinan') || 'Kawin',
+      jumlahAnak: ambil(r, 'jumlah_anak_tanggungan'),
     })
+    // Suami/isteri otomatis dari data guru (nama, NIP, pekerjaan)
+    const namaPasangan = ambil(r, 'nama_pasangan')
+    setPasangan([
+      namaPasangan
+        ? { ...pasanganBaru(), nama: namaPasangan, nip: ambil(r, 'nip_pasangan'), pekerjaan: ambil(r, 'pekerjaan_pasangan') }
+        : pasanganBaru(),
+    ])
   }
 
   // Isi data pegawai dari guru yang dipilih pada Surat Pengantar
@@ -293,6 +320,7 @@ export default function FormulirKP4({
     if (!guruSurat) return
     if (guruSurat.id === '__manual') {
       setP({ ...pegawaiKosong, guruId: '__manual', nama: guruSurat.nama || '', nip: guruSurat.nip || '' })
+      setPasangan([pasanganBaru()])
     } else {
       pilihGuru(guruSurat.id)
     }
@@ -392,10 +420,10 @@ export default function FormulirKP4({
           </Field>
           <Field label="Status perkawinan">
             <select className={inputCls} value={p.statusKawin} onChange={(e) => set({ statusKawin: e.target.value })}>
-              <option>Kawin</option>
               <option>Belum Kawin</option>
-              <option>Janda</option>
-              <option>Duda</option>
+              <option>Kawin</option>
+              <option>Cerai Hidup</option>
+              <option>Cerai Mati</option>
             </select>
           </Field>
 
@@ -415,6 +443,7 @@ export default function FormulirKP4({
                   </button>
                 </div>
                 <input className={inputCls} placeholder="Nama" value={x.nama} onChange={(e) => ubahPasangan(x.id, { nama: e.target.value })} />
+                <input className={inputCls} placeholder="NIP (bila PNS)" value={x.nip} onChange={(e) => ubahPasangan(x.id, { nip: e.target.value })} />
                 <div className="grid grid-cols-2 gap-2">
                   <Field label="Tgl. lahir">
                     <input type="date" className={inputCls} value={x.tglLahir} onChange={(e) => ubahPasangan(x.id, { tglLahir: e.target.value })} />
@@ -437,6 +466,11 @@ export default function FormulirKP4({
           {/* Anak */}
           <div className="space-y-2 border-t border-slate-200 pt-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Anak</p>
+            {p.jumlahAnak && (
+              <p className="rounded bg-blue-50 p-2 text-xs text-blue-800">
+                Data guru mencatat jumlah anak tanggungan: <b>{p.jumlahAnak}</b>. Nama dan tanggal lahir anak diisi manual.
+              </p>
+            )}
             {anak.map((x, i) => (
               <div key={x.id} className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-2.5">
                 <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
