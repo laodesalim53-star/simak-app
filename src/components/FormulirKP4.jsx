@@ -24,12 +24,6 @@ function formatTanggal(iso) {
   })
 }
 
-function hariIni() {
-  const d = new Date()
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-
 // Ambil nilai pertama yang terisi dari beberapa kemungkinan nama kolom
 function ambil(raw, ...keys) {
   for (const k of keys) {
@@ -241,11 +235,19 @@ function LembarKP4({ layar, p, unit, pasangan, anak, tempat, tanggal, kepala, ni
 
 // ============================================================
 // Tab: form isian + pratinjau + salinan cetak
+//
+// Props:
+//  - aktif            : true bila tab KP4 sedang dibuka (portal cetak hanya dipasang saat aktif)
+//  - guruSurat        : guru pada Surat Pengantar { id, nama, nip, raw } -> mengisi data pegawai otomatis
+//  - tempatDefault, tanggalDefault, kepalaDefault, nipKepalaDefault : dari Surat Pengantar
 // ============================================================
 export default function FormulirKP4({
+  aktif,
   daftarGuru,
+  guruSurat,
   namaSekolah,
   tempatDefault,
+  tanggalDefault,
   kepalaDefault,
   nipKepalaDefault,
   cssCetak,
@@ -253,7 +255,7 @@ export default function FormulirKP4({
   const [p, setP] = useState(pegawaiKosong)
   const [pasangan, setPasangan] = useState(() => [pasanganBaru()])
   const [anak, setAnak] = useState(() => [anakBaru()])
-  const [tanggal, setTanggal] = useState(hariIni)
+  const [tanggalK, setTanggalK] = useState(null)
   const [tempatK, setTempatK] = useState(null)
   const [kepalaK, setKepalaK] = useState(null)
   const [nipKepalaK, setNipKepalaK] = useState(null)
@@ -286,22 +288,55 @@ export default function FormulirKP4({
     })
   }
 
+  // Isi data pegawai dari guru yang dipilih pada Surat Pengantar
+  function isiDariSurat() {
+    if (!guruSurat) return
+    if (guruSurat.id === '__manual') {
+      setP({ ...pegawaiKosong, guruId: '__manual', nama: guruSurat.nama || '', nip: guruSurat.nip || '' })
+    } else {
+      pilihGuru(guruSurat.id)
+    }
+  }
+
+  // Otomatis terisi setiap kali guru di Surat Pengantar berubah (atau daftar guru selesai dimuat)
+  const kunciGuru = guruSurat ? `${guruSurat.id}|${guruSurat.nama}|${guruSurat.nip}` : ''
+  useEffect(() => {
+    isiDariSurat()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kunciGuru, daftarGuru])
+
   const ubahPasangan = (id, patch) => setPasangan((l) => l.map((x) => (x.id === id ? { ...x, ...patch } : x)))
   const ubahAnak = (id, patch) => setAnak((l) => l.map((x) => (x.id === id ? { ...x, ...patch } : x)))
 
   const unit = p.unitKerja ?? namaSekolah
   const tempat = tempatK ?? tempatDefault
+  const tanggal = tanggalK ?? tanggalDefault
   const kepala = kepalaK ?? kepalaDefault
   const nipKepala = nipKepalaK ?? nipKepalaDefault
 
   const propsLembar = { p, unit, pasangan, anak, tempat, tanggal, kepala, nipKepala }
 
   return (
-    <>
+    <div className={aktif ? undefined : 'hidden'}>
       <div className="mt-4 grid gap-6 lg:grid-cols-[380px_minmax(0,1fr)]">
         {/* Form */}
         <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Data pegawai</p>
+
+          {guruSurat ? (
+            <div className="flex items-start justify-between gap-2 rounded bg-blue-50 p-2 text-xs text-blue-800">
+              <span>
+                Terisi otomatis dari Surat Pengantar (guru: <b>{guruSurat.nama}</b>).
+              </span>
+              <button type="button" onClick={isiDariSurat} className="shrink-0 font-medium underline">
+                Isi ulang
+              </button>
+            </div>
+          ) : (
+            <p className="rounded bg-slate-50 p-2 text-xs text-slate-600">
+              Pilih guru di tab surat pengantar mana pun (bagian “Guru”) agar data terisi otomatis, atau pilih di bawah ini.
+            </p>
+          )}
 
           <Field label="Pilih guru">
             <select className={inputCls} value={p.guruId} onChange={(e) => pilihGuru(e.target.value)}>
@@ -438,7 +473,7 @@ export default function FormulirKP4({
             </button>
           </div>
 
-          {/* Tanda tangan */}
+          {/* Tanda tangan (default dari Surat Pengantar) */}
           <div className="space-y-3 border-t border-slate-200 pt-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tanda tangan</p>
             <div className="grid grid-cols-2 gap-3">
@@ -446,7 +481,7 @@ export default function FormulirKP4({
                 <input className={inputCls} value={tempat} onChange={(e) => setTempatK(e.target.value)} />
               </Field>
               <Field label="Tanggal">
-                <input type="date" className={inputCls} value={tanggal} onChange={(e) => setTanggal(e.target.value)} />
+                <input type="date" className={inputCls} value={tanggal} onChange={(e) => setTanggalK(e.target.value)} />
               </Field>
             </div>
             <Field label="Nama Kepala Sekolah">
@@ -455,6 +490,20 @@ export default function FormulirKP4({
             <Field label="NIP Kepala Sekolah">
               <input className={inputCls} value={nipKepala} onChange={(e) => setNipKepalaK(e.target.value)} />
             </Field>
+            {(tempatK !== null || tanggalK !== null || kepalaK !== null || nipKepalaK !== null) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setTempatK(null)
+                  setTanggalK(null)
+                  setKepalaK(null)
+                  setNipKepalaK(null)
+                }}
+                className="text-xs font-medium text-blue-700 hover:underline"
+              >
+                Kembalikan ke data Surat Pengantar
+              </button>
+            )}
           </div>
         </div>
 
@@ -466,7 +515,8 @@ export default function FormulirKP4({
         </div>
       </div>
 
-      {siapCetak &&
+      {aktif &&
+        siapCetak &&
         createPortal(
           <div className="sp-print-root">
             <style>{cssCetak}</style>
@@ -474,6 +524,6 @@ export default function FormulirKP4({
           </div>,
           document.body
         )}
-    </>
+    </div>
   )
 }
