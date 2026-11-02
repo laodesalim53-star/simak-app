@@ -9,7 +9,7 @@ const TABEL_GURU = 'guru'
 
 // Ganti nilai ini saat ada aturan baru agar pengumuman aturan muncul lagi
 // untuk guru yang sebelumnya sudah menutupnya.
-const VERSI_ATURAN = '2026-10'
+const VERSI_ATURAN = '2026-11'
 
 // Pengingat jadwal mulai tampil sekian bulan sebelum perkiraan jatuh tempo.
 const BULAN_PERINGATAN = 6
@@ -18,6 +18,7 @@ const KUNCI_TUTUP = 'notif_kepegawaian_ditutup'
 
 // Kolom tabel `guru` (sesuai ProfilSaya.jsx):
 //   nama_lengkap, status_kepegawaian, tanggal_cpns, tmt_pengangkatan -> sudah ada
+//   status_perkawinan, nama_pasangan, jumlah_anak_tanggungan         -> sudah ada (dipakai pengingat KP4)
 //   tmt_pangkat, tmt_kgb                                             -> perlu ditambahkan:
 //   alter table guru add column if not exists tmt_pangkat date;
 //   alter table guru add column if not exists tmt_kgb date;
@@ -30,6 +31,10 @@ function bacaGuru(g) {
     tmtKgb: g.tmt_kgb || '',
     tmtPengangkatan: g.tmt_pengangkatan || '',
     tmtCpns: g.tanggal_cpns || '',
+    // data keluarga (dasar pengusulan Formulir KP4)
+    statusKawin: g.status_perkawinan ? String(g.status_perkawinan).trim() : '',
+    namaPasangan: g.nama_pasangan ? String(g.nama_pasangan).trim() : '',
+    jumlahAnak: g.jumlah_anak_tanggungan ?? '',
     // true bila kolom tmt_pangkat/tmt_kgb memang ada di tabel (walau nilainya kosong)
     adaKolomTmt: 'tmt_pangkat' in g || 'tmt_kgb' in g,
   }
@@ -84,6 +89,14 @@ const bulanTahun = (d) => d.toLocaleDateString('id-ID', { month: 'long', year: '
 // ============================================================
 // Isi pengumuman
 // ============================================================
+const BAGIAN_KP4 = {
+  judul: 'Tunjangan keluarga (Formulir KP4)',
+  poin: [
+    'Pengusulan tunjangan keluarga memerlukan Formulir KP4 yang memuat data suami/istri dan anak.',
+    'Setiap ada perubahan data keluarga (menikah, kelahiran anak, perceraian, atau anak tidak lagi memenuhi syarat), mohon perbarui data di Profil Saya dan ajukan Formulir KP4 yang baru melalui operator sekolah.',
+  ],
+}
+
 const ATURAN = {
   pns: {
     judul: 'Info aturan terbaru untuk Guru PNS',
@@ -104,6 +117,7 @@ const ATURAN = {
           'Gaji pokok mengacu pada PP No. 15 Tahun 2019 sebagaimana disesuaikan dengan PP No. 5 Tahun 2024.',
         ],
       },
+      BAGIAN_KP4,
     ],
   },
   pppk: {
@@ -123,12 +137,44 @@ const ATURAN = {
           'Gaji pokok PPPK mengacu pada Perpres No. 11 Tahun 2024.',
         ],
       },
+      BAGIAN_KP4,
     ],
   },
 }
 
 const CATATAN =
   'Informasi ini ringkasan dan bukan pengganti peraturan resmi. Untuk kepastian, rujuk JDIH BKN/KemenPAN-RB atau tanyakan kepada BKD/BKPSDM dan operator kepegawaian.'
+
+// Pengingat pengusulan Formulir KP4: muncul bila data keluarga pada data guru
+// belum lengkap (guru belum mengisi). Tidak bergantung pada tanggal/TMT.
+// Aturan "belum lengkap":
+//   - status perkawinan kosong
+//   - status "Kawin" tetapi nama suami/istri kosong
+//   - status selain "Belum Kawin" tetapi jumlah anak tanggungan kosong (isi 0 bila tidak ada anak)
+function pengingatKp4(g) {
+  const status = g.statusKawin.toLowerCase()
+  const kurang = []
+  if (!status) kurang.push({ kode: 'status', label: 'status perkawinan' })
+  if (status === 'kawin' && !g.namaPasangan) kurang.push({ kode: 'pasangan', label: 'data suami/istri' })
+  if (status !== 'belum kawin' && (g.jumlahAnak === '' || g.jumlahAnak === null)) {
+    kurang.push({ kode: 'anak', label: 'jumlah anak tanggungan' })
+  }
+  if (!kurang.length) return null
+
+  return {
+    // id memuat kode data yang kurang: bila guru melengkapi sebagian lalu masih ada kekurangan lain,
+    // pengingat muncul lagi meski sebelumnya ditutup.
+    id: `${g.id}-kp4-${kurang.map((k) => k.kode).join('+')}`,
+    tahap: 'segera',
+    perkiraan: false,
+    judul: 'Formulir KP4: data keluarga belum lengkap',
+    teks: `Data keluarga berikut belum terisi di profil Anda: ${kurang
+      .map((k) => k.label)
+      .join(', ')}. Lengkapi di menu Profil Saya, lalu hubungi operator sekolah untuk membuat dan mengusulkan Formulir KP4 (tunjangan keluarga).`,
+    catatan:
+      'Pengingat ini muncul karena data keluarga pada data guru belum lengkap. Bila belum memiliki anak, isi jumlah anak tanggungan dengan 0.',
+  }
+}
 
 // Pengingat jadwal pribadi dari data TMT guru.
 // `perkiraan` = true bila acuannya bukan TMT terakhir (mis. TMT pengangkatan/CPNS),
@@ -176,6 +222,10 @@ function susunPengingat(g, jenis, sekarang) {
     if (tmtKgb) tambah('kgb', 'Kenaikan Gaji Berkala', tambahTahun(tmtKgb, 2))
     else if (tmtPengangkatan) tambah('kgb', 'Kenaikan Gaji Berkala', tambahTahun(tmtPengangkatan, 2), true)
   }
+
+  // Pengusulan Formulir KP4 (PNS dan PPPK): bila data keluarga belum diisi
+  const kp4 = pengingatKp4(g)
+  if (kp4) hasil.push(kp4)
 
   const adaTmt =
     jenis === 'pns'
@@ -342,9 +392,10 @@ export default function PengumumanAturanKepegawaian() {
         >
           <p className="mt-1 text-sm">{p.teks}</p>
           <p className="mt-2 text-xs text-slate-500">
-            {p.perkiraan
-              ? 'Perkiraan awal dari TMT pengangkatan/CPNS. Jika KGB sudah pernah diproses, mohon perbarui data TMT Anda atau hubungi operator.'
-              : 'Perkiraan dihitung dari TMT pada data guru; angka kredit dan penilaian kinerja belum diperhitungkan.'}
+            {p.catatan ??
+              (p.perkiraan
+                ? 'Perkiraan awal dari TMT pengangkatan/CPNS. Jika KGB sudah pernah diproses, mohon perbarui data TMT Anda atau hubungi operator.'
+                : 'Perkiraan dihitung dari TMT pada data guru; angka kredit dan penilaian kinerja belum diperhitungkan.')}
           </p>
         </Kartu>
       ))}
