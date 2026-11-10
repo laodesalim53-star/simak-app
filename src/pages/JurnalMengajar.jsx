@@ -8,6 +8,22 @@ import { cariMateriDefault } from '../lib/pilihanSilabus'
 import { JAM_KE, KEGIATAN, HAMBATAN, TINDAK_LANJUT } from '../lib/pilihanJurnal'
 import { Loader2, Save, BookOpen, Trash2, Printer, Pencil, X, RefreshCw } from 'lucide-react'
 
+// Pilihan cepat untuk komponen baru (tidak perlu mengubah pilihanJurnal.js)
+const METODE = [
+  'Ceramah interaktif', 'Diskusi kelompok', 'Tanya jawab', 'Demonstrasi',
+  'Penugasan', 'Praktik langsung', 'Bermain peran', 'Pembelajaran berbasis proyek',
+]
+
+const PENILAIAN = [
+  'Observasi', 'Tanya jawab lisan', 'Tes tertulis', 'Penilaian unjuk kerja',
+  'Penilaian hasil karya', 'Penugasan', 'Penilaian diri',
+]
+
+const DIMENSI_PROFIL = [
+  'Keimanan dan ketakwaan', 'Kewargaan', 'Penalaran kritis', 'Kreativitas',
+  'Kolaborasi', 'Kemandirian', 'Kesehatan', 'Komunikasi',
+]
+
 const hariIni = () => new Date().toISOString().slice(0, 10)
 
 const KOSONG = () => ({
@@ -16,6 +32,11 @@ const KOSONG = () => ({
   mata_pelajaran: '',
   jam_ke: '',
   materi: '',
+  capaian_pembelajaran: '',
+  tujuan_pembelajaran: '',
+  metode: '',
+  penilaian: '',
+  dimensi_profil: '',
   kegiatan: '',
   hambatan: '',
   tindak_lanjut: '',
@@ -52,6 +73,30 @@ async function ambilKehadiran(kelasId, tanggal) {
   return { hadir: n('hadir'), izin: n('izin'), sakit: n('sakit'), alpa: n('alpa') }
 }
 
+// Ambil Capaian Pembelajaran bawaan untuk mapel.
+// Struktur CP_DEFAULT bisa berupa string, array, atau objek per kelas/fase.
+function cpUntuk(mapel, namaKelas) {
+  const key = Object.keys(CP_DEFAULT).find(
+    (k) => k.toLowerCase() === (mapel || '').trim().toLowerCase()
+  )
+  if (!key) return ''
+  const v = CP_DEFAULT[key]
+  if (typeof v === 'string') return v
+  if (Array.isArray(v)) return v.join('\n')
+  if (v && typeof v === 'object') {
+    const cocok = Object.keys(v).find((k) => namaKelas && String(namaKelas).includes(k))
+    const isi = cocok ? v[cocok] : Object.values(v).find((x) => typeof x === 'string' || Array.isArray(x))
+    return Array.isArray(isi) ? isi.join('\n') : isi || ''
+  }
+  return ''
+}
+
+// Tujuan pembelajaran otomatis dari materi
+function tujuanDariMateri(materi) {
+  const m = (materi || '').trim()
+  return m ? `Peserta didik mampu memahami dan menerapkan materi: ${m}` : ''
+}
+
 const LABEL = 'block text-xs font-semibold text-ink-700/60 mb-1'
 
 export default function JurnalMengajar() {
@@ -71,8 +116,14 @@ export default function JurnalMengajar() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [pesan, setPesan] = useState('')
+  // Kolom yang sudah diedit manual oleh guru: tidak ditimpa isian otomatis lagi
+  const [disentuh, setDisentuh] = useState({})
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
+  const setManual = (k, v) => {
+    setDisentuh((d) => ({ ...d, [k]: true }))
+    set(k, v)
+  }
 
   // Admin: daftar guru untuk filter riwayat
   useEffect(() => {
@@ -168,6 +219,27 @@ export default function JurnalMengajar() {
     return cariMateriDefault(form.mata_pelajaran, namaKelasForm) || []
   }, [silabusKelas, form.mata_pelajaran, namaKelasForm])
 
+  // Capaian Pembelajaran otomatis saat mata pelajaran / kelas berubah
+  useEffect(() => {
+    if (editId || disentuh.capaian_pembelajaran) return
+    setForm((f) => ({ ...f, capaian_pembelajaran: cpUntuk(f.mata_pelajaran, namaKelasForm) }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.mata_pelajaran, namaKelasForm, editId])
+
+  // Materi otomatis: kalau masih kosong, isi dengan saran pertama dari silabus
+  useEffect(() => {
+    if (editId || disentuh.materi || form.materi || saranMateri.length === 0) return
+    setForm((f) => ({ ...f, materi: saranMateri[0] }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saranMateri, editId, form.materi])
+
+  // Tujuan Pembelajaran otomatis dari materi
+  useEffect(() => {
+    if (editId || disentuh.tujuan_pembelajaran) return
+    setForm((f) => ({ ...f, tujuan_pembelajaran: tujuanDariMateri(f.materi) }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.materi, editId])
+
   async function hitungUlangKehadiran() {
     if (!form.kelas_id) {
       setPesan('Pilih kelas dulu.')
@@ -200,6 +272,11 @@ export default function JurnalMengajar() {
       mata_pelajaran: form.mata_pelajaran.trim() || null,
       jam_ke: form.jam_ke.trim() || null,
       materi: form.materi.trim(),
+      capaian_pembelajaran: form.capaian_pembelajaran.trim() || null,
+      tujuan_pembelajaran: form.tujuan_pembelajaran.trim() || null,
+      metode: form.metode.trim() || null,
+      penilaian: form.penilaian.trim() || null,
+      dimensi_profil: form.dimensi_profil.trim() || null,
       kegiatan: form.kegiatan.trim() || null,
       hambatan: form.hambatan.trim() || null,
       tindak_lanjut: form.tindak_lanjut.trim() || null,
@@ -218,7 +295,14 @@ export default function JurnalMengajar() {
     }
     setPesan(editId ? 'Perubahan tersimpan.' : 'Jurnal tersimpan.')
     setEditId(null)
-    setForm((f) => ({ ...KOSONG(), tanggal: f.tanggal, kelas_id: f.kelas_id, mata_pelajaran: f.mata_pelajaran }))
+    setDisentuh({})
+    setForm((f) => ({
+      ...KOSONG(),
+      tanggal: f.tanggal,
+      kelas_id: f.kelas_id,
+      mata_pelajaran: f.mata_pelajaran,
+      capaian_pembelajaran: f.capaian_pembelajaran,
+    }))
     setKehadiranKey((k) => k + 1)
     muatJurnal()
   }
@@ -232,6 +316,11 @@ export default function JurnalMengajar() {
       mata_pelajaran: j.mata_pelajaran || '',
       jam_ke: j.jam_ke || '',
       materi: j.materi || '',
+      capaian_pembelajaran: j.capaian_pembelajaran || '',
+      tujuan_pembelajaran: j.tujuan_pembelajaran || '',
+      metode: j.metode || '',
+      penilaian: j.penilaian || '',
+      dimensi_profil: j.dimensi_profil || '',
       kegiatan: j.kegiatan || '',
       hambatan: j.hambatan || '',
       tindak_lanjut: j.tindak_lanjut || '',
@@ -242,6 +331,7 @@ export default function JurnalMengajar() {
 
   function batalUbah() {
     setEditId(null)
+    setDisentuh({})
     setForm((f) => ({ ...KOSONG(), kelas_id: f.kelas_id }))
     setPesan('')
   }
@@ -267,6 +357,7 @@ export default function JurnalMengajar() {
     <Layout title="Jurnal Mengajar" subtitle="Catat kegiatan belajar mengajar harian">
       <style>{`
         @media print {
+          @page { size: A4 landscape; }
           body * { visibility: hidden; }
           #print-area-jurnal, #print-area-jurnal * { visibility: visible; }
           #print-area-jurnal { display: block !important; position: absolute; left: 0; top: 0; width: 100%; padding: 24px; }
@@ -354,16 +445,61 @@ export default function JurnalMengajar() {
           </div>
 
           <div className="mt-4">
-            <label className={LABEL}>Materi / tujuan pembelajaran</label>
-            <textarea className="input-field w-full" rows={2} value={form.materi} onChange={(e) => set('materi', e.target.value)} />
+            <label className={LABEL}>Capaian Pembelajaran (otomatis dari mata pelajaran)</label>
+            <textarea
+              className="input-field w-full"
+              rows={3}
+              value={form.capaian_pembelajaran}
+              onChange={(e) => setManual('capaian_pembelajaran', e.target.value)}
+            />
+          </div>
+
+          <div className="mt-4">
+            <label className={LABEL}>Materi</label>
+            <textarea
+              className="input-field w-full"
+              rows={2}
+              value={form.materi}
+              onChange={(e) => setManual('materi', e.target.value)}
+            />
             <PilihanCepat
               mode="single"
               pilihan={saranMateri}
               nilai={form.materi}
-              onChange={(v) => set('materi', v)}
+              onChange={(v) => setManual('materi', v)}
               kosongPesan="Pilih mata pelajaran agar saran materi dari silabus muncul."
             />
           </div>
+
+          <div className="mt-4">
+            <label className={LABEL}>Tujuan Pembelajaran (otomatis dari materi)</label>
+            <textarea
+              className="input-field w-full"
+              rows={2}
+              value={form.tujuan_pembelajaran}
+              onChange={(e) => setManual('tujuan_pembelajaran', e.target.value)}
+            />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 mt-4">
+            <div>
+              <label className={LABEL}>Metode</label>
+              <textarea className="input-field w-full" rows={2} value={form.metode} onChange={(e) => set('metode', e.target.value)} />
+              <PilihanCepat pilihan={METODE} nilai={form.metode} onChange={(v) => set('metode', v)} pemisah="; " />
+            </div>
+            <div>
+              <label className={LABEL}>Penilaian</label>
+              <textarea className="input-field w-full" rows={2} value={form.penilaian} onChange={(e) => set('penilaian', e.target.value)} />
+              <PilihanCepat pilihan={PENILAIAN} nilai={form.penilaian} onChange={(v) => set('penilaian', v)} pemisah="; " />
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <label className={LABEL}>Dimensi Profil Lulusan</label>
+            <textarea className="input-field w-full" rows={2} value={form.dimensi_profil} onChange={(e) => set('dimensi_profil', e.target.value)} />
+            <PilihanCepat pilihan={DIMENSI_PROFIL} nilai={form.dimensi_profil} onChange={(v) => set('dimensi_profil', v)} pemisah="; " />
+          </div>
+
           <div className="mt-4">
             <label className={LABEL}>Kegiatan pembelajaran</label>
             <textarea className="input-field w-full" rows={2} value={form.kegiatan} onChange={(e) => set('kegiatan', e.target.value)} />
@@ -462,6 +598,11 @@ export default function JurnalMengajar() {
                       )}
                     </div>
                   </div>
+                  {j.capaian_pembelajaran && <p className="text-sm text-ink-700/70 mt-2"><span className="font-medium">Capaian:</span> {j.capaian_pembelajaran}</p>}
+                  {j.tujuan_pembelajaran && <p className="text-sm text-ink-700/70 mt-1"><span className="font-medium">Tujuan:</span> {j.tujuan_pembelajaran}</p>}
+                  {j.metode && <p className="text-sm text-ink-700/70 mt-1"><span className="font-medium">Metode:</span> {j.metode}</p>}
+                  {j.penilaian && <p className="text-sm text-ink-700/70 mt-1"><span className="font-medium">Penilaian:</span> {j.penilaian}</p>}
+                  {j.dimensi_profil && <p className="text-sm text-ink-700/70 mt-1"><span className="font-medium">Dimensi profil:</span> {j.dimensi_profil}</p>}
                   {j.kegiatan && <p className="text-sm mt-2">{j.kegiatan}</p>}
                   {j.hambatan && <p className="text-sm text-ink-700/70 mt-1"><span className="font-medium">Hambatan:</span> {j.hambatan}</p>}
                   {j.tindak_lanjut && <p className="text-sm text-ink-700/70 mt-1"><span className="font-medium">Tindak lanjut:</span> {j.tindak_lanjut}</p>}
@@ -481,10 +622,10 @@ export default function JurnalMengajar() {
         <p style={{ fontSize: '13px', marginBottom: '16px', color: '#333' }}>
           {namaPencetak} · {bulanLabel(bulan)}
         </p>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
           <thead>
             <tr>
-              {['No', 'Tanggal', 'Kelas', 'Mapel', 'Jam', 'Materi', 'Kegiatan', 'H', 'I', 'S', 'A'].map((h) => (
+              {['No', 'Tanggal', 'Kelas', 'Mapel', 'Jam', 'Materi', 'Tujuan', 'Metode', 'Kegiatan', 'Penilaian', 'H', 'I', 'S', 'A'].map((h) => (
                 <th key={h} style={{ border: '1px solid #000', padding: '5px 6px', textAlign: 'left' }}>{h}</th>
               ))}
             </tr>
@@ -500,7 +641,10 @@ export default function JurnalMengajar() {
                 <td style={{ border: '1px solid #000', padding: '5px 6px' }}>{j.mata_pelajaran || '-'}</td>
                 <td style={{ border: '1px solid #000', padding: '5px 6px' }}>{j.jam_ke || '-'}</td>
                 <td style={{ border: '1px solid #000', padding: '5px 6px' }}>{j.materi}</td>
+                <td style={{ border: '1px solid #000', padding: '5px 6px' }}>{j.tujuan_pembelajaran || '-'}</td>
+                <td style={{ border: '1px solid #000', padding: '5px 6px' }}>{j.metode || '-'}</td>
                 <td style={{ border: '1px solid #000', padding: '5px 6px' }}>{j.kegiatan || '-'}</td>
+                <td style={{ border: '1px solid #000', padding: '5px 6px' }}>{j.penilaian || '-'}</td>
                 <td style={{ border: '1px solid #000', padding: '5px 6px' }}>{j.hadir}</td>
                 <td style={{ border: '1px solid #000', padding: '5px 6px' }}>{j.izin}</td>
                 <td style={{ border: '1px solid #000', padding: '5px 6px' }}>{j.sakit}</td>
