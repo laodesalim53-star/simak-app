@@ -4,7 +4,18 @@ import QrScanner from 'qr-scanner'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import { APP } from '../lib/appConfig'
-import { Loader2, LogIn, Eye, EyeOff, Send, Check, ArrowLeft, ScanLine } from 'lucide-react'
+import {
+  Loader2,
+  LogIn,
+  Eye,
+  EyeOff,
+  Send,
+  Check,
+  ArrowLeft,
+  ScanLine,
+  Upload,
+  KeyRound,
+} from 'lucide-react'
 
 // Awalan isi QR masuk pribadi (dibuat di halaman /qr-masuk-saya).
 // Harus sama dengan QR_PREFIX di QrMasukSaya.jsx.
@@ -177,9 +188,81 @@ export default function Login() {
   const [kamera, setKamera] = useState('mulai') // mulai | siap | ditolak | proses
   const [scanUlang, setScanUlang] = useState(0)
 
+  // Input QR lain (gambar & kode manual)
+  const sibukRef = useRef(false) // mencegah dua proses masuk berjalan bersamaan
+  const fileRef = useRef(null)
+  const [kodeManual, setKodeManual] = useState('')
+  const [prosesKode, setProsesKode] = useState(false)
+
   function gagal(pesan) {
     setError(pesan)
     setShake((s) => s + 1)
+  }
+
+  // Satu pintu untuk semua cara input QR (kamera, gambar, kode teks):
+  // tukar kode → token → sesi. Mengembalikan true bila berhasil. Bila
+  // berhasil, `session` terisi → <Navigate> di bawah membawa pengguna masuk.
+  async function masukDenganKode(kode) {
+    const { data, error: errFn } = await supabase.functions.invoke('qr-masuk', {
+      body: { aksi: 'masuk', kode },
+    })
+    if (errFn || !data?.token_hash) {
+      gagal('QR tidak dikenali atau sudah diganti. Gunakan QR yang benar.')
+      return false
+    }
+    const { error: errOtp } = await supabase.auth.verifyOtp({
+      token_hash: data.token_hash,
+      type: 'magiclink',
+    })
+    if (errOtp) {
+      gagal('Masuk lewat QR gagal. Silakan coba lagi.')
+      return false
+    }
+    return true
+  }
+
+  // Input dari gambar (galeri / screenshot)
+  async function handlePilihGambar(e) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // supaya gambar yang sama bisa dipilih ulang
+    if (!file || sibukRef.current) return
+    sibukRef.current = true
+    setProsesKode(true)
+    setError('')
+    let berhasil = false
+    try {
+      const hasil = await QrScanner.scanImage(file, { returnDetailedScanResult: true })
+      const teks = hasil?.data || ''
+      if (!teks.startsWith(QR_PREFIX)) {
+        gagal('Gambar ini bukan QR masuk SIMAK.')
+      } else {
+        berhasil = await masukDenganKode(teks.slice(QR_PREFIX.length))
+      }
+    } catch {
+      gagal('QR tidak terbaca di gambar itu. Pakai gambar yang jelas dan tidak terpotong.')
+    } finally {
+      setProsesKode(false)
+      if (!berhasil) sibukRef.current = false
+    }
+  }
+
+  // Input dari kode teks (tempel, ketik, atau alat scan barcode "keyboard")
+  async function handleKodeManual(e) {
+    e.preventDefault()
+    if (sibukRef.current) return
+    const teks = kodeManual.trim()
+    const kode = teks.startsWith(QR_PREFIX) ? teks.slice(QR_PREFIX.length) : teks
+    if (kode.length < 20) {
+      gagal('Kode tidak lengkap. Tempel kode QR secara utuh.')
+      return
+    }
+    sibukRef.current = true
+    setProsesKode(true)
+    setError('')
+    const berhasil = await masukDenganKode(kode)
+    setProsesKode(false)
+    if (berhasil) setKodeManual('')
+    else sibukRef.current = false
   }
 
   useEffect(() => {
@@ -198,8 +281,8 @@ export default function Login() {
   // (scanner.destroy) saat pindah mode atau halaman ditutup.
   useEffect(() => {
     if (mode !== 'scan' || !videoRef.current) return
-    let sibuk = false
     let jeda
+    sibukRef.current = false
     setError('')
     setKamera('mulai')
 
@@ -207,33 +290,18 @@ export default function Login() {
       videoRef.current,
       async (hasil) => {
         const teks = hasil?.data || ''
-        if (sibuk || !teks.startsWith(QR_PREFIX)) return
-        sibuk = true
+        if (sibukRef.current || !teks.startsWith(QR_PREFIX)) return
+        sibukRef.current = true
         scanner.stop()
         setKamera('proses')
 
-        const { data, error: errFn } = await supabase.functions.invoke('qr-masuk', {
-          body: { aksi: 'masuk', kode: teks.slice(QR_PREFIX.length) },
-        })
-        if (errFn || !data?.token_hash) {
-          gagal('QR tidak dikenali atau sudah diganti. Arahkan ke QR yang benar.')
+        const berhasil = await masukDenganKode(teks.slice(QR_PREFIX.length))
+        if (!berhasil) {
           jeda = setTimeout(() => {
-            sibuk = false
+            sibukRef.current = false
             setKamera('siap')
             scanner.start().catch(() => setKamera('ditolak'))
           }, 2000)
-          return
-        }
-
-        const { error: errOtp } = await supabase.auth.verifyOtp({
-          token_hash: data.token_hash,
-          type: 'magiclink',
-        })
-        if (errOtp) {
-          gagal('Masuk lewat QR gagal. Silakan coba lagi.')
-          sibuk = false
-          setKamera('siap')
-          scanner.start().catch(() => setKamera('ditolak'))
         }
         // Bila berhasil: session terisi → <Navigate> di bawah membawa pengguna masuk.
       },
@@ -267,6 +335,7 @@ export default function Login() {
     setError('')
     setInfo('')
     setTampilSandi(false)
+    setKodeManual('')
   }
 
   async function handleSubmit(e) {
@@ -333,7 +402,15 @@ export default function Login() {
           ? 'Masuk dengan kode QR'
           : 'Selamat datang'
 
-  const onSubmit = mode === 'lupa' ? handleLupa : mode === 'baru' ? handleBaru : handleSubmit
+  const onSubmit =
+    mode === 'lupa'
+      ? handleLupa
+      : mode === 'baru'
+        ? handleBaru
+        : mode === 'scan'
+          ? handleKodeManual
+          : handleSubmit
+
   // Pesan galat login biasa, atau pesan "akun ini bukan milik aplikasi ini"
   // dari AuthContext (galatTenant).
   const pesanGalat = error || galatTenant
@@ -470,7 +547,7 @@ export default function Login() {
               <p className="login-hint">Arahkan kamera ke QR masuk pribadi Anda.</p>
               <div className="relative mx-auto w-full max-w-[260px] aspect-square overflow-hidden rounded-xl bg-black">
                 <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
-                {(kamera === 'mulai' || kamera === 'proses') && (
+                {(kamera === 'mulai' || kamera === 'proses' || prosesKode) && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/50">
                     <Loader2 className="animate-spin text-white" />
                   </div>
@@ -489,6 +566,53 @@ export default function Login() {
                   .
                 </p>
               )}
+
+              {/* Input QR lewat gambar (galeri / screenshot) */}
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handlePilihGambar}
+              />
+              <button
+                type="button"
+                className="login-link-btn"
+                disabled={prosesKode}
+                onClick={() => fileRef.current?.click()}
+              >
+                <Upload size={14} className="inline -mt-0.5 mr-1" />
+                Pilih gambar QR dari galeri
+              </button>
+
+              {/* Input QR lewat kode teks (tempel / alat scan barcode USB) */}
+              <div className="text-left space-y-1.5 pt-1">
+                <label htmlFor="login-kode" className="login-eyebrow block">
+                  Atau tempel / scan kode
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    id="login-kode"
+                    name="kode-qr"
+                    type="text"
+                    autoComplete="off"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    className="login-field flex-1 min-w-0"
+                    placeholder="simak-qr:..."
+                    value={kodeManual}
+                    onChange={(e) => setKodeManual(e.target.value)}
+                  />
+                  <button
+                    type="submit"
+                    className="login-btn px-3"
+                    disabled={prosesKode || !kodeManual.trim()}
+                    aria-label="Masuk dengan kode"
+                  >
+                    <KeyRound size={16} />
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -754,6 +878,7 @@ export default function Login() {
           cursor: pointer;
         }
         .login-link-btn:hover { color: #fff; text-decoration: underline; }
+        .login-link-btn:disabled { opacity: 0.6; cursor: default; text-decoration: none; }
 
         .login-error { color: #ffb4b4; }
         .login-info { color: #86efac; line-height: 1.5; }
