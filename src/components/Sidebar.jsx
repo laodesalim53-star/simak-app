@@ -1,5 +1,5 @@
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   X,
   LayoutDashboard,
@@ -756,6 +756,7 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
     sekolahId,
   } = useAuth()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   const fotoUrl = getFotoUrl(profil?.foto_profil_path)
   const namaTampil = profil?.nama_lengkap || session?.user?.email || 'Pengguna'
 
@@ -787,13 +788,51 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
     }
   }, [open])
 
+  // BARU (HP): geser ke kiri untuk menutup drawer. Hanya dihitung kalau
+  // gerakan dominan horizontal (bukan menggulung menu ke atas/bawah).
+  const sentuhAwal = useRef(null)
+
+  function onTouchStart(e) {
+    const t = e.touches[0]
+    sentuhAwal.current = { x: t.clientX, y: t.clientY }
+  }
+
+  function onTouchEnd(e) {
+    const m = sentuhAwal.current
+    sentuhAwal.current = null
+    if (!m || !open || typeof window === 'undefined' || window.innerWidth >= 768) return
+    const t = e.changedTouches[0]
+    const dx = t.clientX - m.x
+    const dy = t.clientY - m.y
+    if (dx < -60 && Math.abs(dx) > Math.abs(dy) * 1.5) onClose()
+  }
+
+  // BARU: tombol Esc menutup drawer (berguna juga untuk keyboard eksternal di tablet).
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, onClose])
+
+  // BARU (HP): saat drawer dibuka, gulung otomatis ke menu yang sedang aktif
+  // supaya tidak tersembunyi di luar layar pada daftar menu yang panjang.
+  const navRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    const t = setTimeout(() => {
+      navRef.current?.querySelector('a[aria-current="page"]')?.scrollIntoView({ block: 'center' })
+    }, 320) // tunggu animasi drawer selesai
+    return () => clearTimeout(t)
+  }, [open])
+
   // PERBAIKAN TAMPILAN: sidebar admin punya ~20 menu ditumpuk vertikal,
   // sulit di-scan. Grup berlabel (Akademik, Keuangan & Aset, Administrasi,
   // dst) sekarang bisa di-collapse/expand per grup lewat header grup yang
   // bisa diklik. Grup tanpa label (menu utama paling atas) selalu terbuka.
-  // Default semua grup terbuka (tidak ada yang tertutup) supaya perilaku
-  // awal tidak berubah drastis — pengguna tinggal ciutkan grup yang jarang
-  // dipakai.
+  // Di desktop default semua grup terbuka; di HP grup yang tidak berisi
+  // halaman aktif ditutup di awal (lihat efek di bawah groupsAdmin).
   const [grupTertutup, setGrupTertutup] = useState({})
 
   function toggleGrup(label) {
@@ -1078,6 +1117,23 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
   // "QR Masuk Saya" disisipkan tepat di bawah "Profil Saya" untuk semua peran.
   const groupsAdmin = groupsAdminAsli.map((g) => ({ ...g, links: sisipkanMenuQr(g.links) }))
 
+  // BARU (HP): di layar kecil, grup menu admin yang tidak berisi halaman
+  // aktif ditutup di awal supaya daftar tidak terlalu panjang. Hanya jalan
+  // saat isAdmin berubah (setelah profil selesai dimuat), jadi grup yang
+  // dibuka manual oleh pengguna tidak ikut tertutup lagi.
+  useEffect(() => {
+    if (typeof window === 'undefined' || window.innerWidth >= 768 || !isAdmin) return
+    const cocok = (p) => pathname === p || pathname.startsWith(`${p}/`)
+    const tertutup = {}
+    groupsAdmin.forEach((g) => {
+      if (!g.label) return
+      const adaAktif = g.links.some((l) => cocok(l.to) || l.aktifJuga?.some(cocok))
+      tertutup[g.label] = !adaAktif
+    })
+    setGrupTertutup(tertutup)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin])
+
   const linksGuru = sisipkanMenuQr(
     TIPE === 'kantor'
       ? getLinksKantorPegawai(jumlahPesanBelumDibaca)
@@ -1093,11 +1149,13 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
 
   return (
     <>
-      {/* Overlay gelap di belakang drawer — hanya tampil di HP saat menu dibuka */}
+      {/* Overlay gelap di belakang drawer — hanya tampil di HP saat menu dibuka.
+          PERBAIKAN HP: backdrop-blur dihapus karena membuat animasi drawer
+          patah-patah di HP kelas menengah ke bawah. */}
       {open && (
         <div
           onClick={onClose}
-          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[1px] md:hidden"
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
           aria-hidden="true"
         />
       )}
@@ -1109,11 +1167,16 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
           bawah tertutup bilah browser. Class h-screen dibiarkan sebagai
           cadangan untuk browser lama yang belum mengenal dvh.
         - tap highlight abu-abu bawaan Android dimatikan.
+        PERBAIKAN HP: saat drawer tertutup, aside diberi `invisible` (hanya
+        di layar kecil) supaya menu tidak bisa difokus lewat keyboard /
+        pembaca layar. Geser ke kiri menutup drawer.
       */}
       <aside
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
         style={{ height: '100dvh', background: 'var(--sidebar-solid)', borderColor: 'var(--sidebar-border)' }}
-        className={`w-72 max-w-[85vw] md:w-64 shrink-0 text-white flex flex-col h-screen fixed md:sticky top-0 left-0 z-50 border-r transition-transform duration-300 ease-out [-webkit-tap-highlight-color:transparent]
-        ${open ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}
+        className={`w-72 max-w-[85vw] md:w-64 shrink-0 text-white flex flex-col h-screen fixed md:sticky top-0 left-0 z-50 border-r transition-[transform,visibility] duration-300 ease-out [-webkit-tap-highlight-color:transparent]
+        ${open ? 'translate-x-0 visible' : '-translate-x-full invisible md:visible'} md:translate-x-0`}
       >
         <div
           style={{ paddingTop: 'calc(1.25rem + env(safe-area-inset-top, 0px))', background: 'var(--sidebar-header-gradient)' }}
@@ -1214,9 +1277,11 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
             tertutup bilah navigasi/gestur Android.
         */}
         <div className="relative flex-1 min-h-0" style={{ background: 'var(--sidebar-body-gradient)' }}>
-          {/* Motif batik area menu — gaya berbeda dari header (kawung/diamond, bukan lingkaran) */}
+          {/* Motif batik area menu — gaya berbeda dari header (kawung/diamond, bukan lingkaran).
+              PERBAIKAN HP: disembunyikan di layar kecil (pattern SVG satu layar
+              penuh membebani GPU HP kelas menengah ke bawah). */}
           <svg
-            className="absolute inset-0 w-full h-full opacity-[0.22] pointer-events-none"
+            className="hidden md:block absolute inset-0 w-full h-full opacity-[0.22] pointer-events-none"
             xmlns="http://www.w3.org/2000/svg"
           >
             <defs>
@@ -1236,6 +1301,7 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
           </svg>
 
           <nav
+            ref={navRef}
             style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
             className="relative h-full overflow-y-auto overscroll-contain pt-4 px-3"
           >
@@ -1248,7 +1314,7 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
                       <button
                         type="button"
                         onClick={() => toggleGrup(group.label)}
-                        className="w-full flex items-center justify-between px-3 mb-1.5 py-1 text-[11px] font-semibold tracking-wider uppercase text-white/50 hover:text-white/80 transition-colors touch-manipulation"
+                        className="w-full flex items-center justify-between px-3 mb-1.5 py-2.5 md:py-1 text-[11px] font-semibold tracking-wider uppercase text-white/50 active:text-white md:hover:text-white/80 transition-colors touch-manipulation"
                       >
                         <span>{group.label}</span>
                         <ChevronDown
