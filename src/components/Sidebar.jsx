@@ -78,8 +78,11 @@ import { APP } from '../lib/appConfig'
 // Dibandingkan langsung dengan import.meta.env supaya Vite membuang
 // fungsi menu tipe lain dari bundle.
 const TIPE = import.meta.env.VITE_APP_TIPE || 'sekolah'
+
 // Menu "QR Masuk Saya" disisipkan tepat di bawah "Profil Saya" untuk semua
 // peran & tenant, supaya tidak perlu mengubah tiap fungsi daftar menu.
+// Fungsi sisipkanMenuQr() DIPANGGIL di dalam komponen Sidebar (lihat
+// groupsAdmin, linksGuru, dan linksOrangTua di bawah).
 const MENU_QR = { to: '/qr-masuk-saya', label: 'QR Masuk Saya', icon: QrCode }
 function sisipkanMenuQr(links) {
   const i = links.findIndex((l) => l.to === '/profil-saya')
@@ -167,23 +170,23 @@ function getGroupsAdmin(
       ],
     },
     {
-label: 'Akademik',
-links: [
-  { to: '/siswa', label: 'Data Siswa', icon: Users },
-  { to: '/guru', label: 'Data Guru', icon: GraduationCap },
-  { to: '/nilai-asesmen', label: 'Nilai Asesmen', icon: FileSpreadsheet },
-  // "Rapor Siswa" sudah ada di kartu Administrasi Kelas
-  // PINDAHAN: "Catatan Siswa", "Jurnal Mengajar", dan "Portofolio Siswa"
-  // sekarang jadi kartu di halaman Administrasi Kelas.
-  { to: '/sertifikat', label: 'Sertifikat & Penghargaan', icon: Award },
-  { to: '/buat-ujian', label: 'Buat Ujian', icon: FilePlus },
-  { to: '/bank-soal', label: 'Bank Soal', icon: Database },
-  { to: '/simulasi-tka', label: 'Simulasi TKA', icon: GraduationCap },
-  { to: '/materi-kelas', label: 'Materi Pembelajaran', icon: BookMarked },
-  { to: '/buat-kuis-seru', label: 'Kuis Seru (Kls 1-3)', icon: Gamepad2 },
-  { to: '/rapor-kumer', label: 'Raport Kumer', icon: FileBadge },
-  ],
-  },
+      label: 'Akademik',
+      links: [
+        { to: '/siswa', label: 'Data Siswa', icon: Users },
+        { to: '/guru', label: 'Data Guru', icon: GraduationCap },
+        { to: '/nilai-asesmen', label: 'Nilai Asesmen', icon: FileSpreadsheet },
+        // "Rapor Siswa" sudah ada di kartu Administrasi Kelas
+        // PINDAHAN: "Catatan Siswa", "Jurnal Mengajar", dan "Portofolio Siswa"
+        // sekarang jadi kartu di halaman Administrasi Kelas.
+        { to: '/sertifikat', label: 'Sertifikat & Penghargaan', icon: Award },
+        { to: '/buat-ujian', label: 'Buat Ujian', icon: FilePlus },
+        { to: '/bank-soal', label: 'Bank Soal', icon: Database },
+        { to: '/simulasi-tka', label: 'Simulasi TKA', icon: GraduationCap },
+        { to: '/materi-kelas', label: 'Materi Pembelajaran', icon: BookMarked },
+        { to: '/buat-kuis-seru', label: 'Kuis Seru (Kls 1-3)', icon: Gamepad2 },
+        { to: '/rapor-kumer', label: 'Raport Kumer', icon: FileBadge },
+      ],
+    },
     {
       label: 'Keuangan & Aset',
       links: [
@@ -414,6 +417,7 @@ function getGroupsPuskesmasAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBe
     },
   ]
 }
+
 // Menu ADMIN untuk tenant "polres" (isPolres) — pola sama dengan kantor/puskesmas.
 // Rute kepegawaian masih memakai halaman kantor yang sudah ada.
 function getGroupsPolresAdmin(isAdminUtama, jumlahMenunggu = 0, jumlahPesanBelumDibaca = 0) {
@@ -492,50 +496,50 @@ function getLinksPolresPegawai(jumlahPesanBelumDibaca = 0) {
 // fitur ini admin-only (lihat RLS policy nota_hanya_admin di Supabase).
 function getLinksGuru(jumlahPesanBelumDibaca = 0, sekolahIdGuru = null) {
   return [
-  // PERBAIKAN: "/" sekarang halaman Beranda publik, Dashboard di "/dashboard".
-  { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
-  { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
-  { to: '/visi-misi', label: 'Visi Misi Sekolah', icon: Target },
-  { to: '/struktur-organisasi', label: 'Bagan Struktur Organisasi', icon: Network },
-  // PINDAHAN: Presensi dikeluarkan dari halaman Administrasi Kelas dan
-  // ditempatkan di sini, tepat di bawah Bagan Struktur Organisasi.
-  { to: '/presensi', label: 'Presensi', icon: ClipboardCheck },
-  { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
-  { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
-  { to: '/pusat-toko', label: 'Toko', icon: Store, aktifJuga: ['/toko', '/riwayat-pesanan', '/pesanan-masuk'] },
-  { to: '/administrasi-kelas', label: 'Administrasi Kelas', icon: LayoutGrid },
-  { to: '/alat-media', label: 'Alat / Media', icon: Wrench, aktifJuga: ['/rapat', '/scan-dokumen', '/alat-pdf', '/galeri', '/dokumen'] },
-  // PERBAIKAN: baris "Administrasi Kelas" sebelumnya terduplikasi di sini
-  // (sudah ada satu di atas, sebelum "Rapat Video") — duplikat dihapus.
-  { to: '/siswa', label: 'Data Siswa', icon: Users },
-  // PERBAIKAN: baris "Rapor Siswa" (/rapor) dihapus dari sini — sudah bisa
-  // diakses lewat kartu "Rapor" di halaman Administrasi Kelas (menu di
-  // atas), jadi baris ini dulu bikin dobel untuk guru.
-  { to: '/sertifikat', label: 'Sertifikat & Penghargaan', icon: Award },
-  { to: '/pengajuan-surat-aktif', label: 'Pengajuan Surat Aktif', icon: FileCheck2 },
-  // PINDAHAN: "Perbaikan Data Siswa" sekarang jadi kartu di halaman
-  // Administrasi Kelas.
-  // Hanya tautan pintasan ke form publik, sama seperti menu orang tua —
-  // approval pendaftar PPDB tetap khusus admin lewat /ppdb-admin.
-  // PERBAIKAN: /ppdb/:sekolahId, bukan "/ppdb" polos (lihat catatan di
-  // getLinksOrangTua di atas).
-  { to: sekolahIdGuru ? `/ppdb/${sekolahIdGuru}` : '/ppdb', label: 'PPDB Siswa Baru', icon: UserPlus, external: true },
-  { to: '/buat-ujian', label: 'Buat Ujian', icon: FilePlus },
-  { to: '/bank-soal', label: 'Bank Soal', icon: Database },
-  { to: '/simulasi-tka', label: 'Simulasi TKA', icon: GraduationCap },
-  { to: '/materi-kelas', label: 'Materi Pembelajaran', icon: BookMarked },
-  { to: '/buat-kuis-seru', label: 'Kuis Seru (Kls 1-3)', icon: Gamepad2 },
-  { to: '/rapor-kumer', label: 'Raport Kumer', icon: FileBadge },
-  // PINDAHAN: "Catatan Siswa" dan "Jurnal Mengajar" sekarang jadi kartu di
-  // halaman Administrasi Kelas.
-  { to: '/perpustakaan', label: 'Perpustakaan', icon: Library },
-  { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
-  // BARU: Daftar Hadir Guru & Tendik (guru hanya bisa melihat & mencetak)
-  { to: '/daftar-hadir-pegawai', label: 'Daftar Hadir Guru & Tendik', icon: ClipboardList },
-  { to: '/sk-plh-kepala-sekolah', label: 'SK PLH Kepala Sekolah', icon: FileSignature },
-  { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
-  { to: '/link-layanan', label: 'Link Layanan', icon: Link2 },
-  { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
+    // PERBAIKAN: "/" sekarang halaman Beranda publik, Dashboard di "/dashboard".
+    { to: '/dashboard', label: 'Dasbor', icon: LayoutDashboard, end: true },
+    { to: '/profil-saya', label: 'Profil Saya', icon: UserCircle },
+    { to: '/visi-misi', label: 'Visi Misi Sekolah', icon: Target },
+    { to: '/struktur-organisasi', label: 'Bagan Struktur Organisasi', icon: Network },
+    // PINDAHAN: Presensi dikeluarkan dari halaman Administrasi Kelas dan
+    // ditempatkan di sini, tepat di bawah Bagan Struktur Organisasi.
+    { to: '/presensi', label: 'Presensi', icon: ClipboardCheck },
+    { to: '/upgrade-fitur', label: 'Upgrade Fitur', icon: Sparkles },
+    { to: '/pesan', label: 'Pesan', icon: MessageCircle, badge: jumlahPesanBelumDibaca },
+    { to: '/pusat-toko', label: 'Toko', icon: Store, aktifJuga: ['/toko', '/riwayat-pesanan', '/pesanan-masuk'] },
+    { to: '/administrasi-kelas', label: 'Administrasi Kelas', icon: LayoutGrid },
+    { to: '/alat-media', label: 'Alat / Media', icon: Wrench, aktifJuga: ['/rapat', '/scan-dokumen', '/alat-pdf', '/galeri', '/dokumen'] },
+    // PERBAIKAN: baris "Administrasi Kelas" sebelumnya terduplikasi di sini
+    // (sudah ada satu di atas, sebelum "Rapat Video") — duplikat dihapus.
+    { to: '/siswa', label: 'Data Siswa', icon: Users },
+    // PERBAIKAN: baris "Rapor Siswa" (/rapor) dihapus dari sini — sudah bisa
+    // diakses lewat kartu "Rapor" di halaman Administrasi Kelas (menu di
+    // atas), jadi baris ini dulu bikin dobel untuk guru.
+    { to: '/sertifikat', label: 'Sertifikat & Penghargaan', icon: Award },
+    { to: '/pengajuan-surat-aktif', label: 'Pengajuan Surat Aktif', icon: FileCheck2 },
+    // PINDAHAN: "Perbaikan Data Siswa" sekarang jadi kartu di halaman
+    // Administrasi Kelas.
+    // Hanya tautan pintasan ke form publik, sama seperti menu orang tua —
+    // approval pendaftar PPDB tetap khusus admin lewat /ppdb-admin.
+    // PERBAIKAN: /ppdb/:sekolahId, bukan "/ppdb" polos (lihat catatan di
+    // getLinksOrangTua di bawah).
+    { to: sekolahIdGuru ? `/ppdb/${sekolahIdGuru}` : '/ppdb', label: 'PPDB Siswa Baru', icon: UserPlus, external: true },
+    { to: '/buat-ujian', label: 'Buat Ujian', icon: FilePlus },
+    { to: '/bank-soal', label: 'Bank Soal', icon: Database },
+    { to: '/simulasi-tka', label: 'Simulasi TKA', icon: GraduationCap },
+    { to: '/materi-kelas', label: 'Materi Pembelajaran', icon: BookMarked },
+    { to: '/buat-kuis-seru', label: 'Kuis Seru (Kls 1-3)', icon: Gamepad2 },
+    { to: '/rapor-kumer', label: 'Raport Kumer', icon: FileBadge },
+    // PINDAHAN: "Catatan Siswa" dan "Jurnal Mengajar" sekarang jadi kartu di
+    // halaman Administrasi Kelas.
+    { to: '/perpustakaan', label: 'Perpustakaan', icon: Library },
+    { to: '/kalender-pendidikan', label: 'Kalender Pendidikan', icon: CalendarRange },
+    // BARU: Daftar Hadir Guru & Tendik (guru hanya bisa melihat & mencetak)
+    { to: '/daftar-hadir-pegawai', label: 'Daftar Hadir Guru & Tendik', icon: ClipboardList },
+    { to: '/sk-plh-kepala-sekolah', label: 'SK PLH Kepala Sekolah', icon: FileSignature },
+    { to: '/pengumuman', label: 'Pengumuman', icon: Megaphone },
+    { to: '/link-layanan', label: 'Link Layanan', icon: Link2 },
+    { to: '/cetak-sampul', label: 'Cetak Sampul', icon: FileStack },
   ]
 }
 
@@ -1053,7 +1057,7 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
 
   // Pilih set menu admin & non-admin sesuai jenis tenant (sekolah, kantor,
   // puskesmas, polres). Semua tenant non-sekolah saling eksklusif.
-  const groupsAdmin = TIPE === 'kantor'
+  const groupsAdminAsli = TIPE === 'kantor'
     ? getGroupsKantorAdmin(isAdminUtama, jumlahMenunggu, jumlahPesanBelumDibaca)
     : TIPE === 'puskesmas'
     ? getGroupsPuskesmasAdmin(isAdminUtama, jumlahMenunggu, jumlahPesanBelumDibaca)
@@ -1070,14 +1074,22 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
         jumlahSiapDicairkan,
         jumlahLiveChatBelumDibaca
       )
-  const linksGuru = TIPE === 'kantor'
-    ? getLinksKantorPegawai(jumlahPesanBelumDibaca)
-    : TIPE === 'puskesmas'
-    ? getLinksPuskesmasPegawai(jumlahPesanBelumDibaca)
-    : TIPE === 'polres'
-    ? getLinksPolresPegawai(jumlahPesanBelumDibaca)
-    : getLinksGuru(jumlahPesanBelumDibaca, sekolahId)
-  const linksOrangTua = TIPE === 'sekolah' ? getLinksOrangTua(jumlahPesanBelumDibaca, sekolahId) : []
+
+  // "QR Masuk Saya" disisipkan tepat di bawah "Profil Saya" untuk semua peran.
+  const groupsAdmin = groupsAdminAsli.map((g) => ({ ...g, links: sisipkanMenuQr(g.links) }))
+
+  const linksGuru = sisipkanMenuQr(
+    TIPE === 'kantor'
+      ? getLinksKantorPegawai(jumlahPesanBelumDibaca)
+      : TIPE === 'puskesmas'
+      ? getLinksPuskesmasPegawai(jumlahPesanBelumDibaca)
+      : TIPE === 'polres'
+      ? getLinksPolresPegawai(jumlahPesanBelumDibaca)
+      : getLinksGuru(jumlahPesanBelumDibaca, sekolahId)
+  )
+  const linksOrangTua = TIPE === 'sekolah'
+    ? sisipkanMenuQr(getLinksOrangTua(jumlahPesanBelumDibaca, sekolahId))
+    : []
 
   return (
     <>
@@ -1098,178 +1110,178 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
           cadangan untuk browser lama yang belum mengenal dvh.
         - tap highlight abu-abu bawaan Android dimatikan.
       */}
-     <aside
-     style={{ height: '100dvh', background: 'var(--sidebar-solid)', borderColor: 'var(--sidebar-border)' }}
-     className={`w-72 max-w-[85vw] md:w-64 shrink-0 text-white flex flex-col h-screen fixed md:sticky top-0 left-0 z-50 border-r transition-transform duration-300 ease-out [-webkit-tap-highlight-color:transparent]
-     ${open ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}
-    >
-     <div
-    style={{ paddingTop: 'calc(1.25rem + env(safe-area-inset-top, 0px))', background: 'var(--sidebar-header-gradient)' }}
-    className="relative overflow-hidden shrink-0 px-4 pb-5 border-b border-white/10"
+      <aside
+        style={{ height: '100dvh', background: 'var(--sidebar-solid)', borderColor: 'var(--sidebar-border)' }}
+        className={`w-72 max-w-[85vw] md:w-64 shrink-0 text-white flex flex-col h-screen fixed md:sticky top-0 left-0 z-50 border-r transition-transform duration-300 ease-out [-webkit-tap-highlight-color:transparent]
+        ${open ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}
       >
-        {/*
-          Tombol tutup — hanya tampil di HP.
-          PERBAIKAN ANDROID: dulu tombol ini menempel di pojok kanan atas dan
-          bertumpuk dengan tombol Keluar (power). Sekarang sejajar
-          vertikal di tengah baris header, dan baris di bawahnya diberi
-          ruang kosong di kanan (pr-11) supaya keduanya berdampingan.
-        */}
-        <button
-          onClick={onClose}
-          title="Tutup menu"
-          aria-label="Tutup menu"
-          className="absolute top-1/2 right-2 -translate-y-1/2 z-10 w-10 h-10 rounded-lg flex items-center justify-center text-white/70 active:bg-white/10 touch-manipulation md:hidden"
+        <div
+          style={{ paddingTop: 'calc(1.25rem + env(safe-area-inset-top, 0px))', background: 'var(--sidebar-header-gradient)' }}
+          className="relative overflow-hidden shrink-0 px-4 pb-5 border-b border-white/10"
         >
-          <X size={20} />
-        </button>
-        {/* Motif batik dekoratif (senada dengan banner dashboard) */}
-        <svg
-          className="absolute inset-0 w-full h-full opacity-[0.35] pointer-events-none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-<defs>
-  <pattern id="batikSidebar" width="90" height="90" patternUnits="userSpaceOnUse">
-    {/* Medali bersayap (gaya lambang KORPRI, stilisasi) */}
-    <g transform="translate(45,32)">
-      <circle cx="0" cy="0" r="9" fill="none" stroke="var(--sidebar-accent)" strokeWidth="1.3" />
-      <path d="M0 -4 L1.6 -1 L4.8 -0.6 L2.4 1.6 L3 4.8 L0 3.2 L-3 4.8 L-2.4 1.6 L-4.8 -0.6 L-1.6 -1 Z"
-        fill="var(--sidebar-accent)" />
-      <path d="M-9 0 C-16 -4, -22 -1, -26 4 C-20 3, -14 4, -9 3 Z" fill="var(--sidebar-accent)" opacity="0.85" />
-      <path d="M9 0 C16 -4, 22 -1, 26 4 C20 3, 14 4, 9 3 Z" fill="var(--sidebar-accent)" opacity="0.85" />
-      <path d="M-7 6 C-4 9, 4 9, 7 6" stroke="var(--sidebar-accent)" strokeWidth="1.1" fill="none" />
-    </g>
-    {/* Ukiran bunga di bawah medali */}
-    <g transform="translate(45,64)" stroke="var(--sidebar-accent)" strokeWidth="1" fill="none">
-      <path d="M-14 0 C-10 -6, -4 -6, 0 0 C4 -6, 10 -6, 14 0" />
-      <circle cx="-14" cy="0" r="2" fill="var(--sidebar-accent)" stroke="none" />
-      <circle cx="0" cy="-3" r="2.2" fill="var(--sidebar-accent)" stroke="none" />
-      <circle cx="14" cy="0" r="2" fill="var(--sidebar-accent)" stroke="none" />
-      <path d="M-14 0 v6 M0 -3 v9 M14 0 v6" />
-    </g>
-  </pattern>
-</defs>
-<rect width="100%" height="100%" fill="url(#batikSidebar)" />
-        </svg>
-
-        <div className="relative flex items-center gap-3 pr-11 md:pr-0">
-          {fotoUrl ? (
-<img
-  src={fotoUrl}
-  alt={namaTampil}
-  style={{ borderColor: 'color-mix(in srgb, var(--sidebar-accent) 60%, transparent)' }}
-  className="w-11 h-11 rounded-full object-cover shrink-0 border-2"
-/>
-          ) : (
-<div
-  className="w-11 h-11 rounded-full flex items-center justify-center font-display font-bold text-white text-sm shrink-0 border-2"
-  style={{
-    background: 'var(--sidebar-active-gradient)',
-    borderColor: 'color-mix(in srgb, var(--sidebar-accent) 60%, transparent)',
-  }}
->
-              {getInisial(namaTampil)}
-            </div>
-          )}
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-semibold tracking-widest uppercase text-white/50 truncate">{APP.nama}</p>
-            <p className="font-display font-semibold text-[13px] leading-tight truncate text-white">{namaTampil}</p>
-            {/* Label peran + lencana paket (Free / Standar / Premium). Lencana
-                disembunyikan untuk superadmin karena bukan pelanggan paket. */}
-            <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1">
-              <p className="text-xs text-white/60">{labelPeran}</p>
-              {session && !isSuperAdmin && <PaketBadge paket={paketSaatIni} size="sm" />}
-            </div>
-          </div>
+          {/*
+            Tombol tutup — hanya tampil di HP.
+            PERBAIKAN ANDROID: dulu tombol ini menempel di pojok kanan atas dan
+            bertumpuk dengan tombol Keluar (power). Sekarang sejajar
+            vertikal di tengah baris header, dan baris di bawahnya diberi
+            ruang kosong di kanan (pr-11) supaya keduanya berdampingan.
+          */}
           <button
-            onClick={session ? handleLogout : () => navigate('/login')}
-            title={session ? 'Keluar' : 'Masuk'}
-            aria-label={session ? 'Keluar' : 'Masuk'}
-            className="w-10 h-10 rounded-lg flex items-center justify-center text-red-400 active:bg-red-500/20 md:hover:bg-red-500/15 md:hover:text-red-300 transition-colors shrink-0 touch-manipulation"
+            onClick={onClose}
+            title="Tutup menu"
+            aria-label="Tutup menu"
+            className="absolute top-1/2 right-2 -translate-y-1/2 z-10 w-10 h-10 rounded-lg flex items-center justify-center text-white/70 active:bg-white/10 touch-manipulation md:hidden"
           >
-            <Power size={20} strokeWidth={2.2} />
+            <X size={20} />
           </button>
-        </div>
-      </div>
+          {/* Motif batik dekoratif (senada dengan banner dashboard) */}
+          <svg
+            className="absolute inset-0 w-full h-full opacity-[0.35] pointer-events-none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <defs>
+              <pattern id="batikSidebar" width="90" height="90" patternUnits="userSpaceOnUse">
+                {/* Medali bersayap (gaya lambang KORPRI, stilisasi) */}
+                <g transform="translate(45,32)">
+                  <circle cx="0" cy="0" r="9" fill="none" stroke="var(--sidebar-accent)" strokeWidth="1.3" />
+                  <path d="M0 -4 L1.6 -1 L4.8 -0.6 L2.4 1.6 L3 4.8 L0 3.2 L-3 4.8 L-2.4 1.6 L-4.8 -0.6 L-1.6 -1 Z"
+                    fill="var(--sidebar-accent)" />
+                  <path d="M-9 0 C-16 -4, -22 -1, -26 4 C-20 3, -14 4, -9 3 Z" fill="var(--sidebar-accent)" opacity="0.85" />
+                  <path d="M9 0 C16 -4, 22 -1, 26 4 C20 3, 14 4, 9 3 Z" fill="var(--sidebar-accent)" opacity="0.85" />
+                  <path d="M-7 6 C-4 9, 4 9, 7 6" stroke="var(--sidebar-accent)" strokeWidth="1.1" fill="none" />
+                </g>
+                {/* Ukiran bunga di bawah medali */}
+                <g transform="translate(45,64)" stroke="var(--sidebar-accent)" strokeWidth="1" fill="none">
+                  <path d="M-14 0 C-10 -6, -4 -6, 0 0 C4 -6, 10 -6, 14 0" />
+                  <circle cx="-14" cy="0" r="2" fill="var(--sidebar-accent)" stroke="none" />
+                  <circle cx="0" cy="-3" r="2.2" fill="var(--sidebar-accent)" stroke="none" />
+                  <circle cx="14" cy="0" r="2" fill="var(--sidebar-accent)" stroke="none" />
+                  <path d="M-14 0 v6 M0 -3 v9 M14 0 v6" />
+                </g>
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#batikSidebar)" />
+          </svg>
 
-      {/*
-        PERBAIKAN: motif batik menu dulu diletakkan DI DALAM area yang bisa
-        di-scroll, sehingga ikut tergulung ke atas dan bagian bawah menu yang
-        panjang jadi polos tanpa motif. Sekarang motif ada di pembungkus luar
-        yang diam, dan hanya <nav> di dalamnya yang di-scroll.
-        - overscroll-contain: menggulung sampai ujung menu tidak lagi
-          "menembus" menggulung halaman di belakang.
-        - padding bawah ditambah area aman (env) supaya menu terakhir tidak
-          tertutup bilah navigasi/gestur Android.
-      */}
-     <div className="relative flex-1 min-h-0" style={{ background: 'var(--sidebar-body-gradient)' }}>
-        {/* Motif batik area menu — gaya berbeda dari header (kawung/diamond, bukan lingkaran) */}
-        <svg
-          className="absolute inset-0 w-full h-full opacity-[0.22] pointer-events-none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <defs>
-            <pattern
-              id="batikMenu"
-              width="36"
-              height="36"
-              patternUnits="userSpaceOnUse"
-              patternTransform="rotate(45)"
-            >
-              <rect x="12" y="0" width="12" height="12" fill="none" stroke="var(--sidebar-accent)" strokeWidth="1.2" />
-              <circle cx="18" cy="6" r="2.6" fill="var(--sidebar-accent)" />
-              <path d="M0 18 L18 0 M18 36 L36 18" stroke="var(--sidebar-accent)" strokeWidth="1" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#batikMenu)" />
-        </svg>
-
-        <nav
-          style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
-          className="relative h-full overflow-y-auto overscroll-contain pt-4 px-3"
-        >
-        {isAdmin ? (
-          groupsAdmin.map((group, i) => {
-            const tertutup = group.label ? !!grupTertutup[group.label] : false
-            return (
-              <div key={group.label ?? `top-${i}`} className={i > 0 ? 'mt-5' : ''}>
-                {group.label && (
-                  <button
-                    type="button"
-                    onClick={() => toggleGrup(group.label)}
-                    className="w-full flex items-center justify-between px-3 mb-1.5 py-1 text-[11px] font-semibold tracking-wider uppercase text-white/50 hover:text-white/80 transition-colors touch-manipulation"
-                  >
-                    <span>{group.label}</span>
-                    <ChevronDown
-                      size={13}
-                      className={`transition-transform duration-200 ${tertutup ? '-rotate-90' : ''}`}
-                    />
-                  </button>
-                )}
-                {!tertutup && (
-                  <div className="space-y-1">
-                    {group.links.map((link) => (
-                      <NavItem key={link.to} {...link} onNavigate={onClose} />
-                    ))}
-                  </div>
-                )}
+          <div className="relative flex items-center gap-3 pr-11 md:pr-0">
+            {fotoUrl ? (
+              <img
+                src={fotoUrl}
+                alt={namaTampil}
+                style={{ borderColor: 'color-mix(in srgb, var(--sidebar-accent) 60%, transparent)' }}
+                className="w-11 h-11 rounded-full object-cover shrink-0 border-2"
+              />
+            ) : (
+              <div
+                className="w-11 h-11 rounded-full flex items-center justify-center font-display font-bold text-white text-sm shrink-0 border-2"
+                style={{
+                  background: 'var(--sidebar-active-gradient)',
+                  borderColor: 'color-mix(in srgb, var(--sidebar-accent) 60%, transparent)',
+                }}
+              >
+                {getInisial(namaTampil)}
               </div>
-            )
-          })
-        ) : isOrangTua ? (
-          <div className="space-y-1">
-            {linksOrangTua.map((link) => (
-              <NavItem key={link.to} {...link} onNavigate={onClose} />
-            ))}
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold tracking-widest uppercase text-white/50 truncate">{APP.nama}</p>
+              <p className="font-display font-semibold text-[13px] leading-tight truncate text-white">{namaTampil}</p>
+              {/* Label peran + lencana paket (Free / Standar / Premium). Lencana
+                  disembunyikan untuk superadmin karena bukan pelanggan paket. */}
+              <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                <p className="text-xs text-white/60">{labelPeran}</p>
+                {session && !isSuperAdmin && <PaketBadge paket={paketSaatIni} size="sm" />}
+              </div>
+            </div>
+            <button
+              onClick={session ? handleLogout : () => navigate('/login')}
+              title={session ? 'Keluar' : 'Masuk'}
+              aria-label={session ? 'Keluar' : 'Masuk'}
+              className="w-10 h-10 rounded-lg flex items-center justify-center text-red-400 active:bg-red-500/20 md:hover:bg-red-500/15 md:hover:text-red-300 transition-colors shrink-0 touch-manipulation"
+            >
+              <Power size={20} strokeWidth={2.2} />
+            </button>
           </div>
-        ) : (
-          <div className="space-y-1">
-            {linksGuru.map((link) => (
-              <NavItem key={link.to} {...link} onNavigate={onClose} />
-            ))}
-          </div>
-        )}
-        </nav>
-      </div>
+        </div>
+
+        {/*
+          PERBAIKAN: motif batik menu dulu diletakkan DI DALAM area yang bisa
+          di-scroll, sehingga ikut tergulung ke atas dan bagian bawah menu yang
+          panjang jadi polos tanpa motif. Sekarang motif ada di pembungkus luar
+          yang diam, dan hanya <nav> di dalamnya yang di-scroll.
+          - overscroll-contain: menggulung sampai ujung menu tidak lagi
+            "menembus" menggulung halaman di belakang.
+          - padding bawah ditambah area aman (env) supaya menu terakhir tidak
+            tertutup bilah navigasi/gestur Android.
+        */}
+        <div className="relative flex-1 min-h-0" style={{ background: 'var(--sidebar-body-gradient)' }}>
+          {/* Motif batik area menu — gaya berbeda dari header (kawung/diamond, bukan lingkaran) */}
+          <svg
+            className="absolute inset-0 w-full h-full opacity-[0.22] pointer-events-none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <defs>
+              <pattern
+                id="batikMenu"
+                width="36"
+                height="36"
+                patternUnits="userSpaceOnUse"
+                patternTransform="rotate(45)"
+              >
+                <rect x="12" y="0" width="12" height="12" fill="none" stroke="var(--sidebar-accent)" strokeWidth="1.2" />
+                <circle cx="18" cy="6" r="2.6" fill="var(--sidebar-accent)" />
+                <path d="M0 18 L18 0 M18 36 L36 18" stroke="var(--sidebar-accent)" strokeWidth="1" />
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#batikMenu)" />
+          </svg>
+
+          <nav
+            style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
+            className="relative h-full overflow-y-auto overscroll-contain pt-4 px-3"
+          >
+            {isAdmin ? (
+              groupsAdmin.map((group, i) => {
+                const tertutup = group.label ? !!grupTertutup[group.label] : false
+                return (
+                  <div key={group.label ?? `top-${i}`} className={i > 0 ? 'mt-5' : ''}>
+                    {group.label && (
+                      <button
+                        type="button"
+                        onClick={() => toggleGrup(group.label)}
+                        className="w-full flex items-center justify-between px-3 mb-1.5 py-1 text-[11px] font-semibold tracking-wider uppercase text-white/50 hover:text-white/80 transition-colors touch-manipulation"
+                      >
+                        <span>{group.label}</span>
+                        <ChevronDown
+                          size={13}
+                          className={`transition-transform duration-200 ${tertutup ? '-rotate-90' : ''}`}
+                        />
+                      </button>
+                    )}
+                    {!tertutup && (
+                      <div className="space-y-1">
+                        {group.links.map((link) => (
+                          <NavItem key={link.to} {...link} onNavigate={onClose} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })
+            ) : isOrangTua ? (
+              <div className="space-y-1">
+                {linksOrangTua.map((link) => (
+                  <NavItem key={link.to} {...link} onNavigate={onClose} />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {linksGuru.map((link) => (
+                  <NavItem key={link.to} {...link} onNavigate={onClose} />
+                ))}
+              </div>
+            )}
+          </nav>
+        </div>
       </aside>
     </>
   )
