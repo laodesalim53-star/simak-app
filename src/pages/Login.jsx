@@ -1,9 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, Navigate, useLocation } from 'react-router-dom'
+import QrScanner from 'qr-scanner'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import { APP } from '../lib/appConfig'
-import { Loader2, LogIn, Eye, EyeOff, Send, Check, ArrowLeft } from 'lucide-react'
+import { Loader2, LogIn, Eye, EyeOff, Send, Check, ArrowLeft, ScanLine } from 'lucide-react'
+
+// Awalan isi QR masuk pribadi (dibuat di halaman /qr-masuk-saya).
+// Harus sama dengan QR_PREFIX di QrMasukSaya.jsx.
+const QR_PREFIX = 'simak-qr:'
 
 // Latar belakang "kain merah putih" yang bergelombang seperti kain sungguhan
 // tertiup angin. Dibangun dari 2 lapis path SVG per warna (fase & amplitudo
@@ -160,11 +165,22 @@ export default function Login() {
   const [shake, setShake] = useState(0)
   const [tampilSandi, setTampilSandi] = useState(false)
 
+  // mode: 'masuk' | 'lupa' | 'baru' | 'scan'
   const [mode, setMode] = useState(() =>
     typeof window !== 'undefined' && /type=recovery/.test(window.location.hash) ? 'baru' : 'masuk'
   )
   const [passwordBaru, setPasswordBaru] = useState('')
   const [konfirmasi, setKonfirmasi] = useState('')
+
+  // Pemindai QR (kamera)
+  const videoRef = useRef(null)
+  const [kamera, setKamera] = useState('mulai') // mulai | siap | ditolak | proses
+  const [scanUlang, setScanUlang] = useState(0)
+
+  function gagal(pesan) {
+    setError(pesan)
+    setShake((s) => s + 1)
+  }
 
   useEffect(() => {
     const t = requestAnimationFrame(() => setMounted(true))
@@ -178,16 +194,73 @@ export default function Login() {
     return () => data.subscription.unsubscribe()
   }, [])
 
+  // Pemindai QR: aktif hanya saat mode 'scan'. Kamera otomatis dimatikan
+  // (scanner.destroy) saat pindah mode atau halaman ditutup.
+  useEffect(() => {
+    if (mode !== 'scan' || !videoRef.current) return
+    let sibuk = false
+    let jeda
+    setError('')
+    setKamera('mulai')
+
+    const scanner = new QrScanner(
+      videoRef.current,
+      async (hasil) => {
+        const teks = hasil?.data || ''
+        if (sibuk || !teks.startsWith(QR_PREFIX)) return
+        sibuk = true
+        scanner.stop()
+        setKamera('proses')
+
+        const { data, error: errFn } = await supabase.functions.invoke('qr-masuk', {
+          body: { aksi: 'masuk', kode: teks.slice(QR_PREFIX.length) },
+        })
+        if (errFn || !data?.token_hash) {
+          gagal('QR tidak dikenali atau sudah diganti. Arahkan ke QR yang benar.')
+          jeda = setTimeout(() => {
+            sibuk = false
+            setKamera('siap')
+            scanner.start().catch(() => setKamera('ditolak'))
+          }, 2000)
+          return
+        }
+
+        const { error: errOtp } = await supabase.auth.verifyOtp({
+          token_hash: data.token_hash,
+          type: 'magiclink',
+        })
+        if (errOtp) {
+          gagal('Masuk lewat QR gagal. Silakan coba lagi.')
+          sibuk = false
+          setKamera('siap')
+          scanner.start().catch(() => setKamera('ditolak'))
+        }
+        // Bila berhasil: session terisi → <Navigate> di bawah membawa pengguna masuk.
+      },
+      {
+        returnDetailedScanResult: true,
+        preferredCamera: 'environment',
+        highlightScanRegion: true,
+        maxScansPerSecond: 5,
+      }
+    )
+
+    scanner
+      .start()
+      .then(() => setKamera('siap'))
+      .catch(() => setKamera('ditolak'))
+
+    return () => {
+      clearTimeout(jeda)
+      scanner.destroy()
+    }
+  }, [mode, scanUlang])
+
   const from = location.state?.from
     ? location.state.from.pathname + (location.state.from.search || '')
     : '/dashboard'
 
   if (session && mode !== 'baru') return <Navigate to={from} replace />
-
-  function gagal(pesan) {
-    setError(pesan)
-    setShake((s) => s + 1)
-  }
 
   function gantiMode(m) {
     setMode(m)
@@ -256,7 +329,9 @@ export default function Login() {
       ? 'Atur ulang kata sandi'
       : mode === 'baru'
         ? 'Buat kata sandi baru'
-        : 'Selamat datang'
+        : mode === 'scan'
+          ? 'Masuk dengan kode QR'
+          : 'Selamat datang'
 
   const onSubmit = mode === 'lupa' ? handleLupa : mode === 'baru' ? handleBaru : handleSubmit
   // Pesan galat login biasa, atau pesan "akun ini bukan milik aplikasi ini"
@@ -325,7 +400,7 @@ export default function Login() {
             </p>
           )}
 
-          {mode !== 'baru' && (
+          {(mode === 'masuk' || mode === 'lupa') && (
             <div>
               <label htmlFor="login-email" className="login-eyebrow mb-1.5 block">Email</label>
               <input
@@ -390,6 +465,33 @@ export default function Login() {
             </>
           )}
 
+          {mode === 'scan' && (
+            <div className="text-center space-y-3">
+              <p className="login-hint">Arahkan kamera ke QR masuk pribadi Anda.</p>
+              <div className="relative mx-auto w-full max-w-[260px] aspect-square overflow-hidden rounded-xl bg-black">
+                <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
+                {(kamera === 'mulai' || kamera === 'proses') && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                    <Loader2 className="animate-spin text-white" />
+                  </div>
+                )}
+              </div>
+              {kamera === 'ditolak' && (
+                <p className="login-error text-sm">
+                  Kamera tidak bisa dibuka. Izinkan akses kamera di pengaturan browser, lalu{' '}
+                  <button
+                    type="button"
+                    className="login-link-btn"
+                    onClick={() => setScanUlang((n) => n + 1)}
+                  >
+                    coba lagi
+                  </button>
+                  .
+                </p>
+              )}
+            </div>
+          )}
+
           {pesanGalat && (
             <p
               key={shake}
@@ -405,25 +507,36 @@ export default function Login() {
             </p>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            aria-busy={loading}
-            className="login-btn w-full transition-transform duration-150 active:scale-[0.98] hover:scale-[1.01]"
-          >
-            {loading ? (
-              <Loader2 size={16} className="animate-spin" />
-            ) : mode === 'lupa' ? (
-              <Send size={16} />
-            ) : mode === 'baru' ? (
-              <Check size={16} />
-            ) : (
-              <LogIn size={16} />
-            )}
-            {mode === 'lupa' ? 'Kirim tautan' : mode === 'baru' ? 'Simpan kata sandi' : 'Masuk'}
-          </button>
+          {mode !== 'scan' && (
+            <button
+              type="submit"
+              disabled={loading}
+              aria-busy={loading}
+              className="login-btn w-full transition-transform duration-150 active:scale-[0.98] hover:scale-[1.01]"
+            >
+              {loading ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : mode === 'lupa' ? (
+                <Send size={16} />
+              ) : mode === 'baru' ? (
+                <Check size={16} />
+              ) : (
+                <LogIn size={16} />
+              )}
+              {mode === 'lupa' ? 'Kirim tautan' : mode === 'baru' ? 'Simpan kata sandi' : 'Masuk'}
+            </button>
+          )}
 
-          {mode === 'lupa' && (
+          {mode === 'masuk' && (
+            <div className="text-center">
+              <button type="button" className="login-link-btn" onClick={() => gantiMode('scan')}>
+                <ScanLine size={14} className="inline -mt-0.5 mr-1" />
+                Masuk dengan scan QR
+              </button>
+            </div>
+          )}
+
+          {(mode === 'lupa' || mode === 'scan') && (
             <div className="text-center">
               <button type="button" className="login-link-btn" onClick={() => gantiMode('masuk')}>
                 <ArrowLeft size={14} className="inline -mt-0.5 mr-1" />
