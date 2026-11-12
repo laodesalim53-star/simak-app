@@ -40,6 +40,21 @@ const ROLE_DARI_JABATAN = {
 // mau ada tanggal kedaluwarsa.
 const MASA_AKTIF_HARI = 30
 
+// ---------------------------------------------------------------------------
+// Kelas tampilan bersama — dibuat responsif untuk HP:
+// - area sentuh minimal ±40px di layar kecil (md: kembali ke ukuran ringkas)
+// - touch-manipulation menghilangkan jeda 300ms saat tap
+// - font input 16px di HP supaya iOS tidak otomatis zoom saat fokus
+// ---------------------------------------------------------------------------
+const BTN_TEKS =
+  'flex items-center justify-center gap-1 text-xs font-medium px-3 py-2.5 md:py-1.5 rounded-lg disabled:opacity-60 touch-manipulation'
+const BTN_IKON =
+  'w-10 h-10 md:w-7 md:h-7 rounded-lg flex items-center justify-center disabled:opacity-60 touch-manipulation border border-slate-200 md:border-0'
+const KELAS_TAB_BARIS =
+  'flex gap-2 mb-4 overflow-x-auto md:overflow-visible md:flex-wrap pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+const INPUT_MODAL =
+  'w-full border border-slate-200 rounded-lg px-3 py-2.5 md:py-2 text-base md:text-sm'
+
 export default function PersetujuanAkun() {
   const auth = useAuth()
   const { isSuperAdmin, sekolahId } = auth
@@ -654,6 +669,185 @@ export default function PersetujuanAkun() {
     }).format(nominal)
   }
 
+  // -------------------------------------------------------------------------
+  // Potongan tampilan yang dipakai BERSAMA oleh tabel (desktop) dan kartu (HP),
+  // supaya logika tombol tidak ditulis dua kali.
+  // -------------------------------------------------------------------------
+
+  // Info anak untuk akun orang tua/wali (tenant sekolah saja)
+  function renderInfoAnak(akun) {
+    if (isKantor || (akun.jabatan || akun.role) !== 'orang_tua') return null
+    if (akun.relasiAnak?.length > 0) {
+      return (
+        <p className="text-[11px] text-slate-400 mt-0.5">
+          Anak:{' '}
+          {akun.relasiAnak
+            .map((r) => r.siswa?.nama_lengkap)
+            .filter(Boolean)
+            .join(', ')}
+          {akun.relasiAnak[0]?.hubungan ? ` (${akun.relasiAnak[0].hubungan})` : ''}
+        </p>
+      )
+    }
+    return <p className="text-[11px] text-red-400 mt-0.5">Belum ada data anak terhubung</p>
+  }
+
+  // Catatan admin pada akun yang sudah disetujui
+  function renderCatatan(akun) {
+    if (akun.status_akun !== 'aktif' || !akun.catatan_admin) return null
+    return (
+      <p
+        className="text-[11px] text-slate-400 mt-1 md:max-w-[220px] md:truncate break-words"
+        title={akun.catatan_admin}
+      >
+        "{akun.catatan_admin}"
+      </p>
+    )
+  }
+
+  // Deretan tombol aksi satu akun
+  function renderAksiAkun(akun) {
+    const sibuk = prosesId === akun.id
+    return (
+      <div className="flex items-center gap-2 md:gap-1.5 flex-wrap md:justify-end">
+        {akun.status_akun === 'menunggu' && (
+          <>
+            <button
+              onClick={() => handleSetujui(akun)}
+              disabled={sibuk}
+              className={`${BTN_TEKS} flex-1 md:flex-none bg-green-50 text-green-600 hover:bg-green-100`}
+            >
+              <CheckCircle2 size={14} /> Setujui
+            </button>
+            <button
+              onClick={() => handleTolak(akun.id)}
+              disabled={sibuk}
+              className={`${BTN_TEKS} flex-1 md:flex-none bg-red-50 text-red-600 hover:bg-red-100`}
+            >
+              <XCircle size={14} /> Tolak
+            </button>
+          </>
+        )}
+
+        {akun.status_akun === 'aktif' && (
+          <button
+            onClick={() => handlePesan(akun)}
+            disabled={sibuk}
+            className={`${BTN_TEKS} bg-blue-50 text-blue-600 hover:bg-blue-100`}
+          >
+            <MessageSquare size={14} /> {akun.catatan_admin ? 'Edit Pesan' : 'Kirim Pesan'}
+          </button>
+        )}
+
+        {akun.status_akun === 'aktif' && isJabatanPegawai(akun) && !akun.pegawai_id && (
+          <button
+            onClick={() => setModalPegawai(akun)}
+            disabled={sibuk}
+            className={`${BTN_TEKS} bg-cyan-50 text-cyan-600 hover:bg-cyan-100`}
+          >
+            <UserPlus size={14} /> Hubungkan Pegawai
+          </button>
+        )}
+
+        {akun.status_akun !== 'menunggu' && (
+          <button
+            onClick={() => handleResetStatus(akun)}
+            disabled={sibuk}
+            title="Kembalikan ke status Menunggu"
+            aria-label="Kembalikan ke status Menunggu"
+            className={`${BTN_IKON} text-indigo-600 hover:bg-indigo-50`}
+          >
+            <RotateCcw size={16} />
+          </button>
+        )}
+
+        <button
+          onClick={() => setModalEdit(akun)}
+          disabled={sibuk}
+          title="Edit data akun"
+          aria-label="Edit data akun"
+          className={`${BTN_IKON} text-slate-500 hover:bg-slate-100`}
+        >
+          <Pencil size={16} />
+        </button>
+
+        <button
+          onClick={() => handleResetPassword(akun)}
+          disabled={sibuk}
+          title="Kirim link reset password"
+          aria-label="Kirim link reset password"
+          className={`${BTN_IKON} text-amber-600 hover:bg-amber-50`}
+        >
+          <KeyRound size={16} />
+        </button>
+
+        <button
+          onClick={() => setModalPassword(akun)}
+          disabled={sibuk}
+          title="Ganti password langsung"
+          aria-label="Ganti password langsung"
+          className={`${BTN_IKON} text-orange-600 hover:bg-orange-50`}
+        >
+          <ShieldCheck size={16} />
+        </button>
+
+        <button
+          onClick={() => handleHapus(akun)}
+          disabled={sibuk}
+          title="Hapus akun"
+          aria-label="Hapus akun"
+          className={`${BTN_IKON} text-red-600 hover:bg-red-50`}
+        >
+          <Trash2 size={16} />
+        </button>
+      </div>
+    )
+  }
+
+  // Tombol Setujui/Tolak untuk satu baris anak (tab "Anak Menunggu")
+  function renderAksiAnak(r) {
+    return (
+      <div className="flex items-center gap-2 md:gap-1.5 md:justify-end">
+        <button
+          onClick={() => setujuiAnak(r.id)}
+          disabled={prosesId === r.id}
+          className={`${BTN_TEKS} flex-1 md:flex-none bg-green-50 text-green-600 hover:bg-green-100`}
+        >
+          <CheckCircle2 size={14} /> Setujui
+        </button>
+        <button
+          onClick={() => tolakAnak(r.id)}
+          disabled={prosesId === r.id}
+          className={`${BTN_TEKS} flex-1 md:flex-none bg-red-50 text-red-600 hover:bg-red-100`}
+        >
+          <XCircle size={14} /> Tolak
+        </button>
+      </div>
+    )
+  }
+
+  // Tombol Setujui/Tolak untuk satu permohonan upgrade paket
+  function renderAksiUpgrade(r) {
+    return (
+      <div className="flex items-center gap-2 md:gap-1.5 md:justify-end">
+        <button
+          onClick={() => ubahStatusUpgrade(r, 'approved')}
+          disabled={prosesUpgradeId === r.id}
+          className={`${BTN_TEKS} flex-1 md:flex-none bg-green-50 text-green-600 hover:bg-green-100`}
+        >
+          <CheckCircle2 size={14} /> Setujui & Aktifkan
+        </button>
+        <button
+          onClick={() => ubahStatusUpgrade(r, 'rejected')}
+          disabled={prosesUpgradeId === r.id}
+          className={`${BTN_TEKS} flex-1 md:flex-none bg-red-50 text-red-600 hover:bg-red-100`}
+        >
+          <XCircle size={14} /> Tolak
+        </button>
+      </div>
+    )
+  }
+
   return (
     <Layout
       title="Persetujuan Akun"
@@ -667,10 +861,11 @@ export default function PersetujuanAkun() {
             : ' di sekolah Anda'
       }.`}
     >
-      <div className="flex gap-2 mb-4 flex-wrap">
+      {/* Tab utama — di HP satu baris yang bisa digeser ke samping */}
+      <div className={KELAS_TAB_BARIS}>
         <button
           onClick={() => setTab('menunggu')}
-          className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors ${
+          className={`shrink-0 whitespace-nowrap text-sm font-medium px-4 py-2.5 md:py-2 rounded-lg transition-colors touch-manipulation ${
             tab === 'menunggu' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 border border-slate-200'
           }`}
         >
@@ -678,7 +873,7 @@ export default function PersetujuanAkun() {
         </button>
         <button
           onClick={() => setTab('riwayat')}
-          className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors ${
+          className={`shrink-0 whitespace-nowrap text-sm font-medium px-4 py-2.5 md:py-2 rounded-lg transition-colors touch-manipulation ${
             tab === 'riwayat' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 border border-slate-200'
           }`}
         >
@@ -689,7 +884,7 @@ export default function PersetujuanAkun() {
         {!isKantor && (
           <button
             onClick={() => setTab('anak_menunggu')}
-            className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5 ${
+            className={`shrink-0 whitespace-nowrap text-sm font-medium px-4 py-2.5 md:py-2 rounded-lg transition-colors flex items-center gap-1.5 touch-manipulation ${
               tab === 'anak_menunggu' ? 'bg-emerald-600 text-white' : 'bg-white text-slate-600 border border-slate-200'
             }`}
           >
@@ -710,7 +905,7 @@ export default function PersetujuanAkun() {
         {isSuperAdmin && (
           <button
             onClick={() => setTab('upgrade_paket')}
-            className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5 ${
+            className={`shrink-0 whitespace-nowrap text-sm font-medium px-4 py-2.5 md:py-2 rounded-lg transition-colors flex items-center gap-1.5 touch-manipulation ${
               tab === 'upgrade_paket' ? 'bg-teal-600 text-white' : 'bg-white text-slate-600 border border-slate-200'
             }`}
           >
@@ -729,11 +924,12 @@ export default function PersetujuanAkun() {
         )}
       </div>
 
+      {/* Filter jabatan — juga satu baris yang bisa digeser di HP */}
       {tab !== 'anak_menunggu' && tab !== 'upgrade_paket' && (
-        <div className="flex gap-2 mb-4 flex-wrap">
+        <div className={KELAS_TAB_BARIS}>
           <button
             onClick={() => setFilterJabatan('semua')}
-            className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+            className={`shrink-0 whitespace-nowrap text-xs font-medium px-3 py-2 md:py-1.5 rounded-full transition-colors touch-manipulation ${
               filterJabatan === 'semua' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'
             }`}
           >
@@ -744,7 +940,7 @@ export default function PersetujuanAkun() {
             <>
               <button
                 onClick={() => setFilterJabatan('admin_kepala')}
-                className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+                className={`shrink-0 whitespace-nowrap text-xs font-medium px-3 py-2 md:py-1.5 rounded-full transition-colors touch-manipulation ${
                   filterJabatan === 'admin_kepala' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-600'
                 }`}
               >
@@ -752,7 +948,7 @@ export default function PersetujuanAkun() {
               </button>
               <button
                 onClick={() => setFilterJabatan('pegawai')}
-                className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+                className={`shrink-0 whitespace-nowrap text-xs font-medium px-3 py-2 md:py-1.5 rounded-full transition-colors touch-manipulation ${
                   filterJabatan === 'pegawai' ? 'bg-cyan-600 text-white' : 'bg-cyan-50 text-cyan-600'
                 }`}
               >
@@ -763,7 +959,7 @@ export default function PersetujuanAkun() {
             <>
               <button
                 onClick={() => setFilterJabatan('admin_kepsek')}
-                className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+                className={`shrink-0 whitespace-nowrap text-xs font-medium px-3 py-2 md:py-1.5 rounded-full transition-colors touch-manipulation ${
                   filterJabatan === 'admin_kepsek' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-600'
                 }`}
               >
@@ -771,7 +967,7 @@ export default function PersetujuanAkun() {
               </button>
               <button
                 onClick={() => setFilterJabatan('guru')}
-                className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+                className={`shrink-0 whitespace-nowrap text-xs font-medium px-3 py-2 md:py-1.5 rounded-full transition-colors touch-manipulation ${
                   filterJabatan === 'guru' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600'
                 }`}
               >
@@ -779,7 +975,7 @@ export default function PersetujuanAkun() {
               </button>
               <button
                 onClick={() => setFilterJabatan('orang_tua')}
-                className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+                className={`shrink-0 whitespace-nowrap text-xs font-medium px-3 py-2 md:py-1.5 rounded-full transition-colors touch-manipulation ${
                   filterJabatan === 'orang_tua' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-600'
                 }`}
               >
@@ -801,150 +997,79 @@ export default function PersetujuanAkun() {
                 : 'Belum ada riwayat.'}
             </p>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
-                <tr>
-                  <th className="text-left px-4 py-3 font-medium">Nama</th>
-                  <th className="text-left px-4 py-3 font-medium">Email</th>
-                  <th className="text-left px-4 py-3 font-medium">Jabatan</th>
-                  {isSuperAdmin && (
-                    <th className="text-left px-4 py-3 font-medium">
-                      {isKantor ? teks.unit : 'Sekolah'}
-                    </th>
-                  )}
-                  <th className="text-left px-4 py-3 font-medium">Status</th>
-                  <th className="text-right px-4 py-3 font-medium">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
+            <>
+              {/* ===== HP: daftar kartu ===== */}
+              <div className="md:hidden divide-y divide-slate-100">
                 {daftarAkun.map((akun) => (
-                  <tr key={akun.id}>
-                    <td className="px-4 py-3 text-slate-700">
-                      {akun.nama_lengkap_pendaftar || '—'}
-                      {!isKantor && (akun.jabatan || akun.role) === 'orang_tua' && akun.relasiAnak?.length > 0 && (
-                        <p className="text-[11px] text-slate-400 mt-0.5">
-                          Anak:{' '}
-                          {akun.relasiAnak
-                            .map((r) => r.siswa?.nama_lengkap)
-                            .filter(Boolean)
-                            .join(', ')}
-                          {akun.relasiAnak[0]?.hubungan ? ` (${akun.relasiAnak[0].hubungan})` : ''}
+                  <div key={akun.id} className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-medium text-slate-800 break-words">
+                          {akun.nama_lengkap_pendaftar || '—'}
                         </p>
-                      )}
-                      {!isKantor && (akun.jabatan || akun.role) === 'orang_tua' && akun.relasiAnak?.length === 0 && (
-                        <p className="text-[11px] text-red-400 mt-0.5">
-                          Belum ada data anak terhubung
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-slate-500">{akun.email_pendaftar || '—'}</td>
-                    <td className="px-4 py-3">
-                      <JabatanBadge jabatan={akun.jabatan} role={akun.role} teks={teks} />
-                    </td>
-                    {isSuperAdmin && (
-                      <td className="px-4 py-3 text-slate-500">{akun.sekolah?.nama_sekolah || '—'}</td>
-                    )}
-                    <td className="px-4 py-3">
-                      <StatusBadge status={akun.status_akun} />
-                      {akun.status_akun === 'aktif' && akun.catatan_admin && (
-                        <p className="text-[11px] text-slate-400 mt-1 max-w-[220px] truncate" title={akun.catatan_admin}>
-                          "{akun.catatan_admin}"
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex justify-end items-center gap-1.5 flex-wrap">
-                        {akun.status_akun === 'menunggu' && (
-                          <>
-                            <button
-                              onClick={() => handleSetujui(akun)}
-                              disabled={prosesId === akun.id}
-                              className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 disabled:opacity-60"
-                            >
-                              <CheckCircle2 size={14} /> Setujui
-                            </button>
-                            <button
-                              onClick={() => handleTolak(akun.id)}
-                              disabled={prosesId === akun.id}
-                              className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-60"
-                            >
-                              <XCircle size={14} /> Tolak
-                            </button>
-                          </>
-                        )}
-
-                        {akun.status_akun === 'aktif' && (
-                          <button
-                            onClick={() => handlePesan(akun)}
-                            disabled={prosesId === akun.id}
-                            className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 disabled:opacity-60"
-                          >
-                            <MessageSquare size={14} /> {akun.catatan_admin ? 'Edit Pesan' : 'Kirim Pesan'}
-                          </button>
-                        )}
-
-                        {akun.status_akun === 'aktif' && isJabatanPegawai(akun) && !akun.pegawai_id && (
-                          <button
-                            onClick={() => setModalPegawai(akun)}
-                            disabled={prosesId === akun.id}
-                            className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-cyan-50 text-cyan-600 hover:bg-cyan-100 disabled:opacity-60"
-                          >
-                            <UserPlus size={14} /> Hubungkan Pegawai
-                          </button>
-                        )}
-
-                        {akun.status_akun !== 'menunggu' && (
-                          <button
-                            onClick={() => handleResetStatus(akun)}
-                            disabled={prosesId === akun.id}
-                            title="Kembalikan ke status Menunggu"
-                            className="w-7 h-7 rounded-lg flex items-center justify-center text-indigo-600 hover:bg-indigo-50 disabled:opacity-60"
-                          >
-                            <RotateCcw size={14} />
-                          </button>
-                        )}
-
-                        <button
-                          onClick={() => setModalEdit(akun)}
-                          disabled={prosesId === akun.id}
-                          title="Edit data akun"
-                          className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100 disabled:opacity-60"
-                        >
-                          <Pencil size={14} />
-                        </button>
-
-                        <button
-                          onClick={() => handleResetPassword(akun)}
-                          disabled={prosesId === akun.id}
-                          title="Kirim link reset password"
-                          className="w-7 h-7 rounded-lg flex items-center justify-center text-amber-600 hover:bg-amber-50 disabled:opacity-60"
-                        >
-                          <KeyRound size={14} />
-                        </button>
-
-                        <button
-                          onClick={() => setModalPassword(akun)}
-                          disabled={prosesId === akun.id}
-                          title="Ganti password langsung"
-                          className="w-7 h-7 rounded-lg flex items-center justify-center text-orange-600 hover:bg-orange-50 disabled:opacity-60"
-                        >
-                          <ShieldCheck size={14} />
-                        </button>
-
-                        <button
-                          onClick={() => handleHapus(akun)}
-                          disabled={prosesId === akun.id}
-                          title="Hapus akun"
-                          className="w-7 h-7 rounded-lg flex items-center justify-center text-red-600 hover:bg-red-50 disabled:opacity-60"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        <p className="text-xs text-slate-500 break-all">{akun.email_pendaftar || '—'}</p>
                       </div>
-                    </td>
-                  </tr>
+                      <div className="shrink-0">
+                        <StatusBadge status={akun.status_akun} />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <JabatanBadge jabatan={akun.jabatan} role={akun.role} teks={teks} />
+                      {isSuperAdmin && akun.sekolah?.nama_sekolah && (
+                        <span className="text-xs text-slate-500">{akun.sekolah.nama_sekolah}</span>
+                      )}
+                    </div>
+
+                    {renderInfoAnak(akun)}
+                    {renderCatatan(akun)}
+                    {renderAksiAkun(akun)}
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+
+              {/* ===== Layar lebar: tabel ===== */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+                    <tr>
+                      <th className="text-left px-4 py-3 font-medium">Nama</th>
+                      <th className="text-left px-4 py-3 font-medium">Email</th>
+                      <th className="text-left px-4 py-3 font-medium">Jabatan</th>
+                      {isSuperAdmin && (
+                        <th className="text-left px-4 py-3 font-medium">
+                          {isKantor ? teks.unit : 'Sekolah'}
+                        </th>
+                      )}
+                      <th className="text-left px-4 py-3 font-medium">Status</th>
+                      <th className="text-right px-4 py-3 font-medium">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {daftarAkun.map((akun) => (
+                      <tr key={akun.id}>
+                        <td className="px-4 py-3 text-slate-700">
+                          {akun.nama_lengkap_pendaftar || '—'}
+                          {renderInfoAnak(akun)}
+                        </td>
+                        <td className="px-4 py-3 text-slate-500">{akun.email_pendaftar || '—'}</td>
+                        <td className="px-4 py-3">
+                          <JabatanBadge jabatan={akun.jabatan} role={akun.role} teks={teks} />
+                        </td>
+                        {isSuperAdmin && (
+                          <td className="px-4 py-3 text-slate-500">{akun.sekolah?.nama_sekolah || '—'}</td>
+                        )}
+                        <td className="px-4 py-3">
+                          <StatusBadge status={akun.status_akun} />
+                          {renderCatatan(akun)}
+                        </td>
+                        <td className="px-4 py-3 text-right">{renderAksiAkun(akun)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       ) : tab === 'anak_menunggu' ? (
@@ -956,49 +1081,61 @@ export default function PersetujuanAkun() {
               Tidak ada permintaan tambah anak yang menunggu persetujuan.
             </p>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
-                <tr>
-                  <th className="text-left px-4 py-3 font-medium">Akun Orang Tua</th>
-                  <th className="text-left px-4 py-3 font-medium">Anak</th>
-                  <th className="text-left px-4 py-3 font-medium">Hubungan</th>
-                  <th className="text-right px-4 py-3 font-medium">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
+            <>
+              {/* ===== HP: daftar kartu ===== */}
+              <div className="md:hidden divide-y divide-slate-100">
                 {anakMenunggu.map((r) => (
-                  <tr key={r.id}>
-                    <td className="px-4 py-3 text-slate-700">
-                      {r.ortu?.nama_lengkap_pendaftar || '—'}
-                      <p className="text-[11px] text-slate-400">{r.ortu?.email_pendaftar}</p>
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {r.siswa?.nama_lengkap || '—'}
-                      <p className="text-[11px] text-slate-400">NIS: {r.siswa?.nis || '—'}</p>
-                    </td>
-                    <td className="px-4 py-3 text-slate-500 capitalize">{r.hubungan || '—'}</td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex justify-end items-center gap-1.5">
-                        <button
-                          onClick={() => setujuiAnak(r.id)}
-                          disabled={prosesId === r.id}
-                          className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 disabled:opacity-60"
-                        >
-                          <CheckCircle2 size={14} /> Setujui
-                        </button>
-                        <button
-                          onClick={() => tolakAnak(r.id)}
-                          disabled={prosesId === r.id}
-                          className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-60"
-                        >
-                          <XCircle size={14} /> Tolak
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                  <div key={r.id} className="p-4 space-y-3">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-slate-400">Akun Orang Tua</p>
+                      <p className="font-medium text-slate-800 break-words">
+                        {r.ortu?.nama_lengkap_pendaftar || '—'}
+                      </p>
+                      <p className="text-xs text-slate-500 break-all">{r.ortu?.email_pendaftar}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-slate-400">Anak</p>
+                      <p className="text-slate-700 break-words">{r.siswa?.nama_lengkap || '—'}</p>
+                      <p className="text-xs text-slate-500">
+                        NIS: {r.siswa?.nis || '—'}
+                        {r.hubungan ? ` · ${r.hubungan}` : ''}
+                      </p>
+                    </div>
+                    {renderAksiAnak(r)}
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+
+              {/* ===== Layar lebar: tabel ===== */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+                    <tr>
+                      <th className="text-left px-4 py-3 font-medium">Akun Orang Tua</th>
+                      <th className="text-left px-4 py-3 font-medium">Anak</th>
+                      <th className="text-left px-4 py-3 font-medium">Hubungan</th>
+                      <th className="text-right px-4 py-3 font-medium">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {anakMenunggu.map((r) => (
+                      <tr key={r.id}>
+                        <td className="px-4 py-3 text-slate-700">
+                          {r.ortu?.nama_lengkap_pendaftar || '—'}
+                          <p className="text-[11px] text-slate-400">{r.ortu?.email_pendaftar}</p>
+                        </td>
+                        <td className="px-4 py-3 text-slate-700">
+                          {r.siswa?.nama_lengkap || '—'}
+                          <p className="text-[11px] text-slate-400">NIS: {r.siswa?.nis || '—'}</p>
+                        </td>
+                        <td className="px-4 py-3 text-slate-500 capitalize">{r.hubungan || '—'}</td>
+                        <td className="px-4 py-3 text-right">{renderAksiAnak(r)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       ) : tab === 'upgrade_paket' && isSuperAdmin ? (
@@ -1011,62 +1148,84 @@ export default function PersetujuanAkun() {
               Tidak ada permohonan upgrade paket yang menunggu verifikasi.
             </p>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
-                <tr>
-                  <th className="text-left px-4 py-3 font-medium">Pengguna</th>
-                  <th className="text-left px-4 py-3 font-medium">Paket</th>
-                  <th className="text-left px-4 py-3 font-medium">Transfer</th>
-                  <th className="text-left px-4 py-3 font-medium">Diajukan</th>
-                  <th className="text-right px-4 py-3 font-medium">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
+            <>
+              {/* ===== HP: daftar kartu ===== */}
+              <div className="md:hidden divide-y divide-slate-100">
                 {upgradeRequests.map((r) => (
-                  <tr key={r.id}>
-                    <td className="px-4 py-3 text-slate-700">
-                      {r.nama_lengkap || '—'}
-                      <p className="text-[11px] text-slate-400">{r.email}</p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full bg-teal-50 text-teal-700 capitalize">
+                  <div key={r.id} className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-medium text-slate-800 break-words">{r.nama_lengkap || '—'}</p>
+                        <p className="text-xs text-slate-500 break-all">{r.email}</p>
+                      </div>
+                      <span className="shrink-0 inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full bg-teal-50 text-teal-700 capitalize">
                         {r.paket}
                       </span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {formatRupiah(r.nominal)}
-                      <p className="text-[11px] text-slate-400">
+                    </div>
+
+                    <div className="text-sm text-slate-600">
+                      <p className="font-medium">{formatRupiah(r.nominal)}</p>
+                      <p className="text-xs text-slate-400 break-words">
                         {r.nama_pengirim}
                         {r.bank_pengirim ? ` (${r.bank_pengirim})` : ''}
                         {r.no_rekening_pengirim ? ` · ${r.no_rekening_pengirim}` : ''}
                       </p>
                       {r.catatan && (
-                        <p className="text-[11px] italic text-slate-400 mt-0.5">"{r.catatan}"</p>
+                        <p className="text-xs italic text-slate-400 mt-0.5 break-words">"{r.catatan}"</p>
                       )}
-                    </td>
-                    <td className="px-4 py-3 text-slate-500">{formatTanggalUpgrade(r.created_at)}</td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex justify-end items-center gap-1.5">
-                        <button
-                          onClick={() => ubahStatusUpgrade(r, 'approved')}
-                          disabled={prosesUpgradeId === r.id}
-                          className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 disabled:opacity-60"
-                        >
-                          <CheckCircle2 size={14} /> Setujui & Aktifkan
-                        </button>
-                        <button
-                          onClick={() => ubahStatusUpgrade(r, 'rejected')}
-                          disabled={prosesUpgradeId === r.id}
-                          className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-60"
-                        >
-                          <XCircle size={14} /> Tolak
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Diajukan {formatTanggalUpgrade(r.created_at)}
+                      </p>
+                    </div>
+
+                    {renderAksiUpgrade(r)}
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+
+              {/* ===== Layar lebar: tabel ===== */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+                    <tr>
+                      <th className="text-left px-4 py-3 font-medium">Pengguna</th>
+                      <th className="text-left px-4 py-3 font-medium">Paket</th>
+                      <th className="text-left px-4 py-3 font-medium">Transfer</th>
+                      <th className="text-left px-4 py-3 font-medium">Diajukan</th>
+                      <th className="text-right px-4 py-3 font-medium">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {upgradeRequests.map((r) => (
+                      <tr key={r.id}>
+                        <td className="px-4 py-3 text-slate-700">
+                          {r.nama_lengkap || '—'}
+                          <p className="text-[11px] text-slate-400">{r.email}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full bg-teal-50 text-teal-700 capitalize">
+                            {r.paket}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-slate-600">
+                          {formatRupiah(r.nominal)}
+                          <p className="text-[11px] text-slate-400">
+                            {r.nama_pengirim}
+                            {r.bank_pengirim ? ` (${r.bank_pengirim})` : ''}
+                            {r.no_rekening_pengirim ? ` · ${r.no_rekening_pengirim}` : ''}
+                          </p>
+                          {r.catatan && (
+                            <p className="text-[11px] italic text-slate-400 mt-0.5">"{r.catatan}"</p>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-slate-500">{formatTanggalUpgrade(r.created_at)}</td>
+                        <td className="px-4 py-3 text-right">{renderAksiUpgrade(r)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       ) : null}
@@ -1111,6 +1270,39 @@ export default function PersetujuanAkun() {
         />
       )}
     </Layout>
+  )
+}
+
+// Pembungkus semua modal. Di HP tampil sebagai "lembar bawah" (bottom sheet)
+// yang menempel di dasar layar, bisa digulir bila isinya panjang, dan
+// memperhitungkan area aman (poni/bilah gestur). Di layar lebar tetap
+// kartu di tengah seperti semula.
+function ModalShell({ children }) {
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center sm:px-4 z-50">
+      <div
+        className="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl p-5 overflow-y-auto overscroll-contain"
+        style={{
+          maxHeight: '90dvh',
+          paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom, 0px))',
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
+
+// Tombol tutup (X) dengan area sentuh yang cukup besar di HP
+function TombolTutup({ onClose }) {
+  return (
+    <button
+      onClick={onClose}
+      aria-label="Tutup"
+      className="w-10 h-10 -mr-2 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 touch-manipulation"
+    >
+      <X size={20} />
+    </button>
   )
 }
 
@@ -1173,85 +1365,81 @@ function ModalHubungkanGuru({ akun, onClose, onSelesai }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center px-4 z-50">
-      <div className="bg-white rounded-2xl max-w-md w-full p-5">
-        <div className="flex items-center justify-between mb-1">
-          <h2 className="font-semibold text-slate-800">Hubungkan Akun Guru</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <X size={18} />
-          </button>
-        </div>
-        <p className="text-xs text-slate-500 mb-4">
-          {akun.nama_lengkap_pendaftar} ({akun.email_pendaftar}) perlu dihubungkan ke data Guru
-          supaya muncul di Jadwal, Presensi, Nilai, dan fitur lain.
-        </p>
-
-        <div className="flex gap-2 p-1 bg-slate-100 rounded-lg mb-4">
-          <button
-            onClick={() => setMode('pilih')}
-            className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-medium py-2 rounded-md transition-colors ${
-              mode === 'pilih' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'
-            }`}
-          >
-            <UserCheck size={14} /> Data Sudah Ada
-          </button>
-          <button
-            onClick={() => setMode('baru')}
-            className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-medium py-2 rounded-md transition-colors ${
-              mode === 'baru' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'
-            }`}
-          >
-            <UserPlus size={14} /> Buat Baru
-          </button>
-        </div>
-
-        {mode === 'pilih' ? (
-          <>
-            {loading ? (
-              <p className="text-sm text-slate-400 text-center py-4">Memuat data guru...</p>
-            ) : daftarGuru.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-4">
-                Tidak ada data guru yang belum terhubung di sekolah ini. Gunakan tab "Buat Baru".
-              </p>
-            ) : (
-              <select
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm mb-4"
-                value={guruIdTerpilih}
-                onChange={(e) => setGuruIdTerpilih(e.target.value)}
-              >
-                <option value="">-- Pilih Data Guru --</option>
-                {daftarGuru.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.nama_lengkap} {g.nip ? `(NIP: ${g.nip})` : ''} {g.mata_pelajaran ? `- ${g.mata_pelajaran}` : ''}
-                  </option>
-                ))}
-              </select>
-            )}
-            <button
-              onClick={handleHubungkan}
-              disabled={!guruIdTerpilih || memproses}
-              className="w-full bg-blue-600 text-white text-sm font-medium py-2.5 rounded-lg disabled:opacity-50"
-            >
-              {memproses ? 'Memproses...' : 'Hubungkan & Setujui'}
-            </button>
-          </>
-        ) : (
-          <>
-            <p className="text-xs text-slate-500 mb-4">
-              Data guru baru akan dibuat otomatis dari nama & email pendaftaran. Lengkapi NIP, mata
-              pelajaran, dll nanti di halaman Data Guru.
-            </p>
-            <button
-              onClick={handleBuatBaru}
-              disabled={memproses}
-              className="w-full bg-blue-600 text-white text-sm font-medium py-2.5 rounded-lg disabled:opacity-50"
-            >
-              {memproses ? 'Memproses...' : 'Buat Data Guru Baru & Setujui'}
-            </button>
-          </>
-        )}
+    <ModalShell>
+      <div className="flex items-center justify-between mb-1">
+        <h2 className="font-semibold text-slate-800">Hubungkan Akun Guru</h2>
+        <TombolTutup onClose={onClose} />
       </div>
-    </div>
+      <p className="text-xs text-slate-500 mb-4 break-words">
+        {akun.nama_lengkap_pendaftar} ({akun.email_pendaftar}) perlu dihubungkan ke data Guru
+        supaya muncul di Jadwal, Presensi, Nilai, dan fitur lain.
+      </p>
+
+      <div className="flex gap-2 p-1 bg-slate-100 rounded-lg mb-4">
+        <button
+          onClick={() => setMode('pilih')}
+          className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-medium py-2.5 md:py-2 rounded-md transition-colors touch-manipulation ${
+            mode === 'pilih' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'
+          }`}
+        >
+          <UserCheck size={14} /> Data Sudah Ada
+        </button>
+        <button
+          onClick={() => setMode('baru')}
+          className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-medium py-2.5 md:py-2 rounded-md transition-colors touch-manipulation ${
+            mode === 'baru' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'
+          }`}
+        >
+          <UserPlus size={14} /> Buat Baru
+        </button>
+      </div>
+
+      {mode === 'pilih' ? (
+        <>
+          {loading ? (
+            <p className="text-sm text-slate-400 text-center py-4">Memuat data guru...</p>
+          ) : daftarGuru.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-4">
+              Tidak ada data guru yang belum terhubung di sekolah ini. Gunakan tab "Buat Baru".
+            </p>
+          ) : (
+            <select
+              className={`${INPUT_MODAL} mb-4`}
+              value={guruIdTerpilih}
+              onChange={(e) => setGuruIdTerpilih(e.target.value)}
+            >
+              <option value="">-- Pilih Data Guru --</option>
+              {daftarGuru.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.nama_lengkap} {g.nip ? `(NIP: ${g.nip})` : ''} {g.mata_pelajaran ? `- ${g.mata_pelajaran}` : ''}
+                </option>
+              ))}
+            </select>
+          )}
+          <button
+            onClick={handleHubungkan}
+            disabled={!guruIdTerpilih || memproses}
+            className="w-full bg-blue-600 text-white text-sm font-medium py-3 md:py-2.5 rounded-lg disabled:opacity-50 touch-manipulation"
+          >
+            {memproses ? 'Memproses...' : 'Hubungkan & Setujui'}
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="text-xs text-slate-500 mb-4">
+            Data guru baru akan dibuat otomatis dari nama & email pendaftaran. Lengkapi NIP, mata
+            pelajaran, dll nanti di halaman Data Guru.
+          </p>
+          <button
+            onClick={handleBuatBaru}
+            disabled={memproses}
+            className="w-full bg-blue-600 text-white text-sm font-medium py-3 md:py-2.5 rounded-lg disabled:opacity-50 touch-manipulation"
+          >
+            {memproses ? 'Memproses...' : 'Buat Data Guru Baru & Setujui'}
+          </button>
+        </>
+      )}
+    </ModalShell>
   )
 }
 
@@ -1324,90 +1512,86 @@ function ModalHubungkanPegawai({ akun, teks, onClose, onSelesai }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center px-4 z-50">
-      <div className="bg-white rounded-2xl max-w-md w-full p-5">
-        <div className="flex items-center justify-between mb-1">
-          <h2 className="font-semibold text-slate-800">Hubungkan Data Pegawai</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <X size={18} />
-          </button>
-        </div>
-        <p className="text-xs text-slate-500 mb-4">
-          {akun.nama_lengkap_pendaftar} ({akun.email_pendaftar}) perlu dihubungkan ke{' '}
-          {teks.dataPegawai} supaya muncul di {teks.fitur}.
-        </p>
-
-        <div className="flex gap-2 p-1 bg-slate-100 rounded-lg mb-4">
-          <button
-            onClick={() => setMode('pilih')}
-            className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-medium py-2 rounded-md transition-colors ${
-              mode === 'pilih' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'
-            }`}
-          >
-            <UserCheck size={14} /> Data Sudah Ada
-          </button>
-          <button
-            onClick={() => setMode('baru')}
-            className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-medium py-2 rounded-md transition-colors ${
-              mode === 'baru' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'
-            }`}
-          >
-            <UserPlus size={14} /> Buat Baru
-          </button>
-        </div>
-
-        {mode === 'pilih' ? (
-          <>
-            {loading ? (
-              <p className="text-sm text-slate-400 text-center py-4">Memuat data pegawai...</p>
-            ) : daftarPegawai.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-4">
-                Tidak ada data pegawai yang belum terhubung di {teks.unit.toLowerCase()} ini. Gunakan
-                tab "Buat Baru".
-              </p>
-            ) : (
-              <select
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm mb-4"
-                value={pegawaiIdTerpilih}
-                onChange={(e) => setPegawaiIdTerpilih(e.target.value)}
-              >
-                <option value="">-- Pilih Data Pegawai --</option>
-                {daftarPegawai.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.nama_lengkap} {p.nip ? `(NIP: ${p.nip})` : ''} {p.jabatan ? `- ${p.jabatan}` : ''}
-                  </option>
-                ))}
-              </select>
-            )}
-            <button
-              onClick={handleHubungkan}
-              disabled={!pegawaiIdTerpilih || memproses}
-              className="w-full bg-blue-600 text-white text-sm font-medium py-2.5 rounded-lg disabled:opacity-50"
-            >
-              {memproses ? 'Memproses...' : sedangDiajukan ? 'Hubungkan & Setujui' : 'Hubungkan'}
-            </button>
-          </>
-        ) : (
-          <>
-            <p className="text-xs text-slate-500 mb-4">
-              Data pegawai baru akan dibuat otomatis dari nama & email pendaftaran. Lengkapi NIP,
-              jabatan, dll nanti di halaman Data Pegawai.
-            </p>
-            <button
-              onClick={handleBuatBaru}
-              disabled={memproses}
-              className="w-full bg-blue-600 text-white text-sm font-medium py-2.5 rounded-lg disabled:opacity-50"
-            >
-              {memproses
-                ? 'Memproses...'
-                : sedangDiajukan
-                  ? 'Buat Data Pegawai Baru & Setujui'
-                  : 'Buat Data Pegawai Baru & Hubungkan'}
-            </button>
-          </>
-        )}
+    <ModalShell>
+      <div className="flex items-center justify-between mb-1">
+        <h2 className="font-semibold text-slate-800">Hubungkan Data Pegawai</h2>
+        <TombolTutup onClose={onClose} />
       </div>
-    </div>
+      <p className="text-xs text-slate-500 mb-4 break-words">
+        {akun.nama_lengkap_pendaftar} ({akun.email_pendaftar}) perlu dihubungkan ke{' '}
+        {teks.dataPegawai} supaya muncul di {teks.fitur}.
+      </p>
+
+      <div className="flex gap-2 p-1 bg-slate-100 rounded-lg mb-4">
+        <button
+          onClick={() => setMode('pilih')}
+          className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-medium py-2.5 md:py-2 rounded-md transition-colors touch-manipulation ${
+            mode === 'pilih' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'
+          }`}
+        >
+          <UserCheck size={14} /> Data Sudah Ada
+        </button>
+        <button
+          onClick={() => setMode('baru')}
+          className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-medium py-2.5 md:py-2 rounded-md transition-colors touch-manipulation ${
+            mode === 'baru' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'
+          }`}
+        >
+          <UserPlus size={14} /> Buat Baru
+        </button>
+      </div>
+
+      {mode === 'pilih' ? (
+        <>
+          {loading ? (
+            <p className="text-sm text-slate-400 text-center py-4">Memuat data pegawai...</p>
+          ) : daftarPegawai.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-4">
+              Tidak ada data pegawai yang belum terhubung di {teks.unit.toLowerCase()} ini. Gunakan
+              tab "Buat Baru".
+            </p>
+          ) : (
+            <select
+              className={`${INPUT_MODAL} mb-4`}
+              value={pegawaiIdTerpilih}
+              onChange={(e) => setPegawaiIdTerpilih(e.target.value)}
+            >
+              <option value="">-- Pilih Data Pegawai --</option>
+              {daftarPegawai.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nama_lengkap} {p.nip ? `(NIP: ${p.nip})` : ''} {p.jabatan ? `- ${p.jabatan}` : ''}
+                </option>
+              ))}
+            </select>
+          )}
+          <button
+            onClick={handleHubungkan}
+            disabled={!pegawaiIdTerpilih || memproses}
+            className="w-full bg-blue-600 text-white text-sm font-medium py-3 md:py-2.5 rounded-lg disabled:opacity-50 touch-manipulation"
+          >
+            {memproses ? 'Memproses...' : sedangDiajukan ? 'Hubungkan & Setujui' : 'Hubungkan'}
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="text-xs text-slate-500 mb-4">
+            Data pegawai baru akan dibuat otomatis dari nama & email pendaftaran. Lengkapi NIP,
+            jabatan, dll nanti di halaman Data Pegawai.
+          </p>
+          <button
+            onClick={handleBuatBaru}
+            disabled={memproses}
+            className="w-full bg-blue-600 text-white text-sm font-medium py-3 md:py-2.5 rounded-lg disabled:opacity-50 touch-manipulation"
+          >
+            {memproses
+              ? 'Memproses...'
+              : sedangDiajukan
+                ? 'Buat Data Pegawai Baru & Setujui'
+                : 'Buat Data Pegawai Baru & Hubungkan'}
+          </button>
+        </>
+      )}
+    </ModalShell>
   )
 }
 
@@ -1430,74 +1614,72 @@ function ModalEditAkun({ akun, isKantor, teks, onClose, onSimpan }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center px-4 z-50">
-      <div className="bg-white rounded-2xl max-w-md w-full p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold text-slate-800">Edit Data Akun</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs font-medium text-slate-500 mb-1 block">Nama Lengkap</label>
-            <input
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
-              value={nama}
-              onChange={(e) => setNama(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-slate-500 mb-1 block">Email</label>
-            <input
-              type="email"
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-            <p className="text-[11px] text-slate-400 mt-1">
-              Catatan: mengubah email di sini hanya mengubah data tampilan, bukan email login akun.
-            </p>
-          </div>
-          <div>
-            <label className="text-xs font-medium text-slate-500 mb-1 block">Jabatan</label>
-            <select
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
-              value={jabatan}
-              onChange={(e) => setJabatan(e.target.value)}
-            >
-              {isKantor ? (
-                <>
-                  <option value="pegawai">{teks.pegawai}</option>
-                  <option value="kepala_kantor">{teks.kepala}</option>
-                  <option value="admin">Admin</option>
-                  <option value="admin_utama">Admin Utama</option>
-                </>
-              ) : (
-                <>
-                  <option value="guru">Guru</option>
-                  <option value="admin">Admin</option>
-                  <option value="kepala_sekolah">Kepala Sekolah</option>
-                  <option value="admin_utama">Admin Utama</option>
-                  <option value="orang_tua">Orang Tua/Wali</option>
-                  <option value="pegawai">Pegawai</option>
-                  <option value="kepala_kantor">Kepala Kantor</option>
-                </>
-              )}
-            </select>
-          </div>
-        </div>
-
-        <button
-          onClick={handleSimpan}
-          disabled={menyimpan || !nama || !email}
-          className="w-full mt-5 bg-blue-600 text-white text-sm font-medium py-2.5 rounded-lg disabled:opacity-50"
-        >
-          {menyimpan ? 'Menyimpan...' : 'Simpan Perubahan'}
-        </button>
+    <ModalShell>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-semibold text-slate-800">Edit Data Akun</h2>
+        <TombolTutup onClose={onClose} />
       </div>
-    </div>
+
+      <div className="space-y-3">
+        <div>
+          <label className="text-xs font-medium text-slate-500 mb-1 block">Nama Lengkap</label>
+          <input
+            className={INPUT_MODAL}
+            value={nama}
+            onChange={(e) => setNama(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-slate-500 mb-1 block">Email</label>
+          <input
+            type="email"
+            inputMode="email"
+            autoCapitalize="none"
+            className={INPUT_MODAL}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <p className="text-[11px] text-slate-400 mt-1">
+            Catatan: mengubah email di sini hanya mengubah data tampilan, bukan email login akun.
+          </p>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-slate-500 mb-1 block">Jabatan</label>
+          <select
+            className={INPUT_MODAL}
+            value={jabatan}
+            onChange={(e) => setJabatan(e.target.value)}
+          >
+            {isKantor ? (
+              <>
+                <option value="pegawai">{teks.pegawai}</option>
+                <option value="kepala_kantor">{teks.kepala}</option>
+                <option value="admin">Admin</option>
+                <option value="admin_utama">Admin Utama</option>
+              </>
+            ) : (
+              <>
+                <option value="guru">Guru</option>
+                <option value="admin">Admin</option>
+                <option value="kepala_sekolah">Kepala Sekolah</option>
+                <option value="admin_utama">Admin Utama</option>
+                <option value="orang_tua">Orang Tua/Wali</option>
+                <option value="pegawai">Pegawai</option>
+                <option value="kepala_kantor">Kepala Kantor</option>
+              </>
+            )}
+          </select>
+        </div>
+      </div>
+
+      <button
+        onClick={handleSimpan}
+        disabled={menyimpan || !nama || !email}
+        className="w-full mt-5 bg-blue-600 text-white text-sm font-medium py-3 md:py-2.5 rounded-lg disabled:opacity-50 touch-manipulation"
+      >
+        {menyimpan ? 'Menyimpan...' : 'Simpan Perubahan'}
+      </button>
+    </ModalShell>
   )
 }
 
@@ -1525,70 +1707,69 @@ function ModalGantiPassword({ akun, memproses, onClose, onSimpan }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center px-4 z-50">
-      <div className="bg-white rounded-2xl max-w-md w-full p-5">
-        <div className="flex items-center justify-between mb-1">
-          <h2 className="font-semibold text-slate-800">Ganti Password Akun</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <X size={18} />
-          </button>
-        </div>
-        <p className="text-xs text-slate-500 mb-4">
-          Set password baru untuk <span className="font-medium text-slate-700">
-            {akun.nama_lengkap_pendaftar || akun.email_pendaftar}
-          </span>{' '}
-          ({akun.email_pendaftar || 'tanpa email'}). Password akan berubah seketika — pastikan Anda
-          memberitahu pemilik akun secara langsung.
-        </p>
+    <ModalShell>
+      <div className="flex items-center justify-between mb-1">
+        <h2 className="font-semibold text-slate-800">Ganti Password Akun</h2>
+        <TombolTutup onClose={onClose} />
+      </div>
+      <p className="text-xs text-slate-500 mb-4 break-words">
+        Set password baru untuk{' '}
+        <span className="font-medium text-slate-700">
+          {akun.nama_lengkap_pendaftar || akun.email_pendaftar}
+        </span>{' '}
+        ({akun.email_pendaftar || 'tanpa email'}). Password akan berubah seketika — pastikan Anda
+        memberitahu pemilik akun secara langsung.
+      </p>
 
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs font-medium text-slate-500 mb-1 block">Password Baru</label>
-            <div className="relative">
-              <input
-                type={tampilkan ? 'text' : 'password'}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm pr-16"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Minimal 6 karakter"
-              />
-              <button
-                type="button"
-                onClick={() => setTampilkan((v) => !v)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-medium text-blue-600"
-              >
-                {tampilkan ? 'Sembunyikan' : 'Tampilkan'}
-              </button>
-            </div>
-          </div>
-          <div>
-            <label className="text-xs font-medium text-slate-500 mb-1 block">Konfirmasi Password</label>
+      <div className="space-y-3">
+        <div>
+          <label className="text-xs font-medium text-slate-500 mb-1 block">Password Baru</label>
+          <div className="relative">
             <input
               type={tampilkan ? 'text' : 'password'}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
-              value={konfirmasi}
-              onChange={(e) => setKonfirmasi(e.target.value)}
-              placeholder="Ulangi password baru"
+              autoComplete="new-password"
+              className={`${INPUT_MODAL} pr-24`}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Minimal 6 karakter"
             />
+            <button
+              type="button"
+              onClick={() => setTampilkan((v) => !v)}
+              className="absolute right-1 top-1/2 -translate-y-1/2 px-3 py-2 text-[11px] font-medium text-blue-600 touch-manipulation"
+            >
+              {tampilkan ? 'Sembunyikan' : 'Tampilkan'}
+            </button>
           </div>
         </div>
-
-        {error && (
-          <p className="text-xs text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-3">
-            {error}
-          </p>
-        )}
-
-        <button
-          onClick={handleSimpan}
-          disabled={memproses || !password || !konfirmasi}
-          className="w-full mt-5 flex items-center justify-center gap-2 bg-orange-600 text-white text-sm font-medium py-2.5 rounded-lg disabled:opacity-50"
-        >
-          {memproses ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
-          {memproses ? 'Memproses...' : 'Ganti Password'}
-        </button>
+        <div>
+          <label className="text-xs font-medium text-slate-500 mb-1 block">Konfirmasi Password</label>
+          <input
+            type={tampilkan ? 'text' : 'password'}
+            autoComplete="new-password"
+            className={INPUT_MODAL}
+            value={konfirmasi}
+            onChange={(e) => setKonfirmasi(e.target.value)}
+            placeholder="Ulangi password baru"
+          />
+        </div>
       </div>
-    </div>
+
+      {error && (
+        <p className="text-xs text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-3">
+          {error}
+        </p>
+      )}
+
+      <button
+        onClick={handleSimpan}
+        disabled={memproses || !password || !konfirmasi}
+        className="w-full mt-5 flex items-center justify-center gap-2 bg-orange-600 text-white text-sm font-medium py-3 md:py-2.5 rounded-lg disabled:opacity-50 touch-manipulation"
+      >
+        {memproses ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+        {memproses ? 'Memproses...' : 'Ganti Password'}
+      </button>
+    </ModalShell>
   )
 }
 
