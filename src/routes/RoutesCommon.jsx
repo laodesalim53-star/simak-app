@@ -38,6 +38,7 @@ const AlatPDF = lazy(() => import('../pages/AlatPDF'))
 const Rapat = lazy(() => import('../pages/Rapat'))
 const RapatVideo = lazy(() => import('../pages/RapatVideo'))
 const CetakSampulHub = lazy(() => import('../pages/CetakSampulHub'))
+const QrMasukSaya = lazy(() => import('../pages/QrMasukSaya'))
 
 export const commonRoutes = (
   <>
@@ -54,6 +55,7 @@ export const commonRoutes = (
     {/* Setelah login */}
     <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
     <Route path="/profil-saya" element={<ProtectedRoute><ProfilSaya /></ProtectedRoute>} />
+    <Route path="/qr-masuk-saya" element={<ProtectedRoute><QrMasukSaya /></ProtectedRoute>} />
     <Route path="/upgrade-fitur" element={<ProtectedRoute><UpgradeFitur /></ProtectedRoute>} />
     <Route path="/pesan" element={<ProtectedRoute><Pesan /></ProtectedRoute>} />
     <Route path="/pengumuman" element={<ProtectedRoute><Pengumuman /></ProtectedRoute>} />
