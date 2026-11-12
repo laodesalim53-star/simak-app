@@ -68,6 +68,7 @@ import {
   Target,
   Network,
   Wrench,
+  QrCode,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
@@ -77,6 +78,14 @@ import { APP } from '../lib/appConfig'
 // Dibandingkan langsung dengan import.meta.env supaya Vite membuang
 // fungsi menu tipe lain dari bundle.
 const TIPE = import.meta.env.VITE_APP_TIPE || 'sekolah'
+// Menu "QR Masuk Saya" disisipkan tepat di bawah "Profil Saya" untuk semua
+// peran & tenant, supaya tidak perlu mengubah tiap fungsi daftar menu.
+const MENU_QR = { to: '/qr-masuk-saya', label: 'QR Masuk Saya', icon: QrCode }
+function sisipkanMenuQr(links) {
+  const i = links.findIndex((l) => l.to === '/profil-saya')
+  if (i < 0) return links
+  return [...links.slice(0, i + 1), MENU_QR, ...links.slice(i + 1)]
+}
 
 // Helper: hapus channel Supabase Realtime dengan nama (topic) yang sama
 // kalau masih ada, sebelum bikin channel baru dengan nama itu lagi.
