@@ -10,6 +10,7 @@ import { commonRoutes, adminUmumRoutes } from './RoutesCommon'
 // kecuali yang sudah dipindah ke RoutesCommon.jsx.
 // ============================================================
 const Beranda = lazy(() => import('../pages/Beranda'))
+const QrMasukSaya = lazy(() => import('../pages/QrMasukSaya'))
 const PPDBPublik = lazy(() => import('../pages/PPDBPublik'))
 const UjianOnline = lazy(() => import('../pages/UjianOnline'))
 const KuisSeru = lazy(() => import('../pages/KuisSeru'))
@@ -279,6 +280,7 @@ export default function RoutesSekolah() {
       <Route path="/cetak-8355" element={<ProtectedRoute adminOnly><Cetak8355 /></ProtectedRoute>} />
 
       {/* 4. Akademik */}
+      <Route path="/qr-masuk-saya" element={<ProtectedRoute><QrMasukSaya /></ProtectedRoute>} />
       <Route path="/jadwal" element={<ProtectedRoute><Jadwal /></ProtectedRoute>} />
       <Route path="/jurnal-mengajar" element={<JurnalMengajar />} />
       <Route path="/presensi" element={<ProtectedRoute><Presensi /></ProtectedRoute>} />
