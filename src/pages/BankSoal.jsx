@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import * as XLSX from 'xlsx'
 import JSZip from 'jszip'
 import { supabase } from '../lib/supabaseClient'
@@ -22,6 +22,11 @@ import {
 
 const HURUF_JAWABAN = ['A', 'B', 'C', 'D']
 const EKSTENSI_GAMBAR = /\.(jpg|jpeg|png|webp|gif)$/i
+
+// "Kelas 6", "6", " 6A " -> "6", "6a" supaya cocok dengan kolom bank_soal.kelas (teks bebas)
+function normKelas(k) {
+  return String(k ?? '').replace(/kelas/i, '').trim().toLowerCase()
+}
 
 // ===================== CETAK & UNDUH (untuk asesmen manual) =====================
 // Semua dokumen dibuat dari HTML sederhana supaya:
@@ -196,7 +201,7 @@ const TOMBOL_AKSI =
 
 export default function BankSoal() {
   const { profil, isAdmin, sekolahId } = useAuth()
-  const [items, setItems] = useState([])
+  const [semuaItems, setItems] = useState([]) // semua soal hasil query (belum difilter per guru)
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [uploadingZip, setUploadingZip] = useState(false)
@@ -204,6 +209,10 @@ export default function BankSoal() {
   const [expanded, setExpanded] = useState({})
   const [deletingMapel, setDeletingMapel] = useState('')
   const [profilKop, setProfilKop] = useState(null) // data kop surat sekolah untuk lembar soal cetak/unduh
+
+  // Kelas yang diampu guru (Set nama kelas ter-normalisasi). null = tidak dibatasi (admin).
+  const [kelasDiampu, setKelasDiampu] = useState(null)
+  const [loadingKelas, setLoadingKelas] = useState(true)
 
   // --- Form tambah 1 soal manual, bisa disertai gambar (mis. soal tebak gambar) ---
   const [formTerbuka, setFormTerbuka] = useState(false)
@@ -300,6 +309,57 @@ export default function BankSoal() {
   useEffect(() => {
     load()
   }, [])
+
+  // Kelas yang diampu guru = kelas yang muncul di jadwal mengajarnya (tabel jadwal ->
+  // kelas_id -> tabel kelas.nama). Admin tidak dibatasi. Sesuaikan nama tabel/kolom
+  // di sini kalau skema berbeda.
+  useEffect(() => {
+    if (isAdmin) {
+      setKelasDiampu(null)
+      setLoadingKelas(false)
+      return
+    }
+    if (!profil?.guru_id) {
+      setKelasDiampu(new Set())
+      setLoadingKelas(false)
+      return
+    }
+    let batal = false
+    ;(async () => {
+      setLoadingKelas(true)
+      const { data: jd, error: errJadwal } = await supabase
+        .from('jadwal')
+        .select('kelas_id')
+        .eq('guru_id', profil.guru_id)
+      if (errJadwal) console.error('BankSoal: gagal memuat jadwal guru:', errJadwal)
+
+      const ids = [...new Set((jd || []).map((j) => j.kelas_id).filter(Boolean))]
+      let namaKelas = []
+      if (ids.length > 0) {
+        const { data: kl, error: errKelas } = await supabase.from('kelas').select('id, nama').in('id', ids)
+        if (errKelas) console.error('BankSoal: gagal memuat kelas:', errKelas)
+        namaKelas = (kl || []).map((k) => normKelas(k.nama))
+      }
+      if (!batal) {
+        setKelasDiampu(new Set(namaKelas))
+        setLoadingKelas(false)
+      }
+    })()
+    return () => {
+      batal = true
+    }
+  }, [isAdmin, profil?.guru_id])
+
+  // Daftar soal yang boleh dilihat: admin = semua; guru = soal di kelas yang diampu
+  // + soal yang ia unggah sendiri. Semua tampilan di bawah (folder, filter mapel,
+  // jumlah, cetak, unduh) memakai daftar ini.
+  const items = useMemo(() => {
+    if (isAdmin) return semuaItems
+    if (!kelasDiampu) return []
+    return semuaItems.filter(
+      (it) => it.guru_id === profil?.guru_id || kelasDiampu.has(normKelas(it.kelas))
+    )
+  }, [isAdmin, semuaItems, kelasDiampu, profil?.guru_id])
 
   // Data kop surat sekolah (sumber yang sama dengan KopSurat.jsx: profil_sekolah per
   // sekolah_id). Kalau gagal dimuat, lembar soal tetap bisa dicetak tanpa kop.
@@ -746,12 +806,25 @@ export default function BankSoal() {
             <div className="grid sm:grid-cols-2 gap-3">
               <div>
                 <label className="eyebrow mb-1 block">Kelas</label>
-                <input
-                  className="input-field"
-                  value={formKelas}
-                  onChange={(e) => setFormKelas(e.target.value)}
-                  placeholder="1"
-                />
+                {isAdmin || !kelasDiampu || kelasDiampu.size === 0 ? (
+                  <input
+                    className="input-field"
+                    value={formKelas}
+                    onChange={(e) => setFormKelas(e.target.value)}
+                    placeholder="1"
+                  />
+                ) : (
+                  <select
+                    className="input-field"
+                    value={formKelas}
+                    onChange={(e) => setFormKelas(e.target.value)}
+                  >
+                    <option value="">Pilih kelas</option>
+                    {[...kelasDiampu].map((k) => (
+                      <option key={k} value={k}>{k}</option>
+                    ))}
+                  </select>
+                )}
               </div>
               <div>
                 <label className="eyebrow mb-1 block">Mata Pelajaran</label>
@@ -917,11 +990,15 @@ export default function BankSoal() {
         </div>
       )}
 
-      {loading ? (
+      {loading || loadingKelas ? (
         <p className="text-sm text-ink-700/50">Memuat...</p>
       ) : items.length === 0 ? (
         <div className="card p-6">
-          <p className="text-sm text-ink-700/50">Belum ada soal di Bank Soal. Upload lewat form di atas.</p>
+          <p className="text-sm text-ink-700/50">
+            {isAdmin
+              ? 'Belum ada soal di Bank Soal. Upload lewat form di atas.'
+              : 'Belum ada soal untuk kelas yang Anda ampu. Pastikan jadwal mengajar Anda sudah terisi, atau upload soal lewat form di atas.'}
+          </p>
         </div>
       ) : (
         <div className="space-y-4">
