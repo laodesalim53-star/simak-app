@@ -32,92 +32,92 @@ const PALET_WARNA = {
     bg: 'bg-blue-50',
     icon: 'text-blue-600',
     border: 'border-blue-100',
-    hoverBorder: 'hover:border-blue-400',
-    hoverShadow: 'hover:shadow-blue-100',
+    hoverBorder: 'sm:hover:border-blue-400',
+    hoverShadow: 'sm:hover:shadow-blue-100',
   },
   emerald: {
     bg: 'bg-emerald-50',
     icon: 'text-emerald-600',
     border: 'border-emerald-100',
-    hoverBorder: 'hover:border-emerald-400',
-    hoverShadow: 'hover:shadow-emerald-100',
+    hoverBorder: 'sm:hover:border-emerald-400',
+    hoverShadow: 'sm:hover:shadow-emerald-100',
   },
   purple: {
     bg: 'bg-purple-50',
     icon: 'text-purple-600',
     border: 'border-purple-100',
-    hoverBorder: 'hover:border-purple-400',
-    hoverShadow: 'hover:shadow-purple-100',
+    hoverBorder: 'sm:hover:border-purple-400',
+    hoverShadow: 'sm:hover:shadow-purple-100',
   },
   amber: {
     bg: 'bg-amber-50',
     icon: 'text-amber-600',
     border: 'border-amber-100',
-    hoverBorder: 'hover:border-amber-400',
-    hoverShadow: 'hover:shadow-amber-100',
+    hoverBorder: 'sm:hover:border-amber-400',
+    hoverShadow: 'sm:hover:shadow-amber-100',
   },
   rose: {
     bg: 'bg-rose-50',
     icon: 'text-rose-600',
     border: 'border-rose-100',
-    hoverBorder: 'hover:border-rose-400',
-    hoverShadow: 'hover:shadow-rose-100',
+    hoverBorder: 'sm:hover:border-rose-400',
+    hoverShadow: 'sm:hover:shadow-rose-100',
   },
   cyan: {
     bg: 'bg-cyan-50',
     icon: 'text-cyan-600',
     border: 'border-cyan-100',
-    hoverBorder: 'hover:border-cyan-400',
-    hoverShadow: 'hover:shadow-cyan-100',
+    hoverBorder: 'sm:hover:border-cyan-400',
+    hoverShadow: 'sm:hover:shadow-cyan-100',
   },
   indigo: {
     bg: 'bg-indigo-50',
     icon: 'text-indigo-600',
     border: 'border-indigo-100',
-    hoverBorder: 'hover:border-indigo-400',
-    hoverShadow: 'hover:shadow-indigo-100',
+    hoverBorder: 'sm:hover:border-indigo-400',
+    hoverShadow: 'sm:hover:shadow-indigo-100',
   },
   teal: {
     bg: 'bg-teal-50',
     icon: 'text-teal-600',
     border: 'border-teal-100',
-    hoverBorder: 'hover:border-teal-400',
-    hoverShadow: 'hover:shadow-teal-100',
+    hoverBorder: 'sm:hover:border-teal-400',
+    hoverShadow: 'sm:hover:shadow-teal-100',
   },
   orange: {
     bg: 'bg-orange-50',
     icon: 'text-orange-600',
     border: 'border-orange-100',
-    hoverBorder: 'hover:border-orange-400',
-    hoverShadow: 'hover:shadow-orange-100',
+    hoverBorder: 'sm:hover:border-orange-400',
+    hoverShadow: 'sm:hover:shadow-orange-100',
   },
   sky: {
     bg: 'bg-sky-50',
     icon: 'text-sky-600',
     border: 'border-sky-100',
-    hoverBorder: 'hover:border-sky-400',
-    hoverShadow: 'hover:shadow-sky-100',
+    hoverBorder: 'sm:hover:border-sky-400',
+    hoverShadow: 'sm:hover:shadow-sky-100',
   },
   green: {
     bg: 'bg-green-50',
     icon: 'text-green-600',
     border: 'border-green-100',
-    hoverBorder: 'hover:border-green-400',
-    hoverShadow: 'hover:shadow-green-100',
+    hoverBorder: 'sm:hover:border-green-400',
+    hoverShadow: 'sm:hover:shadow-green-100',
   },
   violet: {
     bg: 'bg-violet-50',
     icon: 'text-violet-600',
     border: 'border-violet-100',
-    hoverBorder: 'hover:border-violet-400',
-    hoverShadow: 'hover:shadow-violet-100',
+    hoverBorder: 'sm:hover:border-violet-400',
+    hoverShadow: 'sm:hover:shadow-violet-100',
   },
   slate: {
     bg: 'bg-slate-100',
     icon: 'text-slate-600',
     border: 'border-slate-200',
-    hoverBorder: 'hover:border-slate-400',
-    hoverShadow: 'hover:shadow-slate-100',
+    hoverBorder: 'sm:hover:border-slate-400',
+    hoverShadow: 'sm:hover:shadow-slate-100',
   },
 }
 
@@ -186,6 +186,16 @@ const daftarSK = [
     warna: 'violet',
     siap: true,
   },
+  {
+    id: 'keterangan-tidak-skhun',
+    kategori: 'tugas',
+    judul: 'Keterangan Tidak Memiliki SKHUN',
+    deskripsi: 'Surat keterangan alumni yang tidak memiliki SKHUN, lengkap dengan data ijazah dan nomor peserta ujian sekolah.',
+    icon: FileX,
+    path: '/gudang-sk/keterangan-tidak-memiliki-skhun',
+    warna: 'slate',
+    siap: true,
+  },
 
   // ---- Honorarium & Tenaga Pendukung ----
   {
@@ -218,56 +228,17 @@ const daftarSK = [
     warna: 'indigo',
     siap: true,
   },
- {
-   id: 'daftar-honor-literasi-numerasi',
-   kategori: 'honor',
-   judul: 'Daftar Honor Literasi & Numerasi',
-   deskripsi: 'Daftar penerimaan honorarium guru yang mengikuti kegiatan literasi dan numerasi, lengkap dengan potongan PPh 21 dan kolom paraf.',
-   icon: Receipt,
-   path: '/gudang-sk/daftar-honor-literasi-numerasi',
-   warna: 'rose',
-   siap: true,
-  },
-    {
-    id: 'daftar-honor-pengawas-asesmen',
-    kategori: 'kegiatan',
-    judul: 'Daftar Honor Pengawas Asesmen',
-    deskripsi: 'Daftar penerimaan honorarium pengawas ruang asesmen, lengkap dengan potongan PPh 21 dan kolom paraf.',
-    icon: Receipt,
-    path: '/gudang-sk/daftar-honor-pengawas-asesmen',
-    warna: 'purple',
-    siap: true,
-  },
   {
-    id: 'daftar-honor-panitia-ujian',
-    kategori: 'kegiatan',
-    judul: 'Daftar Honor Panitia Ujian',
-    deskripsi: 'Daftar penerimaan honorarium panitia ujian sekolah, lengkap dengan potongan PPh 21 dan kolom paraf.',
+    id: 'daftar-honor-literasi-numerasi',
+    kategori: 'honor',
+    judul: 'Daftar Honor Literasi & Numerasi',
+    deskripsi: 'Daftar penerimaan honorarium guru yang mengikuti kegiatan literasi dan numerasi, lengkap dengan potongan PPh 21 dan kolom paraf.',
     icon: Receipt,
-    path: '/gudang-sk/daftar-honor-panitia-ujian',
-    warna: 'cyan',
-    siap: true,
-  },
-  {
-    id: 'daftar-honor-panitia-ppdb',
-    kategori: 'kegiatan',
-    judul: 'Daftar Honor Panitia PPDB',
-    deskripsi: 'Daftar penerimaan honorarium panitia PPDB, lengkap dengan potongan PPh 21 dan kolom paraf.',
-    icon: Receipt,
-    path: '/gudang-sk/daftar-honor-panitia-ppdb',
+    path: '/gudang-sk/daftar-honor-literasi-numerasi',
     warna: 'rose',
     siap: true,
   },
-   {
-   id: 'bendahara-bos',
-   kategori: 'kegiatan',
-   judul: 'SK Bendahara BOS',
-   deskripsi: 'Penetapan bendahara pengelola dana BOS beserta uraian tugas dan tanggung jawabnya.',
-   icon: Coins,
-   path: '/gudang-sk/bendahara-bos',
-   warna: 'amber',
-   siap: true,
- },
+
   // ---- Asesmen & Kegiatan Sekolah ----
   {
     id: 'mengawas-asesmen',
@@ -310,15 +281,45 @@ const daftarSK = [
     siap: true,
   },
   {
-  id: 'keterangan-tidak-skhun',
-  kategori: 'tugas',
-  judul: 'Keterangan Tidak Memiliki SKHUN',
-  deskripsi: 'Surat keterangan alumni yang tidak memiliki SKHUN, lengkap dengan data ijazah dan nomor peserta ujian sekolah.',
-  icon: FileX,
-  path: '/gudang-sk/keterangan-tidak-memiliki-skhun',
-  warna: 'slate',
-  siap: true,
-},
+    id: 'bendahara-bos',
+    kategori: 'kegiatan',
+    judul: 'SK Bendahara BOS',
+    deskripsi: 'Penetapan bendahara pengelola dana BOS beserta uraian tugas dan tanggung jawabnya.',
+    icon: Coins,
+    path: '/gudang-sk/bendahara-bos',
+    warna: 'amber',
+    siap: true,
+  },
+  {
+    id: 'daftar-honor-pengawas-asesmen',
+    kategori: 'kegiatan',
+    judul: 'Daftar Honor Pengawas Asesmen',
+    deskripsi: 'Daftar penerimaan honorarium pengawas ruang asesmen, lengkap dengan potongan PPh 21 dan kolom paraf.',
+    icon: Receipt,
+    path: '/gudang-sk/daftar-honor-pengawas-asesmen',
+    warna: 'purple',
+    siap: true,
+  },
+  {
+    id: 'daftar-honor-panitia-ujian',
+    kategori: 'kegiatan',
+    judul: 'Daftar Honor Panitia Ujian',
+    deskripsi: 'Daftar penerimaan honorarium panitia ujian sekolah, lengkap dengan potongan PPh 21 dan kolom paraf.',
+    icon: Receipt,
+    path: '/gudang-sk/daftar-honor-panitia-ujian',
+    warna: 'cyan',
+    siap: true,
+  },
+  {
+    id: 'daftar-honor-panitia-ppdb',
+    kategori: 'kegiatan',
+    judul: 'Daftar Honor Panitia PPDB',
+    deskripsi: 'Daftar penerimaan honorarium panitia PPDB, lengkap dengan potongan PPh 21 dan kolom paraf.',
+    icon: Receipt,
+    path: '/gudang-sk/daftar-honor-panitia-ppdb',
+    warna: 'rose',
+    siap: true,
+  },
 ]
 
 // Motif batik banner — sama seperti di PusatLaporanGuru.jsx dan Dashboard.jsx
@@ -373,37 +374,41 @@ function BatikOverlay({ patternId, strokeColor = '#d4af37', opacity = 1, size = 
 
 // Isi satu kartu. Dibuat sebagai komponen di luar render supaya tidak dibuat
 // ulang setiap kali state pencarian berubah.
+// Di HP: ikon di kiri, teks di kanan, deskripsi dipotong 2 baris.
+// Di layar >= sm: ikon di atas, teks penuh (tata letak lama).
 function IsiKartu({ item, warna }) {
   const Icon = item.icon
   return (
-    <>
+    <div className="flex items-start gap-3 sm:block">
       <div
-        className={`relative w-11 h-11 rounded-xl flex items-center justify-center mb-3 shrink-0 ${
+        className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center shrink-0 sm:mb-3 ${
           item.siap ? `${warna.bg} ${warna.icon}` : 'bg-slate-100 text-slate-300'
         }`}
       >
         <Icon size={20} />
       </div>
-      <h3
-        className={`font-display text-sm sm:text-[15px] font-semibold mb-1 leading-snug ${
-          item.siap ? 'text-slate-900' : 'text-slate-300'
-        }`}
-      >
-        {item.judul}
-      </h3>
-      <p
-        className={`text-xs sm:text-[13px] leading-relaxed ${
-          item.siap ? 'text-slate-600' : 'text-slate-300'
-        }`}
-      >
-        {item.deskripsi}
-      </p>
-      {!item.siap && (
-        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400 bg-slate-100 px-2 py-1 rounded-full mt-3">
-          <Lock size={10} /> Segera Hadir
-        </span>
-      )}
-    </>
+      <div className="min-w-0 flex-1">
+        <h3
+          className={`font-display text-sm sm:text-[15px] font-semibold mb-0.5 sm:mb-1 leading-snug ${
+            item.siap ? 'text-slate-900' : 'text-slate-300'
+          }`}
+        >
+          {item.judul}
+        </h3>
+        <p
+          className={`text-xs sm:text-[13px] leading-relaxed line-clamp-2 sm:line-clamp-none ${
+            item.siap ? 'text-slate-600' : 'text-slate-300'
+          }`}
+        >
+          {item.deskripsi}
+        </p>
+        {!item.siap && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400 bg-slate-100 px-2 py-1 rounded-full mt-2 sm:mt-3">
+            <Lock size={10} /> Segera Hadir
+          </span>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -448,7 +453,7 @@ export default function GudangSK() {
 
       <div className="relative">
         {/* Banner atas — ikon & teks bisa turun ke bawah kalau layar sempit. */}
-        <div className="dash-fade-in opacity-0 relative overflow-hidden rounded-xl p-4 sm:p-6 mb-5 sm:mb-6 flex flex-wrap items-center gap-3 sm:gap-4 bg-gradient-to-br from-blue-900 to-blue-950">
+        <div className="dash-fade-in opacity-0 relative overflow-hidden rounded-xl p-4 sm:p-6 mb-4 sm:mb-6 flex flex-wrap items-center gap-3 sm:gap-4 bg-gradient-to-br from-blue-900 to-blue-950">
           <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/5 pointer-events-none" />
           <div className="absolute -bottom-14 -left-6 w-32 h-32 rounded-full bg-white/5 pointer-events-none" />
           <BatikOverlay patternId="batikBannerGudangSK" strokeColor="#d4af37" />
@@ -464,25 +469,28 @@ export default function GudangSK() {
           </div>
         </div>
 
-        {/* Kolom pencarian — berguna begitu jumlah SK makin banyak. */}
-        <div className="relative mb-5 sm:mb-6">
+        {/* Kolom pencarian — berguna begitu jumlah SK makin banyak.
+            text-base di HP mencegah iOS Safari memperbesar layar saat fokus. */}
+        <div className="relative mb-4 sm:mb-6">
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           <input
-            type="text"
+            type="search"
+            inputMode="search"
+            enterKeyHint="search"
             value={cari}
             onChange={(e) => setCari(e.target.value)}
-            placeholder="Cari SK, misalnya: honor, dapodik, asesmen"
+            placeholder="Cari SK: honor, dapodik, asesmen"
             aria-label="Cari jenis SK"
-            className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-10 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-300"
+            className="w-full rounded-xl border border-slate-200 bg-white py-3 sm:py-2.5 pl-10 pr-11 text-base sm:text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-300 [&::-webkit-search-cancel-button]:appearance-none"
           />
           {cari && (
             <button
               type="button"
               onClick={() => setCari('')}
               aria-label="Hapus pencarian"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              className="absolute right-1.5 sm:right-2.5 top-1/2 -translate-y-1/2 p-2.5 sm:p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 active:bg-slate-100"
             >
-              <X size={14} />
+              <X size={16} />
             </button>
           )}
         </div>
@@ -495,23 +503,24 @@ export default function GudangSK() {
         )}
 
         {kelompok.map((k) => (
-          <section key={k.id} className="mb-6 sm:mb-8">
-            <div className="mb-3">
+          <section key={k.id} className="mb-5 sm:mb-8">
+            <div className="mb-2.5 sm:mb-3">
               <h2 className="font-display text-base font-semibold text-slate-900">{k.judul}</h2>
               <p className="text-xs sm:text-[13px] text-slate-500">{k.keterangan}</p>
             </div>
 
             {/* Grid kartu — 1 kolom di HP, 2 di tablet, 3 di layar besar. */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-4">
               {k.items.map(({ sk, urutan }) => {
                 const warna = PALET_WARNA[sk.warna] || PALET_WARNA.slate
-                const gayaAnimasi = { animationDelay: `${urutan * 60}ms` }
+                // Jeda dibatasi supaya kartu di bagian bawah tidak lama muncul.
+                const gayaAnimasi = { animationDelay: `${Math.min(urutan, 8) * 50}ms` }
 
                 return sk.siap ? (
                   <Link
                     key={sk.id}
                     to={sk.path}
-                    className={`dash-fade-in opacity-0 card bg-white rounded-2xl border p-4 sm:p-5 hover:shadow-md hover:-translate-y-0.5 sm:hover:-translate-y-1 transition-all duration-300 ease-out ${warna.border} ${warna.hoverBorder} ${warna.hoverShadow}`}
+                    className={`dash-fade-in opacity-0 card block bg-white rounded-2xl border p-3.5 sm:p-5 transition-all duration-300 ease-out active:scale-[0.98] active:bg-slate-50 sm:hover:shadow-md sm:hover:-translate-y-1 ${warna.border} ${warna.hoverBorder} ${warna.hoverShadow}`}
                     style={gayaAnimasi}
                   >
                     <IsiKartu item={sk} warna={warna} />
@@ -520,7 +529,7 @@ export default function GudangSK() {
                   <div
                     key={sk.id}
                     aria-disabled="true"
-                    className="dash-fade-in opacity-0 card bg-white rounded-2xl border border-slate-100 p-4 sm:p-5 cursor-not-allowed"
+                    className="dash-fade-in opacity-0 card bg-white rounded-2xl border border-slate-100 p-3.5 sm:p-5 cursor-not-allowed"
                     style={gayaAnimasi}
                   >
                     <IsiKartu item={sk} warna={warna} />
